@@ -3,14 +3,37 @@
 @tailwind utilities;
 
 :root {
+  /* Core Base */
   --bg-primary: #0a0a0a;
   --bg-card: #161616;
   --bg-border: #222222;
+
+  /* Asian Dragon Market Colors */
+  --market-up: #ef4444;
+  /* Red for Call / Positive */
+  --market-down: #10b981;
+  /* Green for Put / Negative */
+  --market-neutral: #71717a;
+
+  /* UI Accents */
   --accent-green: #00d68f;
   --accent-red: #ff4d6d;
   --accent-amber: #f59e0b;
+  --accent-purple: #a855f7;
+  --accent-cyan: #06b6d4;
+  --accent-blue: #3b82f6;
+
+  /* Wall & Highlighting Variants */
+  --wall-call-bg: #2a1318;
+  --wall-put-bg: #0f2115;
+  --wall-highlight-border: rgba(245, 158, 11, 0.7);
+  --wall-highlight-bg: rgba(245, 158, 11, 0.08);
+  --spot-highlight-bg: rgba(255, 255, 255, 0.05);
+
+  /* Typography */
   --text-primary: #e4e4e7;
   --text-secondary: #71717a;
+  --text-muted: #3f3f46;
 }
 
 * {

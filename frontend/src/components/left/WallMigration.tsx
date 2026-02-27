@@ -26,17 +26,17 @@ export const WallMigration: React.FC<Props> = ({
             <div className="flex items-center gap-0.5 h-7 px-1 py-0.5">
                 {/* Type label */}
                 <div className={`w-5 h-5 flex items-center justify-center rounded-sm text-2xs font-bold flex-shrink-0
-          ${isCall ? 'text-accent-red bg-accent-red/20' : 'text-accent-green bg-accent-green/20'}`}>
+          ${isCall ? 'text-market-up bg-wall-call' : 'text-market-down bg-wall-put'}`}>
                     {type}
                 </div>
 
                 {/* History cell 1 */}
-                <div className="flex-1 flex items-center justify-center border border-bg-border rounded-sm h-5">
+                <div className="flex-1 flex items-center justify-center border border-bg-border bg-white/5 rounded-sm h-5">
                     <span className="mono text-2xs text-text-secondary">{h1 != null ? fmtPrice(h1) : '—'}</span>
                 </div>
 
                 {/* History cell 2 */}
-                <div className="flex-1 flex items-center justify-center border border-bg-border rounded-sm h-5">
+                <div className="flex-1 flex items-center justify-center border border-bg-border bg-white/5 rounded-sm h-5">
                     <span className="mono text-2xs text-text-secondary">{h2 != null ? fmtPrice(h2) : '—'}</span>
                 </div>
 

@@ -5,23 +5,32 @@ export default {
     extend: {
       colors: {
         bg: {
-          primary: '#0a0a0a',
+          primary: 'var(--bg-primary)',
           secondary: '#111111',
-          card: '#161616',
-          border: '#222222',
+          card: 'var(--bg-card)',
+          border: 'var(--bg-border)',
+        },
+        market: {
+          up: 'var(--market-up)',
+          down: 'var(--market-down)',
+          neutral: 'var(--market-neutral)',
+        },
+        wall: {
+          call: 'var(--wall-call-bg)',
+          put: 'var(--wall-put-bg)',
         },
         accent: {
-          green: '#00d68f',
-          red: '#ff4d6d',
-          amber: '#f59e0b',
-          blue: '#3b82f6',
-          purple: '#a855f7',
-          cyan: '#06b6d4',
+          green: 'var(--accent-green)',
+          red: 'var(--accent-red)',
+          amber: 'var(--accent-amber)',
+          purple: 'var(--accent-purple)',
+          cyan: 'var(--accent-cyan)',
+          blue: 'var(--accent-blue)',
         },
         text: {
-          primary: '#e4e4e7',
-          secondary: '#71717a',
-          muted: '#3f3f46',
+          primary: 'var(--text-primary)',
+          secondary: 'var(--text-secondary)',
+          muted: 'var(--text-muted)',
         }
       },
       fontFamily: {

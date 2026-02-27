@@ -71,7 +71,7 @@ export const DepthProfile: React.FC<Props> = ({ perStrikeGex, spot, flipLevel })
                                     style={{ width: `${BAR_MAX_PX}px`, minWidth: `${BAR_MAX_PX}px` }}
                                 >
                                     <div
-                                        className="h-4 rounded-sm bg-[#10b981]"
+                                        className="h-4 rounded-sm bg-market-down"
                                         style={{ width: `${putWidth}px` }}
                                     />
                                     {/* P label on inner edge of put bar */}
@@ -101,7 +101,7 @@ export const DepthProfile: React.FC<Props> = ({ perStrikeGex, spot, flipLevel })
                                         <span className="mono text-2xs font-bold text-bg-primary mr-1 z-10">C</span>
                                     )}
                                     <div
-                                        className="h-4 rounded-sm bg-[#ef4444]"
+                                        className="h-4 rounded-sm bg-market-up"
                                         style={{ width: `${callWidth}px` }}
                                     />
                                     {/* SPOT label — only on spot row */}
