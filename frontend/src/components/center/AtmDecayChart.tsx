@@ -122,7 +122,7 @@ export const AtmDecayChart: React.FC<Props> = ({ data }) => {
                 borderColor: BORDER,
                 timeVisible: true,
                 secondsVisible: false,
-                tickMarkFormatter: formatET,
+                tickMarkFormatter: (time: number) => formatET(time),
                 minBarSpacing: 0.1,
             },
             handleScroll: true,
@@ -132,8 +132,8 @@ export const AtmDecayChart: React.FC<Props> = ({ data }) => {
         const srs = SERIES_CFG.map(({ color }) =>
             chart.addSeries(LineSeries, {
                 color,
-                lineWidth: 1.5,
-                lineType: LineType.Step, // S+ 修复 4：开启极度硬核的阶梯跳动
+                lineWidth: 2,
+                lineType: LineType.WithSteps, // S+ 修复 4：阶梯跳动
                 priceLineVisible: true,
                 priceLineStyle: LineStyle.Dashed,
                 priceLineWidth: 1,
