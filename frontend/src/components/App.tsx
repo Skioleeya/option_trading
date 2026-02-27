@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React from 'react'
 import '../index.css'
 import { useDashboardWS } from '../hooks/useDashboardWS'
 import { Header } from './center/Header'
@@ -44,35 +44,20 @@ export const App: React.FC = () => {
     const putWall = agentBData?.gamma_walls?.put_wall ?? null
     const flipLevel = agentBData?.gamma_flip_level ?? null
     const perStrikeGex = agentBData?.per_strike_gex ?? []
-    const gexRegime = agentG?.data?.gex_regime ?? 'NEUTRAL'
     const ivPct = agentBData?.spy_atm_iv ?? null
     const ivRegime = fused?.iv_regime ?? 'NORMAL'
 
     // Microstructure
-    const micro = agentBData?.micro_structure?.micro_structure_state
-    const vannaFlow = micro?.vanna_flow_result
-    const wallMig = micro?.wall_migration
     const mtfConsensus = agentBData?.mtf_consensus
 
-    // Wall migration states → WALL DYN label
-    const wallDynState = useMemo(() => {
-        if (!wallMig) return 'STABLE'
-        const call = wallMig.call_wall_state
-        const put = wallMig.put_wall_state
-        if (call === 'REINFORCED_WALL' || put === 'REINFORCED_SUPPORT') return 'SIEGE'
-        if (call === 'RETREATING_RESISTANCE') return 'RETREAT'
-        return 'STABLE'
-    }, [wallMig])
-
-    // Vanna state → VANNA label
-    const vannaState = useMemo(() => {
-        if (!vannaFlow) return ''
-        const s = vannaFlow.state
-        if (s === 'GRIND_STABLE') return 'CMPRS'
-        if (s === 'DANGER_ZONE') return 'DANGER'
-        if (s === 'VANNA_FLIP') return 'FLIP'
-        return s
-    }, [vannaFlow])
+    // ── DECOUPLED UI Architecture ──
+    // Backend computes the badges and states precisely, React blindly renders them.
+    const uiState = agentG?.data?.ui_state ?? {
+        net_gex: { label: '—', badge: 'badge-neutral' },
+        wall_dyn: { label: '—', badge: 'badge-neutral' },
+        vanna: { label: '—', badge: 'badge-neutral' },
+        momentum: { label: '—', badge: 'badge-neutral' }
+    }
 
     // ATM Decay (computed separately — requires opening ATM)
     const atm: AtmDecay = {
@@ -131,13 +116,9 @@ export const App: React.FC = () => {
                     </div>
 
                     {/* Micro Stats */}
-                    <div className="border-t border-bg-border">
+                    <div className="flex-1 min-h-0 min-w-0">
                         <MicroStats
-                            netGex={netGex}
-                            gexRegime={gexRegime}
-                            wallDynState={wallDynState}
-                            momentumState={agentG?.data?.agent_a?.signal ?? ''}
-                            vannaState={vannaState}
+                            uiState={uiState}
                             sideState={mtfConsensus?.consensus ?? ''}
                         />
                     </div>

@@ -267,6 +267,7 @@ class AgentG:
             summary.append("WARNING: Gamma Flip detected.")
 
         _vanna_dict = vanna_data.model_dump() if vanna_data is not None else {}
+        micro_state = agent_b.data.get("micro_structure", {}).get("micro_structure_state", {})
 
         return AgentResult(
             agent=self.AGENT_ID,
@@ -299,6 +300,12 @@ class AgentG:
                     "components": fused_signal.components,
                 },
                 "micro_structure": agent_b.data.get("micro_structure"),
+                "ui_state": self._build_ui_metadata(
+                    gex_regime=_vanna_dict.get("gex_regime", "NEUTRAL"),
+                    wall_dyn=micro_state.get("wall_migration", {}),
+                    vanna=micro_state.get("vanna_flow_result", {}).get("state", "NEUTRAL"),
+                    momentum=agent_a.signal
+                )
             },
             summary="; ".join(summary) if summary else "Decision rules not satisfied.",
         )

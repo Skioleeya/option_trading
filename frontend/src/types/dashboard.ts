@@ -105,6 +105,12 @@ export interface AgentGResult {
         trap_state: string
         fused_signal: FusedSignal
         micro_structure: { micro_structure_state: MicroStructureState } | null
+        ui_state: {
+            net_gex: { label: string; badge: string }
+            wall_dyn: { label: string; badge: string }
+            vanna: { label: string; badge: string }
+            momentum: { label: string; badge: string }
+        }
     }
 }
 

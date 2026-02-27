@@ -1,14 +1,13 @@
 import React from 'react'
-import { Anchor, Zap, Minus, Activity } from 'lucide-react'
-import { fmtGex, gexRegimeBadge, gexRegimeLabel } from '../../lib/utils'
-import type { GexRegime } from '../../types/dashboard'
+import { Anchor, Activity, Minus, Zap } from 'lucide-react'
 
 interface Props {
-    netGex: number | null
-    gexRegime: GexRegime
-    wallDynState: string
-    momentumState: string
-    vannaState: string
+    uiState: {
+        net_gex: { label: string; badge: string }
+        wall_dyn: { label: string; badge: string }
+        vanna: { label: string; badge: string }
+        momentum: { label: string; badge: string }
+    }
     sideState: string
 }
 
@@ -33,11 +32,7 @@ const StatCard: React.FC<{
 )
 
 export const MicroStats: React.FC<Props> = ({
-    netGex,
-    gexRegime,
-    wallDynState,
-    momentumState,
-    vannaState,
+    uiState,
     sideState,
 }) => {
     return (
@@ -53,11 +48,10 @@ export const MicroStats: React.FC<Props> = ({
                     title="NET GEX"
                     icon={<Activity size={9} className="text-[#a855f7]" />}
                     badge={
-                        <span className={`badge ${gexRegimeBadge(gexRegime)}`}>
-                            {gexRegimeLabel(gexRegime)}
+                        <span className={`badge ${uiState.net_gex.badge}`}>
+                            {uiState.net_gex.label}
                         </span>
                     }
-                    value={netGex != null ? fmtGex(netGex) : undefined}
                 />
 
                 {/* WALL DYN */}
@@ -65,8 +59,8 @@ export const MicroStats: React.FC<Props> = ({
                     title="WALL DYN"
                     icon={<Anchor size={9} className="text-accent-amber" />}
                     badge={
-                        <span className={`badge ${wallDynBadge(wallDynState)}`}>
-                            {wallDynLabel(wallDynState)}
+                        <span className={`badge ${uiState.wall_dyn.badge}`}>
+                            {uiState.wall_dyn.label}
                         </span>
                     }
                 />
@@ -77,7 +71,7 @@ export const MicroStats: React.FC<Props> = ({
                     badge={
                         <Minus size={14} className="text-text-secondary" />
                     }
-                    value={momentumState && momentumState !== 'NEUTRAL' ? momentumState : undefined}
+                    value={uiState.momentum.label !== '—' ? uiState.momentum.label : undefined}
                 />
 
                 {/* VANNA */}
@@ -85,11 +79,9 @@ export const MicroStats: React.FC<Props> = ({
                     title="VANNA"
                     icon={<Zap size={9} className="text-accent-cyan" />}
                     badge={
-                        vannaState ? (
-                            <span className={`badge ${vannaBadge(vannaState)}`}>
-                                {vannaLabel(vannaState)}
-                            </span>
-                        ) : undefined
+                        <span className={`badge ${uiState.vanna.badge}`}>
+                            {uiState.vanna.label}
+                        </span>
                     }
                 />
             </div>
@@ -104,33 +96,4 @@ export const MicroStats: React.FC<Props> = ({
             </div>
         </div>
     )
-}
-
-function wallDynBadge(state: string): string {
-    if (state === 'SIEGE') return 'badge-amber'
-    if (state === 'RETREAT') return 'badge-red'
-    return 'badge-neutral'
-}
-
-function wallDynLabel(state: string): string {
-    return state || 'STABLE'
-}
-
-function vannaBadge(state: string): string {
-    if (state === 'CMPRS' || state === 'GRIND_STABLE') return 'badge-cyan'
-    if (state === 'DANGER') return 'badge-red'
-    if (state === 'FLIP') return 'badge-purple'
-    return 'badge-neutral'
-}
-
-function vannaLabel(state: string): string {
-    const map: Record<string, string> = {
-        CMPRS: 'CMPRS',
-        GRIND_STABLE: 'CMPRS',
-        DANGER: 'DANGER',
-        DANGER_ZONE: 'DANGER',
-        VANNA_FLIP: 'FLIP',
-        FLIP: 'FLIP',
-    }
-    return map[state] ?? state
 }
