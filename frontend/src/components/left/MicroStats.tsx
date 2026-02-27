@@ -1,5 +1,5 @@
 import React from 'react'
-import { Anchor, Zap, Minus } from 'lucide-react'
+import { Anchor, Zap, Minus, Activity } from 'lucide-react'
 import { fmtGex, gexRegimeBadge, gexRegimeLabel } from '../../lib/utils'
 import type { GexRegime } from '../../types/dashboard'
 
@@ -51,7 +51,7 @@ export const MicroStats: React.FC<Props> = ({
                 {/* NET GEX */}
                 <StatCard
                     title="NET GEX"
-                    icon={<Zap size={9} className="text-accent-red" />}
+                    icon={<Activity size={9} className="text-[#a855f7]" />}
                     badge={
                         <span className={`badge ${gexRegimeBadge(gexRegime)}`}>
                             {gexRegimeLabel(gexRegime)}

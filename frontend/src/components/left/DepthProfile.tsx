@@ -61,7 +61,7 @@ export const DepthProfile: React.FC<Props> = ({ perStrikeGex, spot, flipLevel })
                     return (
                         <div key={s.strike}>
                             <div
-                                className={`flex items-center relative py-px ${isSpot ? 'bg-accent-amber/5' : ''
+                                className={`flex items-center relative py-px ${isSpot ? 'bg-white/5' : ''
                                     }`}
                                 style={{ minHeight: '16px' }}
                             >
@@ -70,14 +70,14 @@ export const DepthProfile: React.FC<Props> = ({ perStrikeGex, spot, flipLevel })
                                     className="flex items-center justify-end"
                                     style={{ width: `${BAR_MAX_PX}px`, minWidth: `${BAR_MAX_PX}px` }}
                                 >
-                                    {/* P label on dominant bar */}
-                                    {isDominantPut && putWidth > 20 && (
-                                        <span className="mono text-2xs font-bold text-bg-primary mx-0.5 z-10">P</span>
-                                    )}
                                     <div
-                                        className="h-4 rounded-sm bg-accent-green/80"
+                                        className="h-4 rounded-sm bg-[#10b981]"
                                         style={{ width: `${putWidth}px` }}
                                     />
+                                    {/* P label on inner edge of put bar */}
+                                    {isDominantPut && putWidth > 20 && (
+                                        <span className="mono text-2xs font-bold text-bg-primary ml-1 z-10">P</span>
+                                    )}
                                 </div>
 
                                 {/* ── Strike CENTER ── */}
@@ -96,14 +96,14 @@ export const DepthProfile: React.FC<Props> = ({ perStrikeGex, spot, flipLevel })
                                     className="flex items-center"
                                     style={{ width: `${BAR_MAX_PX}px`, minWidth: `${BAR_MAX_PX}px` }}
                                 >
+                                    {/* C label on inner edge of call bar */}
+                                    {isDominantCall && callWidth > 20 && (
+                                        <span className="mono text-2xs font-bold text-bg-primary mr-1 z-10">C</span>
+                                    )}
                                     <div
-                                        className="h-4 rounded-sm bg-accent-red/80"
+                                        className="h-4 rounded-sm bg-[#ef4444]"
                                         style={{ width: `${callWidth}px` }}
                                     />
-                                    {/* C label on dominant bar */}
-                                    {isDominantCall && callWidth > 20 && (
-                                        <span className="mono text-2xs font-bold text-bg-primary mx-0.5 z-10">C</span>
-                                    )}
                                     {/* SPOT label — only on spot row */}
                                     {isSpot && (
                                         <span className="mono text-2xs text-accent-amber font-bold ml-1 whitespace-nowrap">
