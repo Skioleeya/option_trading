@@ -91,19 +91,13 @@ class VannaFlowAnalyzer:
 
         # Persistence (v2.1)
         self._redis = None
-        if settings.redis_url:
-            try:
-                import redis
-                self._redis = redis.Redis.from_url(
-                    settings.redis_url,
-                    decode_responses=True,
-                    socket_connect_timeout=1
-                )
-                self._load_state()
-            except Exception:
-                pass
 
-    def _save_state(self) -> None:
+    async def set_redis_client(self, client: Any) -> None:
+        """Inject shared Redis client."""
+        self._redis = client
+        await self._load_state()
+
+    async def _save_state(self) -> None:
         """Save current state to Redis (Fire-and-forget)."""
         if not self._redis:
             return
@@ -118,11 +112,11 @@ class VannaFlowAnalyzer:
             json_str = json.dumps(data)
 
             # Set with 24h TTL
-            self._redis.setex(key, 86400, json_str)
+            await self._redis.setex(key, 86400, json_str)
         except Exception:
             pass
 
-    def _load_state(self) -> None:
+    async def _load_state(self) -> None:
         """Load state from Redis on init."""
         if not self._redis:
             return
@@ -131,7 +125,7 @@ class VannaFlowAnalyzer:
             today = datetime.now(ZoneInfo("US/Eastern")).date().isoformat()
             key = f"vanna_analyzer:state:{today}"
 
-            json_str = self._redis.get(key)
+            json_str = await self._redis.get(key)
             if json_str:
                 import json
                 data = json.loads(json_str)
@@ -230,13 +224,16 @@ class VannaFlowAnalyzer:
             iv_roc=iv_roc,
             iv_roc_prev=iv_roc_prev,
             iv_acceleration=iv_accel,
-            history_count=history_count,
+            history_count=len(self._history),
+            wall_displacement_multiplier=threshold_state.wall_displacement_multiplier,
+            momentum_slope_multiplier=threshold_state.momentum_slope_multiplier,
         )
 
         self._last_result = result
 
         # Persist state
-        self._save_state()
+        import asyncio
+        asyncio.create_task(self._save_state())
 
         return result
 

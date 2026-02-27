@@ -21,9 +21,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.agents.agent_g import AgentG
 from app.config import settings
 from app.services.feeds.option_chain_builder import OptionChainBuilder
-from app.ui.micro_stats.presenter import MicroStatsPresenter
-from app.ui.wall_migration.presenter import WallMigrationPresenter
-from app.ui.depth_profile.presenter import DepthProfilePresenter
+from app.services.system.redis_service import RedisService
+from app.services.system.historical_store import HistoricalStore
+from app.services.system.snapshot_builder import SnapshotBuilder
+from app.services.analysis.atm_decay_tracker import AtmDecayTracker
 
 
 logging.basicConfig(level=getattr(logging, settings.log_level, logging.INFO))
@@ -46,6 +47,9 @@ class AppContainer:
     def __init__(self) -> None:
         self.option_chain_builder = OptionChainBuilder()
         self.agent_g = AgentG()
+        self.redis_service = RedisService()
+        self.historical_store = HistoricalStore(self.redis_service)
+        self.atm_decay_tracker = AtmDecayTracker(self.redis_service.client)
         self.quote_hub_ready = asyncio.Event()
 
         # Agent runner state
@@ -63,8 +67,15 @@ class AppContainer:
         """Initialize all services."""
         print("[DEBUG] ========== LIFESPAN START ==========")
 
-        # Initialize data feed
+        # 1. Start Redis
+        await self.redis_service.start()
+        if self.redis_service.client:
+            await self.agent_g.set_redis_client(self.redis_service.client)
+            self.atm_decay_tracker.redis = self.redis_service.client
+
+        # 2. Initialize data feed and tracker
         await self.option_chain_builder.initialize()
+        await self.atm_decay_tracker.initialize()
         self.quote_hub_ready.set()
 
         # Start agent runner loop
@@ -84,6 +95,7 @@ class AppContainer:
                 pass
 
         await self.option_chain_builder.shutdown()
+        await self.redis_service.stop()
         print("[DEBUG] ========== LIFESPAN END ==========")
 
     async def _agent_runner_loop(self) -> None:
@@ -99,7 +111,14 @@ class AppContainer:
 
                 # 2. Run agent pipeline
                 agent_start = time.monotonic()
-                result = self.agent_g.run(snapshot)
+                result = await self.agent_g.run(snapshot)
+                
+                # 2.5 Calculate ATM Decay via Tracker
+                atm_decay_payload = await self.atm_decay_tracker.update(
+                    snapshot.get("chain", []), 
+                    snapshot.get("spot", 0.0)
+                )
+                
                 agent_time = time.monotonic() - agent_start
 
                 logger.warning(
@@ -109,56 +128,23 @@ class AppContainer:
                 )
 
                 # 3. Build payload
-                payload = self._build_payload(snapshot, result)
+                payload = SnapshotBuilder.build(snapshot, result, atm_decay_payload)
                 self._last_payload = payload
                 self._last_payload_time = time.monotonic()
                 self._total_computations += 1
 
-                # 4. Broadcast to WebSocket clients
+                # 4. Save to Redis
+                await self.historical_store.save_snapshot(payload)
+
+                # 5. Broadcast to WebSocket clients
                 await self._broadcast(payload)
 
             except Exception as e:
                 self._failed_computations += 1
-                logger.error(f"[AgentRunner] Error in loop: {e}")
+                logger.exception(f"[AgentRunner] Error in loop: {e}")
 
             # Sleep for update interval
             await asyncio.sleep(settings.websocket_update_interval)
-
-    def _build_payload(
-        self,
-        snapshot: dict[str, Any],
-        agent_result: Any,
-    ) -> dict[str, Any]:
-        """Build WebSocket broadcast payload."""
-        now = datetime.now(ZoneInfo("US/Eastern"))
-        spot = snapshot.get("spot")
-
-        agent_data = agent_result.model_dump() if agent_result else None
-        ui_state = None
-
-        if agent_data and "data" in agent_data:
-            # Build unified UI payload
-            b_data = agent_data["data"].get("agent_b", {}).get("data", {})
-            micro = b_data.get("micro_structure", {}).get("micro_structure_state", {})
-            
-            ui_state = {
-                "micro_stats": MicroStatsPresenter.build(
-                    gex_regime=agent_data["data"].get("gex_regime", "NEUTRAL"),
-                    wall_dyn=micro.get("wall_migration", {}),
-                    vanna=micro.get("vanna_flow_result", {}).get("state", "NEUTRAL"),
-                    momentum=agent_data["data"].get("agent_a", {}).get("signal", "NEUTRAL")
-                ),
-                "wall_migration": WallMigrationPresenter.build(
-                    wall_migration=micro.get("wall_migration", {})
-                ),
-                "depth_profile": DepthProfilePresenter.build(
-                    per_strike_gex=b_data.get("per_strike_gex", []),
-                    spot=spot,
-                    flip_level=agent_data["data"].get("gamma_flip_level")
-                )
-            }
-            # Inject to data cleanly
-            agent_data["data"]["ui_state"] = ui_state
 
         return {
             "type": "dashboard_update",
@@ -261,6 +247,7 @@ async def persistence_status():
             "stats": runner_stats,
             "last_update_age_seconds": runner_stats.get("last_update_age_seconds"),
         },
+        "redis": container.redis_service.get_diagnostics(),
         "stores": service_diag,
     }
 
@@ -299,6 +286,28 @@ async def websocket_dashboard(websocket: WebSocket):
         logger.warning(f"[WS] Client error: {e}")
     finally:
         container.unregister_ws(websocket)
+
+
+@app.get("/history")
+async def get_history(count: int = 50):
+    """Retrieve historical snapshots from Redis."""
+    container: AppContainer = app.state.container
+    history = await container.historical_store.get_latest(count)
+    return {"history": history, "count": len(history)}
+
+
+@app.get("/api/atm-decay/history")
+async def get_atm_decay_history():
+    """Retrieve the full historical ATM decay series for the current trade date."""
+    container: AppContainer = app.state.container
+    date_str = datetime.now(ZoneInfo("US/Eastern")).strftime("%Y%m%d")
+    history = await container.atm_decay_tracker.get_history(date_str)
+    
+    return {
+        "date": date_str,
+        "history": history,
+        "count": len(history)
+    }
 
 
 @app.get("/health")

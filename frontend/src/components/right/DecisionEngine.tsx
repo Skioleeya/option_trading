@@ -1,80 +1,169 @@
+/**
+ * DecisionEngine.tsx v2.5 — Institutional 5-Quadrant Edition (Phase 24.5)
+ *
+ * Changes from v2.0:
+ *  - Added 5th quadrant: C/P VOL (Call-Put Volume Imbalance - Paper 3)
+ *  - Layout optimization for 5 components (2x2 + 1 full-width bottom)
+ *
+ * Color convention (亚洲龙风格 — 红涨绿跌):
+ *   BULLISH → accent-red
+ *   BEARISH → accent-green
+ *   NEUTRAL → zinc-600
+ */
 import React from 'react'
-import { Anchor, Activity, BarChart2 } from 'lucide-react'
+import { Target, Activity, TrendingUp, BarChart3 } from 'lucide-react'
 import type { FusedSignal } from '../../types/dashboard'
 
 interface Props {
     fused: FusedSignal | null
 }
 
+// ── Colour palette helpers ──────────────────────────────────────────────────
+const DIR_DOT: Record<string, string> = {
+    BULLISH: 'bg-accent-red  shadow-[0_0_6px_rgba(255,77,79,0.5)]',
+    BEARISH: 'bg-accent-green shadow-[0_0_6px_rgba(0,214,143,0.5)]',
+    NEUTRAL: 'bg-zinc-600',
+}
+const DIR_BAR: Record<string, string> = {
+    BULLISH: 'bg-accent-red',
+    BEARISH: 'bg-accent-green',
+    NEUTRAL: 'bg-zinc-600',
+}
+const DIR_TEXT: Record<string, string> = {
+    BULLISH: 'text-accent-red',
+    BEARISH: 'text-accent-green',
+    NEUTRAL: 'text-text-secondary',
+}
+const BANNER_BG: Record<string, string> = {
+    BULLISH: 'bg-red-950/40  border-red-500/30',
+    BEARISH: 'bg-emerald-950/40 border-emerald-500/30',
+    NEUTRAL: 'bg-zinc-900/40  border-zinc-700/30',
+}
+
+// ── Formatting helpers ──────────────────────────────────────────────────────
+const fmtRegime = (r: string) =>
+    r.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').trim().toUpperCase()
+
+const truncate = (s: string, n = 68) =>
+    s.length > n ? s.slice(0, n - 1) + '…' : s
+
+// ── Component ───────────────────────────────────────────────────────────────
 export const DecisionEngine: React.FC<Props> = ({ fused }) => {
-    const weights = fused?.weights ?? { iv: 0, wall: 0, vanna: 0, mtf: 0 }
-    const components = fused?.components ?? {}
+    const dir = fused?.direction ?? 'NEUTRAL'
+    const conf = Math.round((fused?.confidence ?? 0) * 100)
+    const weights = fused?.weights ?? { iv: 0, wall: 0, vanna: 0, mtf: 0, vib: 0 }
+    const comps = fused?.components ?? {}
+    const regime = fused?.regime ?? ''
+    const gexInt = fused?.gex_intensity ?? ''
+    const explanation = fused?.explanation ?? ''
 
     const quadrants = [
-        {
-            key: 'iv',
-            label: 'IV VEL',
-            icon: <Zap />,
-            pct: Math.round((weights.iv ?? 0) * 100),
-            conf: Math.round((components.iv?.confidence ?? 0) * 100),
-        },
-        {
-            key: 'wall',
-            label: 'WALL DYN',
-            icon: <Anchor />,
-            pct: Math.round((weights.wall ?? 0) * 100),
-            conf: Math.round((components.wall?.confidence ?? 0) * 100),
-        },
-        {
-            key: 'vanna',
-            label: 'VANNA',
-            icon: <Activity />,
-            pct: Math.round((weights.vanna ?? 0) * 100),
-            conf: Math.round((components.vanna?.confidence ?? 0) * 100),
-        },
-        {
-            key: 'mtf',
-            label: 'MTF',
-            icon: <BarChart2 />,
-            pct: Math.round((weights.mtf ?? 0) * 100),
-            conf: Math.round((components.mtf?.confidence ?? 0) * 100),
-        },
+        { key: 'iv', label: 'IV VEL', icon: <Zap /> },
+        { key: 'wall', label: 'WALL DYN', icon: <Target size={9} className="text-text-secondary" /> },
+        { key: 'vanna', label: 'VANNA', icon: <Activity size={9} className="text-text-secondary" /> },
+        { key: 'mtf', label: 'MTF', icon: <TrendingUp size={9} className="text-text-secondary" /> },
+        { key: 'vib', label: 'C/P VOL', icon: <BarChart3 size={9} className="text-text-secondary" /> },
     ]
 
     return (
-        <div className="p-2 space-y-2">
-            <div className="flex items-center justify-between mb-1">
-                <span className="section-header">DECISION ENGINE</span>
-                <span className="section-header text-text-muted">FUSION SIGNAL</span>
+        <div className="p-2 space-y-1.5">
+            {/* ── Header ─────────────────────────────────────────── */}
+            <div className="flex items-center justify-between">
+                <span className="section-header text-[10px]">DECISION ENGINE</span>
+                <span className="section-header text-text-muted text-[10px]">FUSION</span>
             </div>
 
-            <div className="grid grid-cols-2 gap-1.5">
-                {quadrants.map((q) => (
-                    <div key={q.key} className="bg-bg-card rounded p-1.5 border border-bg-border">
-                        <div className="flex items-center justify-between mb-1">
-                            <div className="flex items-center gap-1 section-header">
-                                {React.cloneElement(q.icon as React.ReactElement, { size: 9, className: 'text-text-secondary' })}
-                                {q.label}
-                            </div>
-                            <span className="mono text-sm font-bold text-text-primary">{q.pct}%</span>
-                        </div>
-                        {/* Progress bar (weight) */}
-                        <div className="progress-track">
-                            <div
-                                className="progress-fill bg-accent-amber"
-                                style={{ width: `${q.pct}%` }}
-                            />
-                        </div>
-                    </div>
-                ))}
+            {/* ── Direction Banner ───────────────────────────────── */}
+            <div className={`flex items-center justify-between px-2 py-1 rounded border ${BANNER_BG[dir]} transition-all duration-500`}>
+                <div className="flex items-center gap-1.5">
+                    <div className={`w-2 h-2 rounded-full ${DIR_DOT[dir]} transition-all duration-500`} />
+                    <span className={`text-[11px] font-black tracking-widest ${DIR_TEXT[dir]}`}>{dir}</span>
+                </div>
+                <span className={`mono text-[11px] font-bold ${DIR_TEXT[dir]}`}>{conf}%</span>
             </div>
+
+            {/* Confidence bar */}
+            <div className="h-[2px] w-full bg-white/5 rounded-full overflow-hidden">
+                <div
+                    className={`h-full rounded-full transition-all duration-700 ${DIR_BAR[dir]}`}
+                    style={{ width: `${conf}%` }}
+                />
+            </div>
+
+            {/* Regime tags */}
+            {(regime || gexInt) && (
+                <div className="flex gap-1 flex-wrap">
+                    {regime && (
+                        <span className="badge badge-neutral text-[7px] py-0 px-1">{fmtRegime(regime)}</span>
+                    )}
+                    {gexInt && (
+                        <span className={`badge text-[7px] py-0 px-1 ${gexInt.includes('NEGATIVE') ? 'badge-red-dim' : gexInt.includes('POSITIVE') ? 'badge-hollow-green' : 'badge-neutral'}`}>
+                            GEX {fmtRegime(gexInt)}
+                        </span>
+                    )}
+                </div>
+            )}
+
+            {/* ── Five-quadrant grid ─────────────────────────────── */}
+            <div className="grid grid-cols-2 gap-1">
+                {quadrants.map((q, idx) => {
+                    const comp = comps[q.key]
+                    const qDir = comp?.direction ?? 'NEUTRAL'
+                    const qConf = Math.round((comp?.confidence ?? 0) * 100)
+                    const qWt = Math.round((weights[q.key as keyof typeof weights] ?? 0) * 100)
+
+                    // Make last element full width if odd number
+                    const isFullWidth = quadrants.length % 2 !== 0 && idx === quadrants.length - 1
+
+                    return (
+                        <div key={q.key} className={`bg-bg-card rounded p-1 border border-bg-border ${isFullWidth ? 'col-span-2' : ''}`}>
+                            <div className="flex items-center justify-between mb-0.5">
+                                <div className="flex items-center gap-1 section-header text-[8px]">
+                                    {React.cloneElement(q.icon as React.ReactElement, {
+                                        size: 8,
+                                        className: 'text-text-secondary',
+                                    })}
+                                    {q.label}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <div className={`w-1.5 h-1.5 rounded-full ${DIR_DOT[qDir]} transition-all duration-500`} />
+                                    <span className={`mono text-[9px] font-bold ${DIR_TEXT[qDir]}`}>{qWt}%</span>
+                                </div>
+                            </div>
+
+                            <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                                <div
+                                    className={`h-full rounded-full transition-all duration-500 ${DIR_BAR[qDir]}`}
+                                    style={{ width: `${Math.max(qWt, 2)}%` }}
+                                />
+                            </div>
+
+                            <div className={`text-[7px] mono mt-0.5 ${DIR_TEXT[qDir]} opacity-60 flex justify-between`}>
+                                <span>conf {qConf}%</span>
+                                {isFullWidth && <span className="opacity-40 italic">Paper 3 High Leverage Predictor</span>}
+                            </div>
+                        </div>
+                    )
+                })}
+            </div>
+
+            {/* ── Explanation footer ─────────────────────────────── */}
+            {explanation && (
+                <p
+                    className="text-[8px] mono text-text-secondary leading-tight truncate cursor-default opacity-80"
+                    title={explanation}
+                >
+                    {truncate(explanation, 75)}
+                </p>
+            )}
         </div>
     )
 }
 
-// Lucide Zap inline since we need dynamic icon refs
-const Zap = () => (
-    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+// Inline Zap icon
+const Zap: React.FC = () => (
+    <svg width="8" height="8" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" strokeWidth="2.5" className="text-text-secondary">
         <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
     </svg>
 )

@@ -65,19 +65,22 @@ class GammaAnalyzer:
 
         for opt in chain:
             strike = opt.get("strike", 0)
+            if strike <= 0:
+                continue
+
+            if strike not in strike_gex:
+                strike_gex[strike] = {"call_gex": 0.0, "put_gex": 0.0}
+
             gamma = opt.get("gamma", 0) or 0
             oi = opt.get("open_interest", 0) or 0
             multiplier = opt.get("contract_multiplier", 100) or 100
-            opt_type = opt.get("option_type", "").upper()
+            opt_type = opt.get("option_type", opt.get("type", "")).upper()
 
-            if strike <= 0 or gamma <= 0 or oi <= 0:
+            if gamma <= 0 or oi <= 0:
                 continue
 
             # GEX formula: Gamma × OI × Spot² × Multiplier × 0.01
             gex = gamma * oi * (spot ** 2) * multiplier * 0.01
-
-            if strike not in strike_gex:
-                strike_gex[strike] = {"call_gex": 0.0, "put_gex": 0.0}
 
             if opt_type in ("CALL", "C"):
                 strike_gex[strike]["call_gex"] += gex

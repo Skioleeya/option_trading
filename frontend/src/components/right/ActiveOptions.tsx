@@ -1,5 +1,5 @@
 import React from 'react'
-import { fmtPrice, fmtVolume, fmtFlow } from '../../lib/utils'
+import { fmtVolume, fmtFlow } from '../../lib/utils'
 import type { ActiveOption } from '../../types/dashboard'
 
 interface Props {
@@ -11,21 +11,21 @@ export const ActiveOptions: React.FC<Props> = ({ options }) => {
 
     return (
         <div className="p-2">
-            <div className="flex items-center justify-between mb-2">
-                <span className="section-header">ACTIVE OPTIONS</span>
-                <span className="section-header text-text-muted">TOP BY VOLUME</span>
+            <div className="flex items-center justify-between mb-1.5 px-0.5">
+                <span className="text-[10px] font-bold tracking-wider text-text-primary">ACTIVE OPTIONS</span>
+                <span className="text-[9px] font-medium text-text-muted">TOP BY VOLUME</span>
             </div>
 
             <table className="w-full text-2xs mono">
                 <thead>
-                    <tr className="text-text-secondary border-b border-bg-border">
-                        <th className="text-left py-0.5 pr-1 w-4">#</th>
-                        <th className="text-left py-0.5 pr-1">SYM</th>
-                        <th className="text-left py-0.5 pr-1 w-4">T</th>
-                        <th className="text-right py-0.5 pr-1">STRIKE</th>
-                        <th className="text-right py-0.5 pr-1">IV</th>
-                        <th className="text-right py-0.5 pr-1">VOL</th>
-                        <th className="text-right py-0.5">FLOW</th>
+                    <tr className="text-text-muted border-b border-white/5 uppercase font-medium">
+                        <th className="text-center py-1 w-6">#</th>
+                        <th className="text-left py-1">SYM</th>
+                        <th className="text-center py-1 w-4">T</th>
+                        <th className="text-right py-1">STRIKE</th>
+                        <th className="text-right py-1">IV</th>
+                        <th className="text-right py-1">VOL</th>
+                        <th className="text-right py-1 pr-1">FLOW</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -41,30 +41,28 @@ export const ActiveOptions: React.FC<Props> = ({ options }) => {
                             <tr key={`${opt.symbol}-${opt.strike}-${opt.option_type}-${i}`}
                                 className="border-b border-bg-border/50 hover:bg-bg-card transition-colors"
                             >
-                                {/* # with color bar */}
-                                <td className="py-0.5 pr-1">
-                                    <div className="flex items-center gap-0.5">
-                                        <div className={`w-0.5 h-3 rounded-full ${isCall ? 'bg-accent-red' : 'bg-accent-green'}`} />
-                                        <span className="text-text-secondary">{i + 1}</span>
-                                    </div>
+                                {/* Row marker + Rank */}
+                                <td className="py-1 relative">
+                                    <div className={`absolute left-0 top-[20%] bottom-[20%] w-[4px] rounded-r-sm ${isCall ? 'bg-accent-red' : 'bg-accent-green'}`} />
+                                    <div className="text-center font-bold text-text-primary ml-1">{i + 1}</div>
                                 </td>
                                 <td className="py-0.5 pr-1 text-text-secondary">SPY</td>
-                                <td className={`py-0.5 pr-1 font-bold ${isCall ? 'text-accent-red' : 'text-accent-green'}`}>
+                                <td className={`py-1 text-center font-bold ${isCall ? 'text-accent-red' : 'text-accent-green'}`}>
                                     {isCall ? 'C' : 'P'}
                                 </td>
-                                <td className="py-0.5 pr-1 text-right text-text-primary">
-                                    {fmtPrice(opt.strike)}
+                                <td className="py-1 text-right text-text-primary font-bold">
+                                    {opt.strike.toFixed(2)}
                                 </td>
-                                <td className="py-0.5 pr-1 text-right text-text-secondary">
+                                <td className="py-1 text-right text-[#40c4ff]">
                                     {opt.implied_volatility ? `${(opt.implied_volatility * 100).toFixed(1)}%` : '—'}
                                 </td>
-                                <td className="py-0.5 pr-1 text-right">
-                                    <span className={`px-1 rounded text-2xs font-bold ${isCall ? 'bg-accent-red/20 text-accent-red' : 'bg-accent-green/20 text-accent-green'}`}>
-                                        {fmtVolume(opt.volume)}
+                                <td className="py-1 text-right">
+                                    <span className="px-1.5 py-0.5 rounded-[4px] text-[10px] font-bold bg-white/5 border border-white/10">
+                                        {(opt as any).flow_volume_label || fmtVolume(opt.volume)}
                                     </span>
                                 </td>
-                                <td className={`py-0.5 text-right font-bold ${flowNeg ? 'text-accent-red' : 'text-accent-green'}`}>
-                                    {fmtFlow(opt.flow)}
+                                <td className={`py-1 text-right font-bold transition-all duration-500 pr-1 ${(opt as any).flow_color || (flowNeg ? 'text-accent-green' : 'text-accent-red')} ${(opt as any).flow_glow || ''}`}>
+                                    {(opt as any).flow_deg_formatted || fmtFlow(opt.flow)}
                                 </td>
                             </tr>
                         )

@@ -45,33 +45,62 @@ class WallMigrationTracker:
 
         # Persistence
         self._redis = None
-        if settings.redis_url:
-            try:
-                import redis
-                self._redis = redis.Redis.from_url(
-                    settings.redis_url,
-                    decode_responses=True,
-                    socket_connect_timeout=1
-                )
-            except Exception:
-                pass
+
+    def set_redis_client(self, client: Any) -> None:
+        """Inject shared Redis client."""
+        self._redis = client
 
     def update(
         self,
         *,
         call_wall: float | None,
         put_wall: float | None,
+        spot: float | None = None,
         call_wall_volume: int = 0,
         put_wall_volume: int = 0,
         sim_clock_mono: float | None = None,
+        displacement_multiplier: float = 1.0,
     ) -> WallMigrationResult:
         """Update tracker with current wall positions."""
         now_mono = sim_clock_mono if sim_clock_mono is not None else time.monotonic()
+        now_real = datetime.now(ZoneInfo("US/Eastern"))
+
+        # --- Pre-compute cross-cutting states (highest priority) ---
+        # DECAYING: Late-day charm/gamma decay renders walls irrelevant after 14:00 ET
+        is_decaying = now_real.hour >= 14
+
+        # BREACHED: Spot has pierced through the wall
+        call_breached = (
+            spot is not None
+            and call_wall is not None
+            and spot > call_wall + 0.5
+        )
+        put_breached = (
+            spot is not None
+            and put_wall is not None
+            and spot < put_wall - 0.5
+        )
 
         # Only snapshot at configured interval
         elapsed = now_mono - self._last_snapshot_time
         if elapsed < settings.wall_snapshot_interval_seconds and self._snapshots:
-            return self._last_result or WallMigrationResult()
+            # Even on throttled return, overlay high-priority states on cached result
+            if self._last_result:
+                result = self._last_result
+                if call_breached:
+                    result = result.model_copy(update={"call_wall_state": WallMigrationCallState.BREACHED, "confidence": 0.95})
+                elif is_decaying and result.call_wall_state not in (
+                    WallMigrationCallState.BREACHED,
+                ):
+                    result = result.model_copy(update={"call_wall_state": WallMigrationCallState.DECAYING})
+                if put_breached:
+                    result = result.model_copy(update={"put_wall_state": WallMigrationPutState.BREACHED, "confidence": 0.95})
+                elif is_decaying and result.put_wall_state not in (
+                    WallMigrationPutState.BREACHED,
+                ):
+                    result = result.model_copy(update={"put_wall_state": WallMigrationPutState.DECAYING})
+                return result
+            return WallMigrationResult()
 
         self._last_snapshot_time = now_mono
         self._snapshots.append(_WallSnapshot(
@@ -79,7 +108,14 @@ class WallMigrationTracker:
         ))
 
         if len(self._snapshots) < 2:
-            return WallMigrationResult()
+            call_hist = [s.call_wall for s in self._snapshots]
+            put_hist = [s.put_wall for s in self._snapshots]
+            result = WallMigrationResult(
+                call_wall_history=call_hist,
+                put_wall_history=put_hist,
+            )
+            self._last_result = result
+            return result
 
         # Compare current vs previous snapshot
         prev = self._snapshots[-2]
@@ -91,31 +127,47 @@ class WallMigrationTracker:
         put_delta = None
         confidence = 0.0
 
-        # Call wall analysis
-        if curr.call_wall is not None and prev.call_wall is not None:
+        # Call wall analysis — BREACHED takes priority, then DECAYING
+        threshold = settings.wall_displacement_threshold * displacement_multiplier
+        if call_breached:
+            call_state = WallMigrationCallState.BREACHED
+            confidence = max(confidence, 0.95)
+        elif is_decaying:
+            call_state = WallMigrationCallState.DECAYING
+            confidence = max(confidence, 0.3)
+        elif curr.call_wall is not None and prev.call_wall is not None:
             call_delta = curr.call_wall - prev.call_wall
-            if call_delta > settings.wall_displacement_threshold:
+            if call_delta > threshold:
                 call_state = WallMigrationCallState.RETREATING_RESISTANCE
                 confidence = max(confidence, 0.7)
-            elif call_delta < -settings.wall_displacement_threshold:
+            elif call_delta < -threshold:
                 call_state = WallMigrationCallState.REINFORCED_WALL
                 confidence = max(confidence, 0.6)
             elif curr.call_volume > prev.call_volume + settings.volume_reinforcement_threshold:
                 call_state = WallMigrationCallState.REINFORCED_WALL
                 confidence = max(confidence, 0.5)
 
-        # Put wall analysis
-        if curr.put_wall is not None and prev.put_wall is not None:
+        # Put wall analysis — BREACHED takes priority, then DECAYING
+        if put_breached:
+            put_state = WallMigrationPutState.BREACHED
+            confidence = max(confidence, 0.95)
+        elif is_decaying:
+            put_state = WallMigrationPutState.DECAYING
+            confidence = max(confidence, 0.3)
+        elif curr.put_wall is not None and prev.put_wall is not None:
             put_delta = curr.put_wall - prev.put_wall
-            if put_delta < -settings.wall_displacement_threshold:
+            if put_delta < -threshold:
                 put_state = WallMigrationPutState.RETREATING_SUPPORT
                 confidence = max(confidence, 0.7)
-            elif put_delta > settings.wall_displacement_threshold:
+            elif put_delta > threshold:
                 put_state = WallMigrationPutState.REINFORCED_SUPPORT
                 confidence = max(confidence, 0.6)
             elif curr.put_volume > prev.put_volume + settings.volume_reinforcement_threshold:
                 put_state = WallMigrationPutState.REINFORCED_SUPPORT
                 confidence = max(confidence, 0.5)
+
+        call_hist = [s.call_wall for s in self._snapshots]
+        put_hist = [s.put_wall for s in self._snapshots]
 
         result = WallMigrationResult(
             call_wall_state=call_state,
@@ -123,6 +175,8 @@ class WallMigrationTracker:
             confidence=confidence,
             call_wall_delta=call_delta,
             put_wall_delta=put_delta,
+            call_wall_history=call_hist,
+            put_wall_history=put_hist,
         )
         self._last_result = result
         return result

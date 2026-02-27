@@ -23,4 +23,4 @@ BADGE_HOLLOW_AMBER  = "badge-hollow-amber"
 BADGE_HOLLOW_CYAN   = "badge-hollow-cyan"
 
 # ── Universal Text Helpers ─────────────────────────────────────────────────
-TEXT_SECONDARY = "text-text-secondary"
+TEXT_SECONDARY = "text-white/80"

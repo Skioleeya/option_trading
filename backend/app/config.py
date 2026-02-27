@@ -91,7 +91,20 @@ class Settings(BaseSettings):
         description="Mark Opening ATM decay legs stale when quotes haven't updated within this many seconds",
     )
 
+    # Strike Window Settings (Phase 32)
+    strike_window_size: float = Field(
+        default=15.0,
+        description="Active window (+/- points) around spot to fetch option quotes",
+    )
+    research_window_size: float = Field(
+        default=70.0,
+        description="Wide window (+/- points) for liquidity research scans",
+    )
+
     # Persistence (Redis + cold storage)
+    redis_host: str = Field(default="127.0.0.1", description="Redis host")
+    redis_port: int = Field(default=6380, description="Redis port")
+    redis_db: int = Field(default=0, description="Redis database index")
     redis_url: str | None = Field(
         default=None,
         description="Redis connection URL for persistence (e.g. redis://:pass@127.0.0.1:6380/0)",
@@ -207,15 +220,44 @@ class Settings(BaseSettings):
     # IV >= iv_high_max = EXTREME regime (crisis, FADE/Cash, >35%)
 
     # Variance Risk Premium (VRP = IV - HV) thresholds
+    # Post-2022 research (e.g. JF, RFS) indicates structural VRP compression in 0DTE era.
     vrp_cheap_threshold: float = Field(
-        default=-2.0, description="VRP < this = Options CHEAP (IV < HV)"
+        default=-1.5, description="VRP < this = Options CHEAP (Vol sellers underpricing risk)"
     )
     vrp_expensive_threshold: float = Field(
-        default=5.0, description="VRP > this = Options EXPENSIVE (IV >> HV)"
+        default=3.5, description="VRP > this = Options EXPENSIVE (Requires strict hedging)"
     )
     vrp_trap_threshold: float = Field(
-        default=10.0, description="VRP > this = THETA TRAP (extreme premium, DANGER)"
+        default=7.0, description="VRP > this = THETA TRAP (Extreme premium, strict mean-reversion expected)"
     )
+    vrp_veto_threshold: float = Field(
+        default=8.0,
+        description=(
+            "Phase 25A — VRP Veto Gate (Paper: Muravyev et al. SSRN #4019647). "
+            "When VRP > this value, all LONG_CALL/PUT signals are vetoed as NO_TRADE. "
+            "Entry into expensive options has negative expected value (EV < 0). "
+            "Default 8.0 = 2× the TRAP threshold, i.e. extreme rare event only."
+        )
+    )
+    vrp_bargain_boost: float = Field(
+        default=1.15,
+        description=(
+            "Phase 25A — Confidence multiplier applied when VRP is in BARGAIN territory. "
+            "Signals are more reliable when options are cheap (IV underpricing). "
+            "Default 1.15 = +15% confidence boost."
+        )
+    )
+
+    # Jump Detection & Safety Valve (Phase 27)
+    jump_z_threshold: float = Field(
+        default=3.0,
+        description="Phase 27.1 — Z-Score threshold for price jump detection (|Z| > threshold)."
+    )
+    jump_lockout_seconds: int = Field(
+        default=60,
+        description="Phase 27.3 — Duration of signal halt after a jump is detected."
+    )
+
 
     # ============================================================================
     # CENTRALIZED GEX THRESHOLDS (ALL IN MILLIONS - NO HARDCODING ALLOWED)
@@ -308,12 +350,13 @@ class Settings(BaseSettings):
         default=0.03, description="Spot move threshold (%) for divergence detection"
     )
 
-    # Vanna Flow Thresholds
+    # Vanna Flow Thresholds (S-VOL Correlation)
+    # Dealer hedging dynamics shift significantly when correlation flips positive.
     vanna_danger_zone_threshold: float = Field(
-        default=0.5, description="Spot-Vol correlation threshold for DANGER_ZONE"
+        default=0.45, description="Spot-Vol correlation > 0.45 (Positive correlation warns of directional break/bubble)"
     )
     vanna_grind_stable_threshold: float = Field(
-        default=-0.8, description="Inverse correlation threshold for GRIND_STABLE"
+        default=-0.75, description="Inverse correlation < -0.75 (Healthy stable market regime)"
     )
 
     # Historical Volatility Thresholds (for Volatility Regime classification)
@@ -330,13 +373,51 @@ class Settings(BaseSettings):
         default=35.0, description="HV level above which triggers CRISIS alert (percent)"
     )
 
-    # CHARM (Delta Decay) Thresholds
+    # CHARM (Delta Decay) Thresholds - 0DTE Focused
+    # 0DTE theta decay accelerates 100x vs 45DTE, especially around 2PM ET ("Dealer O'Clock").
     charm_accel_threshold: float = Field(
-        default=1.0, description="CHARM threshold for ACCEL_DECAY state (|CHARM| > 1.0)"
+        default=2.5, description="CHARM threshold for ACCEL_DECAY state (|CHARM| > 2.5, limits intraday noise)"
     )
     charm_terminal_threshold: float = Field(
-        default=50.0, description="CHARM threshold for TERMINAL DECAY alert (CHARM > 50)"
+        default=60.0, description="CHARM threshold for TERMINAL DECAY (High-speed 0DTE dealer hedging zone)"
     )
+
+    # SKEW DYNAMICS Thresholds (25-Delta normalized)
+    # Ratio: (Put25d_IV - Call25d_IV) / ATM_IV
+    skew_speculative_max: float = Field(
+        default=0.08, description="Skew < 0.08 = Call demand spike (SPECULATIVE/Fomo)"
+    )
+    skew_defensive_min: float = Field(
+        default=0.22, description="Skew > 0.22 = Put hedging spike (DEFENSIVE/Fear)"
+    )
+
+    # ============================================================================
+    # DEG-FLOW COMPOSITE SYSTEM (Phases D+E+G)
+    # ============================================================================
+    # Base weights (must sum to 1.0 within each set)
+    flow_weight_d: float = Field(default=0.40, description="FlowEngine_D base weight (Gamma Imbalance)")
+    flow_weight_e: float = Field(default=0.35, description="FlowEngine_E base weight (Vanna × ΔIV)")
+    flow_weight_g: float = Field(default=0.25, description="FlowEngine_G base weight (OI Momentum)")
+
+    # Charm Surge weights (last 2 hours of 0DTE session)
+    flow_charm_surge_weight_d: float = Field(default=0.50, description="D weight during Charm Surge zone")
+    flow_charm_surge_weight_e: float = Field(default=0.30, description="E weight during Charm Surge zone")
+    flow_charm_surge_weight_g: float = Field(default=0.20, description="G weight during Charm Surge zone")
+
+    # NEUTRAL GEX zone weights
+    flow_neutral_gex_weight_d: float = Field(default=0.30, description="D weight in NEUTRAL GEX zone")
+    flow_neutral_gex_weight_e: float = Field(default=0.40, description="E weight in NEUTRAL GEX zone")
+    flow_neutral_gex_weight_g: float = Field(default=0.30, description="G weight in NEUTRAL GEX zone")
+
+    # Z-Score intensity thresholds
+    flow_zscore_extreme_threshold: float = Field(default=3.0, description="|z_deg| >= this → EXTREME intensity")
+    flow_intensity_high_threshold: float = Field(default=1.5, description="|z_deg| >= this → HIGH intensity")
+
+    # OI cache TTL (seconds)
+    flow_oi_cache_ttl_seconds: int = Field(default=86400, description="TTL for OI Redis snapshots (one trading day)")
+
+    # Minimum volume for a contract to appear in Active Options
+    flow_active_min_volume: int = Field(default=100, description="Minimum volume threshold for Active Options inclusion")
 
     # Historical Volatility Tracker Configuration
     hv_history_size: int = Field(

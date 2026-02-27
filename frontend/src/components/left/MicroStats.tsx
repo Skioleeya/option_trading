@@ -8,7 +8,6 @@ interface Props {
         vanna: { label: string; badge: string }
         momentum: { label: string; badge: string }
     }
-    sideState: string
 }
 
 // Stat card with title, icon, badge, and optional value
@@ -20,11 +19,14 @@ const StatCard: React.FC<{
 }> = ({ title, icon, badge, value }) => (
     <div className="rounded p-1.5 space-y-1.5"
         style={{ border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.02)' }}>
-        <div className="flex items-center gap-1">
-            <span className="section-header">{title}</span>
-            {icon && <span className="text-text-secondary">{icon}</span>}
+        <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+                <span className="section-header text-white/90">{title}</span>
+                {icon && <span className="opacity-100 drop-shadow-md">{icon}</span>}
+            </div>
+            {value && <span className="mono text-xs font-bold text-text-primary">{value}</span>}
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center">
             {badge}
             {value && <span className="mono text-xs font-bold text-text-primary">{value}</span>}
         </div>
@@ -33,15 +35,17 @@ const StatCard: React.FC<{
 
 export const MicroStats: React.FC<Props> = ({
     uiState,
-    sideState,
 }) => {
     return (
-        <div className="p-2 space-y-2">
+        <div className="p-1 pb-4 space-y-1.5 bg-[#0a0c10]">
             {/* Section title */}
-            <div className="section-header tracking-widest">MICRO STATS</div>
+            <div className="flex items-center gap-2 px-1">
+                <div className="w-1.5 h-1.5 rounded-sm bg-white/80" />
+                <span className="section-header text-white/90 tracking-widest">MICRO STATS</span>
+            </div>
 
             {/* 2×2 grid */}
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="grid grid-cols-2 gap-1 px-1">
 
                 {/* NET GEX */}
                 <StatCard
@@ -68,10 +72,12 @@ export const MicroStats: React.FC<Props> = ({
                 {/* MOMENTUM */}
                 <StatCard
                     title="MOMENTUM"
+                    icon={<Minus size={14} className="text-white/60" />}
                     badge={
-                        <Minus size={14} className="text-text-secondary" />
+                        <span className={`badge ${uiState.momentum.badge}`}>
+                            {uiState.momentum.label}
+                        </span>
                     }
-                    value={uiState.momentum.label !== '—' ? uiState.momentum.label : undefined}
                 />
 
                 {/* VANNA */}
@@ -84,15 +90,6 @@ export const MicroStats: React.FC<Props> = ({
                         </span>
                     }
                 />
-            </div>
-
-            {/* SIDE — separate row below */}
-            <div className="rounded p-1.5"
-                style={{ border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.02)' }}>
-                <div className="section-header mb-1">SIDE</div>
-                {sideState ? (
-                    <span className="badge badge-purple">{sideState}</span>
-                ) : null}
             </div>
         </div>
     )

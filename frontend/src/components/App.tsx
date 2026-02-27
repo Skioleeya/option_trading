@@ -8,30 +8,53 @@ import { WallMigration } from './left/WallMigration'
 import { DepthProfile } from './left/DepthProfile'
 import { MicroStats } from './left/MicroStats'
 import { DecisionEngine } from './right/DecisionEngine'
+import { TacticalTriad } from './right/TacticalTriad'
+import { SkewDynamics } from './right/SkewDynamics'
 import { ActiveOptions } from './right/ActiveOptions'
+import { MtfFlow } from './right/MtfFlow'
 import type { AtmDecay } from '../types/dashboard'
 
-// ============================================================================
-// TradingView Widget placeholder
-// ============================================================================
-const TradingViewChart: React.FC<{ spot: number | null }> = ({ spot: _spot }) => (
-    <div className="relative w-full h-full bg-bg-primary flex items-center justify-center">
-        {/* TradingView widget will be embedded here */}
-        <div id="tradingview-widget" className="w-full h-full" />
-        {/* Fallback if TradingView not loaded */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <span className="mono text-xs text-text-muted">
-                TradingView Widget — SPX / ATM Decay Chart
-            </span>
-        </div>
-    </div>
-)
+
+import { useEffect, useState, useMemo } from 'react'
+
+const API_BASE = 'http://localhost:8000'
+
+import { AtmDecayChart } from './center/AtmDecayChart'
 
 // ============================================================================
 // Main App
 // ============================================================================
 export const App: React.FC = () => {
     const { status, payload } = useDashboardWS()
+    const [atmHistory, setAtmHistory] = useState<AtmDecay[]>([])
+
+    // 1. Fetch history on connection
+    useEffect(() => {
+        if (status === 'connected') {
+            fetch(`${API_BASE}/api/atm-decay/history`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data && data.history) {
+                        setAtmHistory(data.history)
+                    }
+                })
+                .catch(err => console.error("Failed to fetch ATM history:", err))
+        }
+    }, [status])
+
+    // 2. Extract and merge latest tick
+    const atm = useMemo(() => {
+        const latest = payload?.agent_g?.data?.ui_state?.atm
+        if (latest) {
+            // Append to history if it's a new timestamp
+            setAtmHistory(prev => {
+                const alreadyExists = prev.some(t => t.timestamp === latest.timestamp)
+                if (alreadyExists) return prev
+                return [...prev, latest]
+            })
+        }
+        return latest ?? null
+    }, [payload])
 
     const spot = payload?.spot ?? null
     const agentG = payload?.agent_g ?? null
@@ -46,29 +69,25 @@ export const App: React.FC = () => {
     const ivPct = agentBData?.spy_atm_iv ?? null
     const ivRegime = fused?.iv_regime ?? 'NORMAL'
 
-    // Microstructure
-    const mtfConsensus = agentBData?.mtf_consensus
-
     // ── DECOUPLED UI Architecture ──
     // Backend computes the badges and states precisely, React blindly renders them.
-    const uiState = agentG?.data?.ui_state ?? {
+    const uiState: any = agentG?.data?.ui_state ?? {
         micro_stats: {
             net_gex: { label: '—', badge: 'badge-neutral' },
             wall_dyn: { label: '—', badge: 'badge-neutral' },
             vanna: { label: '—', badge: 'badge-neutral' },
             momentum: { label: '—', badge: 'badge-neutral' }
         },
+        tactical_triad: null,
+        skew_dynamics: null,
+        active_options: [],
+        mtf_flow: null,
         wall_migration: [],
-        depth_profile: []
+        depth_profile: [],
+        macro_volume_map: {}
     }
 
-    // ATM Decay (computed separately — requires opening ATM)
-    const atm: AtmDecay = {
-        atm_strike: null, // Will be populated from backend
-        straddle_pct: null,
-        call_pct: null,
-        put_pct: null,
-    }
+
 
     // Market status
     const now = new Date()
@@ -92,130 +111,77 @@ export const App: React.FC = () => {
 
                 {/* ── LEFT PANEL (ANALYSIS / DEFENSE) ── */}
                 <div className="flex flex-col border-r panel-border-right overflow-hidden"
-                    style={{ width: '220px', minWidth: '220px' }}>
-
-                    {/* GAMMA STRUCTURE header */}
-                    <div className="flex items-center justify-between px-2 py-1 border-b border-bg-border">
-                        <span className="section-header">GAMMA STRUCTURE</span>
-                        <span className="section-header text-text-muted">RADAR &amp; DEPTH</span>
-                    </div>
+                    style={{ width: '280px', minWidth: '280px' }}>
 
                     {/* Wall Migration */}
                     <WallMigration rows={uiState.wall_migration} />
 
                     {/* Depth Profile - takes remaining space */}
-                    <div className="flex-1 overflow-hidden border-t border-bg-border">
-                        <div className="flex items-center gap-2 px-2 py-0.5 border-b border-bg-border">
-                            <span className="section-header">DEPTH PROFILE</span>
+                    <div className="flex-1 overflow-hidden border-t border-bg-border flex flex-col">
+                        <div className="shrink-0 flex items-center justify-between px-2 py-1.5 border-b border-bg-border bg-[#0a0a0a]">
+                            <span className="section-header text-[#e0e0e0] font-bold tracking-widest text-[11px] uppercase">DEPTH PROFILE</span>
+                            <div className="flex items-center gap-3 text-3xs font-medium tracking-wide pr-1 text-white/80">
+                                <span className="flex items-center gap-1.5"><div className="w-[5px] h-[5px] rounded-full bg-market-down"></div>Put</span>
+                                <span className="flex items-center gap-1.5"><div className="w-[5px] h-[5px] rounded-full bg-market-up"></div>Call</span>
+                            </div>
                         </div>
-                        <DepthProfile rows={uiState.depth_profile} />
+                        <DepthProfile rows={uiState.depth_profile} macroVolumeMap={uiState.macro_volume_map} spot={spot} />
                     </div>
 
                     {/* Micro Stats */}
-                    <div className="flex-1 min-h-0 min-w-0">
+                    <div className="shrink-0 flex-none border-t border-bg-border">
                         <MicroStats
                             uiState={uiState.micro_stats}
-                            sideState={mtfConsensus?.consensus ?? ''}
                         />
                     </div>
                 </div>
 
                 {/* ── CENTER PANEL (CHART) ── */}
-                <div className="flex flex-col flex-1 overflow-hidden">
-                    {/* Chart area */}
-                    <div className="relative flex-1 overflow-hidden">
-                        <TradingViewChart spot={spot} />
+                <div className="relative flex flex-col flex-1 overflow-hidden bg-[#090a0c]">
+                    <div className="flex-1 overflow-hidden relative">
+                        <AtmDecayChart data={atmHistory} />
+                    </div>
 
-                        {/* ATM Decay glassmorphism overlay */}
-                        <div className="absolute top-2 left-2 z-10">
-                            <AtmDecayOverlay atm={atm} spot={spot} />
+                    {/* ATM Decay glassmorphism overlay */}
+                    <div className="absolute top-3 left-3 z-10 pointer-events-none">
+                        <div className="pointer-events-auto">
+                            <AtmDecayOverlay atm={atm} spot={spot} history={atmHistory} />
                         </div>
                     </div>
 
-                    {/* GEX Status Bar */}
-                    <GexStatusBar
-                        netGex={netGex}
-                        callWall={callWall}
-                        flipLevel={flipLevel}
-                        putWall={putWall}
-                    />
+                    {/* GEX Status Bar — floats above TradingView time axis */}
+                    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+                        <div className="pointer-events-auto">
+                            <GexStatusBar
+                                netGex={netGex}
+                                callWall={callWall}
+                                flipLevel={flipLevel}
+                                putWall={putWall}
+                            />
+                        </div>
+                    </div>
                 </div>
 
                 {/* ── RIGHT PANEL (TACTICAL OFFENSE) ── */}
-                <div className="flex flex-col border-l panel-border-right overflow-y-auto"
-                    style={{ width: '260px', minWidth: '260px' }}>
-
-                    {/* Header */}
-                    <div className="flex items-center justify-between px-2 py-1 border-b border-bg-border">
-                        <div className="flex items-center gap-1.5">
-                            <div className="w-1.5 h-1.5 rounded-full bg-accent-green dot-live" />
-                            <span className="section-header">TACTICAL OFFENSE</span>
-                        </div>
-                    </div>
+                <div className="flex flex-col border-l border-bg-border overflow-y-auto"
+                    style={{ width: '320px', minWidth: '320px' }}>
 
                     {/* Decision Engine */}
                     <DecisionEngine fused={fused} />
 
                     {/* Tactical Triad */}
-                    <div className="border-t border-bg-border p-2">
-                        <div className="flex items-center justify-between mb-2">
-                            <span className="section-header">TACTICAL TRIAD</span>
-                            <span className="section-header text-text-muted">S-VOL / CHARM / VRP</span>
-                        </div>
-                        <div className="grid grid-cols-3 gap-1">
-                            {[
-                                { label: 'VRP', sub: 'BREAKOUT' },
-                                { label: 'CHARM', sub: 'REVERSAL' },
-                                { label: 'S-VOL', sub: 'FLIP RISK' },
-                            ].map((item) => (
-                                <div key={item.label}
-                                    className="border border-bg-border rounded p-1.5 space-y-1">
-                                    <div className="mono text-xs text-text-secondary font-bold">{item.label}</div>
-                                    <div className="mono text-sm font-bold text-text-primary">—</div>
-                                    <div className="section-header text-text-muted">{item.sub}</div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
+                    <TacticalTriad uiState={uiState.tactical_triad} />
 
                     {/* Skew Dynamics */}
-                    <div className="border-t border-bg-border p-2">
-                        <div className="flex items-center justify-between mb-1">
-                            <span className="section-header">SKEW DYNAMICS</span>
-                            <span className="section-header text-text-muted">IV SKEW ANALYSIS</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-1.5">
-                                <div className="w-3 h-3 rounded-full bg-bg-border flex items-center justify-center">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-text-secondary" />
-                                </div>
-                                <div>
-                                    <div className="section-header">IV SKEW</div>
-                                    <div className="badge badge-neutral text-2xs">NEUTRAL</div>
-                                </div>
-                            </div>
-                            <span className="mono text-xl font-bold text-text-primary">—</span>
-                        </div>
-                    </div>
+                    <SkewDynamics uiState={uiState.skew_dynamics} />
 
                     {/* Active Options */}
                     <div className="border-t border-bg-border flex-1">
-                        <ActiveOptions options={[]} />
+                        <ActiveOptions options={uiState.active_options ?? []} />
                     </div>
 
                     {/* MTF Flow */}
-                    <div className="border-t border-bg-border p-2">
-                        <div className="section-header mb-1.5">MTF FLOW</div>
-                        <div className="grid grid-cols-3 gap-1">
-                            {['1M', '5M', '15M'].map((tf) => (
-                                <div key={tf}
-                                    className="flex items-center justify-between px-2 py-1 border border-bg-border rounded">
-                                    <span className="mono text-2xs text-text-secondary">{tf}</span>
-                                    <div className="w-1.5 h-1.5 rounded-full bg-text-muted" />
-                                </div>
-                            ))}
-                        </div>
-                    </div>
+                    <MtfFlow uiState={uiState.mtf_flow} />
                 </div>
             </div>
         </div>

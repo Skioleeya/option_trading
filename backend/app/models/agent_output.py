@@ -6,6 +6,7 @@ replacing deep dict.get() chains with typed attribute access.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field

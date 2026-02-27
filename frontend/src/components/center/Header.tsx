@@ -1,6 +1,7 @@
 import React from 'react'
 import { fmtPrice } from '../../lib/utils'
 import type { ConnectionStatus } from '../../types/dashboard'
+import { Zap } from 'lucide-react'
 
 interface Props {
     spot: number | null
@@ -20,72 +21,105 @@ export const Header: React.FC<Props> = ({
             hour: '2-digit',
             minute: '2-digit',
             second: '2-digit',
-            timeZone: 'America/New_York',
+            timeZone: 'America/New_York'
         })
         : '--:--:--'
 
     const connColor =
-        status === 'connected' ? 'bg-accent-green' :
-            status === 'connecting' ? 'bg-accent-amber' :
-                'bg-accent-red'
+        status === 'connected' ? 'bg-[#10b981]' :
+            status === 'connecting' ? 'bg-[#f59e0b]' :
+                'bg-[#ef4444]'
 
     const ivRegimeColor =
-        ivRegime === 'LOW' ? 'text-accent-green' :
-            ivRegime === 'NORMAL' ? 'text-accent-green' :
-                ivRegime === 'ELEVATED' ? 'text-accent-amber' :
-                    ivRegime === 'HIGH' ? 'text-accent-red' :
-                        ivRegime === 'EXTREME' ? 'text-accent-red' :
-                            'text-text-secondary'
+        (ivRegime === 'HIGH' || ivRegime === 'EXTREME') ? 'text-[#ef4444]' :
+            ivRegime === 'ELEVATED' ? 'text-[#f59e0b]' :
+                'text-[#10b981]'
+
+    const ivBadgeCls =
+        (ivRegime === 'HIGH' || ivRegime === 'EXTREME')
+            ? 'border-[#7f1d1d] text-[#ef4444] bg-[#450a0a]/50'
+            : ivRegime === 'ELEVATED'
+                ? 'border-[#92400e] text-[#f59e0b] bg-[#422006]/50'
+                : 'border-[#065f46] text-[#10b981] bg-[#022c22]/50'
 
     return (
-        <header className="flex items-center justify-between px-3 py-1 border-b border-bg-border bg-bg-secondary"
-            style={{ height: '32px' }}>
-            {/* Left: Title */}
-            <div className="flex items-center gap-3">
-                <span className="font-bold tracking-widest text-xs text-text-primary" style={{ letterSpacing: '0.2em' }}>
-                    SPX SENTINEL
+        /*
+         * Grid 三列对齐三个面板宽度：
+         *   左(280px)  =  ANALYSIS 面板
+         *   中(1fr)    =  中央图表 + 遥测信息
+         *   右(320px)  =  TACTICAL OFFENSE 面板
+         */
+        <header className="grid items-center h-[36px] border-b border-[#27272a] bg-[#060606] w-full font-sans selection:bg-transparent"
+            style={{ gridTemplateColumns: '280px 1fr 320px' }}>
+
+            {/* ── LEFT: ANALYSIS panel label ── */}
+            <div className="flex items-center gap-2 px-3 border-r border-[#27272a] h-full">
+                <span className="text-[11px] font-black tracking-[0.2em] text-white/90 uppercase">
+                    ANALYSIS
                 </span>
-                <span className="mono text-xs text-text-secondary">{timeStr}</span>
             </div>
 
-            {/* Center: Market data pills */}
-            <div className="flex items-center gap-2">
-                {/* Market Open/Close */}
-                <span className={`badge ${marketStatus === 'OPEN' ? 'badge-green' : 'badge-neutral'}`}>
+            {/* ── CENTER: Telemetry bar ── */}
+            <div className="flex items-center justify-center gap-5 h-full">
+
+                {/* Brand */}
+                <span className="font-black tracking-[0.15em] text-[#e4e4e7] text-[11px]">
+                    SPX SENTINEL
+                </span>
+
+                <div className="w-[1px] h-[12px] bg-[#3f3f46]" />
+
+                {/* Time */}
+                <span className="font-mono text-[10px] text-[#71717a]">{timeStr} ET</span>
+
+                <div className="w-[1px] h-[12px] bg-[#3f3f46]" />
+
+                {/* Market open/close */}
+                <span className={`text-[10px] font-black tracking-wider ${marketStatus === 'OPEN' ? 'text-[#10b981]' : 'text-[#52525b]'}`}>
                     {marketStatus}
                 </span>
 
-                {/* Spot */}
-                <div className="flex items-center gap-1">
-                    <span className="section-header">SPY</span>
-                    <span className="mono text-sm font-bold text-text-primary">{fmtPrice(spot)}</span>
+                <div className="w-[1px] h-[12px] bg-[#3f3f46]" />
+
+                {/* SPY price */}
+                <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-bold text-[#71717a]">SPY</span>
+                    <span className="font-mono text-[12px] font-black text-[#e4e4e7]">{fmtPrice(spot)}</span>
                 </div>
 
+                <div className="w-[1px] h-[12px] bg-[#3f3f46]" />
+
                 {/* IV */}
-                <div className="flex items-center gap-1">
-                    <span className="section-header">IV</span>
-                    <span className={`mono text-xs font-bold ${ivRegimeColor}`}>
+                <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-bold text-[#71717a]">IV</span>
+                    <span className={`font-mono text-[12px] font-black ${ivRegimeColor}`}>
                         {ivPct != null ? `${ivPct.toFixed(2)}%` : '—'}
+                    </span>
+                    <span className={`text-[9px] font-black tracking-widest px-1.5 py-[1px] rounded-[2px] border ${ivBadgeCls}`}>
+                        {ivRegime}
                     </span>
                 </div>
 
-                {/* IV Regime badge */}
-                <span className={`badge ${ivRegime === 'NORMAL' ? 'badge-green' :
-                        ivRegime === 'ELEVATED' ? 'badge-amber' :
-                            ivRegime === 'HIGH' || ivRegime === 'EXTREME' ? 'badge-red' :
-                                'badge-neutral'
-                    }`}>{ivRegime || 'NORMAL'}</span>
+                <div className="w-[1px] h-[12px] bg-[#3f3f46]" />
+
+                {/* Connection */}
+                <div className="flex items-center gap-1.5">
+                    <div className={`w-1.5 h-1.5 rounded-full ${connColor} shadow-[0_0_6px_currentcolor]`} />
+                    <span className="text-[10px] font-bold text-[#71717a] tracking-widest">RDS LIVE</span>
+                </div>
             </div>
 
-            {/* Right: Connection dots */}
-            <div className="flex items-center gap-2">
-                <span className="section-header">RDS</span>
-                <div className={`w-1.5 h-1.5 rounded-full dot-live ${connColor}`} />
-                <span className="section-header">9INS</span>
-                <div className={`w-1.5 h-1.5 rounded-full ${connColor}`} />
-                <span className="section-header mono text-2xs">LIVE</span>
-                <div className="w-1.5 h-1.5 rounded-full bg-accent-green dot-live" />
+            {/* ── RIGHT: TACTICAL OFFENSE panel label ── */}
+            <div className="flex items-center justify-end gap-2 px-3 border-l border-[#27272a] h-full">
+                <div className="flex items-center gap-1.5 text-[#ef4444]">
+                    <Zap size={10} className="fill-current shrink-0" />
+                    <span className="text-[11px] font-black tracking-[0.2em] text-white/90 uppercase">
+                        TACTICAL OFFENSE
+                    </span>
+                </div>
+                <div className="w-2 h-2 rounded-full bg-[#10b981] shadow-[0_0_8px_rgba(16,185,129,0.6)] ml-1" />
             </div>
+
         </header>
     )
 }

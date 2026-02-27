@@ -63,22 +63,11 @@ class GreeksExtractor:
         )
 
         # Log sample call for diagnostics
-        sample_call = None
-        for opt in chain:
-            opt_type = opt.get("option_type", "").upper()
-            if opt_type in ("CALL", "C") and opt.get("gamma", 0):
-                sample_call = opt
-                break
-
-        if sample_call:
-            logger.warning(
-                f"[GreeksExtractor] Sample Call keys: {sample_call.keys()}"
-            )
-            logger.warning(
-                f"[GreeksExtractor] Sample Call Gamma: {sample_call.get('gamma')}"
-            )
+        if chain:
+            logger.warning(f"[GreeksExtractor] Sample Raw Option keys: {chain[0].keys()}")
+            logger.warning(f"[GreeksExtractor] Sample Raw Option: {chain[0]}")
         else:
-            logger.warning("[GreeksExtractor] Sample Call is None")
+            logger.warning("[GreeksExtractor] Chain is empty")
 
         # 1. Core GEX computation
         gex_result = self._gamma_analyzer.compute_net_gex(chain, spot)
@@ -105,6 +94,7 @@ class GreeksExtractor:
             "gamma_flip": gex_result["gamma_flip"],
             "atm_iv": atm_iv,
             "spy_atm_iv": atm_iv,  # Alias for pure SPY IV architecture
+            "skew_25d": self._extract_skew_ivs(chain),
             "charm_exposure": charm_exposure,
             "vanna_exposure": vanna_exposure,
             "gamma_profile": gamma_profile,
@@ -130,7 +120,7 @@ class GreeksExtractor:
         min_distance = float("inf")
 
         for opt in chain:
-            opt_type = opt.get("option_type", "").upper()
+            opt_type = opt.get("option_type", opt.get("type", "")).upper()
             if opt_type not in ("CALL", "C"):
                 continue
 
@@ -150,6 +140,48 @@ class GreeksExtractor:
             best_call_iv *= 100.0
 
         return best_call_iv
+
+    def _extract_skew_ivs(self, chain: list[dict[str, Any]]) -> dict[str, float | None]:
+        """Extract IVs for 25-delta Put and Call.
+        
+        Used for Skew Dynamic analysis: (PutIV - CallIV) / ATM_IV.
+        """
+        put_25d_iv = None
+        call_25d_iv = None
+        
+        min_put_delta_diff = float("inf")
+        min_call_delta_diff = float("inf")
+
+        for opt in chain:
+            try:
+                delta = abs(float(opt.get("delta", 0) or 0))
+                iv = float(opt.get("implied_volatility", 0) or 0)
+                opt_type = opt.get("option_type", opt.get("type", "")).upper()
+
+                if iv <= 0 or delta <= 0:
+                    continue
+
+                diff = abs(delta - 0.25)
+                
+                if opt_type in ("PUT", "P"):
+                    if diff < min_put_delta_diff:
+                        min_put_delta_diff = diff
+                        put_25d_iv = iv
+                elif opt_type in ("CALL", "C"):
+                    if diff < min_call_delta_diff:
+                        min_call_delta_diff = diff
+                        call_25d_iv = iv
+            except (ValueError, TypeError):
+                continue
+
+        # Normalized to percentages
+        if put_25d_iv and put_25d_iv < 1.0: put_25d_iv *= 100.0
+        if call_25d_iv and call_25d_iv < 1.0: call_25d_iv *= 100.0
+
+        return {
+            "put_25d_iv": put_25d_iv,
+            "call_25d_iv": call_25d_iv
+        }
 
     def _empty_result(self) -> dict[str, Any]:
         """Return empty result structure."""

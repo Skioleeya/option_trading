@@ -8,8 +8,42 @@ from __future__ import annotations
 
 from enum import Enum
 from typing import Any
+from datetime import datetime
 
 from pydantic import BaseModel, Field
+
+
+# ============================================================================
+# Volume Imbalance Classification (Phase 24)
+# ============================================================================
+class VIBTimeframeResult(BaseModel):
+    """Result for a specific timeframe."""
+    ratio: float = 0.0          # (CallVol - PutVol) / TotalVol
+    direction: str = "NEUTRAL"  # BULLISH (ratio > threshold), BEARISH, NEUTRAL
+    confidence: float = 0.0     # Normalized intensity [0, 1]
+    call_vol: int = 0
+    put_vol: int = 0
+
+
+class VIBResult(BaseModel):
+    """Aggregated VIB result across timeframes."""
+    tf_1m: VIBTimeframeResult = Field(default_factory=VIBTimeframeResult)
+    tf_5m: VIBTimeframeResult = Field(default_factory=VIBTimeframeResult)
+    tf_15m: VIBTimeframeResult = Field(default_factory=VIBTimeframeResult)
+    consensus: str = "NEUTRAL"
+    strength: float = 0.0
+
+
+# ============================================================================
+# Jump Detection Classification (Phase 27)
+# ============================================================================
+class JumpResult(BaseModel):
+    """Result of jump detection analysis."""
+    is_jump: bool = False
+    z_score: float = 0.0
+    magnitude_pct: float = 0.0
+    direction: str = "NEUTRAL"
+    timestamp: datetime | None = None
 
 
 # ============================================================================
@@ -98,6 +132,8 @@ class WallMigrationCallState(str, Enum):
 
     RETREATING_RESISTANCE = "RETREATING_RESISTANCE"  # Call wall moving up (bullish)
     REINFORCED_WALL = "REINFORCED_WALL"              # Call wall holding (bearish ceiling)
+    BREACHED = "BREACHED"                            # Spot pierced through call wall (gamma squeeze)
+    DECAYING = "DECAYING"                            # End-of-day charm decay, wall no longer relevant
     STABLE = "STABLE"
     UNAVAILABLE = "UNAVAILABLE"
 
@@ -107,6 +143,8 @@ class WallMigrationPutState(str, Enum):
 
     RETREATING_SUPPORT = "RETREATING_SUPPORT"    # Put wall moving down (bearish)
     REINFORCED_SUPPORT = "REINFORCED_SUPPORT"    # Put wall holding (bullish floor)
+    BREACHED = "BREACHED"                        # Spot broke below put wall (panic cascade)
+    DECAYING = "DECAYING"                        # End-of-day charm decay, wall no longer relevant
     STABLE = "STABLE"
     UNAVAILABLE = "UNAVAILABLE"
 
@@ -161,6 +199,10 @@ class VannaFlowResult(BaseModel):
     iv_roc_prev: float | None = None
     iv_acceleration: float | None = None
     history_count: int = 0
+    
+    # MM Pulse Dynamic Multipliers
+    wall_displacement_multiplier: float = 1.0
+    momentum_slope_multiplier: float = 1.0
 
 
 class IVVelocityResult(BaseModel):
@@ -181,6 +223,8 @@ class WallMigrationResult(BaseModel):
     confidence: float = 0.0
     call_wall_delta: float | None = None
     put_wall_delta: float | None = None
+    call_wall_history: list[float | None] = Field(default_factory=list)
+    put_wall_history: list[float | None] = Field(default_factory=list)
 
 
 class MicroStructureState(BaseModel):
@@ -191,6 +235,8 @@ class MicroStructureState(BaseModel):
     vanna_flow_result: VannaFlowResult | None = None
     vanna_flow: VannaFlowResult | None = None  # alt key fallback
     mtf_consensus: dict[str, Any] = Field(default_factory=dict)
+    volume_imbalance: VIBResult | None = None
+    jump_detection: JumpResult | None = None
 
 
 class MicroStructureAnalysis(BaseModel):

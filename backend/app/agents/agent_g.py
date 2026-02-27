@@ -9,6 +9,11 @@ from app.agents.base import AgentResult
 from app.config import settings
 from app.models.agent_output import AgentB1Output
 from app.services.fusion.dynamic_weight_engine import DynamicWeightEngine
+from app.ui.micro_stats.presenter import MicroStatsPresenter
+from app.ui.tactical_triad.presenter import TacticalTriadPresenter
+from app.ui.skew_dynamics.presenter import SkewDynamicsPresenter
+from app.ui.active_options.presenter import ActiveOptionsPresenter
+from app.ui.mtf_flow.presenter import MTFFlowPresenter
 
 
 logger = logging.getLogger(__name__)
@@ -35,6 +40,12 @@ class AgentG:
         self._agent_a = agent_a or AgentA()
         self._agent_b = agent_b or AgentB1()
         self._weight_engine = DynamicWeightEngine()
+        self._active_options_presenter = ActiveOptionsPresenter()
+
+    async def set_redis_client(self, client: Any) -> None:
+        """Inject shared Redis client into sub-agents and self (for DEG-FLOW)."""
+        self._redis = client
+        await self._agent_b.set_redis_client(client)
 
     def _map_iv_to_direction(self, iv_state: str | None) -> str:
         """Map IV velocity state to direction.
@@ -71,15 +82,23 @@ class AgentG:
         else:
             return "NEUTRAL"
 
-    def run(self, snapshot: dict[str, Any]) -> AgentResult:
-        a = self._agent_a.run(snapshot)
+    async def run(self, snapshot: dict[str, Any]) -> AgentResult:
+        # 1. Run B1 first to get dynamic thresholds from Vanna
         b = self._agent_b.run(snapshot)
-        return self.decide(agent_a=a, agent_b=b)
+        
+        # 2. Extract momentum multiplier for A
+        vanna_res = b.data.get("micro_structure", {}).get("micro_structure_state", {}).get("vanna_flow_result", {})
+        mom_mult = vanna_res.get("momentum_slope_multiplier", 1.0) if vanna_res else 1.0
+        
+        # 3. Run A with dynamic scaling
+        a = self._agent_a.run(snapshot, slope_multiplier=mom_mult)
+        
+        return await self.decide(agent_a=a, agent_b=b, snapshot=snapshot)
 
-    def decide(self, *, agent_a: AgentResult, agent_b: AgentResult) -> AgentResult:
+    async def decide(self, *, agent_a: AgentResult, agent_b: AgentResult, snapshot: dict[str, Any]) -> AgentResult:
         """Top-level guard wrapper."""
         try:
-            return self._decide_impl(agent_a=agent_a, agent_b=agent_b)
+            return await self._decide_impl(agent_a=agent_a, agent_b=agent_b, snapshot=snapshot)
         except Exception:
             logger.exception("[AgentG] decide() crashed; emitting NO_TRADE safety fallback")
             return AgentResult(
@@ -102,7 +121,7 @@ class AgentG:
                 summary="AgentG.decide() exception; NO_TRADE issued.",
             )
 
-    def _decide_impl(self, *, agent_a: AgentResult, agent_b: AgentResult) -> AgentResult:
+    async def _decide_impl(self, *, agent_a: AgentResult, agent_b: AgentResult, snapshot: dict[str, Any]) -> AgentResult:
         """Core decision logic."""
         b_output = AgentB1Output.model_validate(agent_b.data)
 
@@ -123,6 +142,9 @@ class AgentG:
         if ms_state and not (vanna_data and (vanna_data.state != "NORMAL" or vanna_data.confidence)):
             vanna_data = ms_state.vanna_flow
 
+        vib_data = ms_state.volume_imbalance if ms_state else None
+        jump_data = ms_state.jump_detection if ms_state else None
+
         mtf_consensus = b_output.mtf_consensus or (ms_state.mtf_consensus if ms_state else {})
 
         # Confidence values
@@ -137,7 +159,17 @@ class AgentG:
             wall_data.put_wall_state if wall_data else None,
         )
         vanna_direction = self._map_vanna_to_direction(vanna_data.state if vanna_data else None)
+        
+        # Phase 27.4 — Vanna Direction Correction (Paper 4 & 5)
+        # Danger zone in highly compressed timeframes (<30m) often results in Bullish chasing
+        if vanna_data and vanna_data.state == "DANGER_ZONE":
+            # For now, we assume high-frequency mode is always active. 
+            # In production, this would check `time_since_state_entered`.
+            vanna_direction = "BULLISH" # Chase the jump
+            summary.append("VANNA CORRECT: Danger Zone mapped to BULLISH chasing (Paper 5).")
+
         mtf_direction = mtf_consensus.get("consensus", "NEUTRAL")
+        vib_direction = vib_data.consensus if vib_data else "NEUTRAL"
 
         # Update weight engine
         self._weight_engine.update_market_state(spy_atm_iv, net_gex_f)
@@ -151,10 +183,83 @@ class AgentG:
                 "direction": mtf_direction,
                 "confidence": mtf_consensus.get("strength", 0.5),
             },
+            vib_signal={
+                "direction": vib_direction,
+                "confidence": vib_data.strength if vib_data else 0.0,
+            },
         )
 
-        # 2. Trap Logic (Priority 1)
-        if b_signal == DivergenceState.ACTIVE_BULL_TRAP:
+        # 1.5. Phase 27.3 — Jump Gate Safety Valve (P0.1, highest priority lockout)
+        # Paper 5: Aura et al. — Jumps indicate delta-hedging failure. 
+        # Halt execution until mean-reversion or stabilization.
+        if jump_data and jump_data.is_jump:
+            signal = f"HOLD (JUMP_DETECTED: |Z|={abs(jump_data.z_score):.1f})"
+            summary.append(
+                f"SAFETY VALVE (P0.1): Price shock detected ({jump_data.magnitude_pct:+.2f}%). "
+                "Halting trade entry per Paper 5 safety protocol."
+            )
+            # Early return or set flag to skip ALL downstream
+            return AgentResult(
+                agent=self.AGENT_ID,
+                signal=signal,
+                as_of=agent_b.as_of,
+                data={**agent_b.data, "fused_signal": fused_signal.model_dump()},
+                summary="; ".join(summary)
+            )
+
+        # Phase 25A — VRP Veto Gate (P0.5, fires before trap detection)
+        # Paper: Muravyev et al. (SSRN #4019647) — "EV < 0 when options are too expensive"
+        vrp_value = agent_b.data.get("hv_analysis", {}).get("vrp", None)
+        vrp_state  = agent_b.data.get("hv_analysis", {}).get("premium_state", "FAIR")
+
+        vrp_vetoed = False
+        if vrp_value is not None and vrp_value > settings.vrp_veto_threshold:
+            signal = f"NO_TRADE (VRP_VETO: VRP={vrp_value:.1f}≫{settings.vrp_veto_threshold})"
+            summary.append(
+                f"VRP VETO (P0.5): IV={spy_atm_iv:.1f}% far too expensive (VRP={vrp_value:.1f}). "
+                "Entry EV<0 per Muravyev et al. (SSRN #4019647)."
+            )
+            vrp_vetoed = True
+
+        # Phase 25B — MTF Alignment confidence dampener (Paper 1)
+        # Paper: Dim et al. (SSRN #4692190) — MTF alignment < 0.34 → confidence cut 50%
+        mtf_alignment = mtf_consensus.get("alignment", 1.0)
+        if mtf_alignment < 0.34:
+            fused_signal_confidence = fused_signal.confidence * 0.5
+            summary.append(f"MTF ALIGN DAMP: alignment={mtf_alignment:.2f} → conf halved.")
+        elif mtf_alignment >= 0.67 and vrp_state == "BARGAIN":
+            # VRP Bargain + MTF fully aligned = best entry condition
+            fused_signal_confidence = min(fused_signal.confidence * settings.vrp_bargain_boost, 1.0)
+            summary.append(f"VRP BARGAIN BOOST: alignment={mtf_alignment:.2f}, VRP={vrp_value:.1f}")
+        else:
+            fused_signal_confidence = fused_signal.confidence
+
+        # Phase 25D — GEX Directional Refinement (Paper 4)
+        # GEX < -500M indicates momentum acceleration risk. 
+        # Signals aligning with the gamma-induced move should get higher confidence.
+        gex_accel_boost = 1.0
+        if net_gex_f < -500:
+            if fused_signal.direction == "BEARISH":
+                gex_accel_boost = 1.20 # Reinforce crash
+                summary.append("GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).")
+            elif fused_signal.direction == "BULLISH":
+                gex_accel_boost = 1.15 # Reinforce short squeeze
+                summary.append("GEX ACCEL: Neg Gamma reinforcing Bullish bounce (Short Squeeze).")
+        elif net_gex_f > 800 and fused_signal.direction == "NEUTRAL":
+            summary.append("GEX PINNING: Strong Pos Gamma limiting volatility (Paper 2).")
+
+        fused_signal_confidence = min(fused_signal_confidence * gex_accel_boost, 1.0)
+
+        if net_gex_f < -1000:
+            summary.append("⚠️ TAIL RISK: Extreme Negative GEX detected (-1000M+).")
+
+        # Patch adjusted confidence back so downstream reads it
+        object.__setattr__(fused_signal, 'confidence', fused_signal_confidence)
+
+        # 2. Trap Logic (Priority 1) — only if not VRP vetoed
+        if vrp_vetoed:
+            pass  # signal already set above; skip all decision layers
+        elif b_signal == DivergenceState.ACTIVE_BULL_TRAP:
             signal = "Option Structure: LONG_PUT (Check Breadth!)"
             summary.append("TRAP DETECTED: Bull Trap active (fading price rise).")
         elif b_signal == DivergenceState.ACTIVE_BEAR_TRAP:
@@ -230,6 +335,12 @@ class AgentG:
         _vanna_dict = vanna_data.model_dump() if vanna_data is not None else {}
         micro_state = agent_b.data.get("micro_structure", {}).get("micro_structure_state", {})
 
+        # Extract Greeks for Tactical Triad
+        # In a real scenario these come from Agent B's option scan / IV surfaces
+        # We dummy-fallback to 0.0 if not fully integrated in `AgentB1Output` yet
+        vrp = vrp_value  # use real VRP from hv_analysis (not gamma_flip_level placeholder)
+        net_charm = None  # Add to b1 schema later if needed
+
         return AgentResult(
             agent=self.AGENT_ID,
             signal=signal,
@@ -242,6 +353,37 @@ class AgentG:
                 "gamma_walls": gamma_walls,
                 "gamma_flip_level": b_output.gamma_flip_level,
                 "trap_state": b_signal,
+                "ui_state": {
+                    "micro_stats": MicroStatsPresenter.build(
+                        gex_regime=_vanna_dict.get("gex_regime", "NEUTRAL"),
+                        wall_dyn=wall_data.model_dump() if wall_data else {},
+                        vanna=vanna_data.state if vanna_data else "NORMAL",
+                        momentum=agent_a.signal,
+                    ),
+                    "tactical_triad": TacticalTriadPresenter.build(
+                        vrp=agent_b.data.get("hv_analysis", {}).get("vrp"),
+                        vrp_state=agent_b.data.get("hv_analysis", {}).get("premium_state"),
+                        net_charm=agent_b.data.get("charm_analysis", {}).get("net_charm"),
+                        svol_corr=vanna_data.correlation if vanna_data else None,
+                        svol_state=vanna_data.state if vanna_data else "NORMAL",
+                        fused_signal_direction=fused_signal.direction
+                    ),
+                    "skew_dynamics": SkewDynamicsPresenter.build(
+                        skew_val=agent_b.data.get("skew_analysis", {}).get("skew_value", 0.0),
+                        state=agent_b.data.get("skew_analysis", {}).get("skew_state", "NEUTRAL")
+                    ),
+                    "active_options": await self._active_options_presenter.build(
+                        chain=snapshot.get("chain", []),
+                        spot=snapshot.get("spot") or 0.0,
+                        atm_iv=agent_b.data.get("spy_atm_iv") or 0.0,
+                        gex_regime=_vanna_dict.get("gex_regime", "NEUTRAL"),
+                        redis=getattr(self, "_redis", None),
+                        limit=5
+                    ),
+                    "mtf_flow": MTFFlowPresenter.build(
+                        mtf_consensus=mtf_consensus
+                    )
+                },
                 "fused_signal": {
                     "direction": fused_signal.direction,
                     "confidence": fused_signal.confidence,

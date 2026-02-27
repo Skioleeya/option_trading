@@ -9,12 +9,15 @@ export type VannaFlowState = 'DANGER_ZONE' | 'GRIND_STABLE' | 'NORMAL' | 'VANNA_
 export interface FusedSignal {
     direction: 'BULLISH' | 'BEARISH' | 'NEUTRAL'
     confidence: number
-    weights: { iv: number; wall: number; vanna: number; mtf: number }
+    weights: { iv: number; wall: number; vanna: number; mtf: number; vib?: number }
     regime: string
     iv_regime: string
     gex_intensity: string
     explanation: string
     components: Record<string, { direction: string; confidence: number; weight: number }>
+    // Phase 23/25B: MTF alignment score
+    alignment?: number
+    align_label?: string
 }
 
 export interface IVVelocityResult {
@@ -68,6 +71,13 @@ export interface ActiveOption {
     volume: number
     turnover: number
     flow: number
+    // DEG-specific extended fields
+    flow_deg_formatted?: string
+    flow_volume_label?: string
+    flow_color?: string
+    flow_glow?: string
+    flow_intensity?: 'EXTREME' | 'HIGH' | 'MODERATE' | 'LOW'
+    flow_direction?: 'BULLISH' | 'BEARISH' | 'NEUTRAL'
 }
 
 export interface AgentBData {
@@ -141,6 +151,8 @@ export interface AgentGResult {
                 is_flip: boolean
                 strike_color: string
             }>
+            macro_volume_map: Record<string, number>
+            atm: AtmDecay | null
         }
     }
 }
@@ -154,8 +166,10 @@ export interface DashboardPayload {
 
 // ATM Decay
 export interface AtmDecay {
-    atm_strike: number | null
+    strike: number | null
+    locked_at: string | null
     straddle_pct: number | null
     call_pct: number | null
     put_pct: number | null
+    timestamp?: string
 }

@@ -45,7 +45,7 @@ class AgentA:
         self._cumulative_volume: float = 0.0
         self._cumulative_pv: float = 0.0  # Price × Volume sum
 
-    def run(self, snapshot: dict[str, Any]) -> AgentResult:
+    def run(self, snapshot: dict[str, Any], slope_multiplier: float = 1.0) -> AgentResult:
         """Process market snapshot and return directional signal."""
         now = datetime.now(ZoneInfo("US/Eastern"))
         now_mono = time.monotonic()
@@ -95,7 +95,7 @@ class AgentA:
             slope = (recent[-1].price - recent[0].price) / len(recent)
 
         # Classification
-        slope_threshold = settings.agent_a_vwap_slope_threshold
+        slope_threshold = settings.agent_a_vwap_slope_threshold * slope_multiplier
 
         if spot > band1_upper and slope > slope_threshold:
             signal = "BULLISH"

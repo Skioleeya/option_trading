@@ -19,6 +19,9 @@ from zoneinfo import ZoneInfo
 from app.agents.base import AgentResult
 from app.agents.services.greeks_extractor import GreeksExtractor
 from app.config import settings
+from app.services.analysis.mtf_iv_engine import MTFIVEngine
+from app.services.analysis.volume_imbalance_engine import VolumeImbalanceEngine
+from app.services.analysis.jump_detector import JumpDetector
 from app.services.trackers.iv_velocity_tracker import IVVelocityTracker
 from app.services.trackers.vanna_flow_analyzer import VannaFlowAnalyzer
 from app.services.trackers.wall_migration_tracker import WallMigrationTracker
@@ -72,10 +75,24 @@ class AgentB1:
         self._wall_tracker = WallMigrationTracker()
         self._vanna_analyzer = VannaFlowAnalyzer()
 
-        # MTF trackers (Multi-Timeframe)
+        # MTF trackers (Multi-Timeframe) — legacy IVVelocity (kept for backward compat)
         self._iv_tracker_1m = IVVelocityTracker(window_seconds=settings.mtf_window_seconds_1min)
         self._iv_tracker_5m = IVVelocityTracker(window_seconds=settings.mtf_window_seconds_5min)
         self._iv_tracker_15m = IVVelocityTracker(window_seconds=settings.mtf_window_seconds_15min)
+
+        # MTF IV Z-Score Engine (Phase 23 — VSRSD Method C)
+        self._mtf_iv_engine = MTFIVEngine()
+
+        # Volume Imbalance Engine (Phase 24 — C/P Volume Imbalance)
+        self._vib_engine = VolumeImbalanceEngine()
+
+        # Jump Detector (Phase 27 — Paper 5 Safety Valve)
+        self._jump_detector = JumpDetector()
+
+    async def set_redis_client(self, client: Any) -> None:
+        """Inject shared Redis client into sub-trackers."""
+        await self._vanna_analyzer.set_redis_client(client)
+        self._wall_tracker.set_redis_client(client)
 
     def run(self, snapshot: dict[str, Any]) -> AgentResult:
         """Process market snapshot and detect traps.
@@ -106,6 +123,7 @@ class AgentB1:
 
         # 2. Microstructure analysis
         micro = self._run_microstructure(
+            chain=chain,
             spot=spot,
             atm_iv=greeks.get("atm_iv"),
             net_gex=greeks.get("net_gex"),
@@ -141,6 +159,50 @@ class AgentB1:
             elif signal == DivergenceState.ACTIVE_BEAR_TRAP:
                 summary_parts.append(f"Bear Trap: Spot{spot_roc:+.2f}% but Put{put_roc:+.1f}%")
 
+        # Tactical Triad Metrics Computation
+        atm_iv = greeks.get("atm_iv", 0) or 0.0
+        # Assume a baseline structural SPY daily HV. In production, this would track the 20-day realized vol.
+        baseline_hv = 13.5
+        vrp = atm_iv - baseline_hv
+        
+        premium_state = "FAIR"
+        if vrp > settings.vrp_trap_threshold:
+            premium_state = "TRAP"
+        elif vrp > settings.vrp_expensive_threshold:
+            premium_state = "EXPENSIVE"
+        elif vrp < (settings.vrp_cheap_threshold * 3):
+            premium_state = "BARGAIN"
+        elif vrp < settings.vrp_cheap_threshold:
+            premium_state = "CHEAP"
+
+        hv_analysis = {
+            "vrp": vrp,
+            "premium_state": premium_state,
+        }
+
+        charm_analysis = {
+            "net_charm": greeks.get("charm_exposure", 0.0)
+        }
+
+        # Skew Dynamics Computation
+        skew_ivs = greeks.get("skew_25d", {})
+        put_25d_iv = skew_ivs.get("put_25d_iv")
+        call_25d_iv = skew_ivs.get("call_25d_iv")
+        
+        skew_val = 0.0
+        skew_state = "NEUTRAL"
+        if put_25d_iv and call_25d_iv and atm_iv > 0:
+            skew_val = (put_25d_iv - call_25d_iv) / atm_iv
+            if skew_val < settings.skew_speculative_max:
+                skew_state = "SPECULATIVE"
+            elif skew_val > settings.skew_defensive_min:
+                skew_state = "DEFENSIVE"
+        
+        skew_analysis = {
+            "skew_value": skew_val,
+            "skew_state": skew_state,
+        }
+
         # Build result
         return AgentResult(
             agent=self.AGENT_ID,
@@ -161,6 +223,10 @@ class AgentB1:
                 "mtf_consensus": micro.get("mtf_consensus", {}),
                 "gamma_profile": greeks.get("gamma_profile", []),
                 "per_strike_gex": greeks.get("per_strike_gex", []),
+                "top_active_options": chain, # Pass through for presenter
+                "hv_analysis": hv_analysis,
+                "charm_analysis": charm_analysis,
+                "skew_analysis": skew_analysis,
             },
             summary="; ".join(summary_parts) if summary_parts else "IDLE",
         )
@@ -168,6 +234,7 @@ class AgentB1:
     def _run_microstructure(
         self,
         *,
+        chain: list[dict[str, Any]],
         spot: float,
         atm_iv: float | None,
         net_gex: float | None,
@@ -181,21 +248,7 @@ class AgentB1:
         if not settings.agent_b1_v2_enabled:
             return {}
 
-        # IV Velocity
-        iv_result = self._iv_tracker.update(
-            spot=spot, atm_iv=atm_iv, sim_clock_mono=sim_clock_mono
-        )
-
-        # Wall Migration
-        wall_result = self._wall_tracker.update(
-            call_wall=call_wall,
-            put_wall=put_wall,
-            call_wall_volume=call_wall_volume,
-            put_wall_volume=put_wall_volume,
-            sim_clock_mono=sim_clock_mono,
-        )
-
-        # Vanna Flow
+        # 1. Vanna Flow (Dynamic Engine)
         vanna_result = self._vanna_analyzer.update(
             spot=spot,
             atm_iv=atm_iv,
@@ -203,19 +256,60 @@ class AgentB1:
             spy_atm_iv=atm_iv,
             sim_clock_mono=sim_clock_mono,
         )
+        
+        # Extract dynamic multipliers
+        wall_mult = vanna_result.wall_displacement_multiplier if vanna_result else 1.0
 
-        # MTF (Multi-Timeframe) Consensus
-        iv_1m = self._iv_tracker_1m.update(spot=spot, atm_iv=atm_iv, sim_clock_mono=sim_clock_mono)
-        iv_5m = self._iv_tracker_5m.update(spot=spot, atm_iv=atm_iv, sim_clock_mono=sim_clock_mono)
+        # 2. Wall Migration (Adaptive Sensitivity)
+        wall_result = self._wall_tracker.update(
+            call_wall=call_wall,
+            put_wall=put_wall,
+            spot=spot,
+            call_wall_volume=call_wall_volume,
+            put_wall_volume=put_wall_volume,
+            sim_clock_mono=sim_clock_mono,
+            displacement_multiplier=wall_mult,
+        )
+
+        # 3. IV Velocity
+        iv_result = self._iv_tracker.update(
+            spot=spot, atm_iv=atm_iv, sim_clock_mono=sim_clock_mono
+        )
+
+        # MTF VSRSD: push current ATM IV into each rolling window
+        if atm_iv and atm_iv > 0:
+            # Produce a new bar for each timeframe on each tick
+            # (real sampling per-TF can be enforced by a clock gate; simplified here)
+            self._mtf_iv_engine.update("1m",  atm_iv)
+            self._mtf_iv_engine.update("5m",  atm_iv)
+            self._mtf_iv_engine.update("15m", atm_iv)
+
+        # Also run legacy IVVelocityTrackers for backward compat (MTF UI fallback)
+        iv_1m  = self._iv_tracker_1m.update(spot=spot,  atm_iv=atm_iv, sim_clock_mono=sim_clock_mono)
+        iv_5m  = self._iv_tracker_5m.update(spot=spot,  atm_iv=atm_iv, sim_clock_mono=sim_clock_mono)
         iv_15m = self._iv_tracker_15m.update(spot=spot, atm_iv=atm_iv, sim_clock_mono=sim_clock_mono)
 
-        mtf_consensus = self._compute_mtf_consensus(iv_1m, iv_5m, iv_15m)
+        # Compute VSRSD consensus (new primary path)
+        mtf_vsrsd = self._mtf_iv_engine.compute({
+            "1m":  atm_iv or 0.0,
+            "5m":  atm_iv or 0.0,
+            "15m": atm_iv or 0.0,
+        })
+        mtf_consensus = mtf_vsrsd   # Replaces legacy _compute_mtf_consensus
+
+        # 6. Volume Imbalance (Phase 24)
+        vib_result = self._vib_engine.update(chain, spot)
+
+        # 7. Jump Detection (Phase 27)
+        jump_result = self._jump_detector.update(spot)
 
         return {
             "iv_velocity": iv_result.model_dump() if iv_result else None,
             "wall_migration": wall_result.model_dump() if wall_result else None,
             "vanna_flow_result": vanna_result.model_dump() if vanna_result else None,
             "mtf_consensus": mtf_consensus,
+            "volume_imbalance": vib_result.model_dump() if vib_result else None,
+            "jump_detection": jump_result.model_dump() if jump_result else None,
             "iv_confidence": self._iv_tracker.get_confidence(),
             "wall_confidence": self._wall_tracker.get_confidence(),
             "vanna_confidence": self._vanna_analyzer.get_confidence(),

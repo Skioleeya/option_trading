@@ -16,6 +16,7 @@ from app.models.microstructure import (
     GexIntensity,
     IVRegime,
 )
+from app.services.analysis.time_decay_factor import TimeDecayFactor
 
 
 class DynamicWeightEngine:
@@ -35,6 +36,7 @@ class DynamicWeightEngine:
     def __init__(self) -> None:
         self._iv_regime = IVRegime.NORMAL
         self._gex_intensity = GexIntensity.NEUTRAL
+        self._time_decay = TimeDecayFactor()
 
     def update_market_state(
         self,
@@ -77,6 +79,7 @@ class DynamicWeightEngine:
         wall_signal: dict[str, Any],
         vanna_signal: dict[str, Any],
         mtf_signal: dict[str, Any],
+        vib_signal: dict[str, Any],
     ) -> FusedSignalResult:
         """Calculate fused directional signal.
 
@@ -94,6 +97,7 @@ class DynamicWeightEngine:
         w_wall = settings.agent_g_wall_weight
         w_vanna = settings.agent_g_vanna_weight
         w_mtf = settings.agent_g_mtf_weight
+        w_vib = 0.20 # Phase 24 — C/P Volume Imbalance (Paper 3)
 
         # Dynamic weight adjustments based on regime
         if self._iv_regime in (IVRegime.HIGH, IVRegime.EXTREME):
@@ -114,13 +118,24 @@ class DynamicWeightEngine:
             w_vanna *= 1.3
             w_wall *= 0.8
 
+        # Dynamic weight adjustments based on Time Decay (Phase 25C)
+        # 0DTE Gamma/Vanna risk explodes near close (Paper 1 & 5)
+        decay = self._time_decay.get_decay_factor()
+        if decay > 0:
+            # Shift weight towards high-leverage microstructure (Vanna/VIB)
+            w_vanna *= (1.0 + decay * 0.5)  # +50% weight at close
+            w_vib *= (1.0 + decay * 0.4)    # +40% weight at close
+            w_wall *= (1.0 - decay * 0.3)   # -30% weight at close (pinning risk dissipates)
+            w_iv *= (1.0 - decay * 0.2)     # -20% weight at close (historical relevance drops)
+
         # Normalize weights
-        total_w = w_iv + w_wall + w_vanna + w_mtf
+        total_w = w_iv + w_wall + w_vanna + w_mtf + w_vib
         if total_w > 0:
             w_iv /= total_w
             w_wall /= total_w
             w_vanna /= total_w
             w_mtf /= total_w
+            w_vib /= total_w
 
         # Calculate directional score
         # +1 = BULLISH, -1 = BEARISH, 0 = NEUTRAL
@@ -131,6 +146,7 @@ class DynamicWeightEngine:
             "wall": {"direction": wall_signal["direction"], "confidence": wall_signal["confidence"], "weight": w_wall},
             "vanna": {"direction": vanna_signal["direction"], "confidence": vanna_signal["confidence"], "weight": w_vanna},
             "mtf": {"direction": mtf_signal["direction"], "confidence": mtf_signal["confidence"], "weight": w_mtf},
+            "vib": {"direction": vib_signal["direction"], "confidence": vib_signal["confidence"], "weight": w_vib},
         }
 
         weighted_score = 0.0
@@ -156,8 +172,11 @@ class DynamicWeightEngine:
 
         # Build explanation
         top_driver = max(components.items(), key=lambda x: x[1]["weight"] * x[1]["confidence"])
+        
+        pre_close_tag = "[PRE-CLOSE] " if self._time_decay.is_pre_close(decay) else ""
+        
         explanation = (
-            f"Fused: {direction} (score={weighted_score:.2f}). "
+            f"{pre_close_tag}Fused: {direction} (score={weighted_score:.2f}). "
             f"Regime: {regime}. "
             f"Primary: {top_driver[0]} ({top_driver[1]['direction']}, "
             f"conf={top_driver[1]['confidence']:.0%}, w={top_driver[1]['weight']:.0%})"
@@ -166,7 +185,7 @@ class DynamicWeightEngine:
         return FusedSignalResult(
             direction=direction,
             confidence=abs(weighted_confidence),
-            weights={"iv": w_iv, "wall": w_wall, "vanna": w_vanna, "mtf": w_mtf},
+            weights={"iv": w_iv, "wall": w_wall, "vanna": w_vanna, "mtf": w_mtf, "vib": w_vib},
             regime=regime,
             iv_regime=self._iv_regime,
             gex_intensity=self._gex_intensity,

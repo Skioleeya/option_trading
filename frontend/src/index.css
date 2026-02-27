@@ -91,7 +91,7 @@ body,
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #52525b;
+  color: rgba(255, 255, 255, 0.9);
 }
 
 /* Badge variants */
@@ -137,9 +137,9 @@ body,
 }
 
 .badge-neutral {
-  background: rgba(113, 113, 122, 0.15);
-  color: #71717a;
-  border: 1px solid rgba(113, 113, 122, 0.3);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 /* Hollow badges (transparent bg, solid border) */
@@ -159,6 +159,20 @@ body,
   background: transparent;
   color: #22d3ee;
   border: 1px solid #06b6d4;
+}
+
+/* Badge: Hollow Green — DAMPING / 稳定对冲区 */
+.badge-hollow-green {
+  background: transparent;
+  color: #00d68f;
+  border: 1px solid rgba(0, 214, 143, 0.6);
+}
+
+/* Badge: Red Dim — 上涨动能 (亚洲龙：红=涨) 暗调版 */
+.badge-red-dim {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.35);
 }
 
 /* Progress bar */
