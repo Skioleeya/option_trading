@@ -21,9 +21,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.agents.agent_g import AgentG
 from app.config import settings
 from app.services.feeds.option_chain_builder import OptionChainBuilder
-from app.ui.micro_stats_presenter import MicroStatsPresenter
-from app.ui.wall_migration_presenter import WallMigrationPresenter
-from app.ui.depth_profile_presenter import DepthProfilePresenter
+from app.ui.micro_stats.presenter import MicroStatsPresenter
+from app.ui.wall_migration.presenter import WallMigrationPresenter
+from app.ui.depth_profile.presenter import DepthProfilePresenter
 
 
 logging.basicConfig(level=getattr(logging, settings.log_level, logging.INFO))
