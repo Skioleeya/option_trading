@@ -36,45 +36,6 @@ class AgentG:
         self._agent_b = agent_b or AgentB1()
         self._weight_engine = DynamicWeightEngine()
 
-    def _get_wall_interaction(
-        self,
-        spot: float | None,
-        net_gex: float | None,
-        agent_a_signal: str,
-        call_wall: float | None,
-        put_wall: float | None,
-        magnet_pct: float,
-    ) -> dict | None:
-        """Helper to detect critical wall interactions for UI fx."""
-        if not spot or net_gex is None:
-            return None
-
-        # Only trigger in Negative Gamma (Acceleration)
-        if net_gex >= 0:
-            return None
-
-        if put_wall:
-            dist_pct = (spot - put_wall) / spot * 100.0
-            if -magnet_pct < dist_pct < magnet_pct:
-                return {
-                    "type": "APPROACHING_PUT",
-                    "wall_level": put_wall,
-                    "severity": "HIGH",
-                    "effect": "glitch",
-                }
-
-        if call_wall:
-            dist_pct = (call_wall - spot) / spot * 100.0
-            if -magnet_pct < dist_pct < magnet_pct:
-                return {
-                    "type": "APPROACHING_CALL",
-                    "wall_level": call_wall,
-                    "severity": "HIGH",
-                    "effect": "glitch",
-                }
-
-        return None
-
     def _map_iv_to_direction(self, iv_state: str | None) -> str:
         """Map IV velocity state to direction.
 
@@ -300,12 +261,6 @@ class AgentG:
                     "components": fused_signal.components,
                 },
                 "micro_structure": agent_b.data.get("micro_structure"),
-                "ui_state": self._build_ui_metadata(
-                    gex_regime=_vanna_dict.get("gex_regime", "NEUTRAL"),
-                    wall_dyn=micro_state.get("wall_migration", {}),
-                    vanna=micro_state.get("vanna_flow_result", {}).get("state", "NEUTRAL"),
-                    momentum=agent_a.signal
-                )
             },
             summary="; ".join(summary) if summary else "Decision rules not satisfied.",
         )

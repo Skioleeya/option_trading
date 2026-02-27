@@ -21,6 +21,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.agents.agent_g import AgentG
 from app.config import settings
 from app.services.feeds.option_chain_builder import OptionChainBuilder
+from app.ui.micro_stats_presenter import MicroStatsPresenter
+from app.ui.wall_migration_presenter import WallMigrationPresenter
+from app.ui.depth_profile_presenter import DepthProfilePresenter
 
 
 logging.basicConfig(level=getattr(logging, settings.log_level, logging.INFO))
@@ -128,12 +131,40 @@ class AppContainer:
     ) -> dict[str, Any]:
         """Build WebSocket broadcast payload."""
         now = datetime.now(ZoneInfo("US/Eastern"))
+        spot = snapshot.get("spot")
+
+        agent_data = agent_result.model_dump() if agent_result else None
+        ui_state = None
+
+        if agent_data and "data" in agent_data:
+            # Build unified UI payload
+            b_data = agent_data["data"].get("agent_b", {}).get("data", {})
+            micro = b_data.get("micro_structure", {}).get("micro_structure_state", {})
+            
+            ui_state = {
+                "micro_stats": MicroStatsPresenter.build(
+                    gex_regime=agent_data["data"].get("gex_regime", "NEUTRAL"),
+                    wall_dyn=micro.get("wall_migration", {}),
+                    vanna=micro.get("vanna_flow_result", {}).get("state", "NEUTRAL"),
+                    momentum=agent_data["data"].get("agent_a", {}).get("signal", "NEUTRAL")
+                ),
+                "wall_migration": WallMigrationPresenter.build(
+                    wall_migration=micro.get("wall_migration", {})
+                ),
+                "depth_profile": DepthProfilePresenter.build(
+                    per_strike_gex=b_data.get("per_strike_gex", []),
+                    spot=spot,
+                    flip_level=agent_data["data"].get("gamma_flip_level")
+                )
+            }
+            # Inject to data cleanly
+            agent_data["data"]["ui_state"] = ui_state
 
         return {
             "type": "dashboard_update",
             "timestamp": now.isoformat(),
-            "spot": snapshot.get("spot"),
-            "agent_g": agent_result.model_dump() if agent_result else None,
+            "spot": spot,
+            "agent_g": agent_data,
         }
 
     async def _broadcast(self, payload: dict[str, Any]) -> None:

@@ -106,10 +106,33 @@ export interface AgentGResult {
         fused_signal: FusedSignal
         micro_structure: { micro_structure_state: MicroStructureState } | null
         ui_state: {
-            net_gex: { label: string; badge: string }
-            wall_dyn: { label: string; badge: string }
-            vanna: { label: string; badge: string }
-            momentum: { label: string; badge: string }
+            micro_stats: {
+                net_gex: { label: string; badge: string }
+                wall_dyn: { label: string; badge: string }
+                vanna: { label: string; badge: string }
+                momentum: { label: string; badge: string }
+            }
+            wall_migration: Array<{
+                type_label: string
+                type_bg: string
+                type_text: string
+                h1: number | null
+                h2: number | null
+                current: number | null
+                dot_color: string
+            }>
+            depth_profile: Array<{
+                strike: number
+                put_pct: number
+                call_pct: number
+                put_color: string
+                call_color: string
+                is_dominant_put: boolean
+                is_dominant_call: boolean
+                is_spot: boolean
+                is_flip: boolean
+                strike_color: string
+            }>
         }
     }
 }

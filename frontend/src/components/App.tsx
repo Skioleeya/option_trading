@@ -43,7 +43,6 @@ export const App: React.FC = () => {
     const callWall = agentBData?.gamma_walls?.call_wall ?? null
     const putWall = agentBData?.gamma_walls?.put_wall ?? null
     const flipLevel = agentBData?.gamma_flip_level ?? null
-    const perStrikeGex = agentBData?.per_strike_gex ?? []
     const ivPct = agentBData?.spy_atm_iv ?? null
     const ivRegime = fused?.iv_regime ?? 'NORMAL'
 
@@ -53,10 +52,14 @@ export const App: React.FC = () => {
     // ── DECOUPLED UI Architecture ──
     // Backend computes the badges and states precisely, React blindly renders them.
     const uiState = agentG?.data?.ui_state ?? {
-        net_gex: { label: '—', badge: 'badge-neutral' },
-        wall_dyn: { label: '—', badge: 'badge-neutral' },
-        vanna: { label: '—', badge: 'badge-neutral' },
-        momentum: { label: '—', badge: 'badge-neutral' }
+        micro_stats: {
+            net_gex: { label: '—', badge: 'badge-neutral' },
+            wall_dyn: { label: '—', badge: 'badge-neutral' },
+            vanna: { label: '—', badge: 'badge-neutral' },
+            momentum: { label: '—', badge: 'badge-neutral' }
+        },
+        wall_migration: [],
+        depth_profile: []
     }
 
     // ATM Decay (computed separately — requires opening ATM)
@@ -98,27 +101,20 @@ export const App: React.FC = () => {
                     </div>
 
                     {/* Wall Migration */}
-                    <WallMigration
-                        callWall={callWall}
-                        putWall={putWall}
-                    />
+                    <WallMigration rows={uiState.wall_migration} />
 
                     {/* Depth Profile - takes remaining space */}
                     <div className="flex-1 overflow-hidden border-t border-bg-border">
                         <div className="flex items-center gap-2 px-2 py-0.5 border-b border-bg-border">
                             <span className="section-header">DEPTH PROFILE</span>
                         </div>
-                        <DepthProfile
-                            perStrikeGex={perStrikeGex}
-                            spot={spot}
-                            flipLevel={flipLevel}
-                        />
+                        <DepthProfile rows={uiState.depth_profile} />
                     </div>
 
                     {/* Micro Stats */}
                     <div className="flex-1 min-h-0 min-w-0">
                         <MicroStats
-                            uiState={uiState}
+                            uiState={uiState.micro_stats}
                             sideState={mtfConsensus?.consensus ?? ''}
                         />
                     </div>
