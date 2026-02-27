@@ -1,7 +1,7 @@
 """DepthProfile submodule — Presenter.
 
-Converts raw per-strike GEX data into structured rows ready for dumb DOM rendering.
-No in-line hex colors or magic numbers — all constants from thresholds/mappings.
+Converts raw per-strike GEX into structured rows for dumb DOM rendering.
+All colors reference this submodule's own palette.
 """
 
 from typing import Any
@@ -17,16 +17,7 @@ class DepthProfilePresenter:
         spot: float | None,
         flip_level: float | None,
     ) -> list[dict[str, Any]]:
-        """Convert per-strike GEX snapshot to frontend-ready row list.
-
-        Args:
-            per_strike_gex: List of strike GEX dicts from Agent B.
-            spot: Current SPY spot price.
-            flip_level: The gamma flip level.
-
-        Returns:
-            List of row dicts the React component maps over directly.
-        """
+        """Convert per-strike GEX snapshot to frontend-ready row list."""
         if not per_strike_gex:
             return []
 
@@ -43,8 +34,8 @@ class DepthProfilePresenter:
             call_gex = s.get("call_gex", 0.0)
             put_gex  = s.get("put_gex",  0.0)
 
-            is_spot = spot       is not None and abs(strike - spot)        < thresholds.STRIKE_PROXIMITY_THRESHOLD
-            is_flip = flip_level is not None and abs(strike - flip_level)  < thresholds.STRIKE_PROXIMITY_THRESHOLD
+            is_spot = spot       is not None and abs(strike - spot)       < thresholds.STRIKE_PROXIMITY_THRESHOLD
+            is_flip = flip_level is not None and abs(strike - flip_level) < thresholds.STRIKE_PROXIMITY_THRESHOLD
 
             is_dominant_put  = abs(put_gex)  > abs(call_gex) and abs(put_gex)  > max_abs_gex * thresholds.GEX_DOMINANCE_RATIO
             is_dominant_call = abs(call_gex) > abs(put_gex)  and abs(call_gex) > max_abs_gex * thresholds.GEX_DOMINANCE_RATIO
@@ -57,16 +48,20 @@ class DepthProfilePresenter:
                 strike_color = mappings.STRIKE_DEFAULT_COLOR
 
             rows.append({
-                "strike":           strike,
-                "put_pct":          abs(put_gex)  / max_abs_gex,
-                "call_pct":         abs(call_gex) / max_abs_gex,
-                "put_color":        mappings.PUT_BAR_COLOR,
-                "call_color":       mappings.CALL_BAR_COLOR,
-                "is_dominant_put":  is_dominant_put,
-                "is_dominant_call": is_dominant_call,
-                "is_spot":          is_spot,
-                "is_flip":          is_flip,
-                "strike_color":     strike_color,
+                "strike":             strike,
+                "put_pct":            abs(put_gex)  / max_abs_gex,
+                "call_pct":           abs(call_gex) / max_abs_gex,
+                "put_color":          mappings.PUT_BAR_COLOR,
+                "call_color":         mappings.CALL_BAR_COLOR,
+                "put_label_color":    mappings.PUT_LABEL_COLOR,
+                "call_label_color":   mappings.CALL_LABEL_COLOR,
+                "spot_tag_classes":   mappings.SPOT_TAG_CLASSES,
+                "flip_tag_classes":   mappings.FLIP_TAG_CLASSES,
+                "is_dominant_put":    is_dominant_put,
+                "is_dominant_call":   is_dominant_call,
+                "is_spot":            is_spot,
+                "is_flip":            is_flip,
+                "strike_color":       strike_color,
             })
 
         return rows

@@ -1,18 +1,24 @@
 """DepthProfile submodule — UI mappings.
 
 Maps per-strike state flags to CSS color tokens.
-All tokens reference the global theme.py.
+Imports from this submodule's own palette — not from global theme.
 """
 
-from app.ui import theme
+from app.ui.depth_profile import palette
 
-# Color for put bars (Asian Dragon: green = down)
-PUT_BAR_COLOR = f"bg-{theme.MARKET_DOWN}"
+# Bar colors
+PUT_BAR_COLOR  = palette.PUT_BAR_COLOR
+CALL_BAR_COLOR = palette.CALL_BAR_COLOR
 
-# Color for call bars (Asian Dragon: red = up)
-CALL_BAR_COLOR = f"bg-{theme.MARKET_UP}"
+# Strike center text colors
+STRIKE_SPOT_COLOR    = palette.STRIKE_SPOT_COLOR
+STRIKE_FLIP_COLOR    = palette.STRIKE_FLIP_COLOR
+STRIKE_DEFAULT_COLOR = palette.STRIKE_DEFAULT_COLOR
 
-# Strike labels for special levels
-STRIKE_SPOT_COLOR   = f"text-{theme.ACCENT_AMBER} font-bold"
-STRIKE_FLIP_COLOR   = f"text-{theme.ACCENT_PURPLE}"
-STRIKE_DEFAULT_COLOR = theme.TEXT_SECONDARY
+# Labels on dominant bars
+PUT_LABEL_COLOR  = palette.PUT_LABEL_COLOR
+CALL_LABEL_COLOR = palette.CALL_LABEL_COLOR
+
+# Overlay annotation tags
+SPOT_TAG_CLASSES = palette.SPOT_TAG_CLASSES
+FLIP_TAG_CLASSES = palette.FLIP_TAG_CLASSES
