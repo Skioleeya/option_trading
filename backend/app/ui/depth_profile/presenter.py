@@ -21,15 +21,28 @@ class DepthProfilePresenter:
         if not per_strike_gex:
             return []
 
+        # Find center strike to apply radius
+        sorted_strikes = sorted(per_strike_gex, key=lambda x: x.get("strike", 0.0), reverse=True)
+        center_val = spot if spot is not None else (sorted_strikes[len(sorted_strikes)//2].get("strike", 0.0) if sorted_strikes else 0.0)
+
+        # Filter by radius
+        visible_strikes = [
+            s for s in sorted_strikes
+            if center_val - thresholds.STRIKE_RADIUS <= s.get("strike", 0.0) <= center_val + thresholds.STRIKE_RADIUS
+        ]
+
+        if not visible_strikes:
+            return []
+
         max_abs_gex = max(
-            (max(abs(s.get("call_gex", 0)), abs(s.get("put_gex", 0))) for s in per_strike_gex),
+            (max(abs(s.get("call_gex", 0)), abs(s.get("put_gex", 0))) for s in visible_strikes),
             default=0.0,
         )
         if max_abs_gex == 0:
             return []
 
         rows = []
-        for s in per_strike_gex:
+        for s in visible_strikes:
             strike   = s.get("strike", 0.0)
             call_gex = s.get("call_gex", 0.0)
             put_gex  = s.get("put_gex",  0.0)

@@ -120,6 +120,10 @@ export interface AgentGResult {
                 h2: number | null
                 current: number | null
                 dot_color: string
+                current_border: string
+                current_bg: string
+                current_shadow: string
+                current_text: string
             }>
             depth_profile: Array<{
                 strike: number
@@ -127,6 +131,10 @@ export interface AgentGResult {
                 call_pct: number
                 put_color: string
                 call_color: string
+                put_label_color: string
+                call_label_color: string
+                spot_tag_classes: string
+                flip_tag_classes: string
                 is_dominant_put: boolean
                 is_dominant_call: boolean
                 is_spot: boolean

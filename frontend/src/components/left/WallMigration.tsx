@@ -9,6 +9,10 @@ interface PropTableRow {
     h2: number | null
     current: number | null
     dot_color: string
+    current_border: string
+    current_bg: string
+    current_shadow: string
+    current_text: string
 }
 
 interface Props {
@@ -44,11 +48,11 @@ export const WallMigration: React.FC<Props> = ({ rows }) => {
                         {/* Current — Highlighted Box */}
                         <div className="flex-1 flex items-center justify-center rounded-sm h-5"
                             style={{
-                                border: '1px solid var(--wall-highlight-border)',
-                                background: 'var(--wall-highlight-bg)',
-                                boxShadow: '0 0 6px rgba(245, 158, 11, 0.25)'
+                                border: `1px solid ${row.current_border}`,
+                                background: row.current_bg,
+                                boxShadow: `0 0 6px ${row.current_shadow}`
                             }}>
-                            <span className="mono text-2xs text-accent-amber font-bold">{row.current != null ? fmtPrice(row.current) : '—'}</span>
+                            <span className={`mono text-2xs ${row.current_text}`}>{row.current != null ? fmtPrice(row.current) : '—'}</span>
                         </div>
 
                         {/* Pulse dot matching Asian colors */}
