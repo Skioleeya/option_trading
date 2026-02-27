@@ -242,14 +242,6 @@ class AgentG:
                 "gamma_walls": gamma_walls,
                 "gamma_flip_level": b_output.gamma_flip_level,
                 "trap_state": b_signal,
-                "wall_interaction": self._get_wall_interaction(
-                    spot=spot,
-                    net_gex=net_gex_f,
-                    agent_a_signal=agent_a.signal,
-                    call_wall=call_wall,
-                    put_wall=put_wall,
-                    magnet_pct=WALL_MAGNET_PCT,
-                ),
                 "fused_signal": {
                     "direction": fused_signal.direction,
                     "confidence": fused_signal.confidence,

@@ -2,6 +2,7 @@
 
 from typing import Any
 from app.ui import theme
+from app.config import thresholds
 
 class DepthProfilePresenter:
     """Format business data into DepthProfile UI state."""
@@ -37,12 +38,12 @@ class DepthProfilePresenter:
             call_gex = s.get("call_gex", 0.0)
             put_gex = s.get("put_gex", 0.0)
 
-            is_spot = spot is not None and abs(strike - spot) < 0.5
-            is_flip = flip_level is not None and abs(strike - flip_level) < 0.5
+            is_spot = spot is not None and abs(strike - spot) < thresholds.STRIKE_PROXIMITY_THRESHOLD
+            is_flip = flip_level is not None and abs(strike - flip_level) < thresholds.STRIKE_PROXIMITY_THRESHOLD
 
             # Dominance logic
-            is_dominant_put = abs(put_gex) > abs(call_gex) and abs(put_gex) > (max_abs_gex * 0.1)
-            is_dominant_call = abs(call_gex) > abs(put_gex) and abs(call_gex) > (max_abs_gex * 0.1)
+            is_dominant_put = abs(put_gex) > abs(call_gex) and abs(put_gex) > (max_abs_gex * thresholds.GEX_DOMINANCE_RATIO)
+            is_dominant_call = abs(call_gex) > abs(put_gex) and abs(call_gex) > (max_abs_gex * thresholds.GEX_DOMINANCE_RATIO)
 
             # Center text styling
             strike_color = theme.TEXT_SECONDARY

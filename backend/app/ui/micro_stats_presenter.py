@@ -2,6 +2,7 @@
 
 from typing import Any
 from app.ui import theme
+from app.ui import mappings
 
 class MicroStatsPresenter:
     """Format business data into MicroStats UI state."""
@@ -14,45 +15,37 @@ class MicroStatsPresenter:
         vanna: str,
         momentum: str,
     ) -> dict[str, Any]:
-        """Calculates frontend color and styling bindings.
+        """Calculates frontend color and styling bindings via mappings.
         
         Args:
-            gex_regime: E.g., 'SUPER_PIN', 'DAMPING', 'ACCELERATION'.
-            wall_dyn: Wall migration dictionary.
-            vanna: Vanna micro structure state.
-            momentum: Agent A signal ('BULLISH', 'BEARISH').
+            gex_regime: The environment regime (SUPER_PIN, DAMPING, etc.)
+            wall_dyn: Dict containing Wall Migration states
+            vanna: Vanna flow string descriptor
+            momentum: Agent A's signal
         """
-        ui = {
-            "net_gex": {"label": "NEUTRAL", "badge": theme.BADGE_NEUTRAL},
-            "wall_dyn": {"label": "STABLE", "badge": theme.BADGE_NEUTRAL},
-            "vanna": {"label": "NEUTRAL", "badge": theme.BADGE_NEUTRAL},
-            "momentum": {"label": momentum if momentum != "NEUTRAL" else "—", "badge": theme.BADGE_NEUTRAL}
-        }
-
-        # 1. NET GEX
-        if gex_regime == "SUPER_PIN":
-            ui["net_gex"] = {"label": "SUPER PIN", "badge": theme.BADGE_AMBER}
-        elif gex_regime == "DAMPING":
-            ui["net_gex"] = {"label": "DAMPING", "badge": theme.BADGE_GREEN}
-        elif gex_regime == "ACCELERATION":
-            ui["net_gex"] = {"label": "VOLATILE", "badge": theme.BADGE_HOLLOW_PURPLE}
-
-        # 2. WALL DYN
+        # Determine dominant Wall state (call or put state)
+        wall_st = "STABLE"
         if wall_dyn:
-            call_st = wall_dyn.get("call_wall_state", "")
-            put_st = wall_dyn.get("put_wall_state", "")
+            if wall_dyn.get("call_wall_state") == "REINFORCED_WALL" or wall_dyn.get("put_wall_state") == "REINFORCED_SUPPORT":
+                wall_st = "REINFORCED_WALL"
+            elif wall_dyn.get("call_wall_state") == "RETREATING_RESISTANCE":
+                wall_st = "RETREATING_RESISTANCE"
             
-            if call_st == "REINFORCED_WALL" or put_st == "REINFORCED_SUPPORT":
-                ui["wall_dyn"] = {"label": "SIEGE", "badge": theme.BADGE_HOLLOW_AMBER}
-            elif call_st == "RETREATING_RESISTANCE":
-                ui["wall_dyn"] = {"label": "RETREAT", "badge": theme.BADGE_HOLLOW_AMBER}
-
-        # 3. VANNA
-        if vanna in ["CMPRS", "GRIND_STABLE"]:
-            ui["vanna"] = {"label": "CMPRS", "badge": theme.BADGE_HOLLOW_CYAN}
-        elif vanna in ["DANGER", "DANGER_ZONE"]:
-            ui["vanna"] = {"label": "DANGER", "badge": theme.BADGE_RED}
-        elif vanna in ["FLIP", "VANNA_FLIP"]:
-            ui["vanna"] = {"label": "FLIP", "badge": theme.BADGE_PURPLE}
-
-        return ui
+        return {
+            "net_gex": mappings.GEX_REGIME_MAP.get(
+                gex_regime, 
+                mappings.GEX_REGIME_MAP["NEUTRAL"]
+            ),
+            "wall_dyn": mappings.WALL_DYNAMICS_MAP.get(
+                wall_st, 
+                mappings.WALL_DYNAMICS_MAP["STABLE"]
+            ),
+            "vanna": mappings.VANNA_STATE_MAP.get(
+                vanna, 
+                mappings.VANNA_STATE_MAP["NEUTRAL"]
+            ),
+            "momentum": {
+                "label": momentum if momentum != "NEUTRAL" else "—", 
+                "badge": theme.BADGE_NEUTRAL
+            }
+        }
