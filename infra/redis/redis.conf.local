@@ -1,0 +1,18 @@
+# SPY 0DTE Dashboard v3.0 — Redis Local Config
+# Port: 6380 (avoid conflict with default 6379)
+
+port 6380
+bind 127.0.0.1
+
+# Persistence
+dir ./data
+dbfilename dump.rdb
+appendonly yes
+appendfilename "appendonly.aof"
+
+# Memory
+maxmemory 256mb
+maxmemory-policy allkeys-lru
+
+# Logging
+loglevel notice
