@@ -267,8 +267,33 @@ class AgentG:
                 "[AgentG.Phase3] micro_flow: tox=%.3f bbo=%.3f score=%.3f → %s (conf=%.2f)",
                 avg_tox, avg_bbo, micro_score, micro_flow_direction, micro_flow_confidence,
             )
+        # ── Practice 2: ATM VPIN Score Aggregation (diagnostic field) ───────
+        # Aggregate vpin_score from per-strike flow snapshot for ATM strikes (±3 window).
+        atm_vpin_vals: list[float] = []
+        for row in per_strike:
+            row_strike = row.get("strike", 0) if isinstance(row, dict) else getattr(row, "strike", 0)
+            if abs(row_strike - _spot) <= 3.0:
+                vpin_s = row.get("vpin_score", None) if isinstance(row, dict) else getattr(row, "vpin_score", None)
+                if vpin_s is not None and vpin_s != 0.0:
+                    atm_vpin_vals.append(float(vpin_s))
+
+        avg_atm_vpin = sum(atm_vpin_vals) / len(atm_vpin_vals) if atm_vpin_vals else 0.0
+        micro_flow_signal_dict["avg_atm_vpin_score"] = avg_atm_vpin
+
+        # ── Practice 3: dealer_squeeze_alert from micro state ────────────────
+        # Read flag set by AgentB1._run_microstructure (vol_accel ≥ threshold AND net_gex < 0).
+        # Primary path: typed MicroStructureState.dealer_squeeze_alert
+        # Fallback path: raw dict from agent_b.data (throttled-cache path)
+        dealer_squeeze_alert: bool = False
+        if ms_state is not None:
+            dealer_squeeze_alert = getattr(ms_state, "dealer_squeeze_alert", False)
+        if not dealer_squeeze_alert:
+            raw_micro_state = agent_b.data.get("micro_structure", {}).get("micro_structure_state", {})
+            if isinstance(raw_micro_state, dict):
+                dealer_squeeze_alert = bool(raw_micro_state.get("dealer_squeeze_alert", False))
 
         # ── Calculate fused signal ──────────────────────────────────────────
+
 
         fused_signal = self._weight_engine.calculate_weights(
             iv_signal={"direction": iv_direction, "confidence": iv_confidence},
@@ -375,9 +400,17 @@ class AgentG:
 
         fused_signal_confidence = min(fused_signal_confidence * gex_accel_boost, 1.0)
 
-        if net_gex_f is not None and net_gex_f < -1000:
-            summary.append("⚠️ TAIL RISK: Extreme Negative GEX detected (-1000M+).")
-
+        # ── Practice 3: VOL ACCEL SQUEEZE Confidence Boost ────────────────
+        # A volume burst (1s vol ≥ 3× 60s avg) in a negative GEX environment signals
+        # Dealer delta-hedge exhaustion. Escalate confidence to encourage faster entry.
+        # Academic: Muravyev & Pearson (2024/2026) — dealer inventory stress.
+        if dealer_squeeze_alert:
+            fused_signal_confidence = min(fused_signal_confidence * 1.25, 1.0)
+            summary.append("VOL ACCEL SQUEEZE: High volume burst in Neg Gamma → Risk elevated.")
+            logger.info(
+                "[AgentG.Practice3] VOL ACCEL SQUEEZE: avg_vpin=%.3f dir=%s conf×1.25",
+                avg_atm_vpin, fused_signal.direction,
+            )
         # Patch adjusted confidence back so downstream reads it
         object.__setattr__(fused_signal, 'confidence', fused_signal_confidence)
 
@@ -465,7 +498,7 @@ class AgentG:
         # We dummy-fallback to 0.0 if not fully integrated in `AgentB1Output` yet
         net_charm = None  # Add to b1 schema later if needed
 
-        return AgentResult(
+        res = AgentResult(
             agent=self.AGENT_ID,
             signal=signal,
             as_of=agent_a.as_of,
@@ -516,3 +549,6 @@ class AgentG:
             },
             summary="; ".join(summary) if summary else "Decision rules not satisfied.",
         )
+        
+        logger.info(f"[L2 AgentG] Final Signal: {res.signal} | Gate Winner Statement: {res.summary}")
+        return res

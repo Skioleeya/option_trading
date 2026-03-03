@@ -72,7 +72,8 @@ class OptionChainBuilder:
         self._oi_smooth: dict[str, float] = {}   # symbol -> smoothed OI
 
         # Shared rate limiter — single token bucket for ALL REST callers
-        self._rate_limiter = APIRateLimiter(rate=8.0, burst=8, max_concurrent=4)
+        # PP-LIMIT FIX: Longport 30req/30s limit is strict. Using 0.9/s with burst=1.
+        self._rate_limiter = APIRateLimiter(rate=0.9, burst=1, max_concurrent=2)
 
         # Modular components (rate limiter injected into every REST user)
         self._sub_mgr = SubscriptionManager(self._rate_limiter)
@@ -93,6 +94,11 @@ class OptionChainBuilder:
             # RACE FIX (Race 2): capture the running asyncio loop so WS callbacks
             # (fired from Longport SDK OS threads) can schedule writes safely.
             self._loop = asyncio.get_event_loop()
+
+            # DEBUG TOKEN LENTH AND BOUNDS
+            tk = settings.longport_access_token
+            masked_tk = f"{tk[:5]}...{tk[-5:]}" if tk else "NONE"
+            logger.info(f"[OptionChainBuilder] Token Diag: key={settings.longport_app_key} token={masked_tk} len={len(tk) if tk else 0}")
 
             config = Config(
                 app_key=settings.longport_app_key,
@@ -209,9 +215,11 @@ class OptionChainBuilder:
                     target_set = await self._sub_mgr.refresh(self._quote_ctx, self._spot)
                     
                     # 3. Warm up IV cache for new symbols (Extremely Heavy REST)
-                    new_symbols = target_set - set(self._iv_sync.iv_cache.keys())
                     if new_symbols:
+                        logger.info(f"[OptionChainBuilder] Detected {len(new_symbols)} new symbols. Triggering sync warm-up...")
                         await self._iv_sync.warm_up(list(new_symbols))
+                    else:
+                        logger.debug("[OptionChainBuilder] No new symbols for IV sync.")
 
                 # 4. Periodic Volume Research (Every 15 mins)
                 if self._spot and (not self._last_research or 
@@ -222,8 +230,11 @@ class OptionChainBuilder:
             except Exception as e:
                 logger.error(f"[OptionChainBuilder] Management loop error: {e}")
             
-            # Run management every 60 seconds to keep things fresh but lean
-            await asyncio.sleep(60)
+            # STARTUP BOOST: Run faster for the first 5 minutes (every 5s) to warm up chain
+            if (datetime.now(ZoneInfo("US/Eastern")) - now).total_seconds() < 300:
+                await asyncio.sleep(5)
+            else:
+                await asyncio.sleep(60)
 
     # =========================================================================
     # Tier 1: Core Chain Retrieval (DEPRECATED - Moved to management loop)
@@ -275,6 +286,9 @@ class OptionChainBuilder:
         ivs_arr     = np.zeros(n,  dtype=np.float64)  # 0 = invalid / skip
         is_call_arr = np.empty(n,  dtype=np.bool_)
         adj_ivs     = np.zeros(n,  dtype=np.float64)  # skew-adjusted IV per entry
+        ois_arr     = np.zeros(n,  dtype=np.float64)
+        mults_arr   = np.zeros(n,  dtype=np.float64)
+        vols_arr    = np.zeros(n,  dtype=np.float64)
 
         for idx, entry in enumerate(chain_data):
             symbol   = entry["symbol"]
@@ -284,12 +298,28 @@ class OptionChainBuilder:
             spots_arr[idx]   = self._spot
             strikes_arr[idx] = strike
             is_call_arr[idx] = opt_type in ("CALL", "C")
+            vols_arr[idx]    = float(entry.get("volume", 0))
+            
+            # OI resolution + EMA smoothing (PP-4)
+            raw_oi     = self._iv_sync.oi_cache.get(symbol, 0)
+            prev_smooth = self._oi_smooth.get(symbol, float(raw_oi))
+            smoothed_oi = prev_smooth + 0.2 * (raw_oi - prev_smooth)
+            self._oi_smooth[symbol] = smoothed_oi
+            oi = int(smoothed_oi)
+            entry["open_interest"] = oi
+            
+            ois_arr[idx] = float(oi)
+            mults_arr[idx] = float(entry.get("contract_multiplier", 100))
 
             # IV resolution: WS real-time > REST cache (PP-1: TTL guard)
             ws_iv_raw = entry.get("implied_volatility")
             iv_age    = now_mono - entry.get("iv_timestamp", 0.0)
             ws_iv     = ws_iv_raw if (ws_iv_raw and ws_iv_raw > 0 and iv_age < WS_IV_TTL) else None
             rest_iv   = self._iv_sync.iv_cache.get(symbol)
+            
+            if ws_iv_raw is not None and ws_iv is None:
+                logger.debug(f"[L1 Fallback] Stale WS IV for {symbol} (Age: {iv_age:.1f}s), falling back to REST cache.")
+                
             raw_iv    = ws_iv if ws_iv is not None else rest_iv
 
             if raw_iv and raw_iv > 0:
@@ -304,11 +334,21 @@ class OptionChainBuilder:
                 ivs_arr[idx]  = adj_iv
                 adj_ivs[idx]  = adj_iv
 
+        # Vectorized Volume computation (OTM specific)
+        otm_call_mask = is_call_arr & (strikes_arr > self._spot)
+        otm_put_mask  = ~is_call_arr & (strikes_arr < self._spot)
+        
+        agg["otm_call_vol"] = int(np.sum(vols_arr[otm_call_mask]))
+        agg["otm_put_vol"]  = int(np.sum(vols_arr[otm_put_mask]))
+        agg["total_chain_vol"] = int(np.sum(vols_arr))
+
         # ── Phase 2: batch Greeks (single Numba/NumPy call for entire chain) ──
-        batch = compute_greeks_batch(
+        batch, batch_agg = compute_greeks_batch(
             spots_arr, strikes_arr, ivs_arr, t_years, is_call_arr,
             r=settings.risk_free_rate,
             q=settings.bsm_dividend_yield,
+            ois=ois_arr,
+            mults=mults_arr,
         )
 
         # ── Phase 3: write results back + aggregate ────────────────────────────
@@ -318,7 +358,6 @@ class OptionChainBuilder:
 
             symbol   = entry["symbol"]
             strike   = entry["strike"]
-            opt_type = entry["type"].upper()
             adj_iv   = adj_ivs[idx]
 
             greeks = {
@@ -341,41 +380,8 @@ class OptionChainBuilder:
             if symbol in self._chain:
                 self._chain[symbol].update(greeks)
 
-            # OI resolution + EMA smoothing (PP-4)
-            raw_oi     = self._iv_sync.oi_cache.get(symbol, 0)
-            prev_smooth = self._oi_smooth.get(symbol, float(raw_oi))
-            smoothed_oi = prev_smooth + 0.2 * (raw_oi - prev_smooth)
-            self._oi_smooth[symbol] = smoothed_oi
-            oi = int(smoothed_oi)
-            entry["open_interest"] = oi
-            multiplier = entry.get("contract_multiplier", 100)
-
-            # Aggregation
-            gamma   = greeks["gamma"]
-            gex     = gamma * oi * (self._spot ** 2) * multiplier * 0.01
-            vanna_exp = greeks["vanna"] * oi * multiplier
-            charm_exp = greeks["charm"] * oi * multiplier
-
-            if opt_type in ("CALL", "C"):
-                agg["total_call_gex"] += gex
-                agg["net_gex"]        += gex
-                if gex > agg["max_call_gex"]:
-                    agg["max_call_gex"] = gex
-                    agg["call_wall"]    = strike
-            else:
-                agg["total_put_gex"] -= gex
-                agg["net_gex"]       -= gex
-                if gex > agg["max_put_gex"]:
-                    agg["max_put_gex"] = gex
-                    agg["put_wall"]    = strike
-
-            agg["net_vanna"] += vanna_exp
-            agg["net_charm"] += charm_exp
-
-        # Normalize GEX to Millions
-        agg["net_gex"]        /= 1_000_000.0
-        agg["total_call_gex"] /= 1_000_000.0
-        agg["total_put_gex"]  /= 1_000_000.0
+        if batch_agg:
+            agg.update(batch_agg)
 
         return agg
 
@@ -424,23 +430,58 @@ class OptionChainBuilder:
         checks this timestamp and downgrades stale WS IV to the REST cache if
         it is older than WS_IV_TTL (60s), eliminating 'zombie IV' oscillation.
 
-        ENTROPY FIX: Zero-information ticks (no meaningful change across all
-        fields) are discarded early, preventing redundant BSM array allocation
-        and computation for unmodified data pushes.
+        FIELD PROTECTION: LongPort WebSocket Quotes for options often lack
+        IV and OI. We MUST NOT default missing fields to 0, as it overwrites
+        valid REST cache. We only update fields present in the quote object.
         """
         strike = self._sub_mgr.symbol_to_strike.get(symbol)
         if strike is None:
             return
 
-        # Build a candidate entry with incoming values for the entropy gate
-        new_values = {
-            "implied_volatility": float(getattr(q, 'implied_volatility', 0) or 0),
-            "volume":             float(getattr(q, 'volume', 0) or 0),
-            "bid":                float(getattr(q, 'bid', 0) or 0),
-            "ask":                float(getattr(q, 'ask', 0) or 0),
-            "last_price":         float(getattr(q, 'last_done', 0) or 0),
-            "open_interest":      float(getattr(q, 'open_interest', 0) or 0),
-        }
+        # 1. Build values safely — only include fields that exist in the push
+        new_values = {}
+        
+        # Core Price/Volume (Usually present)
+        for field, attr in [
+            ("last_price", "last_done"),
+            ("volume", "volume"),
+            ("bid", "bid"),
+            ("ask", "ask"),
+            ("current_volume", "current_volume"),
+            ("turnover", "turnover")
+        ]:
+            val = getattr(q, attr, None)
+            if val is not None:
+                new_values[field] = float(val)
+
+        # Optional Greeks/OI (Nested in option_extend for LongPort)
+        opt_ext = getattr(q, "option_extend", None)
+        if opt_ext:
+            iv_val = getattr(opt_ext, "implied_volatility", None)
+            if iv_val is not None:
+                try:
+                    # Protobuf string to float, then scale from percent
+                    new_values["implied_volatility"] = float(iv_val) / 100.0
+                    new_values["iv_timestamp"] = time.monotonic()
+                except (ValueError, TypeError):
+                    pass
+
+            oi_val = getattr(opt_ext, "open_interest", None)
+            if oi_val is not None:
+                new_values["open_interest"] = int(oi_val)
+        else:
+            # Fallback for flat structure or calc_indexes results
+            iv_val = getattr(q, "implied_volatility", None)
+            if iv_val is not None:
+                new_values["implied_volatility"] = float(iv_val) / 100.0
+                new_values["iv_timestamp"] = time.monotonic()
+
+            oi_val = getattr(q, "open_interest", None)
+            if oi_val is not None:
+                new_values["open_interest"] = int(oi_val)
+
+        if not new_values:
+            return
 
         # Shannon entropy gate: discard zero-information ticks
         if not self._entropy_filter.accept(symbol, new_values):
@@ -467,7 +508,7 @@ class OptionChainBuilder:
             # the asyncio thread, this is a direct call (no extra thread handoff needed).
             self._iv_sync.apply_iv_update(symbol, None, oi_val)
         if hasattr(q, 'implied_volatility') and q.implied_volatility:
-            iv_value = float(q.implied_volatility)
+            iv_value = float(q.implied_volatility) / 100.0
             entry["implied_volatility"] = iv_value
             # PP-1 FIX: stamp the monotonic time so _enrich_ can detect stale WS IV
             entry["iv_timestamp"] = time.monotonic()
@@ -575,6 +616,18 @@ class OptionChainBuilder:
 
     def get_diagnostics(self) -> dict[str, Any]:
         """Return diagnostic info."""
+        # Defensive Log: Check for stale data indicating WS drop
+        now_mono = time.monotonic()
+        if self._chain:
+            # Get the first entry to check its timestamp
+            first_symbol = next(iter(self._chain))
+            first_entry = self._chain[first_symbol]
+            first_timestamp = first_entry.get("iv_timestamp", 0) # Use iv_timestamp for freshness
+            if first_timestamp > 0:
+                age_ms = (now_mono - first_timestamp) * 1000
+                if age_ms > 3000: # 3 seconds
+                    logger.warning(f"[L0 Feed] Stale Quote Data detected. Age: {age_ms:.0f}ms. WS might be disconnected.")
+
         return {
             "initialized": self._initialized,
             "chain_size": len(self._chain),

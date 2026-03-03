@@ -79,10 +79,77 @@ fn detect_vanna_flip(now_mono: f64, current_corr: Option<f64>, history: Vec<(f64
     Ok(false)
 }
 
+/// Kernel for VPIN calculation. Processes a batch of trades and updates the EMA and bucket states.
+/// 
+/// Returns: (new_ema_v, new_ema_dv, new_bucket_accum, new_bucket_dv, new_bucket_tv, toxicity_score, vpin_score)
+#[pyfunction]
+fn update_vpin_logic(
+    mut ema_v: f64,
+    mut ema_dv: f64,
+    mut b_accum: f64,
+    mut b_dv: f64,
+    mut b_tv: f64,
+    bucket_size: f64,
+    trades: Vec<(f64, f64)>, // (volume, dir_sign)
+) -> PyResult<(f64, f64, f64, f64, f64, f64, f64)> {
+    for (vol, dir_sign) in trades {
+        if vol <= 0.0 { continue; }
+
+        // 1. Dynamic Alpha EMA (Practice 2)
+        let alpha = (vol / bucket_size.max(1.0)).min(1.0);
+        ema_v = (1.0 - alpha) * ema_v + alpha * vol;
+        ema_dv = (1.0 - alpha) * ema_dv + alpha * (dir_sign * vol);
+
+        // 2. Bucket Integration
+        b_accum += vol;
+        b_dv += dir_sign * vol;
+        b_tv += vol;
+
+        if b_accum >= bucket_size {
+            // Bucket full - reset but keep remainder for smoothness if any
+            // (Simple reset for now to match current Python implementation)
+            b_accum = 0.0;
+            b_dv = 0.0;
+            b_tv = 0.0;
+        }
+    }
+
+    let toxicity = if ema_v > 1e-8 { ema_dv / ema_v } else { 0.0 };
+    let vpin = if b_tv > 1e-8 { b_dv / b_tv } else { 0.0 };
+
+    Ok((ema_v, ema_dv, b_accum, b_dv, b_tv, toxicity, vpin))
+}
+
+/// Kernel for Volume Acceleration Ratio. 
+/// 
+/// Returns: (new_ema, ratio) using decoupled previous EMA as baseline.
+#[pyfunction]
+fn compute_vol_accel(
+    tick_volume: f64,
+    current_ema: f64,
+    alpha: f64,
+) -> PyResult<(f64, f64)> {
+    let ratio = if current_ema > 0.0 {
+        tick_volume / current_ema.max(1.0)
+    } else {
+        1.0
+    };
+
+    let new_ema = if current_ema == 0.0 {
+        tick_volume
+    } else {
+        alpha * tick_volume + (1.0 - alpha) * current_ema
+    };
+
+    Ok((new_ema, ratio))
+}
+
 /// A Python module implemented in Rust.
 #[pymodule]
 fn ndm_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(pearson_r, m)?)?;
     m.add_function(wrap_pyfunction!(detect_vanna_flip, m)?)?;
+    m.add_function(wrap_pyfunction!(update_vpin_logic, m)?)?;
+    m.add_function(wrap_pyfunction!(compute_vol_accel, m)?)?;
     Ok(())
 }

@@ -26,6 +26,9 @@ except ImportError:
     import logging
     logging.getLogger(__name__).warning("ndm_rust not installed, falling back to pure Python")
 
+import logging
+logger = logging.getLogger(__name__)
+
 from app.config import settings
 from app.models.microstructure import (
     GexRegime,
@@ -326,10 +329,19 @@ class VannaFlowAnalyzer:
 
         # Priority 2: Absolute Zones
         if correlation > settings.vanna_danger_zone_threshold:
+            if not getattr(self, '_was_in_danger_zone', False):
+                logger.debug(f"[L2 Vanna] Entering DANGER_ZONE. Corr: {correlation:.2f} > {settings.vanna_danger_zone_threshold:.2f}")
+                self._was_in_danger_zone = True
             return VannaFlowState.DANGER_ZONE
         elif correlation < settings.vanna_grind_stable_threshold:
+            if getattr(self, '_was_in_danger_zone', False):
+                logger.debug(f"[L2 Vanna] Exiting DANGER_ZONE. Corr dropped to {correlation:.2f}")
+                self._was_in_danger_zone = False
             return VannaFlowState.GRIND_STABLE
         else:
+            if getattr(self, '_was_in_danger_zone', False):
+                logger.debug(f"[L2 Vanna] Exiting DANGER_ZONE. Corr dropped to {correlation:.2f}")
+                self._was_in_danger_zone = False
             return VannaFlowState.NORMAL
 
     def _calculate_vanna_acceleration(

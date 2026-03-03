@@ -498,6 +498,36 @@ class Settings(BaseSettings):
     # Minimum volume for a contract to appear in Active Options
     flow_active_min_volume: int = Field(default=100, description="Minimum volume threshold for Active Options inclusion")
 
+    # ============================================================================
+    # VPIN (Volume-synchronized Probability of Informed Trading) — Practice 2
+    # ============================================================================
+    # Academic: Easley, Lopez de Prado & O'Hara (2012) — VPIN uses volume buckets
+    # rather than clock time, which is critical for 0DTE high-burst environments.
+    vpin_bucket_size: float = Field(
+        default=500.0,
+        description=(
+            "Practice 2: Volume bucket size for VPIN dynamic alpha calculation. "
+            "Toxicity score updates significantly only when this volume is accumulated per bucket. "
+            "Low-volume ticks (noise) get near-zero alpha; high-burst ticks get alpha≈1. "
+            "Default 500 contracts represents a meaningful institutional-size print."
+        ),
+    )
+
+    # ============================================================================
+    # Volume Acceleration Squeeze Detection — Practice 3
+    # ============================================================================
+    # Academic: Muravyev & Pearson (2024/2026) — Volume accel divergence from GEX
+    # distribution signals Dealer delta-hedge exhaustion (Dealer Squeeze).
+    vol_accel_squeeze_threshold: float = Field(
+        default=3.0,
+        description=(
+            "Practice 3: Vol Accel Ratio threshold for Dealer Squeeze alert. "
+            "If current-1s volume / 60s-average-volume exceeds this AND net_gex < 0, "
+            "a squeeze condition is flagged and AgentG confidence is boosted. "
+            "Default 3.0 = 1s volume is 3× its 60s average (burst signal)."
+        ),
+    )
+
     # Historical Volatility Tracker Configuration
     hv_history_size: int = Field(
         default=100, description="Number of HV data points to keep for percentile calculation"

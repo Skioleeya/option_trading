@@ -4,68 +4,161 @@ Converts raw per-strike GEX into structured rows for dumb DOM rendering.
 Uses an EMA (Exponential Moving Average) smoother to stabilize bar values
 across ticks, preventing visual jitter from minute-to-minute GEX fluctuations.
 
-All colors reference this submodule's own palette.
+EMA Execution Tiers (2-tier, no pure-Python fallback):
+  1. CuPy GPU  — batches all ~14 strikes into a single GPU kernel.
+                 Auto-selected when `cupy` is importable + CUDA device present.
+  2. Numba JIT — multi-core parallel EMA via @njit prange.
+                 Selected when cupy unavailable but numba installed.
+
+Install GPU path: `pip install cupy-cuda12x` (match your CUDA version).
 """
 
+import logging
+import math
 from collections import Counter
 from typing import Any
 
+import numpy as np
+
 from app.ui.depth_profile import mappings, thresholds
 
+logger = logging.getLogger(__name__)
 
-# ─── EMA Smoother (module-level singleton state) ──────────────────────────────
+
+# ─── Tier 1: CuPy GPU probe ──────────────────────────────────────────────────
+try:
+    import cupy as cp                         # type: ignore
+    _probe = cp.array([1.0], dtype=cp.float64)
+    del _probe
+    _CUPY_AVAILABLE = True
+    logger.info("[DepthProfile EMA] CuPy/CUDA detected — GPU EMA ACTIVE (Tier 1).")
+except Exception:
+    _CUPY_AVAILABLE = False
+    logger.info("[DepthProfile EMA] CuPy unavailable — will use Numba JIT (Tier 2).")
+
+
+# ─── Tier 2: Numba JIT probe ──────────────────────────────────────────────────
+try:
+    from numba import njit, prange            # type: ignore
+    _NUMBA_AVAILABLE = True
+    logger.info("[DepthProfile EMA] Numba detected — JIT EMA enabled (Tier 2).")
+
+    @njit(parallel=True, fastmath=True, cache=True)
+    def _ema_numba(
+        new_calls: np.ndarray,   # float64[n]
+        new_puts:  np.ndarray,   # float64[n]
+        prev_calls: np.ndarray,  # float64[n]
+        prev_puts:  np.ndarray,  # float64[n]
+        alpha: float,
+    ):
+        """Numba JIT parallel EMA over n strikes (call + put in one pass)."""
+        n = len(new_calls)
+        out_calls = np.empty(n, dtype=np.float64)
+        out_puts  = np.empty(n, dtype=np.float64)
+        inv_alpha = 1.0 - alpha
+        for i in prange(n):
+            out_calls[i] = alpha * new_calls[i] + inv_alpha * prev_calls[i]
+            out_puts[i]  = alpha * new_puts[i]  + inv_alpha * prev_puts[i]
+        return out_calls, out_puts
+
+except ImportError:
+    _NUMBA_AVAILABLE = False
+    logger.error(
+        "[DepthProfile EMA] CRITICAL: Neither CuPy nor Numba is available. "
+        "Install `cupy-cuda12x` or `numba`. EMA smoothing will be DISABLED."
+    )
+
+
+# ─── EMA State (module-level singletons) ─────────────────────────────────────
 #
 # Alpha controls how quickly the smoother tracks new values.
-# Lower alpha = smoother / slower to respond.
-# 0.30 = approximately 2-3 update cycles to reach 75% of a step change.
+# 0.30 ≈ 2-3 ticks to reach 75% of a step change.
 #
 _EMA_ALPHA: float = 0.30
 
-# per-strike EMA state: { "call_687.0": 1234.5, "put_687.0": -890.2 }
-_ema_state: dict[str, float] = {}
+# NumPy arrays that hold the previous smoothed value per-strike slot.
+# Sized lazily on first call (when we know n_strikes).
+_prev_calls: np.ndarray | None = None
+_prev_puts:  np.ndarray | None = None
 
-# PP-L3A FIX: Stable center EMA — prevents strike axis from flipping every tick
-# when spot oscillates near a 0.5-step boundary.
-# Alpha=0.08 means the center drifts ~8% toward new spot each tick, roughly
-# needing 12+ ticks of sustained movement before the axis shifts one strike.
+# PP-L3A: Stable center for strike axis (slow EMA — prevents tick-by-tick flip).
 _center_ema: float = 0.0
 _CENTER_EMA_ALPHA: float = 0.08
 
-# PP-L3B FIX: Asymmetric rise/fall EMA for normalization baseline.
-# New highs are tracked quickly (RISE alpha=0.80), but the baseline decays
-# slowly (FALL alpha=0.05), so a single GEX spike does not suppress the
-# entire chart for 20+ ticks while the EMA slowly bleeds back down.
+# PP-L3B: Asymmetric rise/fall baseline for normalization.
 _ema_max_gex: float = 0.0
 _MAX_EMA_ALPHA_RISE: float = 0.80   # fast response to new highs
-_MAX_EMA_ALPHA_FALL: float = 0.05   # slow, steady decay when below previous high
+_MAX_EMA_ALPHA_FALL: float = 0.05   # slow decay when below previous high
 
 
-def _ema(key: str, new_val: float) -> float:
-    """Apply EMA to a named series. Returns smoothed value.
-
-    On a cache miss (new key) we seed from new_val so the first value
-    renders immediately rather than fading in from zero.
-    """
-    prev = _ema_state.get(key, new_val)
-    smoothed = _EMA_ALPHA * new_val + (1.0 - _EMA_ALPHA) * prev
-    _ema_state[key] = smoothed
-    return smoothed
-
+# ─── Internal helpers (CPU-side, scalar) ─────────────────────────────────────
 
 def _stable_center(spot: float, spacing: float) -> float:
-    """PP-L3A: Return a strike-snapped center that moves via slow EMA.
-
-    By smoothing spot with a low alpha before snapping to strike grid,
-    the axis only shifts when spot has sustained a direction for many
-    ticks, eliminating per-tick axis flips near half-step boundaries.
-    """
+    """PP-L3A: Strike-snapped center via slow EMA — prevents per-tick axis flips."""
     global _center_ema
     if _center_ema == 0.0:
-        # Cold start: seed from spot directly.
         _center_ema = spot
     else:
         _center_ema = _CENTER_EMA_ALPHA * spot + (1.0 - _CENTER_EMA_ALPHA) * _center_ema
     return round(round(_center_ema / spacing) * spacing, 2)
+
+
+def _apply_ema_batch(
+    new_calls: np.ndarray,
+    new_puts:  np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Apply EMA across all strikes using the active tier (CuPy → Numba).
+
+    Both tiers operate on the same module-level _prev_calls/_prev_puts arrays,
+    updated in-place after each tick for O(1) state management.
+    """
+    global _prev_calls, _prev_puts
+
+    n = len(new_calls)
+
+    # Cold start: seed prev arrays from the first batch so bars appear immediately.
+    if _prev_calls is None or len(_prev_calls) != n:
+        _prev_calls = new_calls.copy()
+        _prev_puts  = new_puts.copy()
+        return new_calls.copy(), new_puts.copy()
+
+    if _CUPY_AVAILABLE:
+        # ── Tier 1: CuPy GPU ──────────────────────────────────────────────────
+        try:
+            cp_new_c  = cp.asarray(new_calls)
+            cp_new_p  = cp.asarray(new_puts)
+            cp_prev_c = cp.asarray(_prev_calls)
+            cp_prev_p = cp.asarray(_prev_puts)
+            alpha     = _EMA_ALPHA
+            inv_alpha = 1.0 - alpha
+            sm_c = alpha * cp_new_c + inv_alpha * cp_prev_c
+            sm_p = alpha * cp_new_p + inv_alpha * cp_prev_p
+            out_calls = cp.asnumpy(sm_c)
+            out_puts  = cp.asnumpy(sm_p)
+            _prev_calls = out_calls.copy()
+            _prev_puts  = out_puts.copy()
+            return out_calls, out_puts
+        except Exception as exc:
+            logger.warning(
+                f"[DepthProfile EMA] CuPy path failed ({exc}), falling back to Numba."
+            )
+
+    if _NUMBA_AVAILABLE:
+        # ── Tier 2: Numba JIT ─────────────────────────────────────────────────
+        out_calls, out_puts = _ema_numba(
+            new_calls.astype(np.float64),
+            new_puts.astype(np.float64),
+            _prev_calls.astype(np.float64),
+            _prev_puts.astype(np.float64),
+            _EMA_ALPHA,
+        )
+        _prev_calls = out_calls.copy()
+        _prev_puts  = out_puts.copy()
+        return out_calls, out_puts
+
+    # Neither tier available — return raw unsmoothed values.
+    logger.error("[DepthProfile EMA] No compute tier available — returning raw GEX.")
+    return new_calls.copy(), new_puts.copy()
 
 
 # ─── Presenter ────────────────────────────────────────────────────────────────
@@ -82,12 +175,14 @@ class DepthProfilePresenter:
         """Convert per-strike GEX snapshot to frontend-ready row list.
 
         Key design decisions:
-        1. Generates a *contiguous* strike axis by filling in any missing strikes
-           within the visible range with zero-GEX rows.
-        2. Applies EMA smoothing to every strike's call_gex / put_gex before
-           normalizing, so the bar widths evolve smoothly instead of jumping.
-        3. Normalizes against a rolling maximum that decays slowly, preventing
-           the entire chart from rescaling when the dominant bar briefly drops.
+        1. Generates a *contiguous* strike axis by filling in any missing
+           strikes within the visible range with zero-GEX rows.
+        2. Applies 2-tier GPU EMA (CuPy → Numba) to every strike's
+           call_gex / put_gex before normalizing, so bar widths evolve
+           smoothly instead of jumping.
+        3. Normalizes against a rolling maximum that decays slowly,
+           preventing the entire chart from rescaling when the dominant
+           bar briefly drops.
         """
         global _ema_max_gex, _center_ema
 
@@ -97,16 +192,18 @@ class DepthProfilePresenter:
         # ── Step 1: Build lookup from raw data ────────────────────────────────
         raw_by_strike: dict[float, Any] = {}
         for s in per_strike_gex:
-            # Handle both dicts and objects (Pydantic models)
             if hasattr(s, "get"):
                 k = s.get("strike", 0)
             else:
                 k = getattr(s, "strike", 0)
-
             if k and k > 0:
                 raw_by_strike[round(float(k), 2)] = s
 
         if not raw_by_strike:
+            logger.debug(
+                f"[L3 DepthProfile] Returning empty profile. "
+                f"per_strike_gex length: {len(per_strike_gex)}, valid strikes found: 0"
+            )
             return []
 
         # ── Step 2: Detect strike spacing ─────────────────────────────────────
@@ -122,24 +219,23 @@ class DepthProfilePresenter:
         spacing = max(spacing, 0.5)
 
         # ── Step 3: Build contiguous strike axis centered on spot ─────────────
-        # PP-L3A FIX: Use stable center EMA to prevent per-tick axis flipping
-        # when spot oscillates near a 0.5-step boundary.
         raw_center = spot if spot is not None else sorted_keys[len(sorted_keys) // 2]
         snapped_center = _stable_center(raw_center, spacing)
 
-        # For an even count like 14, we'll have (count/2) items below and (count/2 - 1) above,
-        # plus the center item itself if we want it centered as possible.
-        # Or more simply: range(-7, 7) for count=14.
         count = thresholds.STRIKE_COUNT
-        half = count // 2
+        half  = count // 2
         contiguous_strikes = sorted(
             [round(snapped_center + i * spacing, 2) for i in range(-half, count - half)],
             reverse=True,
         )
 
-        # ── Step 4: Apply EMA smoothing to raw GEX values ─────────────────────
-        smoothed: dict[float, dict[str, float]] = {}
-        for strike in contiguous_strikes:
+        # ── Step 4: Collect raw GEX & auxiliary arrays ────────────────────────
+        raw_calls  = np.zeros(count, dtype=np.float64)
+        raw_puts   = np.zeros(count, dtype=np.float64)
+        raw_tox    = np.zeros(count, dtype=np.float64)
+        raw_bbo    = np.zeros(count, dtype=np.float64)
+
+        for idx, strike in enumerate(contiguous_strikes):
             data = raw_by_strike.get(strike)
             if data is None:
                 for k in raw_by_strike:
@@ -147,52 +243,37 @@ class DepthProfilePresenter:
                         data = raw_by_strike[k]
                         break
 
-            # Handle both dicts and objects
             if hasattr(data, "get"):
-                raw_call = data.get("call_gex", 0.0) if data else 0.0
-                raw_put  = data.get("put_gex", 0.0)  if data else 0.0
-                raw_tox  = data.get("toxicity_score", 0.0) if data else 0.0
-                raw_bbo  = data.get("bbo_imbalance", 0.0)  if data else 0.0
+                raw_calls[idx] = data.get("call_gex", 0.0) if data else 0.0
+                raw_puts[idx]  = data.get("put_gex",  0.0) if data else 0.0
+                raw_tox[idx]   = data.get("toxicity_score", 0.0) if data else 0.0
+                raw_bbo[idx]   = data.get("bbo_imbalance",  0.0) if data else 0.0
             else:
-                raw_call = getattr(data, "call_gex", 0.0) if data else 0.0
-                raw_put  = getattr(data, "put_gex", 0.0)  if data else 0.0
-                raw_tox  = getattr(data, "toxicity_score", 0.0) if data else 0.0
-                raw_bbo  = getattr(data, "bbo_imbalance", 0.0)  if data else 0.0
+                raw_calls[idx] = getattr(data, "call_gex",        0.0) if data else 0.0
+                raw_puts[idx]  = getattr(data, "put_gex",          0.0) if data else 0.0
+                raw_tox[idx]   = getattr(data, "toxicity_score",   0.0) if data else 0.0
+                raw_bbo[idx]   = getattr(data, "bbo_imbalance",    0.0) if data else 0.0
 
-            sk = f"{strike}"
-            smoothed[strike] = {
-                "call_gex": _ema(f"call_{sk}", raw_call),
-                "put_gex":  _ema(f"put_{sk}",  raw_put),
-                "toxicity_score": raw_tox,
-                "bbo_imbalance": raw_bbo,
-            }
+        # ── Step 5: GPU-accelerated batch EMA (CuPy → Numba) ─────────────────
+        sm_calls, sm_puts = _apply_ema_batch(raw_calls, raw_puts)
 
-        # ── Step 5: Stabilize normalization using asymmetric rise/fall EMA ────
-        # PP-L3B FIX: Use different alphas for rising vs falling max so a single
-        # GEX spike doesn't suppress the chart for 20+ ticks.
-        current_max = max(
-            (max(abs(v["call_gex"]), abs(v["put_gex"])) for v in smoothed.values()),
-            default=0.0,
-        )
+        # ── Step 6: Stabilize normalization using asymmetric rise/fall EMA ────
+        current_max = float(np.max(np.maximum(np.abs(sm_calls), np.abs(sm_puts))))
 
         if _ema_max_gex == 0.0:
-            # Cold start: seed directly.
             _ema_max_gex = current_max if current_max > 0 else 1.0
         elif current_max >= _ema_max_gex:
-            # Rising: track rapidly so bars don't clip when a new dominant strike appears.
             _ema_max_gex = _MAX_EMA_ALPHA_RISE * current_max + (1.0 - _MAX_EMA_ALPHA_RISE) * _ema_max_gex
         else:
-            # Falling: decay slowly to prevent chart rescaling thrash after a spike.
             _ema_max_gex = _MAX_EMA_ALPHA_FALL * current_max + (1.0 - _MAX_EMA_ALPHA_FALL) * _ema_max_gex
 
-        # Safety: if still near zero use current max or 1.0
         norm_max = _ema_max_gex if _ema_max_gex > 1e-9 else max(current_max, 1.0)
 
-        # ── Step 6: Build output rows ──────────────────────────────────────────
+        # ── Step 7: Build output rows ──────────────────────────────────────────
         rows = []
-        for strike in contiguous_strikes:
-            call_gex = smoothed[strike]["call_gex"]
-            put_gex  = smoothed[strike]["put_gex"]
+        for idx, strike in enumerate(contiguous_strikes):
+            call_gex = float(sm_calls[idx])
+            put_gex  = float(sm_puts[idx])
 
             is_spot = spot       is not None and abs(strike - spot)       < thresholds.STRIKE_PROXIMITY_THRESHOLD
             is_flip = flip_level is not None and abs(strike - flip_level) < thresholds.STRIKE_PROXIMITY_THRESHOLD
@@ -208,22 +289,22 @@ class DepthProfilePresenter:
                 strike_color = mappings.STRIKE_DEFAULT_COLOR
 
             rows.append({
-                "strike":             strike,
-                "put_pct":            abs(put_gex)  / norm_max,
-                "call_pct":           abs(call_gex) / norm_max,
-                "put_color":          mappings.PUT_BAR_COLOR,
-                "call_color":         mappings.CALL_BAR_COLOR,
-                "put_label_color":    mappings.PUT_LABEL_COLOR,
-                "call_label_color":   mappings.CALL_LABEL_COLOR,
-                "spot_tag_classes":   mappings.SPOT_TAG_CLASSES,
-                "flip_tag_classes":   mappings.FLIP_TAG_CLASSES,
-                "is_dominant_put":    is_dominant_put,
-                "is_dominant_call":   is_dominant_call,
-                "is_spot":            is_spot,
-                "is_flip":            is_flip,
-                "strike_color":       strike_color,
-                "toxicity_score":     smoothed[strike]["toxicity_score"],
-                "bbo_imbalance":      smoothed[strike]["bbo_imbalance"],
+                "strike":           strike,
+                "put_pct":          abs(put_gex)  / norm_max,
+                "call_pct":         abs(call_gex) / norm_max,
+                "put_color":        mappings.PUT_BAR_COLOR,
+                "call_color":       mappings.CALL_BAR_COLOR,
+                "put_label_color":  mappings.PUT_LABEL_COLOR,
+                "call_label_color": mappings.CALL_LABEL_COLOR,
+                "spot_tag_classes": mappings.SPOT_TAG_CLASSES,
+                "flip_tag_classes": mappings.FLIP_TAG_CLASSES,
+                "is_dominant_put":  is_dominant_put,
+                "is_dominant_call": is_dominant_call,
+                "is_spot":          is_spot,
+                "is_flip":          is_flip,
+                "strike_color":     strike_color,
+                "toxicity_score":   float(raw_tox[idx]),
+                "bbo_imbalance":    float(raw_bbo[idx]),
             })
 
         return rows

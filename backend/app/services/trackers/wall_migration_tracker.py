@@ -6,6 +6,7 @@ to detect wall retreat, reinforcement, or stability.
 
 from __future__ import annotations
 
+import logging
 import time
 from collections import deque
 from datetime import datetime
@@ -18,6 +19,8 @@ from app.models.microstructure import (
     WallMigrationPutState,
     WallMigrationResult,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class _WallSnapshot(NamedTuple):
@@ -108,6 +111,7 @@ class WallMigrationTracker:
         # snapshot — refuse to advance _last_snapshot_time so the next valid
         # call immediately retries instead of waiting 900s.
         if call_wall is None and put_wall is None:
+            logger.debug("[L3 WallTracker] Snapshot rejected: Both call_wall and put_wall are None (chain likely unwarmed).")
             # Still cache a minimal result for the UI so it shows '—' consistently
             if self._last_result is None:
                 self._last_result = WallMigrationResult(

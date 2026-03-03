@@ -32,6 +32,8 @@ class VIBResult(BaseModel):
     tf_15m: VIBTimeframeResult = Field(default_factory=VIBTimeframeResult)
     consensus: str = "NEUTRAL"
     strength: float = 0.0
+    # Practice 3: Volume Acceleration Ratio (1s volume / 60s avg)
+    vol_accel_ratio: float = 1.0
 
 
 # ============================================================================
@@ -237,6 +239,10 @@ class MicroStructureState(BaseModel):
     mtf_consensus: dict[str, Any] = Field(default_factory=dict)
     volume_imbalance: VIBResult | None = None
     jump_detection: JumpResult | None = None
+    # Practice 3: Dealer Squeeze alert (vol_accel > threshold AND net_gex < 0)
+    dealer_squeeze_alert: bool = False
+    # Practice 2: VPIN score propagated from DepthEngine (ATM contracts average)
+    avg_atm_vpin_score: float = 0.0
 
 
 class MicroStructureAnalysis(BaseModel):

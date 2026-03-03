@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
+from longport.openapi import QuoteContext
 from redis.asyncio import Redis
 
 from app.config import settings
@@ -24,8 +25,9 @@ ET = ZoneInfo("US/Eastern")
 class AtmDecayTracker:
     """Manages the 9:30 AM ATM anchor and calculates real-time decay."""
 
-    def __init__(self, redis_client: Optional[Redis] = None):
+    def __init__(self, redis_client: Optional[Redis] = None, quote_ctx: Optional[QuoteContext] = None):
         self.redis = redis_client
+        self.ctx = quote_ctx
         self.anchor: dict[str, Any] | None = None
         
         # Cold storage paths
@@ -111,7 +113,18 @@ class AtmDecayTracker:
         # Dual-write
         await self._save_to_redis(anchor_data, date_str)
         await self._save_to_disk(anchor_data, date_str)
+        if self.anchor and not await self._has_sufficient_history():
+            await self.pre_fill_history()
+
         logger.info(f"[AtmDecayTracker] Persisted new anchor for {date_str}: {anchor_data}")
+
+    async def _has_sufficient_history(self) -> bool:
+        """Check if history already exists for today to avoid redundant REST calls."""
+        if not self.redis:
+            return False
+        key = self.series_key_template.format(date=self._current_date_str)
+        count = await self.redis.llen(key)
+        return count > 5  # arbitrary threshold
 
     async def update(self, chain: list[dict[str, Any]], spot: float) -> dict[str, Any] | None:
         """
@@ -167,15 +180,99 @@ class AtmDecayTracker:
                     put_price = price
                     
         if call_price > 0 and put_price > 0:
+            # Locate symbols for pre-fill with safety guards
+            try:
+                call_sym = next(o["symbol"] for o in chain if o["strike"] == closest_strike and o["type"].upper() in ("CALL", "C"))
+                put_sym = next(o["symbol"] for o in chain if o["strike"] == closest_strike and o["type"].upper() in ("PUT", "P"))
+            except StopIteration:
+                logger.warning(f"[AtmDecayTracker] Strike {closest_strike} pair incomplete in chain")
+                return
+
             new_anchor = {
                 "strike": closest_strike,
+                "call_symbol": call_sym,
+                "put_symbol": put_sym,
                 "call_price": call_price,
                 "put_price": put_price,
                 "timestamp": now.isoformat()
             }
             await self._persist_anchor(new_anchor)
+            # Trigger real exchange history prefill
+            await self.pre_fill_history()
         else:
             logger.warning(f"[AtmDecayTracker] Failed to capture full straddle prices for ATM strike: {closest_strike}")
+
+    async def pre_fill_history(self) -> None:
+        """Fetch real 1-minute intraday lines from LongPort and rebuild decay history."""
+        if not self.anchor or not self.ctx:
+            return
+
+        call_sym = self.anchor.get("call_symbol")
+        put_sym = self.anchor.get("put_symbol")
+        if not call_sym or not put_sym:
+            return
+
+        logger.info(f"[AtmDecayTracker] Pre-filling today's history for {call_sym} and {put_sym}...")
+        
+        try:
+            # 1. Fetch Real Intraday Lines (REST)
+            # NOTE: LongPort lines contain timestamp (Unix), price (last), volume
+            call_lines = self.ctx.intraday(call_sym)
+            put_lines = self.ctx.intraday(put_sym)
+
+            if not call_lines or not put_lines:
+                logger.warning("[AtmDecayTracker] Intraday lines empty, skipping pre-fill")
+                return
+
+            # Map lines by timestamp (Unix integer seconds)
+            call_map = {int(l.timestamp): float(l.price) for l in call_lines}
+            put_map = {int(l.timestamp): float(l.price) for l in put_lines}
+
+            # Find common timestamps and sort
+            timestamps = sorted(set(call_map.keys()) & set(put_map.keys()))
+            if not timestamps:
+                return
+
+            # 2. Build Decay Series
+            anchor_c = self.anchor["call_price"]
+            anchor_p = self.anchor["put_price"]
+            anchor_straddle = anchor_c + anchor_p
+            anchor_strike = self.anchor["strike"]
+            locked_at_str = datetime.fromisoformat(self.anchor["timestamp"]).strftime("%H:%M:%S")
+
+            new_history = []
+            for t in timestamps:
+                c_price = call_map[t]
+                p_price = put_map[t]
+                straddle = c_price + p_price
+
+                dt = datetime.fromtimestamp(t, ET)
+                
+                # Filter points before market open or before our anchor capture if desired
+                # But typically we want the whole session.
+                
+                item = {
+                    "strike": anchor_strike,
+                    "locked_at": locked_at_str,
+                    "call_pct": round((c_price - anchor_c) / anchor_c, 4) if anchor_c > 0 else 0.0,
+                    "put_pct": round((p_price - anchor_p) / anchor_p, 4) if anchor_p > 0 else 0.0,
+                    "straddle_pct": round((straddle - anchor_straddle) / anchor_straddle, 4) if anchor_straddle > 0 else 0.0,
+                    "timestamp": dt.isoformat()
+                }
+                new_history.append(item)
+
+            # 3. Batch Write to Redis (REPLACE existing series for today)
+            if self.redis and new_history:
+                key = self.series_key_template.format(date=self._current_date_str)
+                await self.redis.delete(key)
+                for point in new_history:
+                    await self.redis.rpush(key, json.dumps(point))
+                await self.redis.expire(key, settings.opening_atm_redis_ttl_seconds)
+                
+            logger.info(f"[AtmDecayTracker] Pre-filled {len(new_history)} historical points from LongPort Intraday API")
+
+        except Exception as e:
+            logger.error(f"[AtmDecayTracker] Critical pre-fill error: {e}")
 
     async def _calculate_decay(self, chain: list[dict[str, Any]]) -> dict[str, Any] | None:
         """Calculate percentage change from anchor."""

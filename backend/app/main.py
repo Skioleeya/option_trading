@@ -53,7 +53,7 @@ class AppContainer:
         self.agent_g = AgentG()
         self.redis_service = RedisService()
         self.historical_store = HistoricalStore(self.redis_service)
-        self.atm_decay_tracker = AtmDecayTracker(self.redis_service.client)
+        self.atm_decay_tracker = AtmDecayTracker(self.redis_service.client, self.option_chain_builder._quote_ctx)
         self.quote_hub_ready = asyncio.Event()
 
         # Agent runner state
@@ -86,6 +86,7 @@ class AppContainer:
 
         # 2. Initialize data feed and tracker
         await self.option_chain_builder.initialize()
+        self.atm_decay_tracker.ctx = self.option_chain_builder._quote_ctx
         await self.atm_decay_tracker.initialize()
         self.quote_hub_ready.set()
 
@@ -288,14 +289,20 @@ class AppContainer:
                     self._last_full_snapshot_time = now_time
                 else:
                     # Calculate JSON patch
-                    patch_obj = jsonpatch.make_patch(self._last_broadcast_payload, fresh_payload)
-                    msg = {
-                        "type": "dashboard_delta",
-                        "patch": patch_obj.patch,
-                        "timestamp": fresh_payload["timestamp"],
-                        "heartbeat_timestamp": fresh_payload["heartbeat_timestamp"]
-                    }
-                    self._last_broadcast_payload = fresh_payload
+                    try:
+                        patch_obj = jsonpatch.make_patch(self._last_broadcast_payload, fresh_payload)
+                        msg = {
+                            "type": "dashboard_delta",
+                            "patch": patch_obj.patch,
+                            "timestamp": fresh_payload["timestamp"],
+                            "heartbeat_timestamp": fresh_payload["heartbeat_timestamp"]
+                        }
+                        self._last_broadcast_payload = fresh_payload
+                    except Exception as patch_err:
+                        logger.warning(f"[L3 Broadcast] Delta patch generation failed: {patch_err}. Falling back to full snapshot.")
+                        msg = {**fresh_payload, "type": "dashboard_update"}
+                        self._last_broadcast_payload = fresh_payload
+                        self._last_full_snapshot_time = now_time
 
                 client_count = len(self._ws_clients)
                 logger.debug(
@@ -305,7 +312,7 @@ class AppContainer:
 
                 await self._broadcast(msg)
             else:
-                logger.warning("[RACE_PROBE] broadcast skipped: _last_payload is None")
+                logger.debug(f"[L3 Broadcast] Skipped: _last_payload is None. Compute loop may be stalled. (Stalled for {(time.monotonic() - next_tick):.1f}s)")
 
             next_tick += broadcast_interval
             sleep_dur = next_tick - time.monotonic()

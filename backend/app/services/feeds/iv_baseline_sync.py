@@ -91,23 +91,28 @@ class IVBaselineSync:
             symbols = self._sort_by_proximity(symbols)
             spot = self._get_spot()  # Fetch here so it's in scope for spot_at_sync below
 
-            batch_size = 50
             for i in range(0, len(symbols), batch_size):
                 batch = symbols[i:i + batch_size]
+                logger.warning(f"[IVSync] Warm-up batch {i//batch_size + 1}/{len(symbols)//batch_size + 1} starting...")
                 async with self._limiter.acquire():
                     try:
+                        logger.warning(f"[IVSync] Calling calc_indexes for {len(batch)} symbols...")
                         results = self._ctx.calc_indexes(
                             batch, [CalcIndex.ImpliedVolatility, CalcIndex.OpenInterest]
                         )
+                        logger.warning(f"[IVSync] Received {len(results or [])} items.")
                         for item in results:
-                            iv = float(item.implied_volatility) if item.implied_volatility else None
+                            iv = float(item.implied_volatility) / 100.0 if item.implied_volatility else None
                             oi = int(item.open_interest) if item.open_interest else None
                             self.apply_iv_update(item.symbol, iv, oi)
-                            # PP-2 FIX: record per-symbol spot at IV-fetch time
                             if spot is not None:
                                 self.spot_at_sync[item.symbol] = spot
                     except Exception as e:
-                        logger.warning(f"[IVBaselineSync] Warm-up batch failed: {e}")
+                        logger.warning(f"[IVSync] Warm-up batch failed: {e}")
+                        if "301607" in str(e):
+                            await asyncio.sleep(10.0)
+                
+                await asyncio.sleep(1.1)
         except Exception as e:
             logger.info(f"[IVBaselineSync] Warm-up session error: {e}")
         finally:
@@ -168,7 +173,7 @@ class IVBaselineSync:
                             batch, [CalcIndex.ImpliedVolatility, CalcIndex.OpenInterest]
                         )
                         for item in results:
-                            iv = float(item.implied_volatility) if item.implied_volatility else None
+                            iv = float(item.implied_volatility) / 100.0 if item.implied_volatility else None
                             oi = int(item.open_interest) if item.open_interest else None
                             self.apply_iv_update(item.symbol, iv, oi)
                             # PP-2/3 FIX: per-symbol spot ref recorded at batch time
@@ -177,7 +182,10 @@ class IVBaselineSync:
                     except Exception as e:
                         if "301607" in str(e):
                             self._limiter.trigger_cooldown()
+                            await asyncio.sleep(5.0) # Local pause
                         logger.warning(f"[IVBaselineSync] Batch failed: {e}")
+
+                await asyncio.sleep(1.1)  # Respect 1-sec per-call cadence
 
             iv_after = len(self.iv_cache)
             logger.warning(
@@ -203,10 +211,11 @@ class IVBaselineSync:
 
         def get_dist(s: str) -> float:
             try:
-                # LONGPORT FORMAT: SPY + YYMMDD + C/P + 8-digit strike (scaled ×1000)
-                # Example: SPY260302C00690000 → 690.0
-                strike_str = s[9:]
-                return abs(float(strike_str) / 1000.0 - spot)
+                # LONGPORT FORMAT: SPY + YYMMDD + C/P + 6+ digit strike (.US)
+                # Example: SPY260304C673000.US
+                # index 0-2 (SPY), 3-8 (date), 9 (C/P), 10+ (strike)
+                strike_part = s[10:].split('.')[0]
+                return abs(float(strike_part) / 1000.0 - spot)
             except (ValueError, IndexError):
                 return 999.0
 

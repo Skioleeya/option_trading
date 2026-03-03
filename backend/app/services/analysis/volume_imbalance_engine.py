@@ -2,13 +2,26 @@
 
 Based on Muravyev, Pearson & Pollet (2022/2024) SSRN #4019647.
 Core discovery: OTM Call-Put Volume Imbalance is a strong short-term return predictor.
+
+Practice 3 — Volume Acceleration Ratio:
+Tracks per-tick total volume against a 60-tick EMA baseline.
+vol_accel_ratio = current_tick_vol / max(60tick_ema, 1)
+Ratio ≥ 3.0 on negative GEX → Dealer Squeeze alert in AgentB1.
 """
 
 from collections import deque
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
+import logging
+import ndm_rust
 
 from app.models.microstructure import VIBResult, VIBTimeframeResult
+
+logger = logging.getLogger(__name__)
+
+# Practice 3: EMA decay factor for 60-tick rolling volume average.
+# alpha = 2 / (N+1) where N=60 → alpha ≈ 0.032.
+_VOL_ACCEL_EMA_ALPHA: float = 2.0 / (60.0 + 1.0)
 
 
 class VolumeImbalanceEngine:
@@ -17,42 +30,45 @@ class VolumeImbalanceEngine:
     def __init__(self, thresholds: dict[str, float] | None = None):
         # Academic threshold: 0.1 (10% imbalance) is often significant
         self.threshold = (thresholds or {}).get("vib_threshold", 0.1)
-        
-        # History for timeframes (rolling windows of ticks or seconds)
-        self.history: deque[dict[str, Any]] = deque(maxlen=2000) # Increased for 15M covering
 
-    def update(self, chain: list[dict[str, Any]], spot: float) -> VIBResult:
-        """Update with new chain data and return imbalance analysis."""
+        # History for timeframes (rolling windows of ticks or seconds)
+        self.history: deque[dict[str, Any]] = deque(maxlen=2000)  # Increased for 15M covering
+
+        # Practice 3: 60-tick EMA of per-tick total volume for Vol Accel Ratio.
+        # Initialized to None; defaults to current tick volume on first update.
+        self._vol_ema_60tick: float = 0.0
+        self._prev_total_vol: Optional[int] = None
+
+    def update(
+        self, 
+        chain: list[dict[str, Any]], 
+        spot: float,
+        otm_call_vol: int = 0,
+        otm_put_vol: int = 0,
+        current_cumulative_total_chain_vol: int = 0,
+    ) -> VIBResult:
+        """Update with new chain data and return imbalance analysis.
         
-        # 1. Filter OTM and calculate current cumulative volume
-        otm_call_vol = 0
-        otm_put_vol = 0
-        
-        for contract in chain:
-            strike = contract.get("strike", 0)
-            vol = contract.get("volume", 0)
-            option_type = contract.get("option_type") # "CALL" or "PUT"
-            
-            if option_type == "CALL" and strike > spot:
-                otm_call_vol += vol
-            elif option_type == "PUT" and strike < spot:
-                otm_put_vol += vol
+        Now heavily optimized: OTM volumes are pre-calculated via NumPy/GPU 
+        in OptionChainBuilder and passed down directly.
+        """
+        # (The loop over `chain` is removed because caller pre-calculates this via NumPy)
 
         now = datetime.now()
         data_point = {
             "timestamp": now,
             "call_vol": otm_call_vol,
             "put_vol": otm_put_vol,
-            "total_vol": otm_call_vol + otm_put_vol
+            "total_vol": otm_call_vol + otm_put_vol,
         }
         self.history.append(data_point)
 
         # 2. Calculate for 1M, 5M, 15M (based on history)
         result = VIBResult()
-        
-        result.tf_1m = self._calculate_tf(60)   # 60s
-        result.tf_5m = self._calculate_tf(300)  # 300s
-        result.tf_15m = self._calculate_tf(900) # 900s
+
+        result.tf_1m = self._calculate_tf(60)    # 60s
+        result.tf_5m = self._calculate_tf(300)   # 300s
+        result.tf_15m = self._calculate_tf(900)  # 900s
 
         # 3. Aggregation
         directions = [result.tf_1m.direction, result.tf_5m.direction, result.tf_15m.direction]
@@ -68,6 +84,35 @@ class VolumeImbalanceEngine:
         else:
             result.consensus = "NEUTRAL"
             result.strength = 0.0
+
+        # ── Practice 3: Volume Acceleration Ratio ─────────────────────────────
+        # Practice 3: Volume Acceleration Ratio (based on delta volume)
+        # 1. Total volume across the chain (cumulative daily)
+        # This is already calculated as current_cumulative_total_chain_vol
+        
+        # 2. Derive tick volume (delta)
+        if self._prev_total_vol is None:
+            # First tick: assume zero activity before and use current as delta
+            tick_volume = float(current_cumulative_total_chain_vol)
+        else:
+            tick_volume = float(max(0, current_cumulative_total_chain_vol - self._prev_total_vol))
+        
+        self._prev_total_vol = current_cumulative_total_chain_vol
+
+        # ── Migration: Calculation moved to Rust (ndm_rust) ──────────────────
+        # Call Rust kernel for EMA and Ratio
+        new_ema, vol_accel_ratio = ndm_rust.compute_vol_accel(
+            tick_volume=tick_volume,
+            current_ema=self._vol_ema_60tick,
+            alpha=_VOL_ACCEL_EMA_ALPHA
+        )
+        
+        self._vol_ema_60tick = new_ema
+        result.vol_accel_ratio = vol_accel_ratio
+        
+        # Defensive Log: Track high Vol Accel Ratio
+        if vol_accel_ratio >= 2.0:
+            logger.debug(f"[L1 Rust Engine] High Vol Accel Ratio detected: {vol_accel_ratio:.2f} (Tick Vol: {tick_volume:.1f}, Prev EMA: {self._vol_ema_60tick:.1f})")
 
         return result
 

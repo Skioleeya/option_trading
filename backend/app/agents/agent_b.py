@@ -1,4 +1,4 @@
-"""Agent B1 — Options Structure / Trap Detection.
+"""Agent B — Options Structure / Trap Detection.
 
 Detects divergence between spot price movement and option price action
 to identify bull traps and bear traps.
@@ -142,6 +142,9 @@ class AgentB1:
             put_wall=greeks.get("gamma_walls", {}).get("put_wall"),
             call_wall_volume=0,
             put_wall_volume=0,
+            otm_call_vol=greeks.get("otm_call_vol", 0),
+            otm_put_vol=greeks.get("otm_put_vol", 0),
+            total_chain_vol=greeks.get("total_chain_vol", 0),
             sim_clock_mono=now_mono,
         )
 
@@ -290,6 +293,9 @@ class AgentB1:
         put_wall: float | None,
         call_wall_volume: int,
         put_wall_volume: int,
+        otm_call_vol: int = 0,
+        otm_put_vol: int = 0,
+        total_chain_vol: int = 0,
         sim_clock_mono: float | None = None,
     ) -> dict[str, Any]:
         """Run all microstructure trackers."""
@@ -348,10 +354,32 @@ class AgentB1:
         mtf_consensus = mtf_vsrsd   # Replaces legacy _compute_mtf_consensus
 
         # 6. Volume Imbalance (Phase 24)
-        vib_result = self._vib_engine.update(chain, spot)
+        vib_result = self._vib_engine.update(
+            chain, 
+            spot,
+            otm_call_vol=otm_call_vol,
+            otm_put_vol=otm_put_vol,
+            current_cumulative_total_chain_vol=total_chain_vol,
+        )
 
         # 7. Jump Detection (Phase 27)
         jump_result = self._jump_detector.update(spot)
+
+        # 8. Practice 3: Dealer Squeeze Alert
+        # Triggered when 1s volume burst is ≥ vol_accel_squeeze_threshold × 60s average
+        # AND the GEX regime is negative (dealer delta-hedge exhaustion risk).
+        vol_accel = vib_result.vol_accel_ratio if vib_result else 1.0
+        dealer_squeeze_alert = (
+            vol_accel >= settings.vol_accel_squeeze_threshold
+            and net_gex is not None
+            and net_gex < 0
+        )
+
+        # 9. Practice 2: Propagate average ATM VPIN score
+        # The per-strike flow snapshot is not available here (it's held by OptionChainBuilder).
+        # We pass a placeholder 0.0; the actual propagation happens in agent_g.py
+        # which has access to per_strike_gex with vpin_score fields.
+        avg_atm_vpin_score = 0.0
 
         return {
             "iv_velocity": iv_result.model_dump() if iv_result else None,
@@ -360,6 +388,8 @@ class AgentB1:
             "mtf_consensus": mtf_consensus,
             "volume_imbalance": vib_result.model_dump() if vib_result else None,
             "jump_detection": jump_result.model_dump() if jump_result else None,
+            "dealer_squeeze_alert": dealer_squeeze_alert,
+            "avg_atm_vpin_score": avg_atm_vpin_score,
             "iv_confidence": self._iv_tracker.get_confidence(),
             "wall_confidence": self._wall_tracker.get_confidence(),
             "vanna_confidence": self._vanna_analyzer.get_confidence(),
@@ -433,12 +463,14 @@ class AgentB1:
             if spot_roc > th_spot_entry and call_roc < th_opt_fade:
                 self._entry_count += 1
                 if self._entry_count >= k_entry:
+                    logger.debug(f"[L2 Trap] IDLE -> ACTIVE_BULL_TRAP (Spot RoC: {spot_roc:.2f}, Call RoC: {call_roc:.2f})")
                     self._state = DivergenceState.ACTIVE_BULL_TRAP
                     self._exit_count = 0
             # Check for BEAR TRAP entry: Spot down + Put dying
             elif spot_roc < -th_spot_entry and put_roc < th_opt_fade:
                 self._entry_count += 1
                 if self._entry_count >= k_entry:
+                    logger.debug(f"[L2 Trap] IDLE -> ACTIVE_BEAR_TRAP (Spot RoC: {spot_roc:.2f}, Put RoC: {put_roc:.2f})")
                     self._state = DivergenceState.ACTIVE_BEAR_TRAP
                     self._exit_count = 0
             else:
@@ -449,10 +481,12 @@ class AgentB1:
             if abs(spot_roc) < th_spot_exit or call_roc > th_opt_recover:
                 self._exit_count += 1
                 if self._exit_count >= k_exit:
+                    logger.debug(f"[L2 Trap] ACTIVE_BULL_TRAP -> IDLE (Spot RoC: {spot_roc:.2f}, Call RoC: {call_roc:.2f})")
                     self._state = DivergenceState.IDLE
                     self._entry_count = 0
             # Rocket exit (option price surging)
             elif call_roc > settings.agent_b_th_opt_rocket_pct:
+                logger.debug(f"[L2 Trap] ACTIVE_BULL_TRAP -> IDLE via ROCKET (Call RoC: {call_roc:.2f} > {settings.agent_b_th_opt_rocket_pct})")
                 self._state = DivergenceState.IDLE
                 self._entry_count = 0
             else:
@@ -462,9 +496,11 @@ class AgentB1:
             if abs(spot_roc) < th_spot_exit or put_roc > th_opt_recover:
                 self._exit_count += 1
                 if self._exit_count >= k_exit:
+                    logger.debug(f"[L2 Trap] ACTIVE_BEAR_TRAP -> IDLE (Spot RoC: {spot_roc:.2f}, Put RoC: {put_roc:.2f})")
                     self._state = DivergenceState.IDLE
                     self._entry_count = 0
             elif put_roc > settings.agent_b_th_opt_rocket_pct:
+                logger.debug(f"[L2 Trap] ACTIVE_BEAR_TRAP -> IDLE via ROCKET (Put RoC: {put_roc:.2f} > {settings.agent_b_th_opt_rocket_pct})")
                 self._state = DivergenceState.IDLE
                 self._entry_count = 0
             else:

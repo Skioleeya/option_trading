@@ -87,6 +87,10 @@ class GreeksExtractor:
             total_call_gex = agg.get("total_call_gex", 0.0)
             total_put_gex = agg.get("total_put_gex", 0.0)
             
+            otm_call_vol = agg.get("otm_call_vol", 0)
+            otm_put_vol = agg.get("otm_put_vol", 0)
+            total_chain_vol = agg.get("total_chain_vol", 0)
+            
             # Fix B: Prioritize skew-adjusted ATM IV from L1 aggregate
             # This ensures consistency with GEX/Greeks computation path.
             l1_atm_iv = agg.get("atm_iv", 0.0)
@@ -115,6 +119,9 @@ class GreeksExtractor:
             vanna_exposure = self._gamma_analyzer.compute_net_vanna(chain, spot)
             total_call_gex = profile_result.get("total_call_gex", 0)
             total_put_gex  = profile_result.get("total_put_gex", 0)
+            otm_call_vol = 0
+            otm_put_vol = 0
+            total_chain_vol = 0
 
         # 2. ATM IV extraction
         atm_iv = self._extract_atm_iv(chain, spot)
@@ -136,6 +143,9 @@ class GreeksExtractor:
             "per_strike_gex": per_strike_gex,       # from profile_result (UI only)
             "total_call_gex": total_call_gex,
             "total_put_gex": total_put_gex,
+            "otm_call_vol": otm_call_vol,
+            "otm_put_vol": otm_put_vol,
+            "total_chain_vol": total_chain_vol,
             "as_of": as_of.isoformat(),
         }
 
@@ -170,10 +180,7 @@ class GreeksExtractor:
                 min_distance = distance
                 best_call_iv = iv
 
-        # Convert to percentage if needed (some APIs return as decimal)
-        if best_call_iv is not None and best_call_iv < 1.0:
-            best_call_iv *= 100.0
-
+        # Keep as fractional decimal for system consistency
         return best_call_iv
 
     def _extract_skew_ivs(self, chain: list[dict[str, Any]]) -> dict[str, float | None]:
@@ -209,9 +216,7 @@ class GreeksExtractor:
             except (ValueError, TypeError):
                 continue
 
-        # Normalized to percentages
-        if put_25d_iv and put_25d_iv < 1.0: put_25d_iv *= 100.0
-        if call_25d_iv and call_25d_iv < 1.0: call_25d_iv *= 100.0
+        # Normalized to fractions for system consistency
 
         return {
             "put_25d_iv": put_25d_iv,

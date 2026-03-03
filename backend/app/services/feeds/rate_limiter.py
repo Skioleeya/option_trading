@@ -115,4 +115,5 @@ class APIRateLimiter:
         else:
             return 3
 # Module-level singleton — shared across all REST callers in the same process
-longport_limiter = APIRateLimiter(rate=8.0, burst=8, max_concurrent=4)
+# PP-LIMIT FIX: Longport 30req/30s limit is strict. Using 0.9/s with burst=1.
+longport_limiter = APIRateLimiter(rate=0.9, burst=1, max_concurrent=2)

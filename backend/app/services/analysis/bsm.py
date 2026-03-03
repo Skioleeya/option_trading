@@ -27,6 +27,10 @@ def norm_pdf(x: float) -> float:
 # Time to Maturity
 # ---------------------------------------------------------------------------
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 def get_trading_time_to_maturity(now: datetime) -> float:
     """Calculate TTM in 0DTE trading time (years).
 
@@ -176,6 +180,11 @@ def compute_greeks(
 
 
     gamma = eq_t * nd1 / (spot * iv * sqrt_t)
+    
+    # Defensive Log: Catch Gamma singularity
+    if t_years < 0.001 and gamma > 5.0:
+        logger.debug(f"[L1 BSM] Near-Singularity Gamma detected: {gamma:.2f} for Strike {strike} (TTM: {t_years:.5f}y, Spot: {spot:.2f})")
+        
     vega  = spot * eq_t * nd1 * sqrt_t * 0.01      # per 1pp IV move
     vanna = -eq_t * nd1 * d2 / iv                  # ∂Δ/∂σ (unnormalised)
 

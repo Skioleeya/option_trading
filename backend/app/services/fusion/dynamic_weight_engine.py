@@ -8,9 +8,12 @@ Adjusts weights dynamically based on IV regime and GEX intensity.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 from app.models.microstructure import (
     FusedSignalResult,
     GexIntensity,
@@ -168,6 +171,10 @@ class DynamicWeightEngine:
             w = comp["weight"]
             weighted_score += d * c * w
             weighted_confidence += c * w
+            
+        # Defensive Log for MTF damping component
+        if components["mtf"]["direction"] != "NEUTRAL" and components["mtf"]["confidence"] < 0.4:
+            logger.debug(f"[L2 Fusion] MTF Confidence heavily discounted: {components['mtf']['confidence']:.2f}")
 
         # Determine fused direction
         if weighted_score > 0.15:

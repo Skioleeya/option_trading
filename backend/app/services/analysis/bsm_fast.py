@@ -252,7 +252,9 @@ def _bsm_batch_cupy(
     is_call: np.ndarray,
     r: float,
     q: float,
-) -> dict[str, np.ndarray]:
+    ois:     np.ndarray | None = None,
+    mults:   np.ndarray | None = None,
+) -> tuple[dict[str, np.ndarray], dict[str, float] | None]:
     """GPU-accelerated BSM Greeks using CuPy CUDA element-wise ops.
 
     All arrays are transferred to device once, computed in parallel across
@@ -324,8 +326,48 @@ def _bsm_batch_cupy(
     for arr in (delta, gamma, vega, vanna, charm, theta):
         arr[~valid] = 0.0
 
+    agg = None
+    if ois is not None and mults is not None:
+        cp_ois = cp.asarray(ois.astype(np.float64))
+        cp_mults = cp.asarray(mults.astype(np.float64))
+        
+        gex = gamma * cp_ois * (safe_S ** 2) * cp_mults * 0.01
+        gex = cp.where(valid, gex, 0.0)
+        vanna_exp = cp.where(valid, vanna * cp_ois * cp_mults, 0.0)
+        charm_exp = cp.where(valid, charm * cp_ois * cp_mults, 0.0)
+        
+        call_mask = cp_is_call
+        put_mask = ~cp_is_call
+        
+        call_gex_arr = cp.where(call_mask, gex, cp.array(0.0, dtype=cp.float64))
+        put_gex_arr = cp.where(put_mask, gex, cp.array(0.0, dtype=cp.float64))
+        
+        total_call_gex = float(cp.sum(call_gex_arr).item())
+        total_put_gex = -float(cp.sum(put_gex_arr).item())
+        
+        max_call_idx = int(cp.argmax(call_gex_arr).item())
+        max_put_idx = int(cp.argmax(put_gex_arr).item())
+        
+        max_call_gex = float(call_gex_arr[max_call_idx].item())
+        max_put_gex = float(put_gex_arr[max_put_idx].item())
+        
+        call_wall = float(cp_strikes[max_call_idx].item()) if max_call_gex > 0 else None
+        put_wall = float(cp_strikes[max_put_idx].item()) if max_put_gex > 0 else None
+        
+        agg = {
+            "net_gex": (total_call_gex + total_put_gex) / 1_000_000.0,
+            "total_call_gex": total_call_gex / 1_000_000.0,
+            "total_put_gex": total_put_gex / 1_000_000.0,
+            "max_call_gex": max_call_gex,
+            "max_put_gex": max_put_gex,
+            "call_wall": call_wall,
+            "put_wall": put_wall,
+            "net_vanna": float(cp.sum(vanna_exp).item()),
+            "net_charm": float(cp.sum(charm_exp).item()),
+        }
+
     # Transfer back to CPU — the rest of the pipeline is CPU-side
-    return {
+    greeks = {
         "delta":  cp.asnumpy(delta),
         "gamma":  cp.asnumpy(gamma),
         "vega":   cp.asnumpy(vega),
@@ -333,11 +375,51 @@ def _bsm_batch_cupy(
         "charm":  cp.asnumpy(charm),
         "theta":  cp.asnumpy(theta),
     }
+    return greeks, agg
 
 
 # =========================================================================== #
 # Public API
 # =========================================================================== #
+
+def _aggregate_greeks_cpu(
+    greeks: dict[str, np.ndarray],
+    spots: np.ndarray, strikes: np.ndarray, is_call: np.ndarray,
+    ivs: np.ndarray, t_years: float,
+    ois: np.ndarray, mults: np.ndarray
+) -> dict[str, float]:
+    valid = (ivs > 0) & (spots > 0) & (strikes > 0) & (t_years > 0)
+    
+    gex = greeks["gamma"] * ois * (spots ** 2) * mults * 0.01
+    gex = np.where(valid, gex, 0.0)
+    vanna_exp = np.where(valid, greeks["vanna"] * ois * mults, 0.0)
+    charm_exp = np.where(valid, greeks["charm"] * ois * mults, 0.0)
+    
+    call_gex = np.where(is_call, gex, 0.0)
+    put_gex  = np.where(~is_call, gex, 0.0)
+    
+    total_call_gex = float(np.sum(call_gex))
+    total_put_gex  = -float(np.sum(put_gex))
+    
+    max_call_idx = int(np.argmax(call_gex))
+    max_put_idx  = int(np.argmax(put_gex))
+    max_call_gex = float(call_gex[max_call_idx])
+    max_put_gex  = float(put_gex[max_put_idx])
+    
+    call_wall = float(strikes[max_call_idx]) if max_call_gex > 0 else None
+    put_wall  = float(strikes[max_put_idx]) if max_put_gex > 0 else None
+    
+    return {
+        "net_gex": (total_call_gex + total_put_gex) / 1_000_000.0,
+        "total_call_gex": total_call_gex / 1_000_000.0,
+        "total_put_gex": total_put_gex / 1_000_000.0,
+        "max_call_gex": max_call_gex,
+        "max_put_gex": max_put_gex,
+        "call_wall": call_wall,
+        "put_wall": put_wall,
+        "net_vanna": float(np.sum(vanna_exp)),
+        "net_charm": float(np.sum(charm_exp)),
+    }
 
 def compute_greeks_batch(
     spots:   np.ndarray,
@@ -347,7 +429,9 @@ def compute_greeks_batch(
     is_call: np.ndarray,
     r: float = 0.05,
     q: float = 0.0,
-) -> dict[str, np.ndarray]:
+    ois:     np.ndarray | None = None,
+    mults:   np.ndarray | None = None,
+) -> tuple[dict[str, np.ndarray], dict[str, float] | None]:
     """
     Batch-compute BSM Greeks for an entire option chain.
 
@@ -371,10 +455,12 @@ def compute_greeks_batch(
     # Tier 1: GPU path
     if _CUPY_AVAILABLE:
         try:
-            return _bsm_batch_cupy(spots, strikes, ivs, t_years, is_call, r, q)
+            return _bsm_batch_cupy(spots, strikes, ivs, t_years, is_call, r, q, ois, mults)
         except Exception as exc:
             logger.warning(f"[bsm_fast] CuPy GPU path failed ({exc}), falling back to Numba.")
 
+    # CPU paths
+    greeks = None
     # Tier 2: Numba JIT path
     if _NUMBA_AVAILABLE:
         d, g, ve, va, ch, th = _bsm_batch_numba(
@@ -385,10 +471,16 @@ def compute_greeks_batch(
             is_call.astype(np.bool_),
             float(r), float(q),
         )
-        return {"delta": d, "gamma": g, "vega": ve, "vanna": va, "charm": ch, "theta": th}
-
-    # Tier 3: NumPy vectorized fallback
-    return _bsm_batch_numpy(spots, strikes, ivs, t_years, is_call, r, q)
+        greeks = {"delta": d, "gamma": g, "vega": ve, "vanna": va, "charm": ch, "theta": th}
+    else:
+        # Tier 3: NumPy vectorized fallback
+        greeks = _bsm_batch_numpy(spots, strikes, ivs, t_years, is_call, r, q)
+        
+    agg = None
+    if ois is not None and mults is not None:
+        agg = _aggregate_greeks_cpu(greeks, spots, strikes, is_call, ivs, t_years, ois, mults)
+        
+    return greeks, agg
 
 
 def warmup() -> None:

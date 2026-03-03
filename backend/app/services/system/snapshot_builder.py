@@ -147,7 +147,7 @@ class SnapshotBuilder:
                     drift_warning = True
                     logger.warning(f"[SnapshotBuilder] OOD Drift Detected: {drift_ms:.0f}ms")
         except Exception as e:
-            logger.debug(f"[SnapshotBuilder] Failed to calc drift: {e}")
+            logger.debug(f"[L3 SnapshotBuilder] Failed to calc drift: {e}. snapshot_time type: {type(snapshot_time)}, agent_as_of type: {type(agent_as_of)}. snapshot_time: {snapshot_time}, agent_as_of: {agent_as_of}")
 
         return {
             "type": "dashboard_update",
