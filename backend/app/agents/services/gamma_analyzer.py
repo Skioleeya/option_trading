@@ -77,6 +77,7 @@ class GammaAnalyzer:
             opt_type = opt.get("option_type", opt.get("type", "")).upper()
 
             if gamma <= 0 or oi <= 0:
+                # We do not compute GEX, but we already ensured the strike is in strike_gex
                 continue
 
             # GEX formula: Gamma × OI × Spot² × Multiplier × 0.01
@@ -195,15 +196,17 @@ class GammaAnalyzer:
         self,
         chain: list[dict[str, Any]],
         spot: float,
+        t_years: float | None = None,
     ) -> list[dict[str, float]]:
-        """Compute gamma profile curve for visualization.
-
-        Generates GEX values across a range of spot prices
-        to show how Net GEX changes with price movement.
-
-        Returns:
-            List of {price, net_gex} dicts for the gamma profile curve.
+        """Compute gamma profile curve using DYNAMIC Greeks simulation.
+        
+        Refactor FIX: Instead of using current Gamma for all price points,
+        we re-run BSM for every simulated spot price to capture non-linearities.
         """
+        # We need BSM utils here since we're re-simulating
+        from app.services.analysis.bsm import compute_greeks
+        from app.config import settings
+
         range_pct = settings.gamma_profile_range_pct  # 10%
         steps = settings.gamma_profile_steps  # 50
 
@@ -211,13 +214,50 @@ class GammaAnalyzer:
         high = spot * (1 + range_pct)
         step_size = (high - low) / steps
 
+        # Use current TTM if not provided
+        if t_years is None:
+            from app.services.analysis.bsm import get_trading_time_to_maturity
+            from datetime import datetime
+            from zoneinfo import ZoneInfo
+            t_years = get_trading_time_to_maturity(datetime.now(ZoneInfo("US/Eastern")))
+
         profile = []
         for i in range(steps + 1):
-            price = low + i * step_size
-            result = self.compute_net_gex(chain, price)
+            sim_spot = low + i * step_size
+            sim_net_gex = 0.0
+
+            for opt in chain:
+                strike = opt.get("strike", 0)
+                iv = opt.get("implied_volatility", 0)
+                oi = opt.get("open_interest", 0)
+                opt_type = opt.get("type", opt.get("option_type", "")).upper()
+                multiplier = opt.get("contract_multiplier", 100)
+
+                if iv <= 0 or oi <= 0 or strike <= 0:
+                    continue
+
+                # Re-calculate Gamma at sim_spot
+                g = compute_greeks(
+                    spot=sim_spot,
+                    strike=strike,
+                    iv=iv,
+                    t_years=t_years,
+                    opt_type=opt_type,
+                    r=settings.risk_free_rate,
+                    q=settings.bsm_dividend_yield,
+                )
+                
+                # GEX_i = Gamma_i × OI_i × SimSpot² × Multiplier × 0.01
+                gex = g["gamma"] * oi * (sim_spot ** 2) * multiplier * 0.01
+                
+                if opt_type in ("CALL", "C"):
+                    sim_net_gex += gex
+                else:
+                    sim_net_gex -= gex
+
             profile.append({
-                "price": round(price, 2),
-                "net_gex": result["net_gex"],
+                "price": round(sim_spot, 2),
+                "net_gex": sim_net_gex / 1_000_000.0,
             })
 
         return profile

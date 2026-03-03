@@ -36,6 +36,13 @@ const StatCard: React.FC<{
 export const MicroStats: React.FC<Props> = ({
     uiState,
 }) => {
+    // Guard: render empty shell if uiState sub-fields are null (pre-WS-connection)
+    const safe = {
+        net_gex: uiState?.net_gex ?? { label: '—', badge: 'badge-neutral' },
+        wall_dyn: uiState?.wall_dyn ?? { label: '—', badge: 'badge-neutral' },
+        vanna: uiState?.vanna ?? { label: '—', badge: 'badge-neutral' },
+        momentum: uiState?.momentum ?? { label: '—', badge: 'badge-neutral' },
+    }
     return (
         <div className="p-1 pb-4 space-y-1.5 bg-[#0a0c10]">
             {/* Section title */}
@@ -52,8 +59,8 @@ export const MicroStats: React.FC<Props> = ({
                     title="NET GEX"
                     icon={<Activity size={9} className="text-[#a855f7]" />}
                     badge={
-                        <span className={`badge ${uiState.net_gex.badge}`}>
-                            {uiState.net_gex.label}
+                        <span className={`badge ${safe.net_gex.badge}`}>
+                            {safe.net_gex.label}
                         </span>
                     }
                 />
@@ -63,8 +70,8 @@ export const MicroStats: React.FC<Props> = ({
                     title="WALL DYN"
                     icon={<Anchor size={9} className="text-accent-amber" />}
                     badge={
-                        <span className={`badge ${uiState.wall_dyn.badge}`}>
-                            {uiState.wall_dyn.label}
+                        <span className={`badge ${safe.wall_dyn.badge}`}>
+                            {safe.wall_dyn.label}
                         </span>
                     }
                 />
@@ -74,8 +81,8 @@ export const MicroStats: React.FC<Props> = ({
                     title="MOMENTUM"
                     icon={<Minus size={14} className="text-white/60" />}
                     badge={
-                        <span className={`badge ${uiState.momentum.badge}`}>
-                            {uiState.momentum.label}
+                        <span className={`badge ${safe.momentum.badge}`}>
+                            {safe.momentum.label}
                         </span>
                     }
                 />
@@ -85,8 +92,8 @@ export const MicroStats: React.FC<Props> = ({
                     title="VANNA"
                     icon={<Zap size={9} className="text-accent-cyan" />}
                     badge={
-                        <span className={`badge ${uiState.vanna.badge}`}>
-                            {uiState.vanna.label}
+                        <span className={`badge ${safe.vanna.badge}`}>
+                            {safe.vanna.label}
                         </span>
                     }
                 />

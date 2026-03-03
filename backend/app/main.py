@@ -7,6 +7,7 @@ Orchestrates all services via AppContainer with async lifespan management.
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import logging
 import time
@@ -27,7 +28,11 @@ from app.services.system.snapshot_builder import SnapshotBuilder
 from app.services.analysis.atm_decay_tracker import AtmDecayTracker
 
 
-logging.basicConfig(level=getattr(logging, settings.log_level, logging.INFO))
+logging.basicConfig(
+    level=getattr(logging, settings.log_level, logging.INFO),
+    format='%(asctime)s.%(msecs)03d %(levelname)s %(name)s: %(message)s',
+    datefmt='%H:%M:%S'
+)
 logger = logging.getLogger(__name__)
 
 
@@ -54,11 +59,15 @@ class AppContainer:
 
         # Agent runner state
         self._runner_task: asyncio.Task | None = None
+        self._broadcast_task: asyncio.Task | None = None
         self._running = False
         self._last_payload: dict[str, Any] | None = None
         self._last_payload_time: float = 0.0
         self._total_computations = 0
         self._failed_computations = 0
+        # PP-L3D: Track current compute interval so broadcast_loop can set
+        # a dynamic is_stale threshold instead of a fixed constant.
+        self._current_compute_interval: float = 3.0
 
         # WebSocket clients
         self._ws_clients: set[WebSocket] = set()
@@ -78,80 +87,163 @@ class AppContainer:
         await self.atm_decay_tracker.initialize()
         self.quote_hub_ready.set()
 
-        # Start agent runner loop
+        # Start agent runner loop (compute every 3s) and broadcast loop (1Hz)
         self._running = True
         self._runner_task = asyncio.create_task(self._agent_runner_loop())
+        self._broadcast_task = asyncio.create_task(self._broadcast_loop())
 
         logger.info("[AppContainer] All services initialized")
 
     async def shutdown_all(self) -> None:
         """Shutdown all services."""
         self._running = False
-        if self._runner_task:
-            self._runner_task.cancel()
-            try:
-                await self._runner_task
-            except asyncio.CancelledError:
-                pass
+        for task in (self._runner_task, self._broadcast_task):
+            if task:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
 
         await self.option_chain_builder.shutdown()
         await self.redis_service.stop()
         print("[DEBUG] ========== LIFESPAN END ==========")
 
     async def _agent_runner_loop(self) -> None:
-        """Main loop: fetch data → run agents → broadcast."""
+        """Compute loop: fetch data → run agents → build payload → save Redis.
+
+        Dynamically paces between 1s (idle API) and 3s (heavy API load).
+        Does NOT broadcast — that is handled by _broadcast_loop.
+
+        RACE FIX (Race 1): payload is stored as copy.deepcopy so the broadcast
+        loop always holds a fully-isolated snapshot, immune to in-place mutations
+        by subsequent SnapshotBuilder.build() calls.
+        """
+        from app.services.feeds.rate_limiter import longport_limiter
+        next_tick = time.monotonic()
+
         while self._running:
+            # 0. Dynamically adjust interval based on available API tokens
+            compute_interval = float(longport_limiter.get_dynamic_interval())
+            # PP-L3D: Expose current compute_interval so broadcast_loop can
+            # calculate a dynamic is_stale threshold.
+            self._current_compute_interval = compute_interval
+            
             try:
                 start = time.monotonic()
 
                 # 1. Fetch snapshot
                 snapshot = await self.option_chain_builder.fetch_chain()
-
                 snapshot_time = time.monotonic() - start
+
+                chain_size = len(snapshot.get("chain", []))
+                iv_cache_size = len(self.option_chain_builder._iv_sync.iv_cache)
 
                 # 2. Run agent pipeline
                 agent_start = time.monotonic()
                 result = await self.agent_g.run(snapshot)
-                
+
                 # 2.5 Calculate ATM Decay via Tracker
                 atm_decay_payload = await self.atm_decay_tracker.update(
-                    snapshot.get("chain", []), 
+                    snapshot.get("chain", []),
                     snapshot.get("spot", 0.0)
                 )
-                
+
                 agent_time = time.monotonic() - agent_start
 
-                logger.warning(
+                logger.info(
                     f"[PERF] build_payload breakdown: "
                     f"snapshot={snapshot_time*1000:.1f}ms, "
-                    f"agent={agent_time*1000:.1f}ms"
+                    f"agent={agent_time*1000:.1f}ms, "
+                    f"interval={compute_interval}s"
+                )
+                logger.debug(
+                    f"[RACE_PROBE] runner tick: chain_size={chain_size}, "
+                    f"iv_cache_size={iv_cache_size}, "
+                    f"spot={snapshot.get('spot')}"
                 )
 
-                # 3. Build payload
-                payload = SnapshotBuilder.build(snapshot, result, atm_decay_payload)
-                self._last_payload = payload
-                self._last_payload_time = time.monotonic()
-                self._total_computations += 1
+                # 3. Build and cache payload — deep-copy to isolate from next frame
+                # PP-1 FIX: Only update _last_payload if agent result is valid to prevent UI flickering.
+                if result:
+                    new_payload = SnapshotBuilder.build(snapshot, result, atm_decay_payload)
+                    # RACE FIX: deepcopy prevents broadcast loop from sharing mutable
+                    # nested objects with the next SnapshotBuilder.build() call.
+                    self._last_payload = copy.deepcopy(new_payload)
+                    self._last_payload_time = time.monotonic()
+                    self._total_computations += 1
+                else:
+                    logger.warning("[AgentRunner] Agent result is None, skipping payload update (Outcome Cache active)")
 
-                # 4. Save to Redis
-                await self.historical_store.save_snapshot(payload)
-
-                # 5. Broadcast to WebSocket clients
-                await self._broadcast(payload)
+                # 4. Save to Redis (use original payload if available)
+                if self._last_payload:
+                    await self.historical_store.save_snapshot(self._last_payload)
 
             except Exception as e:
                 self._failed_computations += 1
-                logger.exception(f"[AgentRunner] Error in loop: {e}")
+                logger.exception(f"[AgentRunner] Error in compute loop: {e}")
 
-            # Sleep for update interval
-            await asyncio.sleep(settings.websocket_update_interval)
+            # Drift-corrected sleep with dynamic cadence
+            next_tick += compute_interval
+            sleep_dur = next_tick - time.monotonic()
+            if sleep_dur > 0:
+                await asyncio.sleep(sleep_dur)
+            else:
+                next_tick = time.monotonic()
+                await asyncio.sleep(0.01)
 
-        return {
-            "type": "dashboard_update",
-            "timestamp": now.isoformat(),
-            "spot": spot,
-            "agent_g": agent_data,
-        }
+    async def _broadcast_loop(self) -> None:
+        """Broadcast loop: push the latest cached payload to WS clients at 1Hz.
+
+        Runs independently of the compute loop so the frontend always gets
+        smooth 1-second updates even when backend computation is slower.
+
+        RACE FIX (Race 1): _last_payload is already a deepcopy (set by runner),
+        so a top-level dict() copy here is safe — only 'timestamp' is mutated
+        at the top level, which does not affect the runner's next deepcopy.
+        """
+        broadcast_interval = settings.ws_broadcast_interval  # configurable via WS_BROADCAST_INTERVAL in .env
+        next_tick = time.monotonic()
+
+        while self._running:
+            if self._last_payload is not None:
+                # PP-L3E FIX: Use deepcopy (not shallow dict()) so nested
+                # dicts like agent_g.data.ui_state are fully isolated from
+                # _last_payload. A shallow copy would allow mutations in
+                # the broadcast path to corrupt the stored payload.
+                fresh_payload = copy.deepcopy(self._last_payload)
+                fresh_payload["heartbeat_timestamp"] = datetime.now(ZoneInfo("US/Eastern")).isoformat()
+                
+                # PP-L3D FIX: Dynamic is_stale threshold scaled to current
+                # compute_interval, so the stale flag only fires when the
+                # payload is older than 2.5× the *actual* compute cadence,
+                # not a hard-coded constant that may not match.
+                payload_age = time.monotonic() - self._last_payload_time
+                stale_threshold = self._current_compute_interval * 2.5
+                fresh_payload["is_stale"] = payload_age > stale_threshold
+
+                # PP-L3F FIX: Expose a canonical `timestamp` alias at the top
+                # level so the frontend Header component reads a consistent
+                # key name regardless of internal rename history.
+                fresh_payload["timestamp"] = fresh_payload.get("data_timestamp", "")
+
+                client_count = len(self._ws_clients)
+                logger.debug(
+                    f"[RACE_PROBE] broadcast: payload_age={payload_age:.2f}s, "
+                    f"ws_clients={client_count}"
+                )
+
+                await self._broadcast(fresh_payload)
+            else:
+                logger.warning("[RACE_PROBE] broadcast skipped: _last_payload is None")
+
+            next_tick += broadcast_interval
+            sleep_dur = next_tick - time.monotonic()
+            if sleep_dur > 0:
+                await asyncio.sleep(sleep_dur)
+            else:
+                next_tick = time.monotonic()
+                await asyncio.sleep(0.01)
 
     async def _broadcast(self, payload: dict[str, Any]) -> None:
         """Broadcast payload to all connected WebSocket clients."""

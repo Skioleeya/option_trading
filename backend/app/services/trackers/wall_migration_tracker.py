@@ -86,21 +86,36 @@ class WallMigrationTracker:
         if elapsed < settings.wall_snapshot_interval_seconds and self._snapshots:
             # Even on throttled return, overlay high-priority states on cached result
             if self._last_result:
-                result = self._last_result
+                updates = {}
                 if call_breached:
-                    result = result.model_copy(update={"call_wall_state": WallMigrationCallState.BREACHED, "confidence": 0.95})
-                elif is_decaying and result.call_wall_state not in (
-                    WallMigrationCallState.BREACHED,
-                ):
-                    result = result.model_copy(update={"call_wall_state": WallMigrationCallState.DECAYING})
+                    updates.update({"call_wall_state": WallMigrationCallState.BREACHED, "confidence": 0.95})
+                elif is_decaying and self._last_result.call_wall_state != WallMigrationCallState.BREACHED:
+                    updates["call_wall_state"] = WallMigrationCallState.DECAYING
+                
                 if put_breached:
-                    result = result.model_copy(update={"put_wall_state": WallMigrationPutState.BREACHED, "confidence": 0.95})
-                elif is_decaying and result.put_wall_state not in (
-                    WallMigrationPutState.BREACHED,
-                ):
-                    result = result.model_copy(update={"put_wall_state": WallMigrationPutState.DECAYING})
-                return result
+                    updates.update({"put_wall_state": WallMigrationPutState.BREACHED, "confidence": 0.95})
+                elif is_decaying and self._last_result.put_wall_state != WallMigrationPutState.BREACHED:
+                    updates["put_wall_state"] = WallMigrationPutState.DECAYING
+
+                # CRITICAL: Always inject live values into history tail for UI synchronization
+                updates["call_wall_history"] = [s.call_wall for s in self._snapshots] + [call_wall]
+                updates["put_wall_history"]  = [s.put_wall for s in self._snapshots] + [put_wall]
+
+                return self._last_result.model_copy(update=updates)
             return WallMigrationResult()
+
+        # If both walls are None (cold start / unwarmed chain), do NOT commit this
+        # snapshot — refuse to advance _last_snapshot_time so the next valid
+        # call immediately retries instead of waiting 900s.
+        if call_wall is None and put_wall is None:
+            # Still cache a minimal result for the UI so it shows '—' consistently
+            if self._last_result is None:
+                self._last_result = WallMigrationResult(
+                    call_wall_state=WallMigrationCallState.STABLE,
+                    put_wall_state=WallMigrationPutState.STABLE,
+                    confidence=0.0,
+                )
+            return self._last_result
 
         self._last_snapshot_time = now_mono
         self._snapshots.append(_WallSnapshot(
@@ -108,11 +123,16 @@ class WallMigrationTracker:
         ))
 
         if len(self._snapshots) < 2:
-            call_hist = [s.call_wall for s in self._snapshots]
-            put_hist = [s.put_wall for s in self._snapshots]
+            # First snapshot: history = [None, None, current_wall]
+            # This ensures the 'current' box has data even if history is empty.
+            call_hist = [None, None, call_wall]
+            put_hist  = [None, None, put_wall]
             result = WallMigrationResult(
+                call_wall_state=WallMigrationCallState.STABLE,
+                put_wall_state=WallMigrationPutState.STABLE,
                 call_wall_history=call_hist,
                 put_wall_history=put_hist,
+                confidence=0.5,
             )
             self._last_result = result
             return result
@@ -166,8 +186,11 @@ class WallMigrationTracker:
                 put_state = WallMigrationPutState.REINFORCED_SUPPORT
                 confidence = max(confidence, 0.5)
 
-        call_hist = [s.call_wall for s in self._snapshots]
-        put_hist = [s.put_wall for s in self._snapshots]
+        # Build history list from snapshots PLUS THE CURRENT LIVE VALUE
+        # Presenter expects total 3 slots (h1, h2, current). 
+        # We supply all snapshots + the live value at the end.
+        call_hist = [s.call_wall for s in self._snapshots] + [call_wall]
+        put_hist  = [s.put_wall for s in self._snapshots] + [put_wall]
 
         result = WallMigrationResult(
             call_wall_state=call_state,

@@ -38,6 +38,7 @@ class GreeksExtractor:
         chain: list[dict[str, Any]],
         spot: float,
         as_of: datetime | None = None,
+        aggregate_greeks: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Compute all Greeks metrics from option chain.
 
@@ -57,50 +58,84 @@ class GreeksExtractor:
             logger.warning("[GreeksExtractor] Empty chain or invalid spot")
             return self._empty_result()
 
-        logger.warning(
+        logger.info(
             f"[GreeksExtractor] Chain length={len(chain)}, spot={spot}, "
             f"net_gex={self._gamma_analyzer.compute_net_gex(chain, spot)['net_gex']}"
         )
 
         # Log sample call for diagnostics
         if chain:
-            logger.warning(f"[GreeksExtractor] Sample Raw Option keys: {chain[0].keys()}")
-            logger.warning(f"[GreeksExtractor] Sample Raw Option: {chain[0]}")
+            logger.debug(f"[GreeksExtractor] Sample Raw Option keys: {chain[0].keys()}")
+            logger.debug(f"[GreeksExtractor] Sample Raw Option: {chain[0]}")
         else:
-            logger.warning("[GreeksExtractor] Chain is empty")
+            logger.info("[GreeksExtractor] Chain is empty")
 
-        # 1. Core GEX computation
-        gex_result = self._gamma_analyzer.compute_net_gex(chain, spot)
+        if aggregate_greeks:
+            # OPTIMIZATION: Use pre-computed aggregates from OptionChainBuilder
+            agg = aggregate_greeks
+            net_gex = agg.get("net_gex", 0.0)
+            # FIX A: gamma_flip is derived from the SAME source as net_gex (aggregate BSM)
+            # Do NOT use profile_result["gamma_flip"] which re-runs on raw WS chain[].gamma
+            # and can produce a contradictory sign vs net_gex.
+            gamma_flip = net_gex < 0
+            gamma_walls = {
+                "call_wall": agg.get("call_wall"),
+                "put_wall": agg.get("put_wall"),
+            }
+            charm_exposure = agg.get("net_charm", 0.0)
+            vanna_exposure = agg.get("net_vanna", 0.0)
+            total_call_gex = agg.get("total_call_gex", 0.0)
+            total_put_gex = agg.get("total_put_gex", 0.0)
+            
+            # Fix B: Prioritize skew-adjusted ATM IV from L1 aggregate
+            # This ensures consistency with GEX/Greeks computation path.
+            l1_atm_iv = agg.get("atm_iv", 0.0)
+            if l1_atm_iv > 0:
+                atm_iv = l1_atm_iv
+            else:
+                atm_iv = self._extract_atm_iv(chain, spot)
+
+            # Still need flip-level interpolation and per-strike profile for UI.
+            # Use profile_result ONLY for those two fields — never its net_gex/gamma_flip.
+            profile_result = self._gamma_analyzer.compute_net_gex(chain, spot)
+            gamma_flip_level = profile_result.get("gamma_flip_level")
+            per_strike_gex   = profile_result.get("per_strike_gex", [])
+        else:
+            # Fallback: full BSM computation (O(N))
+            profile_result = self._gamma_analyzer.compute_net_gex(chain, spot)
+            net_gex = profile_result["net_gex"]
+            gamma_flip = profile_result["gamma_flip"]
+            gamma_flip_level = profile_result.get("gamma_flip_level")
+            per_strike_gex   = profile_result.get("per_strike_gex", [])
+            gamma_walls = {
+                "call_wall": profile_result["call_wall"],
+                "put_wall": profile_result["put_wall"],
+            }
+            charm_exposure = self._gamma_analyzer.compute_net_charm(chain)
+            vanna_exposure = self._gamma_analyzer.compute_net_vanna(chain, spot)
+            total_call_gex = profile_result.get("total_call_gex", 0)
+            total_put_gex  = profile_result.get("total_put_gex", 0)
 
         # 2. ATM IV extraction
         atm_iv = self._extract_atm_iv(chain, spot)
 
-        # 3. Charm exposure
-        charm_exposure = self._gamma_analyzer.compute_net_charm(chain)
-
-        # 4. Vanna exposure
-        vanna_exposure = self._gamma_analyzer.compute_net_vanna(chain, spot)
-
-        # 5. Gamma profile (for visualization)
+        # 3. Gamma profile (DYNAMIC simulation - Fixed math)
         gamma_profile = self._gamma_analyzer.compute_gamma_profile(chain, spot)
 
         result = {
-            "net_gex": gex_result["net_gex"],
-            "gamma_walls": {
-                "call_wall": gex_result["call_wall"],
-                "put_wall": gex_result["put_wall"],
-            },
-            "gamma_flip_level": gex_result["gamma_flip_level"],
-            "gamma_flip": gex_result["gamma_flip"],
+            "net_gex": net_gex,
+            "gamma_walls": gamma_walls,
+            "gamma_flip_level": gamma_flip_level,  # from profile_result (UI only)
+            "gamma_flip": gamma_flip,               # FIX A: always consistent with net_gex
             "atm_iv": atm_iv,
             "spy_atm_iv": atm_iv,  # Alias for pure SPY IV architecture
             "skew_25d": self._extract_skew_ivs(chain),
             "charm_exposure": charm_exposure,
             "vanna_exposure": vanna_exposure,
             "gamma_profile": gamma_profile,
-            "per_strike_gex": gex_result["per_strike_gex"],
-            "total_call_gex": gex_result.get("total_call_gex", 0),
-            "total_put_gex": gex_result.get("total_put_gex", 0),
+            "per_strike_gex": per_strike_gex,       # from profile_result (UI only)
+            "total_call_gex": total_call_gex,
+            "total_put_gex": total_put_gex,
             "as_of": as_of.isoformat(),
         }
 

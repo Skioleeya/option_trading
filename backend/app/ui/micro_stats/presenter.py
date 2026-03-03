@@ -8,6 +8,17 @@ from typing import Any
 from app.ui.micro_stats import mappings, thresholds
 
 
+# PP-L3C FIX: Debounce state for wall_key so a single-tick PINCH⇄SIEGE
+# oscillation caused by REINFORCED_WALL entering/leaving its state
+# does not immediately flip the MicroStats badge.
+#
+# Only commit a new wall_key if it has been stable for >= _WALL_KEY_DEBOUNCE_TICKS.
+_last_committed_wall_key: str = "STABLE"
+_pending_wall_key: str = ""
+_pending_wall_key_count: int = 0
+_WALL_KEY_DEBOUNCE_TICKS: int = 2  # must see same key this many times before committing
+
+
 class MicroStatsPresenter:
 
     @classmethod
@@ -26,23 +37,50 @@ class MicroStatsPresenter:
             vanna:      Raw vanna state string (DANGER_ZONE / GRIND_STABLE / VANNA_FLIP / NORMAL / UNAVAILABLE).
             momentum:   Agent A signal (BULLISH / BEARISH / NEUTRAL).
         """
-        # ─── 1. WALL DYN 状态聚合 ─────────────────────────────────────────
-        # 从原始 call/put wall 状态推导出单一的 UI 展示状态
-        call_st = wall_dyn.get("call_wall_state", "") if wall_dyn else ""
-        put_st  = wall_dyn.get("put_wall_state",  "") if wall_dyn else ""
+        # Strip Enum prefix if present
+        gex_regime = str(gex_regime or "NEUTRAL")
+        if "." in gex_regime: gex_regime = gex_regime.split(".")[-1]
+
+        vanna = str(vanna or "NORMAL")
+        if "." in vanna: vanna = vanna.split(".")[-1]
+
+        momentum = str(momentum or "NEUTRAL")
+        if "." in momentum: momentum = momentum.split(".")[-1]
+
+        # ─── 1. Wall dynamics composite key ─────────────────────────────────
+        # (priority: PINCH > SIEGE > RETREAT > COLLAPSE > STABLE)
+        global _last_committed_wall_key, _pending_wall_key, _pending_wall_key_count
+        call_st = str(wall_dyn.get("call_wall_state", "") if wall_dyn else "")
+        put_st  = str(wall_dyn.get("put_wall_state",  "") if wall_dyn else "")
+
+        if "." in call_st: call_st = call_st.split(".")[-1]
+        if "." in put_st:  put_st  = put_st.split(".")[-1]
+
 
         # 优先级：PINCH > SIEGE > RETREAT > COLLAPSE > STABLE
         if (call_st in thresholds.WALL_PINCH_CALL_STATES and
                 put_st in thresholds.WALL_PINCH_PUT_STATES):
-            wall_key = "PINCH"
+            candidate_key = "PINCH"
         elif call_st in thresholds.WALL_SIEGE_STATES or put_st in thresholds.WALL_SIEGE_STATES:
-            wall_key = "SIEGE"
+            candidate_key = "SIEGE"
         elif call_st in thresholds.WALL_RETREAT_STATES:
-            wall_key = "RETREAT"
+            candidate_key = "RETREAT"
         elif put_st in thresholds.WALL_COLLAPSE_STATES:
-            wall_key = "COLLAPSE"
+            candidate_key = "COLLAPSE"
         else:
-            wall_key = "STABLE"
+            candidate_key = "STABLE"
+
+        # PP-L3C: Debounce — only commit when candidate is stable for N ticks.
+        if candidate_key == _pending_wall_key:
+            _pending_wall_key_count += 1
+        else:
+            _pending_wall_key = candidate_key
+            _pending_wall_key_count = 1  # reset counter, first observed tick
+
+        if _pending_wall_key_count >= _WALL_KEY_DEBOUNCE_TICKS:
+            _last_committed_wall_key = _pending_wall_key
+
+        wall_key = _last_committed_wall_key
 
         # ─── 2. 查表组装 UI 状态 ──────────────────────────────────────────
         return {

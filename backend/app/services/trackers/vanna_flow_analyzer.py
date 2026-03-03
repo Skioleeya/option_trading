@@ -424,25 +424,39 @@ class VannaFlowAnalyzer:
             return GexRegime.NEUTRAL
 
     def get_confidence(self) -> float:
-        """Calculate vanna flow signal confidence."""
+        """Calculate vanna flow signal confidence.
+
+        PP-3 FIX: When correlation sits near the DANGER_ZONE threshold, linearly
+        interpolate confidence within a ±BOUNDARY_BAND window instead of hard-jumping
+        0.4 → 0.9. This eliminates the confidence oscillation that occurred when
+        correlation hovered just above/below vanna_danger_zone_threshold.
+        """
         if self._last_result is None or self._last_result.state == VannaFlowState.UNAVAILABLE:
             return 0.0
 
+        corr = abs(self._last_result.correlation or 0.0)
+        sample_count = len(self._history)
+        sample_factor = min(1.0, sample_count / 20)
+
         if self._last_result.state == VannaFlowState.DANGER_ZONE:
-            state_confidence = 0.9
+            # Smooth the 0.4→0.9 hard jump: linearly interpolate ±BOUNDARY_BAND around threshold
+            BOUNDARY_BAND = 0.05
+            danger_th = settings.vanna_danger_zone_threshold
+            raw_corr = self._last_result.correlation or 0.0
+            low = danger_th - BOUNDARY_BAND
+            high = danger_th + BOUNDARY_BAND
+            boundary_progress = (raw_corr - low) / (high - low)
+            boundary_progress = max(0.0, min(1.0, boundary_progress))
+            state_confidence = 0.4 + boundary_progress * 0.5  # 0.4 → 0.9 linear
         elif self._last_result.state == VannaFlowState.GRIND_STABLE:
             state_confidence = 0.7
         else:
             state_confidence = 0.4
 
-        corr = abs(self._last_result.correlation or 0.0)
         corr_factor = min(1.0, corr)
-
-        sample_count = len(self._history)
-        sample_factor = min(1.0, sample_count / 20)
-
         confidence = (state_confidence * 0.5 + corr_factor * 0.3 + sample_factor * 0.2)
         return min(1.0, confidence)
+
 
     def reset(self) -> None:
         """Reset analyzer state. Call on day change."""

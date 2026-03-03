@@ -60,7 +60,7 @@ class RedisService:
             except Exception as e:
                 logger.error(f"Failed to start Redis process: {e}")
 
-        # 2. Connect client
+        # 2. Connect client and wait for 'loading dataset' to finish
         try:
             self.client = redis.Redis(
                 host=settings.redis_host,
@@ -68,9 +68,25 @@ class RedisService:
                 db=settings.redis_db,
                 decode_responses=True
             )
-            # Ping test
-            await self.client.ping()
-            logger.info(f"Connected to Redis at {settings.redis_host}:{settings.redis_port}")
+            
+            # Ping test with retries for 'loading dataset'
+            max_retries = 30
+            for i in range(max_retries):
+                try:
+                    await self.client.ping()
+                    logger.info(f"Connected to Redis at {settings.redis_host}:{settings.redis_port}")
+                    return
+                except redis.ConnectionError as ce:
+                    if "loading the dataset" in str(ce).lower():
+                        if i % 5 == 0:
+                            logger.info(f"Redis is loading dataset... retrying ({i}/{max_retries})")
+                        await asyncio.sleep(1)
+                    else:
+                        raise ce
+            
+            logger.error("Redis connection timed out (still loading dataset)")
+            self.client = None
+            
         except Exception as e:
             logger.error(f"Failed to connect to Redis: {e}")
             self.client = None

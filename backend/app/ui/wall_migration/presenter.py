@@ -146,8 +146,12 @@ class WallMigrationPresenter:
         call_hist = wall_migration.get("call_wall_history", [])
         put_hist  = wall_migration.get("put_wall_history",  [])
 
-        call_state_str = wall_migration.get("call_wall_state", "UNAVAILABLE") or "UNAVAILABLE"
-        put_state_str  = wall_migration.get("put_wall_state",  "UNAVAILABLE") or "UNAVAILABLE"
+        call_state_str = str(wall_migration.get("call_wall_state", "UNAVAILABLE") or "UNAVAILABLE")
+        put_state_str  = str(wall_migration.get("put_wall_state",  "UNAVAILABLE") or "UNAVAILABLE")
+
+        # Strip Enum prefix if present (e.g. 'WallMigrationCallState.STABLE' -> 'STABLE')
+        if "." in call_state_str: call_state_str = call_state_str.split(".")[-1]
+        if "." in put_state_str:  put_state_str  = put_state_str.split(".")[-1]
 
         call_lights = _CALL_STATE_LIGHTING.get(call_state_str, _CALL_STATE_LIGHTING["UNAVAILABLE"])
         put_lights  = _PUT_STATE_LIGHTING.get(put_state_str,   _PUT_STATE_LIGHTING["UNAVAILABLE"])

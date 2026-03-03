@@ -24,8 +24,10 @@ interface Props {
 }
 
 export const DepthProfile: React.FC<Props> = ({ rows, macroVolumeMap, spot }) => {
+    // Guard: render empty shell until WS data arrives
+    const safeRows = rows ?? []
     const spotRef = useRef<HTMLDivElement>(null)
-    const currentSpot = rows.find(r => r.is_spot)?.strike
+    const currentSpot = safeRows.find(r => r.is_spot)?.strike
 
     useEffect(() => {
         if (spotRef.current) {
@@ -43,14 +45,18 @@ export const DepthProfile: React.FC<Props> = ({ rows, macroVolumeMap, spot }) =>
         sortedStrikes = Object.keys(macroVolumeMap).map(Number).sort((a, b) => b - a)
     }
 
-    const maxPutPct = Math.max(...rows.map(r => r.put_pct), 0)
-    const maxCallPct = Math.max(...rows.map(r => r.call_pct), 0)
+    const maxPutPct = safeRows.length > 0 ? Math.max(...safeRows.map(r => r.put_pct), 0) : 0
+    const maxCallPct = safeRows.length > 0 ? Math.max(...safeRows.map(r => r.call_pct), 0) : 0
+
+    if (safeRows.length === 0) {
+        return <div className="flex flex-1 min-h-0 w-full bg-[#060606] items-center justify-center"><span className="text-[#52525b] text-[10px]">—</span></div>
+    }
 
     return (
         <div className="flex flex-row flex-1 min-h-0 w-full relative bg-[#060606] font-sans selection:bg-transparent overflow-hidden">
             <div className="flex flex-col flex-1 overflow-y-auto relative px-1 py-4 scrollbar-hide" style={{ scrollbarWidth: 'none' }}>
                 <div className="flex flex-col w-full relative">
-                    {rows.map((row) => {
+                    {safeRows.map((row) => {
                         const isMaxPut = row.put_pct === maxPutPct && maxPutPct > 0
                         const isMaxCall = row.call_pct === maxCallPct && maxCallPct > 0
                         const hasPut = row.put_pct > 0
@@ -84,9 +90,9 @@ export const DepthProfile: React.FC<Props> = ({ rows, macroVolumeMap, spot }) =>
                                         {hasPut && (
                                             <div
                                                 className={`h-[16px] relative transition-all duration-300 ease-out flex items-center justify-end ${row.is_dominant_put
-                                                        // 提升根部基础亮度 (#059669)，消除光学湮灭
-                                                        ? 'bg-gradient-to-l from-[#059669] to-[#10b981] border-l border-[#34d399] shadow-[-2px_0_6px_rgba(16,185,129,0.3)]'
-                                                        : 'bg-gradient-to-l from-[#064e3b] to-[#059669]/90 border-l border-[#10b981]/50'
+                                                    // 提升根部基础亮度 (#059669)，消除光学湮灭
+                                                    ? 'bg-gradient-to-l from-[#059669] to-[#10b981] border-l border-[#34d399] shadow-[-2px_0_6px_rgba(16,185,129,0.3)]'
+                                                    : 'bg-gradient-to-l from-[#064e3b] to-[#059669]/90 border-l border-[#10b981]/50'
                                                     }`}
                                                 style={{ width: `${maxPutPct > 0 ? Math.max((row.put_pct / maxPutPct) * 95, 1) : 1}%`, borderTopLeftRadius: '2px', borderBottomLeftRadius: '2px' }}
                                             >
@@ -106,8 +112,8 @@ export const DepthProfile: React.FC<Props> = ({ rows, macroVolumeMap, spot }) =>
                                         )}
 
                                         <span className={`font-mono text-[13px] tracking-tight transition-colors z-10 ${row.is_spot ? 'text-[#ff3366] font-black bg-[#ff3366]/10 px-1 rounded' :
-                                                row.is_flip ? 'text-[#fbbf24] font-bold' :
-                                                    (isMaxPut || isMaxCall) ? 'text-[#f4f4f5] font-bold drop-shadow-[0_0_4px_rgba(255,255,255,0.4)]' : 'text-[#71717a]'
+                                            row.is_flip ? 'text-[#fbbf24] font-bold' :
+                                                (isMaxPut || isMaxCall) ? 'text-[#f4f4f5] font-bold drop-shadow-[0_0_4px_rgba(255,255,255,0.4)]' : 'text-[#71717a]'
                                             }`}>
                                             {row.strike.toFixed(0)}
                                         </span>
@@ -122,9 +128,9 @@ export const DepthProfile: React.FC<Props> = ({ rows, macroVolumeMap, spot }) =>
                                         {hasCall && (
                                             <div
                                                 className={`h-[16px] relative transition-all duration-300 ease-out flex items-center justify-start ${row.is_dominant_call
-                                                        // 提升根部基础亮度 (#dc2626)，消除光学湮灭
-                                                        ? 'bg-gradient-to-r from-[#dc2626] to-[#ef4444] border-r border-[#f87171] shadow-[2px_0_6px_rgba(239,68,68,0.3)]'
-                                                        : 'bg-gradient-to-r from-[#7f1d1d] to-[#dc2626]/90 border-r border-[#ef4444]/50'
+                                                    // 提升根部基础亮度 (#dc2626)，消除光学湮灭
+                                                    ? 'bg-gradient-to-r from-[#dc2626] to-[#ef4444] border-r border-[#f87171] shadow-[2px_0_6px_rgba(239,68,68,0.3)]'
+                                                    : 'bg-gradient-to-r from-[#7f1d1d] to-[#dc2626]/90 border-r border-[#ef4444]/50'
                                                     }`}
                                                 style={{ width: `${maxCallPct > 0 ? Math.max((row.call_pct / maxCallPct) * 95, 1) : 1}%`, borderTopRightRadius: '2px', borderBottomRightRadius: '2px' }}
                                             >
@@ -163,9 +169,9 @@ export const DepthProfile: React.FC<Props> = ({ rows, macroVolumeMap, spot }) =>
             {hasMinimap && (
                 <div className="w-[14px] border-l border-white/[0.04] bg-[#060606] flex flex-col py-4 px-[1px] relative z-40">
                     {sortedStrikes.map(strike => {
-                        const vol = macroVolumeMap[strike]
+                        const vol = macroVolumeMap![strike]
                         const pct = vol / maxVol
-                        const isActiveViewport = rows.some(r => r.strike === strike)
+                        const isActiveViewport = safeRows.some(r => r.strike === strike)
 
                         return (
                             <div key={strike} className="w-full flex justify-end h-[3px] my-[1px] relative">

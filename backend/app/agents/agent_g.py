@@ -42,6 +42,13 @@ class AgentG:
         self._weight_engine = DynamicWeightEngine()
         self._active_options_presenter = ActiveOptionsPresenter()
 
+        # Hysteresis States (Fixing Boundary Flicker)
+        self._vrp_active = False    # True if currently in VRP Veto state
+        self._mtf_damped = False    # True if currently in MTF Alignment Damping state
+
+        # PP-2 FIX: EWMA smoothed MTF alignment to eliminate single-tick discrete jumps
+        self._mtf_alignment_ema: float | None = None
+
     async def set_redis_client(self, client: Any) -> None:
         """Inject shared Redis client into sub-agents and self (for DEG-FLOW)."""
         self._redis = client
@@ -74,11 +81,22 @@ class AgentG:
             return "NEUTRAL"
 
     def _map_vanna_to_direction(self, vanna_state: str | None) -> str:
-        """Map vanna flow state to direction."""
+        """Map vanna flow state to direction.
+
+        DANGER_ZONE: Positive Spot-IV correlation in compressed timeframes
+        signals dealer delta-hedging unwinding → short-squeeze fuel.
+        Both academic papers (4 & 5) and the original override logic agree
+        this maps to BULLISH. Unifying here so there is exactly ONE place
+        that defines this mapping — no secondary override needed.
+
+        PP-3 FIX: GRIND_STABLE was incorrectly mapped to BULLISH (causing
+        NORMAL→GRIND_STABLE transitions to inject a spurious BULLISH vanna
+        signal). Corrected to NEUTRAL — stable grinding is not directional.
+        """
         if vanna_state == "DANGER_ZONE":
-            return "BEARISH"
+            return "BULLISH"   # FIX C/F: was BEARISH in map, then overridden BULLISH elsewhere
         elif vanna_state == "GRIND_STABLE":
-            return "BULLISH"
+            return "NEUTRAL"   # PP-3 FIX: was BULLISH, now NEUTRAL (no spurious direction)
         else:
             return "NEUTRAL"
 
@@ -152,6 +170,21 @@ class AgentG:
         wall_confidence = b_output.wall_confidence or (wall_data.confidence if wall_data else 0.0)
         vanna_confidence = b_output.vanna_confidence or (vanna_data.confidence if vanna_data else 0.0)
 
+        # PP-5 FIX: Dual-rate sync staleness detection.
+        # trap_micro_sync_gap > 0 means trap state is older than the current micro snapshot.
+        # This is expected and normal (throttle design), but if the gap grows beyond
+        # reasonable bounds, log a diagnostic so operators can tune gamma_tick_interval.
+        # IMPORTANT: Jump detection and Vanna multipliers are ALWAYS fresh (updated every tick)
+        # regardless of trap staleness, so no signal dampening is applied here.
+        sync_gap = agent_b.data.get("trap_micro_sync_gap", 0.0) or 0.0
+        if sync_gap > settings.agent_b_gamma_tick_interval * 3:
+            summary.append(
+                f"[PP-5 DIAG] Trap state stale: trap_micro_sync_gap={sync_gap:.2f}s "
+                f"(>{settings.agent_b_gamma_tick_interval * 3:.1f}s). "
+                "Consider reducing agent_b_gamma_tick_interval."
+            )
+            logger.debug("[AgentG] PP-5: trap/micro sync gap=%.2fs", sync_gap)
+
         # Map microstructure states to directions
         iv_direction = self._map_iv_to_direction(iv_data.state if iv_data else None)
         wall_direction = self._map_wall_to_direction(
@@ -160,14 +193,6 @@ class AgentG:
         )
         vanna_direction = self._map_vanna_to_direction(vanna_data.state if vanna_data else None)
         
-        # Phase 27.4 — Vanna Direction Correction (Paper 4 & 5)
-        # Danger zone in highly compressed timeframes (<30m) often results in Bullish chasing
-        if vanna_data and vanna_data.state == "DANGER_ZONE":
-            # For now, we assume high-frequency mode is always active. 
-            # In production, this would check `time_since_state_entered`.
-            vanna_direction = "BULLISH" # Chase the jump
-            summary.append("VANNA CORRECT: Danger Zone mapped to BULLISH chasing (Paper 5).")
-
         mtf_direction = mtf_consensus.get("consensus", "NEUTRAL")
         vib_direction = vib_data.consensus if vib_data else "NEUTRAL"
 
@@ -207,24 +232,52 @@ class AgentG:
                 summary="; ".join(summary)
             )
 
-        # Phase 25A — VRP Veto Gate (P0.5, fires before trap detection)
-        # Paper: Muravyev et al. (SSRN #4019647) — "EV < 0 when options are too expensive"
-        vrp_value = agent_b.data.get("hv_analysis", {}).get("vrp", None)
-        vrp_state  = agent_b.data.get("hv_analysis", {}).get("premium_state", "FAIR")
-
         vrp_vetoed = False
-        if vrp_value is not None and vrp_value > settings.vrp_veto_threshold:
-            signal = f"NO_TRADE (VRP_VETO: VRP={vrp_value:.1f}≫{settings.vrp_veto_threshold})"
-            summary.append(
-                f"VRP VETO (P0.5): IV={spy_atm_iv:.1f}% far too expensive (VRP={vrp_value:.1f}). "
-                "Entry EV<0 per Muravyev et al. (SSRN #4019647)."
-            )
-            vrp_vetoed = True
+        if vrp_value is not None:
+            # Hysteresis: Entry > threshold, Exit < threshold * 0.95
+            entry_th = settings.vrp_veto_threshold
+            exit_th = entry_th * 0.95
+            
+            if not self._vrp_active and vrp_value > entry_th:
+                self._vrp_active = True
+                logger.warning(f"[AgentG] VRP Veto ACTIVATED: {vrp_value:.1f} > {entry_th}")
+            elif self._vrp_active and vrp_value < exit_th:
+                self._vrp_active = False
+                logger.warning(f"[AgentG] VRP Veto DEACTIVATED: {vrp_value:.1f} < {exit_th}")
+
+            if self._vrp_active:
+                signal = f"NO_TRADE (VRP_VETO: VRP={vrp_value:.1f})"
+                summary.append(
+                    f"VRP VETO (P0.5): IV={spy_atm_iv:.1f}% far too expensive (VRP={vrp_value:.1f}). "
+                    "Entry EV<0 per Muravyev et al. (SSRN #4019647)."
+                )
+                vrp_vetoed = True
 
         # Phase 25B — MTF Alignment confidence dampener (Paper 1)
         # Paper: Dim et al. (SSRN #4692190) — MTF alignment < 0.34 → confidence cut 50%
-        mtf_alignment = mtf_consensus.get("alignment", 1.0)
-        if mtf_alignment < 0.34:
+        raw_mtf_alignment = mtf_consensus.get("alignment", 1.0)
+
+        # PP-2 FIX: EWMA smooth the raw alignment to eliminate single-vote discrete jumps.
+        # e.g. one TF switching from NEUTRAL→BULLISH flipped alignment 0.33→0.67 instantly.
+        alpha = settings.mtf_alignment_ewma_alpha
+        if self._mtf_alignment_ema is None:
+            self._mtf_alignment_ema = raw_mtf_alignment
+        else:
+            self._mtf_alignment_ema = alpha * raw_mtf_alignment + (1 - alpha) * self._mtf_alignment_ema
+        mtf_alignment = self._mtf_alignment_ema
+
+        # PP-2 FIX: Hysteresis thresholds now come from settings (were hardcoded 0.34/0.38)
+        mtf_entry_th = settings.mtf_alignment_damp_entry
+        mtf_exit_th = settings.mtf_alignment_damp_exit
+
+        if not self._mtf_damped and mtf_alignment < mtf_entry_th:
+            self._mtf_damped = True
+            logger.info(f"[AgentG] MTF Damping ACTIVATED: alignment={mtf_alignment:.2f} < {mtf_entry_th}")
+        elif self._mtf_damped and mtf_alignment > mtf_exit_th:
+            self._mtf_damped = False
+            logger.info(f"[AgentG] MTF Damping DEACTIVATED: alignment={mtf_alignment:.2f} > {mtf_exit_th}")
+
+        if self._mtf_damped:
             fused_signal_confidence = fused_signal.confidence * 0.5
             summary.append(f"MTF ALIGN DAMP: alignment={mtf_alignment:.2f} → conf halved.")
         elif mtf_alignment >= 0.67 and vrp_state == "BARGAIN":
@@ -235,22 +288,23 @@ class AgentG:
             fused_signal_confidence = fused_signal.confidence
 
         # Phase 25D — GEX Directional Refinement (Paper 4)
-        # GEX < -500M indicates momentum acceleration risk. 
+        # GEX < -500M indicates momentum acceleration risk.
+        # PP-4 FIX: threshold and boost multipliers moved from magic numbers to settings.
         # Signals aligning with the gamma-induced move should get higher confidence.
         gex_accel_boost = 1.0
-        if net_gex_f < -500:
+        if net_gex_f is not None and net_gex_f < settings.gex_accel_threshold:
             if fused_signal.direction == "BEARISH":
-                gex_accel_boost = 1.20 # Reinforce crash
+                gex_accel_boost = settings.gex_accel_boost_bearish
                 summary.append("GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).")
             elif fused_signal.direction == "BULLISH":
-                gex_accel_boost = 1.15 # Reinforce short squeeze
+                gex_accel_boost = settings.gex_accel_boost_bullish
                 summary.append("GEX ACCEL: Neg Gamma reinforcing Bullish bounce (Short Squeeze).")
-        elif net_gex_f > 800 and fused_signal.direction == "NEUTRAL":
+        elif net_gex_f is not None and net_gex_f > 800 and fused_signal.direction == "NEUTRAL":
             summary.append("GEX PINNING: Strong Pos Gamma limiting volatility (Paper 2).")
 
         fused_signal_confidence = min(fused_signal_confidence * gex_accel_boost, 1.0)
 
-        if net_gex_f < -1000:
+        if net_gex_f is not None and net_gex_f < -1000:
             summary.append("⚠️ TAIL RISK: Extreme Negative GEX detected (-1000M+).")
 
         # Patch adjusted confidence back so downstream reads it
@@ -352,6 +406,7 @@ class AgentG:
                 "gex_regime": _vanna_dict.get("gex_regime", "NEUTRAL"),
                 "gamma_walls": gamma_walls,
                 "gamma_flip_level": b_output.gamma_flip_level,
+                "spy_atm_iv": b_output.spy_atm_iv,
                 "trap_state": b_signal,
                 "ui_state": {
                     "micro_stats": MicroStatsPresenter.build(
@@ -362,7 +417,7 @@ class AgentG:
                     ),
                     "tactical_triad": TacticalTriadPresenter.build(
                         vrp=agent_b.data.get("hv_analysis", {}).get("vrp"),
-                        vrp_state=agent_b.data.get("hv_analysis", {}).get("premium_state"),
+                        vrp_state=agent_b.data.get("hv_analysis", {}).get("premium_state", "FAIR"),
                         net_charm=agent_b.data.get("charm_analysis", {}).get("net_charm"),
                         svol_corr=vanna_data.correlation if vanna_data else None,
                         svol_state=vanna_data.state if vanna_data else "NORMAL",

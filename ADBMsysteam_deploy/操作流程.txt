@@ -1,0 +1,10 @@
+cd C:\Users\Lenovo\Desktop\US.market\MarketBreadthMonitoring\ADBMsysteam_deploy\monitor
+Python app.py
+
+cd C:\Users\Lenovo\Desktop\US.market\MarketBreadthMonitoring\ADBMsysteam_deploy\monitor
+Python debug_monitor.py
+
+cd C:\Users\Lenovo\Desktop\US.market\MarketBreadthMonitoring\ADBMsysteam\get_data
+Python run_get_data.py
+
+

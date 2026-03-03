@@ -81,8 +81,11 @@ class Settings(BaseSettings):
     )
 
     # WebSocket settings
-    websocket_update_interval: int = Field(
-        default=3, description="Interval in seconds for WebSocket dashboard updates"
+    websocket_update_interval: float = Field(
+        default=1.0, description="Interval in seconds for backend computation loop (data fetch + agents)"
+    )
+    ws_broadcast_interval: float = Field(
+        default=1.0, description="Interval in seconds for WebSocket broadcast to frontend clients"
     )
 
     # Decay chart settings
@@ -221,6 +224,13 @@ class Settings(BaseSettings):
 
     # Variance Risk Premium (VRP = IV - HV) thresholds
     # Post-2022 research (e.g. JF, RFS) indicates structural VRP compression in 0DTE era.
+    vrp_baseline_hv: float = Field(
+        default=13.5,
+        description=(
+            "PP-1 FIX: VRP 计算所用的历史波动率基线 (annualized %). "
+            "默认 13.5 = SPY 结构性 HV。可通过环境变量 VRP_BASELINE_HV 覆盖。"
+        ),
+    )
     vrp_cheap_threshold: float = Field(
         default=-1.5, description="VRP < this = Options CHEAP (Vol sellers underpricing risk)"
     )
@@ -294,6 +304,27 @@ class Settings(BaseSettings):
         default=200, description="|GEX| >= 200M = MODERATE intensity (legacy)"
     )
 
+    # GEX Acceleration Boost (PP-4 Fix — originally hardcoded in agent_g.py)
+    gex_accel_threshold: float = Field(
+        default=-500.0,
+        description=(
+            "PP-4 FIX: net_gex < 此值时激活加速置信度增益 (原硬编码 -500M). "
+            "可通过环境变量 GEX_ACCEL_THRESHOLD 覆盖。"
+        ),
+    )
+    gex_accel_boost_bearish: float = Field(
+        default=1.20,
+        description=(
+            "PP-4 FIX: 负 Gamma 环境下 BEARISH 信号的置信度增益倍数 (原硬编码 1.20)。"
+        ),
+    )
+    gex_accel_boost_bullish: float = Field(
+        default=1.15,
+        description=(
+            "PP-4 FIX: 负 Gamma 环境下 BULLISH 信号的置信度增益倍数 (原硬编码 1.15)。"
+        ),
+    )
+
     # Agent G Dynamic Weight Engine Configuration
     agent_g_iv_weight: float = Field(
         default=0.25, description="IV Velocity base weight"
@@ -306,6 +337,35 @@ class Settings(BaseSettings):
     )
     agent_g_mtf_weight: float = Field(
         default=0.25, description="Multi-Timeframe Consensus base weight"
+    )
+    agent_g_vib_weight: float = Field(
+        default=0.20,
+        description=(
+            "PP-2/PP-6 FIX: Volume Imbalance 分量基础权重 (原硬编码 0.20)。"
+            "可通过环境变量 AGENT_G_VIB_WEIGHT 覆盖。"
+        ),
+    )
+
+    # MTF Alignment Hysteresis & EWMA Smoothing (PP-2 Fix)
+    mtf_alignment_damp_entry: float = Field(
+        default=0.34,
+        description=(
+            "PP-2 FIX: MTF alignment 低于此值时激活置信度阻尼 (原硬编码 0.34)。"
+        ),
+    )
+    mtf_alignment_damp_exit: float = Field(
+        default=0.38,
+        description=(
+            "PP-2 FIX: MTF alignment 高于此值时退出置信度阻尼 (原硬编码 0.38)。"
+        ),
+    )
+    mtf_alignment_ewma_alpha: float = Field(
+        default=0.30,
+        description=(
+            "PP-2 FIX: MTF alignment EWMA 平滑因子。"
+            "0.0 = 纯历史（无响应），1.0 = 瞬时值（无平滑）。"
+            "默认 0.30 消除单 tick 离散跳跃。"
+        ),
     )
 
     # Wall Migration Tracker Configuration
@@ -498,6 +558,34 @@ class Settings(BaseSettings):
     implied_spot_pcp_strikes: int = Field(
         default=10,
         description="Number of ATM-region strikes used in PCP implied-spot calculation",
+    )
+
+    # ============================================================================
+    # GREEKS 2.0 & QUOTA MANAGEMENT
+    # ============================================================================
+    bsm_dividend_yield: float = Field(
+        default=0.0,
+        description="Annual dividend yield used for BSM Greeks calculation (SPY ≈ 0.0)",
+    )
+    bsm_year_trading_minutes: int = Field(
+        default=98280,
+        description="Total trading minutes in a year (252 days * 390 minutes)",
+    )
+    cooling_buffer_quota: int = Field(
+        default=90,
+        description="Number of symbol-request slots per minute to keep empty for window sliding",
+    )
+    iv_baseline_sync_interval: int = Field(
+        default=300,
+        description="Interval in seconds to refresh the full chain's baseline via REST (Fallback only)",
+    )
+    max_total_quota_per_min: int = Field(
+        default=500,
+        description="Hard limit of symbol-requests per rolling minute for LongPort API",
+    )
+    subscription_max: int = Field(
+        default=480,
+        description="Maximum concurrent WebSocket subscriptions allowed (reserved for Core+Wide)",
     )
 
     # WebSocket allowed origins

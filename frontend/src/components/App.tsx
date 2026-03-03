@@ -17,7 +17,7 @@ import type { AtmDecay } from '../types/dashboard'
 
 import { useEffect, useState, useMemo } from 'react'
 
-const API_BASE = 'http://localhost:8000'
+const API_BASE = 'http://localhost:8001'
 
 import { AtmDecayChart } from './center/AtmDecayChart'
 

@@ -24,6 +24,13 @@ class TacticalTriadPresenter:
     ) -> dict[str, Any]:
         """Build the Tactical Triad UI state block for the frontend.
         """
+        # --- Internal Standardisation: Strip Enum prefixes ---
+        vrp_state = str(vrp_state or "FAIR")
+        if "." in vrp_state: vrp_state = vrp_state.split(".")[-1]
+        
+        svol_state = str(svol_state or "NORMAL")
+        if "." in svol_state: svol_state = svol_state.split(".")[-1]
+
         # Determine if we are in the pre-close amplification window (after 14:00 ET)
         now_et = datetime.now(ZoneInfo("America/New_York"))
         is_pre_close = now_et.hour >= 14

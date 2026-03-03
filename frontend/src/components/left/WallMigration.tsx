@@ -24,6 +24,18 @@ interface Props {
 }
 
 export const WallMigration: React.FC<Props> = ({ rows }) => {
+    // Guard: render empty shell until WS data arrives
+    if (!rows || rows.length === 0) {
+        return (
+            <div className="p-2 pb-3 flex flex-col gap-1.5 font-sans bg-[#060606] selection:bg-transparent">
+                <div className="flex items-center mb-1 px-1">
+                    <div className="w-[2px] h-[10px] bg-[#d4d4d8] shadow-[0_0_4px_rgba(212,212,216,0.5)] mr-1.5"></div>
+                    <span className="text-[10px] font-black text-[#d4d4d8] tracking-widest leading-none">WALL MIGRATION</span>
+                </div>
+                <div className="text-[10px] text-[#52525b] px-1">—</div>
+            </div>
+        )
+    }
     return (
         <div className="p-2 pb-3 flex flex-col gap-1.5 font-sans bg-[#060606] selection:bg-transparent">
             {/* 1. S+ Terminal Header */}

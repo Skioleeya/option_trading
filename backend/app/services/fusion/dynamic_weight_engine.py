@@ -97,7 +97,7 @@ class DynamicWeightEngine:
         w_wall = settings.agent_g_wall_weight
         w_vanna = settings.agent_g_vanna_weight
         w_mtf = settings.agent_g_mtf_weight
-        w_vib = 0.20 # Phase 24 — C/P Volume Imbalance (Paper 3)
+        w_vib = settings.agent_g_vib_weight  # PP-6 FIX: was hardcoded 0.20
 
         # Dynamic weight adjustments based on regime
         if self._iv_regime in (IVRegime.HIGH, IVRegime.EXTREME):

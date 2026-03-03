@@ -9,6 +9,10 @@ class SkewDynamicsPresenter:
     @classmethod
     def build(cls, skew_val: float, state: str) -> dict[str, Any]:
         """Build the Skew Dynamics UI state block."""
+        # --- Internal Standardisation: Strip Enum prefixes ---
+        state = str(state or "NEUTRAL")
+        if "." in state: state = state.split(".")[-1]
+
         mapping = SKEW_STATES.get(state, SKEW_STATES["NEUTRAL"])
         
         return {

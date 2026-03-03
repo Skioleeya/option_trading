@@ -1,0 +1,437 @@
+# ============================================================================
+# US Market Breadth Data Collector - 数据生成者系统架构规范
+# ============================================================================
+#
+# 架构师职责：作为顶级金融系统架构师，负责美股广度数据生成者系统的架构设计
+# 核心目标：实现零硬编码、自动关闭和模块化设计，确保数据采集的可靠性和合规性
+#
+# ============================================================================
+
+## 1. 核心架构原则
+
+### 1.1 零硬编码承诺 (CRITICAL)
+**目标**：所有配置完全外部化，实现环境无关的部署
+
+**强制要求**：
+- ❌ **绝对禁止**：代码中出现任何硬编码的API密钥、URL、时间间隔
+- ❌ **绝对禁止**：代码中出现魔法数字和硬编码路径
+- ✅ **强制要求**：所有配置通过 `.env` 文件管理
+- ✅ **强制要求**：使用 `settings.py` 统一配置入口
+
+**违规示例**：
+```python
+# ❌ 绝对禁止
+redis_host = "localhost"  # 硬编码
+refresh_interval = 3      # 魔法数字
+api_url = "https://api.example.com"  # 硬编码URL
+```
+
+**正确示例**：
+```python
+# ✅ 正确做法
+from settings import system_config, longbridge_config
+redis_host = system_config.REDIS_HOST
+refresh_interval = system_config.REFRESH_INTERVAL
+api_url = longbridge_config.DATA_URL
+```
+
+### 1.2 智能自动关闭 (CRITICAL)
+**目标**：严格按照交易时间自动关闭程序，确保合规性和资源管理
+
+**强制要求**：
+- ✅ **强制启用**：默认情况下 `AUTO_SHUTDOWN_ENABLED=true`
+- ✅ **时间合规**：必须使用美东时间（America/New_York）
+- ✅ **优雅关闭**：程序关闭前必须执行资源清理
+- ❌ **禁止跳过**：任何情况下都不能跳过自动关闭检查
+
+**关闭时间计算**：
+```python
+# 正常交易日：16:00 + 偏移分钟
+# 提前收盘日：13:00 + 偏移分钟
+# 动态检查频率：<5分钟每10秒，5-30分钟每5分钟，>30分钟每30分钟
+```
+
+## 2. 技术栈与环境规范
+
+### 2.1 Python 运行环境 (CRITICAL)
+**强制要求**：
+- **Python 版本**：3.13.9 (与主监控系统保持一致)
+- **时区处理**：强制使用 `zoneinfo.ZoneInfo("America/New_York")`
+- **异步框架**：使用 `asyncio` 进行数据采集调度
+
+### 2.2 依赖管理 (CRITICAL)
+**requirements.txt 固定版本**：
+```
+asyncio>=3.4.3
+redis>=4.0.0
+pandas>=1.5.0
+python-dotenv>=0.19.0
+```
+
+## 3. 系统架构设计
+
+### 3.1 目录结构规范 (严格遵守)
+```
+📁 get_data/                          # 数据生成者系统根目录
+├── 📄 .cursorrules                   # 本架构规范文件 (新增)
+├── 📄 .env                           # 环境变量配置 (CRITICAL)
+├── 📄 README.md                      # 系统文档
+├── 📄 requirements.txt               # 依赖版本规范
+├── 📄 settings.py                    # 零硬编码配置系统 (CRITICAL)
+├── 📄 config.py                      # 兼容性配置层
+├── 📄 run_get_data.py                # 主程序入口
+├── 📁 core/                          # 核心业务模块
+│   ├── 📄 __init__.py
+│   ├── 📄 auto_shutdown.py           # 智能关闭调度器
+│   ├── 📄 calendar.py                # 交易日历
+│   └── 📄 logger.py                  # 日志系统
+├── 📁 data/                          # 数据存储目录
+├── 📁 logs/                          # 日志存储目录
+├── 📁 assets/                        # 静态资源目录
+├── 📄 bm_calculator.py               # 广度动量计算
+├── 📄 longbridge_client.py           # Longbridge API客户端
+├── 📄 output.py                      # 数据输出管理
+├── 📄 scheduler.py                   # 异步调度器
+└── 📄 google_sync.py                 # Google Sheets同步 (可选)
+```
+
+**职责划分**：
+- **settings.py**：纯配置层，零业务逻辑
+- **core/**：核心业务算法和基础设施
+- **run_get_data.py**：最小化入口，专注启动和关闭
+- **data/logs/assets/**：运行时数据存储
+
+### 3.2 组件间通信规范
+
+**数据流设计**：
+```
+Longbridge API → 数据采集 → BM计算 → 输出管理 → 存储/同步
+    ↓            ↓        ↓        ↓        ↓
+实时数据流    异步调度    业务逻辑    Redis/CSV    Google Sheets
+```
+
+**接口标准**：
+- ✅ **类型安全**：所有接口使用类型注解
+- ✅ **错误处理**：统一异常处理和日志记录
+- ✅ **配置注入**：所有组件通过settings获取配置
+
+## 4. 配置管理规范
+
+### 4.1 环境变量管理 (CRITICAL)
+
+**.env 文件必须包含**：
+```bash
+# === Longbridge API 配置 (必需) ===
+DATA_URL=https://api.lbctrl.com/quote/index/statics?counter_id=US
+LB_COOKIE=your_cookie_here
+AUTHORIZATION=your_auth_token_here
+REFERRER=https://trade.longbridge.com/
+ORIGIN=https://trade.longbridge.com
+# ... 其他API头信息
+
+# === 系统配置 (必需) ===
+REFRESH_INTERVAL=3
+USE_REDIS=1
+CSV_PATH=breadth_momentum.csv
+
+# === 自动关闭配置 (CRITICAL - 必须存在) ===
+AUTO_SHUTDOWN_ENABLED=true
+AUTO_SHUTDOWN_NORMAL_OFFSET_MINUTES=1
+AUTO_SHUTDOWN_EARLY_OFFSET_MINUTES=1
+AUTO_SHUTDOWN_CHECK_INTERVAL_SECONDS=30
+
+# === 可选配置 ===
+GS_CREDENTIALS_PATH=
+GS_SHEET_ID=
+```
+
+### 4.2 settings.py 配置系统 (CRITICAL)
+
+**强制结构**：
+```python
+# === CRITICAL: 以下结构必须严格遵守 ===
+
+# 时区配置 (不可修改)
+TZ_NY = ZoneInfo("America/New_York")
+
+# 交易时间常量 (不可修改)
+MARKET_CLOSE_NORMAL_HOUR = 16
+MARKET_CLOSE_EARLY_HOUR = 13
+
+# 配置类 (必须存在)
+class LongbridgeConfig:    # API配置
+class SystemConfig:        # 系统配置
+class AutoShutdownConfig:  # 自动关闭配置 (CRITICAL)
+
+# 便捷访问函数 (必须存在)
+def get_longbridge_config()
+def get_system_config()
+def get_auto_shutdown_config()
+```
+
+## 5. 数据采集架构
+
+### 5.1 数据源规范 (CRITICAL)
+
+**Longbridge API 约束**：
+- ✅ **实时数据**：必须采集秒级原始数据
+- ✅ **数据验证**：每个数据点必须包含时间戳和所有必需字段
+- ✅ **错误重试**：网络异常时必须实现重试机制
+- ❌ **禁止缓存**：实盘数据绝对禁止客户端缓存
+
+**数据格式标准**：
+```python
+# 每条记录必须包含
+{
+    'timestamp': '2025-12-19T09:30:00-05:00',  # ISO格式，美东时区
+    'BM': 45.67,                               # 广度动量
+    'advancers': 1500,                          # 上涨股票数
+    'decliners': 1200,                          # 下跌股票数
+    'net_breadth': 300                          # 净广度
+}
+```
+
+### 5.2 数据处理管道 (CRITICAL)
+
+**处理流程**：
+```
+原始数据 → 验证 → BM计算 → 时间戳处理 → 输出分发
+    ↓        ↓      ↓         ↓          ↓
+清洗过滤    格式校验  算法计算   时区转换    Redis + CSV + Google
+```
+
+**质量控制**：
+- ✅ **数据完整性**：缺失数据必须记录但不中断程序
+- ✅ **时间准确性**：所有时间戳必须为美东时间
+- ✅ **业务一致性**：BM计算必须符合金融算法标准
+
+## 6. 自动关闭功能规范
+
+### 6.1 关闭时间计算 (CRITICAL)
+
+**算法要求**：
+```python
+# === CRITICAL: 关闭时间计算必须严格遵循此算法 ===
+
+def calculate_shutdown_time():
+    now_ny = datetime.now(TZ_NY)
+    today = now_ny.date()
+
+    # 检查是否交易日
+    if not trading_calendar.is_trading_day(now_ny):
+        return None
+
+    # 确定收盘时间
+    if trading_calendar.is_early_close_day(today):
+        close_time = datetime.combine(today,
+            time(hour=MARKET_CLOSE_EARLY_HOUR, minute=MARKET_CLOSE_EARLY_MINUTE),
+            tzinfo=TZ_NY)
+        offset = AUTO_SHUTDOWN_EARLY_OFFSET_MINUTES
+    else:
+        close_time = datetime.combine(today,
+            time(hour=MARKET_CLOSE_NORMAL_HOUR, minute=MARKET_CLOSE_NORMAL_MINUTE),
+            tzinfo=TZ_NY)
+        offset = AUTO_SHUTDOWN_NORMAL_OFFSET_MINUTES
+
+    # 计算最终关闭时间
+    shutdown_time = close_time + timedelta(minutes=offset)
+    return shutdown_time
+```
+
+### 6.2 监控频率策略 (CRITICAL)
+
+**动态调整算法**：
+```python
+# === CRITICAL: 监控频率必须动态调整 ===
+
+def get_check_interval(minutes_remaining: float) -> int:
+    if minutes_remaining <= 5:
+        return 10      # 每10秒检查一次
+    elif minutes_remaining <= 30:
+        return 300     # 每5分钟检查一次
+    else:
+        return 1800    # 每30分钟检查一次
+```
+
+### 6.3 优雅关闭流程 (CRITICAL)
+
+**关闭步骤**：
+```python
+# === CRITICAL: 优雅关闭必须包含以下步骤 ===
+
+def graceful_shutdown():
+    # 1. 标记关闭状态
+    shutdown_triggered = True
+
+    # 2. 停止数据采集
+    stop_data_collection()
+
+    # 3. 清理资源
+    cleanup_resources()
+
+    # 4. 记录关闭日志
+    log_shutdown_event()
+
+    # 5. 发送关闭信号
+    os.kill(os.getpid(), signal.SIGTERM)
+```
+
+## 7. 错误处理与监控
+
+### 7.1 日志规范 (CRITICAL)
+
+**日志级别要求**：
+- **INFO**：程序启动/关闭、重要状态变化
+- **DEBUG**：详细的调试信息和性能数据
+- **ERROR**：所有异常和错误情况
+
+**日志内容要求**：
+```python
+# 启动日志
+[INFO] Starting breadth momentum loop (interval=3s)
+[INFO] 智能关闭调度器已启动
+
+# 数据采集日志
+[DEBUG] Performance: data_fetch took 0.15s
+[INFO] Collected 7800 data points
+
+# 关闭日志
+[INFO] 到达数据采集自动关闭时间: 2025-12-19 16:01:00-05:00
+[INFO] 数据采集程序因到达收盘自动关闭时间而正常退出
+```
+
+### 7.2 性能监控 (CRITICAL)
+
+**必须监控的指标**：
+- 数据采集耗时
+- API响应时间
+- 内存使用情况
+- 错误率统计
+
+**性能基准**：
+- 数据采集：< 0.2秒
+- BM计算：< 0.05秒
+- 总处理时间：< 0.3秒
+
+## 8. 开发工作流程
+
+### 8.1 代码修改规范
+
+**修改前检查**：
+1. 📋 **需求分析**：确认修改不违反架构原则
+2. 🔍 **配置检查**：确保不引入新的硬编码
+3. 🧪 **测试准备**：准备验证自动关闭功能的测试
+4. 🔄 **备份策略**：确保有回滚方案
+
+**修改约束**：
+- ❌ **禁止修改**：settings.py 的核心结构
+- ❌ **禁止修改**：自动关闭的时间计算算法
+- ❌ **禁止修改**：动态检查频率策略
+- ✅ **允许优化**：性能优化和错误处理改进
+
+### 8.2 代码审查清单
+
+**架构合规**：
+- [ ] 所有配置是否通过 settings.py 获取？
+- [ ] 是否存在任何硬编码值？
+- [ ] 自动关闭功能是否完整保留？
+- [ ] 时区处理是否正确？
+
+**功能验证**：
+- [ ] 代码语法是否正确？
+- [ ] 数据采集逻辑是否正常？
+- [ ] 自动关闭是否按预期工作？
+- [ ] 错误处理是否完善？
+
+## 9. 部署规范
+
+### 9.1 环境要求
+
+**必需文件**：
+- ✅ **.env**：完整的环境变量配置
+- ✅ **requirements.txt**：精确的依赖版本
+- ✅ **Python 3.13.9**：确切的版本匹配
+
+**目录权限**：
+- ✅ **data/**：读写权限
+- ✅ **logs/**：写权限
+- ✅ **assets/**：读权限
+
+### 9.2 启动检查
+
+**启动前验证**：
+```bash
+# 1. 环境变量检查
+python -c "from settings import auto_shutdown_config; print(f'Auto shutdown: {auto_shutdown_config.ENABLED}')"
+
+# 2. API配置检查
+python -c "from settings import longbridge_config; print(f'Data URL: {bool(longbridge_config.DATA_URL)}')"
+
+# 3. 语法检查
+python -m py_compile run_get_data.py
+
+# 4. 导入测试
+python -c "from core.auto_shutdown import data_collector_auto_shutdown; print('Import successful')"
+```
+
+### 9.3 监控要求
+
+**运行时监控**：
+- 数据采集频率和成功率
+- 自动关闭功能的执行情况
+- 系统资源使用情况
+- 错误日志的及时处理
+
+## 10. 故障排除
+
+### 10.1 常见问题
+
+**自动关闭不工作**：
+```bash
+# 检查配置
+grep AUTO_SHUTDOWN .env
+
+# 检查时区
+python -c "from settings import TZ_NY; from datetime import datetime; print(datetime.now(TZ_NY))"
+```
+
+**数据采集失败**：
+```bash
+# 检查API配置
+python -c "from settings import longbridge_config; print(longbridge_config.DATA_URL)"
+
+# 检查网络连接
+curl -I https://api.lbctrl.com/quote/index/statics?counter_id=US
+```
+
+**配置加载错误**：
+```bash
+# 验证settings.py
+python -c "from settings import get_system_config; print('Settings loaded')"
+```
+
+---
+
+## 11. 架构约束总结
+
+### CRITICAL (必须严格遵守)
+1. **零硬编码**：所有配置通过 `.env` + `settings.py`
+2. **自动关闭**：强制启用，默认1分钟后关闭
+3. **时区处理**：强制使用美东时间
+4. **目录结构**：严格按照规范组织
+5. **配置格式**：settings.py 结构不可修改
+
+### IMPORTANT (强烈推荐)
+1. **错误处理**：完善的异常捕获和日志记录
+2. **性能监控**：关键操作的耗时统计
+3. **数据验证**：API响应的完整性检查
+4. **资源清理**：程序退出时的资源释放
+
+### OPTIONAL (可选择)
+1. **Google Sheets同步**：可选的数据导出功能
+2. **扩展日志**：额外的调试信息记录
+3. **性能优化**：非关键路径的优化改进
+
+---
+
+**本规范由顶级金融系统架构师制定，确保数据生成者系统达到金融级别的质量标准和合规要求。如需修改，必须通过正式的架构评审流程。**

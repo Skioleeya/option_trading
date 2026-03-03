@@ -67,6 +67,11 @@ class AgentB1:
         self._last_run_time: float = 0.0
         self._gamma_flip_cooldown: int = 0
 
+        # PP-5 FIX: Track when trap machine vs micro last ran independently.
+        # This exposes the dual-rate staleness gap to AgentG for diagnostics.
+        self._trap_updated_at: float = 0.0   # monotonic time of last full trap recompute
+        self._micro_updated_at: float = 0.0  # monotonic time of last micro update
+
         # Greeks extractor
         self._greeks_extractor = GreeksExtractor()
 
@@ -82,6 +87,13 @@ class AgentB1:
 
         # MTF IV Z-Score Engine (Phase 23 — VSRSD Method C)
         self._mtf_iv_engine = MTFIVEngine()
+
+        # FIX E: Per-timeframe sampling buffers so each TF accumulates its own
+        # mean-bar before pushing to MTFIVEngine (prevents all-three-identical input).
+        # Keys match MTFIVEngine timeframe names exactly.
+        self._MTF_INTERVALS: dict[str, float] = {"1m": 60.0, "5m": 300.0, "15m": 900.0}
+        self._mtf_buf: dict[str, list[float]] = {"1m": [], "5m": [], "15m": []}
+        self._mtf_last_push: dict[str, float] = {"1m": 0.0, "5m": 0.0, "15m": 0.0}
 
         # Volume Imbalance Engine (Phase 24 — C/P Volume Imbalance)
         self._vib_engine = VolumeImbalanceEngine()
@@ -103,13 +115,7 @@ class AgentB1:
         """
         now = datetime.now(ZoneInfo("US/Eastern"))
         now_mono = time.monotonic()
-
-        # Throttle
-        elapsed = now_mono - self._last_run_time
-        if elapsed < settings.agent_b_gamma_tick_interval:
-            return self._last_result or self._idle_result(now, snapshot)
-        self._last_run_time = now_mono
-
+        
         spot = snapshot.get("spot")
         call_mark = snapshot.get("call_mark", 0) or 0
         put_mark = snapshot.get("put_mark", 0) or 0
@@ -118,10 +124,15 @@ class AgentB1:
         if not spot or spot <= 0:
             return self._idle_result(now, snapshot)
 
-        # 1. Greeks computation
-        greeks = self._greeks_extractor.compute(chain, spot, as_of=now)
+        # 1. Greeks computation (Always run - lightweight with aggregate_greeks)
+        greeks = self._greeks_extractor.compute(
+            chain, 
+            spot, 
+            as_of=now,
+            aggregate_greeks=snapshot.get("aggregate_greeks")
+        )
 
-        # 2. Microstructure analysis
+        # 2. Microstructure analysis (FIX D: ALWAYS run to prevent blind zones)
         micro = self._run_microstructure(
             chain=chain,
             spot=spot,
@@ -133,6 +144,31 @@ class AgentB1:
             put_wall_volume=0,
             sim_clock_mono=now_mono,
         )
+
+        # Throttle Logic (Only for heavy Trap Detection & Z-Score history)
+        elapsed = now_mono - self._last_run_time
+        if elapsed < settings.agent_b_gamma_tick_interval and self._last_result:
+            # FIX D: Update cached result with FRESH microstructure data.
+            # This ensures Agent G always sees the latest Vanna multiplier/Jump status.
+            # PP-5 FIX: Also inject dual-rate sync timestamps so AgentG can observe
+            # the gap between stale trap state and fresh micro state.
+            self._micro_updated_at = now_mono
+            sync_gap = now_mono - self._trap_updated_at  # seconds trap is behind micro
+            updated_data = dict(self._last_result.data)
+            updated_data.update({
+                "micro_structure": {"micro_structure_state": micro},
+                "iv_confidence": micro.get("iv_confidence", 0),
+                "wall_confidence": micro.get("wall_confidence", 0),
+                "vanna_confidence": micro.get("vanna_confidence", 0),
+                "mtf_consensus": micro.get("mtf_consensus", {}),
+                # PP-5 FIX: Dual-rate sync diagnostics
+                "trap_computed_at": self._trap_updated_at,
+                "micro_computed_at": self._micro_updated_at,
+                "trap_micro_sync_gap": round(sync_gap, 3),
+            })
+            return self._last_result.model_copy(update={"as_of": now, "data": updated_data})
+
+        self._last_run_time = now_mono
 
         # 3. RoC (Rate of Change) calculation
         self._history.append(_RocPoint(now_mono, spot, call_mark, put_mark))
@@ -161,8 +197,9 @@ class AgentB1:
 
         # Tactical Triad Metrics Computation
         atm_iv = greeks.get("atm_iv", 0) or 0.0
-        # Assume a baseline structural SPY daily HV. In production, this would track the 20-day realized vol.
-        baseline_hv = 13.5
+        # PP-1 FIX: Use configurable baseline HV (was hardcoded 13.5).
+        # Override via VRP_BASELINE_HV env var or .env file.
+        baseline_hv = settings.vrp_baseline_hv
         vrp = atm_iv - baseline_hv
         
         premium_state = "FAIR"
@@ -203,8 +240,12 @@ class AgentB1:
             "skew_state": skew_state,
         }
 
+        # PP-5 FIX: Record that a full trap recompute just ran (both rates in sync now).
+        self._trap_updated_at = now_mono
+        self._micro_updated_at = now_mono
+
         # Build result
-        return AgentResult(
+        result = AgentResult(
             agent=self.AGENT_ID,
             signal=signal.value if isinstance(signal, DivergenceState) else str(signal),
             as_of=now,
@@ -227,9 +268,16 @@ class AgentB1:
                 "hv_analysis": hv_analysis,
                 "charm_analysis": charm_analysis,
                 "skew_analysis": skew_analysis,
+                # PP-5 FIX: Dual-rate sync diagnostics (gap = 0 on full recompute)
+                "trap_computed_at": self._trap_updated_at,
+                "micro_computed_at": self._micro_updated_at,
+                "trap_micro_sync_gap": 0.0,
             },
             summary="; ".join(summary_parts) if summary_parts else "IDLE",
         )
+        
+        self._last_result = result
+        return result
 
     def _run_microstructure(
         self,
@@ -276,13 +324,15 @@ class AgentB1:
             spot=spot, atm_iv=atm_iv, sim_clock_mono=sim_clock_mono
         )
 
-        # MTF VSRSD: push current ATM IV into each rolling window
+        # MTF VSRSD: accumulate into per-TF buffers; push bar-mean at each interval
         if atm_iv and atm_iv > 0:
-            # Produce a new bar for each timeframe on each tick
-            # (real sampling per-TF can be enforced by a clock gate; simplified here)
-            self._mtf_iv_engine.update("1m",  atm_iv)
-            self._mtf_iv_engine.update("5m",  atm_iv)
-            self._mtf_iv_engine.update("15m", atm_iv)
+            for tf, interval in self._MTF_INTERVALS.items():
+                self._mtf_buf[tf].append(atm_iv)
+                if (sim_clock_mono - self._mtf_last_push[tf]) >= interval:
+                    bar_mean = sum(self._mtf_buf[tf]) / len(self._mtf_buf[tf])
+                    self._mtf_iv_engine.update(tf, bar_mean)
+                    self._mtf_buf[tf].clear()
+                    self._mtf_last_push[tf] = sim_clock_mono
 
         # Also run legacy IVVelocityTrackers for backward compat (MTF UI fallback)
         iv_1m  = self._iv_tracker_1m.update(spot=spot,  atm_iv=atm_iv, sim_clock_mono=sim_clock_mono)

@@ -1,0 +1,595 @@
+# ============================================================================
+# US Market Breadth Data Sharing Library - Redis模块架构规范
+# ============================================================================
+#
+# 架构师职责：作为顶级金融系统架构师，负责Redis数据共享库的架构设计
+# 核心目标：实现高性能数据存储、零硬编码配置和数据一致性保障
+#
+# ============================================================================
+
+## 1. 核心架构原则
+
+### 1.1 数据共享库定位 (CRITICAL)
+**目标**：作为系统的数据共享基础设施，提供高性能、可靠的数据存储和访问服务
+
+**核心职责**：
+- ✅ **数据存储**：提供结构化金融数据的持久化存储
+- ✅ **高性能访问**：支持毫秒级数据读取和写入
+- ✅ **数据一致性**：确保数据在多进程间的准确同步
+- ✅ **容错机制**：完善的连接管理和错误恢复
+
+**服务范围**：
+- 实盘数据的实时存储和读取
+- 历史数据的批量存储和查询
+- 数据索引和时间序列管理
+- 连接池优化和性能监控
+
+### 1.2 零硬编码承诺 (CRITICAL)
+**目标**：所有Redis配置完全外部化，实现环境无关的部署
+
+**强制要求**：
+- ❌ **绝对禁止**：代码中出现硬编码的Redis连接参数
+- ❌ **绝对禁止**：魔法数字和硬编码的超时时间
+- ✅ **强制要求**：所有配置通过环境变量管理
+- ✅ **强制要求**：创建独立的 `settings.py` 配置系统
+
+**违规示例**：
+```python
+# ❌ 绝对禁止
+redis_client = redis.Redis(host="localhost", port=6379)  # 硬编码
+max_connections = 20  # 魔法数字
+timeout = 10  # 硬编码超时
+```
+
+**正确示例**：
+```python
+# ✅ 正确做法
+from settings import redis_config
+redis_client = RedisClient(
+    host=redis_config.REDIS_HOST,
+    port=redis_config.REDIS_PORT,
+    password=redis_config.REDIS_PASSWORD,
+    max_connections=redis_config.MAX_CONNECTIONS
+)
+```
+
+### 1.3 高性能数据访问 (CRITICAL)
+**目标**：提供金融级别的性能保证，确保数据访问不成为系统瓶颈
+
+**性能要求**：
+- ✅ **连接池优化**：最大化连接复用，减少连接开销
+- ✅ **批量操作**：优先使用pipeline和mget/mset
+- ✅ **异步友好**：支持异步操作和非阻塞访问
+- ✅ **内存优化**：合理的数据序列化和内存管理
+
+## 2. 技术栈与环境规范
+
+### 2.1 Python 运行环境 (CRITICAL)
+**强制要求**：
+- **Python 版本**：3.13.9 (与整个系统保持一致)
+- **Redis客户端**：redis>=4.0.0 (官方推荐版本)
+- **时区处理**：强制使用 `zoneinfo.ZoneInfo("America/New_York")`
+
+### 2.2 Redis服务规范 (CRITICAL)
+**服务器配置要求**：
+```redis.conf
+# === CRITICAL: Redis配置必须包含 ===
+bind 127.0.0.1          # 本地绑定，提高安全性
+port 6379                # 标准端口
+maxmemory 512mb          # 内存限制，防止内存溢出
+maxmemory-policy allkeys-lru  # 内存淘汰策略
+appendonly yes           # AOF持久化，保证数据安全
+save 900 1               # RDB快照配置
+save 300 10
+save 60 10000
+tcp-keepalive 300        # TCP保活
+```
+
+### 2.3 依赖管理 (CRITICAL)
+**requirements.txt 固定版本**：
+```
+redis>=4.0.0              # Redis官方客户端
+python-dotenv>=0.19.0     # 环境变量管理
+```
+
+## 3. 系统架构设计
+
+### 3.1 目录结构规范 (严格遵守)
+```
+📁 Redis/                             # Redis数据共享库根目录
+├── 📄 .cursorrules                   # 本架构规范文件 (新增)
+├── 📄 settings.py                    # 零硬编码配置系统 (CRITICAL)
+├── 📄 redis_client.py                # Redis连接池客户端
+├── 📄 redis_reader.py                # 数据读取接口
+├── 📄 redis.conf                     # Redis服务器配置
+├── 📄 redis-server.exe               # Redis服务器可执行文件
+├── 📄 start_redis.bat                # 启动脚本
+├── 📄 stop_redis.bat                 # 停止脚本
+├── 📄 run_system.bat                 # 系统运行脚本
+├── 📄 README_Windows.md              # Windows部署文档
+├── 📄 dump.rdb                       # RDB数据文件 (运行时生成)
+├── 📄 appendonly.aof                 # AOF日志文件 (运行时生成)
+└── 📄 __init__.py                    # 包初始化
+```
+
+**职责划分**：
+- **settings.py**：纯配置层，零业务逻辑
+- **redis_client.py**：连接池和底层操作
+- **redis_reader.py**：高层数据访问接口
+- **redis.conf**：服务器配置，不可修改核心参数
+
+### 3.2 数据模型规范 (CRITICAL)
+
+**Key命名空间标准**：
+```redis
+# === CRITICAL: Key格式必须严格遵守 ===
+
+# 实时数据存储
+market:breadth:live                              # 最新数据Hash
+market:breadth:series:YYYYMMDD                   # 历史数据Sorted Set
+market:breadth:record:{timestamp_ms}             # 单条记录Hash
+
+# 元数据存储
+market:breadth:metadata:count                    # 总记录数
+market:breadth:metadata:last_update              # 最后更新时间
+market:breadth:metadata:version                  # 数据版本
+```
+
+**数据结构标准**：
+```python
+# 单条记录结构 (不可修改)
+BREADTH_RECORD_SCHEMA = {
+    'timestamp': 'ISO格式时间戳，美东时区',
+    'BM': 'float，广度动量值',
+    'advancers': 'int，上涨股票数',
+    'decliners': 'int，下跌股票数',
+    'net_breadth': 'int，净广度',
+    'up0_3': 'int，上涨0-3%股票数',
+    'up3_5': 'int，上涨3-5%股票数',
+    'up5': 'int，上涨>5%股票数',
+    'down0_3': 'int，下跌0-3%股票数',
+    'down3_5': 'int，下跌3-5%股票数',
+    'down5': 'int，下跌>5%股票数'
+}
+```
+
+### 3.3 组件间通信规范
+
+**连接池架构**：
+```
+应用进程 → RedisClient单例 → 连接池 → Redis服务器
+    ↓            ↓            ↓        ↓
+多进程     单例模式     连接复用   数据持久化
+安全访问   线程安全     性能优化   高可用性
+```
+
+**接口标准**：
+- ✅ **单例模式**：RedisClient必须是单例，防止连接泄漏
+- ✅ **连接池**：强制使用连接池，配置化连接参数
+- ✅ **重试机制**：网络异常时自动重试，指数退避
+- ✅ **健康检查**：定期检查连接状态，自动恢复
+
+## 4. 配置管理规范
+
+### 4.1 环境变量配置 (CRITICAL)
+
+**.env 文件必须包含**：
+```bash
+# === Redis连接配置 (CRITICAL) ===
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+REDIS_PASSWORD=your_password
+REDIS_DB=0
+
+# === 连接池配置 ===
+REDIS_MAX_CONNECTIONS=20
+REDIS_SOCKET_TIMEOUT=10
+REDIS_SOCKET_CONNECT_TIMEOUT=10
+
+# === 性能配置 ===
+REDIS_HEALTH_CHECK_INTERVAL=30
+REDIS_RETRY_MAX_ATTEMPTS=3
+REDIS_RETRY_DELAY=0.1
+```
+
+### 4.2 settings.py 配置系统 (CRITICAL)
+
+**强制结构**：
+```python
+# === CRITICAL: 以下结构必须严格遵守 ===
+
+# 时区配置 (不可修改)
+TZ_NY = ZoneInfo("America/New_York")
+
+# Redis配置类 (必须存在)
+class RedisConfig:
+    REDIS_HOST: str = os.getenv("REDIS_HOST", "127.0.0.1")
+    REDIS_PORT: int = int(os.getenv("REDIS_PORT", "6379"))
+    REDIS_PASSWORD: str | None = os.getenv("REDIS_PASSWORD")
+    REDIS_DB: int = int(os.getenv("REDIS_DB", "0"))
+    # ... 其他配置项
+
+# 便捷访问函数 (必须存在)
+def get_redis_config() -> RedisConfig:
+    return redis_config
+```
+
+### 4.3 连接池配置标准 (CRITICAL)
+
+**强制参数配置**：
+```python
+# === CRITICAL: 连接池参数必须配置化 ===
+CONNECTION_POOL_CONFIG = {
+    'max_connections': int(os.getenv("REDIS_MAX_CONNECTIONS", "20")),
+    'decode_responses': True,  # 固定值
+    'socket_connect_timeout': int(os.getenv("REDIS_SOCKET_CONNECT_TIMEOUT", "10")),
+    'socket_timeout': int(os.getenv("REDIS_SOCKET_TIMEOUT", "10")),
+    'socket_keepalive': True,  # 固定值
+    'socket_keepalive_options': {1: 60, 2: 30, 3: 3}  # 固定值
+}
+```
+
+## 5. 数据操作规范
+
+### 5.1 写入操作标准 (CRITICAL)
+
+**实时数据写入流程**：
+```python
+# === CRITICAL: 实时数据写入必须遵循此流程 ===
+
+def store_live_data(data: dict) -> bool:
+    # 1. 数据验证
+    validate_breadth_data(data)
+
+    # 2. 时间戳处理 (美东时间)
+    timestamp_ms = int(data['timestamp'].timestamp() * 1000)
+
+    # 3. 批量操作
+    with redis_client.pipeline() as pipe:
+        # 更新最新数据
+        pipe.hset('market:breadth:live', mapping=data)
+
+        # 添加到时间序列
+        pipe.zadd(f'market:breadth:series:{date_str}', {timestamp_ms: timestamp_ms})
+
+        # 添加详细记录
+        pipe.hset(f'market:breadth:record:{timestamp_ms}', mapping=data)
+
+        # 更新元数据
+        pipe.set('market:breadth:metadata:last_update', timestamp_ms)
+
+        # 执行批量操作
+        pipe.execute()
+
+    return True
+```
+
+### 5.2 读取操作标准 (CRITICAL)
+
+**数据查询优化**：
+```python
+# === CRITICAL: 数据查询必须使用批量操作 ===
+
+def get_time_range_data(start_time: datetime, end_time: datetime) -> pd.DataFrame:
+    # 1. 时间范围计算
+    start_ms = int(start_time.timestamp() * 1000)
+    end_ms = int(end_time.timestamp() * 1000)
+
+    # 2. 使用pipeline批量获取
+    with redis_client.pipeline() as pipe:
+        for date in date_range:
+            pipe.zrangebyscore(f'market:breadth:series:{date}', start_ms, end_ms)
+
+        results = pipe.execute()
+
+    # 3. 批量处理记录
+    all_records = []
+    for record_ids in results:
+        if record_ids:
+            # 批量获取记录数据
+            records = redis_client.mget([f'market:breadth:record:{rid}' for rid in record_ids])
+            all_records.extend(records)
+
+    return process_records_to_dataframe(all_records)
+```
+
+### 5.3 数据一致性保障 (CRITICAL)
+
+**事务和原子性**：
+- ✅ **实时数据**：使用pipeline保证原子性
+- ✅ **批量操作**：优先使用mget/mset而不是循环
+- ✅ **错误回滚**：操作失败时自动清理不一致数据
+- ✅ **数据验证**：写入前验证数据完整性
+
+## 6. 性能优化规范
+
+### 6.1 连接池优化 (CRITICAL)
+
+**连接池配置标准**：
+```python
+# === CRITICAL: 连接池必须优化配置 ===
+POOL_OPTIMIZATION = {
+    'max_connections': 20,      # 根据并发需求调整
+    'socket_keepalive': True,   # 启用TCP保活
+    'socket_timeout': 10,       # 合理的超时时间
+    'decode_responses': True,   # 返回字符串格式
+    'retry_on_timeout': True,   # 启用超时重试
+}
+```
+
+### 6.2 内存和序列化优化 (CRITICAL)
+
+**数据序列化策略**：
+```python
+# === CRITICAL: 数据序列化必须优化 ===
+
+def optimize_data_storage(data: dict) -> dict:
+    # 1. 数值类型优化
+    optimized = {
+        'timestamp': data['timestamp'].isoformat(),  # ISO字符串
+        'BM': round(float(data['BM']), 4),          # 控制精度
+        'advancers': int(data['advancers']),         # 整数类型
+        'decliners': int(data['decliners']),
+        # ... 其他字段
+    }
+
+    # 2. 压缩大对象 (如果需要)
+    # 3. 索引优化
+
+    return optimized
+```
+
+### 6.3 监控和调优 (IMPORTANT)
+
+**性能监控指标**：
+- 连接池利用率
+- 查询响应时间
+- 内存使用情况
+- 缓存命中率
+
+**调优目标**：
+- 查询响应时间：< 10ms
+- 连接池利用率：> 80%
+- 内存使用率：< 70%
+- 数据一致性：100%
+
+## 7. 错误处理与监控
+
+### 7.1 连接管理 (CRITICAL)
+
+**连接健康检查**：
+```python
+# === CRITICAL: 连接必须定期健康检查 ===
+
+def health_check() -> bool:
+    try:
+        # 1. Ping测试
+        redis_client.ping()
+
+        # 2. 性能测试
+        start_time = time.time()
+        redis_client.get('test_key')
+        response_time = time.time() - start_time
+
+        # 3. 阈值检查
+        if response_time > 0.1:  # 100ms阈值
+            logging.warning(f"Redis响应时间过慢: {response_time:.3f}s")
+
+        return True
+
+    except redis.ConnectionError:
+        logging.error("Redis连接失败")
+        return False
+    except redis.TimeoutError:
+        logging.error("Redis操作超时")
+        return False
+```
+
+### 7.2 错误处理策略 (CRITICAL)
+
+**异常处理标准**：
+```python
+# === CRITICAL: 错误处理必须分层处理 ===
+
+try:
+    # Redis操作
+    result = redis_client.get_data_range(start_time, end_time)
+except redis.ConnectionError as e:
+    # 连接错误：重试机制
+    logging.error(f"Redis连接错误: {e}")
+    retry_with_backoff()
+except redis.TimeoutError as e:
+    # 超时错误：降级处理
+    logging.error(f"Redis超时错误: {e}")
+    return fallback_data()
+except Exception as e:
+    # 未知错误：记录并抛出
+    logging.error(f"Redis未知错误: {e}")
+    raise
+```
+
+### 7.3 日志规范 (IMPORTANT)
+
+**日志级别要求**：
+- **INFO**：连接状态、数据统计、重要操作
+- **WARNING**：性能警告、连接恢复、异常情况
+- **ERROR**：连接失败、数据错误、系统异常
+
+**日志内容要求**：
+```python
+# 连接日志
+[INFO] Redis连接池初始化成功: 127.0.0.1:6379
+[INFO] Redis连接成功: 127.0.0.1:6379
+
+# 性能日志
+[WARNING] Redis响应时间过慢: 0.15s
+[INFO] 批量存储 1000 条记录，耗时 0.05s
+
+# 错误日志
+[ERROR] Redis连接失败，已达到最大重试次数
+[ERROR] 数据一致性检查失败: 缺失必需字段
+```
+
+## 8. 开发工作流程
+
+### 8.1 代码修改规范
+
+**修改前检查**：
+1. 📋 **需求分析**：确认修改不违反数据一致性原则
+2. 🔍 **配置检查**：确保不引入新的硬编码
+3. 🧪 **测试准备**：准备数据完整性验证测试
+4. 🔄 **备份策略**：确保Redis数据安全
+
+**修改约束**：
+- ❌ **禁止修改**：Key命名空间格式
+- ❌ **禁止修改**：数据结构schema
+- ❌ **禁止修改**：连接池核心配置
+- ✅ **允许优化**：性能优化和错误处理改进
+
+### 8.2 代码审查清单
+
+**架构合规**：
+- [ ] 所有Redis操作是否使用了连接池？
+- [ ] 数据结构是否符合schema定义？
+- [ ] 是否存在硬编码的连接参数？
+- [ ] 时区处理是否正确？
+
+**性能验证**：
+- [ ] 查询响应时间是否满足要求？
+- [ ] 连接池利用率是否合理？
+- [ ] 内存使用是否控制在合理范围？
+- [ ] 大批量操作是否使用pipeline？
+
+**数据一致性**：
+- [ ] 写入操作是否保证原子性？
+- [ ] 错误情况下是否正确回滚？
+- [ ] 数据验证是否完整？
+- [ ] 时间戳处理是否正确？
+
+## 9. 部署规范
+
+### 9.1 环境要求
+
+**必需文件**：
+- ✅ **redis.conf**：正确配置的Redis配置文件
+- ✅ **redis-server.exe**：Redis服务器可执行文件
+- ✅ **.env**：完整的环境变量配置
+- ✅ **Python 3.13.9**：确切的版本匹配
+
+**目录权限**：
+- ✅ **数据目录**：Redis进程读写权限
+- ✅ **日志目录**：写权限
+- ✅ **配置目录**：读权限
+
+### 9.2 启动检查
+
+**启动前验证**：
+```bash
+# 1. Redis服务检查
+redis-cli ping
+
+# 2. 配置验证
+python -c "from settings import get_redis_config; print('Redis config loaded')"
+
+# 3. 连接测试
+python -c "from redis_client import RedisClient; client = RedisClient(); print(f'Connected: {client.is_connected()}')"
+
+# 4. 数据一致性检查
+python -c "from redis_reader import RedisDataReader; reader = RedisDataReader(client); print(f'Data available: {reader.is_available()}')"
+```
+
+### 9.3 监控要求
+
+**运行时监控**：
+- Redis内存使用率和连接数
+- 数据写入和读取性能
+- 连接池状态和健康检查
+- 数据一致性和完整性
+
+## 10. 故障排除
+
+### 10.1 常见问题
+
+**连接池耗尽**：
+```bash
+# 检查连接池配置
+REDIS_MAX_CONNECTIONS=50  # 增加连接数
+
+# 监控连接使用情况
+redis-cli info clients
+```
+
+**内存不足**：
+```bash
+# 检查Redis内存配置
+maxmemory 1gb  # 增加内存限制
+
+# 优化内存策略
+maxmemory-policy allkeys-lru
+```
+
+**数据不一致**：
+```bash
+# 检查数据完整性
+python -c "
+from redis_reader import RedisDataReader
+reader = RedisDataReader(client)
+print(f'总记录数: {reader.get_data_count()}')
+"
+
+# 验证数据结构
+redis-cli hgetall market:breadth:live
+```
+
+### 10.2 性能调优
+
+**查询优化**：
+```python
+# 使用批量操作而不是循环
+# redis_client.mget(keys) 而不是 for key in keys: redis_client.get(key)
+
+# 使用pipeline进行事务
+with redis_client.pipeline() as pipe:
+    for item in batch:
+        pipe.set(item['key'], item['value'])
+    pipe.execute()
+```
+
+**内存优化**：
+```python
+# 合理设置过期时间
+redis_client.expire(key, 3600)  # 1小时过期
+
+# 使用压缩数据结构
+# 对于大数据量，考虑使用压缩算法
+```
+
+---
+
+## 11. 架构约束总结
+
+### CRITICAL (必须严格遵守)
+1. **零硬编码**：所有Redis配置必须外部化
+2. **单例模式**：RedisClient必须是单例实现
+3. **连接池**：强制使用连接池，不可直接创建连接
+4. **时区处理**：强制使用zoneinfo，不得使用pytz
+5. **数据一致性**：所有操作必须保证原子性
+6. **Key命名空间**：严格按照规范命名，不可随意修改
+7. **数据Schema**：数据结构不可修改字段定义
+
+### IMPORTANT (强烈推荐)
+1. **性能监控**：所有Redis操作必须有性能监控
+2. **错误处理**：完善的异常处理和重试机制
+3. **批量操作**：优先使用pipeline和批量命令
+4. **健康检查**：定期检查连接和数据状态
+5. **日志记录**：详细的操作日志和错误记录
+
+### OPTIONAL (可选择)
+1. **高级功能**：Redis集群、哨兵模式等
+2. **监控扩展**：额外的性能指标收集
+3. **数据压缩**：大对象的压缩存储
+4. **备份策略**：额外的备份和恢复机制
+
+---
+
+**本规范由顶级金融系统架构师制定，确保Redis数据共享库达到金融级别的性能和可靠性要求。如需修改，必须通过正式的架构评审流程。**
