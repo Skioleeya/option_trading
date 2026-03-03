@@ -118,8 +118,6 @@ def _is_in_collection_window(now_ny: datetime) -> bool:
         bool: 是否在采集窗口内
     """
     start_time, end_time = _get_collection_window(now_ny)
-
-    if start_time is None or end_time is None:
         return False
 
     current_time = now_ny.time()
