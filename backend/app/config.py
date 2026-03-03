@@ -346,6 +346,25 @@ class Settings(BaseSettings):
         ),
     )
 
+    # Phase 3 — L2 Micro Flow Signal Component
+    # Academic reference: OFI Papers 2022-2024 (see MicroFlow_Research_2022_2026.md)
+    agent_g_micro_flow_weight: float = Field(
+        default=0.12,
+        description=(
+            "Phase 3: L2 Micro Flow (toxicity + bbo_imbalance) 分量基础权重。"
+            "比 MTF/VIB 低，避免单因子过拟合 (Paper 4: OFI alpha 衰减快)。"
+        ),
+    )
+    micro_flow_toxicity_threshold: float = Field(
+        default=0.25,
+        description=(
+            "Phase 3: micro_flow 方向信号触发门限。"
+            "|micro_score| < 0.25 时视为噪音不产生方向信号。"
+            "(Paper 4+5 依据: 绝对值< 0.2 不显著，加 0.05 缓冲)"
+        ),
+    )
+
+
     # MTF Alignment Hysteresis & EWMA Smoothing (PP-2 Fix)
     mtf_alignment_damp_entry: float = Field(
         default=0.34,

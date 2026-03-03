@@ -37,6 +37,7 @@ class SubscriptionManager:
 
     def __init__(self, rate_limiter: APIRateLimiter) -> None:
         self._subscribed_symbols: set[str] = set()
+        self._depth_subscribed_symbols: set[str] = set()
         self._target_symbols: set[str] = set()
         self._symbol_to_strike: dict[str, float] = {}
         self._limiter = rate_limiter
@@ -60,8 +61,9 @@ class SubscriptionManager:
         self._target_symbols = target_set
 
         # Slowly sync physical WebSocket status in the background
-        await self._sync_subscriptions(ctx, target_set)
+        await self._sync_subscriptions(ctx, target_set, spot)
         return target_set
+
 
     async def _collect_core_symbols(self, ctx: QuoteContext, spot: float | None) -> set[str]:
         """
@@ -112,16 +114,17 @@ class SubscriptionManager:
         self._symbol_to_strike = new_symbol_to_strike
         return target_symbols
 
-    async def _sync_subscriptions(self, ctx: QuoteContext, target_set: set[str]) -> None:
+    async def _sync_subscriptions(self, ctx: QuoteContext, target_set: set[str], spot: float | None) -> None:
         """
         Dynamic Promotion & Sliding:
         - Symbols leaving the core zone are dropped instantly.
         - Symbols entering the core zone are subscribed in micro-batches (5 per 50ms).
+        - Manage SubType.Depth and SubType.Trade for only the Top 10 closest strikes to Spot.
         """
         to_subscribe = list(target_set - self._subscribed_symbols)
         to_unsubscribe = list(self._subscribed_symbols - target_set)
 
-        # 1. Drop targets slipping out of the window
+        # 1. Drop targets slipping out of the window (Quote)
         if to_unsubscribe:
             try:
                 ctx.unsubscribe(to_unsubscribe, [SubType.Quote])
@@ -130,23 +133,53 @@ class SubscriptionManager:
             except Exception as e:
                 logger.error(f"[SubscriptionManager] Unsubscribe error: {e}")
 
-        # 2. Promote targets sliding into the window (micro-batched)
+        # 2. Promote targets sliding into the window (Quote, micro-batched)
         if to_subscribe:
             if len(self._subscribed_symbols) + len(to_subscribe) > settings.subscription_max:
                 logger.warning(
                     f"[SubscriptionManager] Sub limit breached! Cannot add {len(to_subscribe)} "
                     f"symbols to existing {len(self._subscribed_symbols)}."
                 )
-                return
+            else:
+                batch_size = 10
+                for i in range(0, len(to_subscribe), batch_size):
+                    batch = to_subscribe[i:i + batch_size]
+                    try:
+                        ctx.subscribe(batch, [SubType.Quote])
+                        self._subscribed_symbols |= set(batch)
+                        await asyncio.sleep(1.5)  # Throttled WS sub delay
+                    except Exception as e:
+                        logger.error(f"[SubscriptionManager] Subscribe batch error: {e}")
 
-            batch_size = 10
-            for i in range(0, len(to_subscribe), batch_size):
-                batch = to_subscribe[i:i + batch_size]
+        # 3. Synchronize SubType.Depth and SubType.Trade for Top 10 ATM contracts + SPY.US
+        if spot is not None and self._subscribed_symbols:
+            # Sort all subscribed options by distance to spot
+            sorted_symbols = sorted(
+                [s for s in self._subscribed_symbols if s != "SPY.US"],
+                key=lambda s: abs(self._symbol_to_strike.get(s, float('inf')) - spot)
+            )
+            
+            # Select top 10 (approx 5 Call + 5 Put ATM) + SPY
+            target_depth_set = set(sorted_symbols[:10])
+            target_depth_set.add("SPY.US")
+
+            to_sub_depth = list(target_depth_set - self._depth_subscribed_symbols)
+            to_unsub_depth = list(self._depth_subscribed_symbols - target_depth_set)
+
+            if to_unsub_depth:
                 try:
-                    ctx.subscribe(batch, [SubType.Quote])
-                    self._subscribed_symbols |= set(batch)
-                    await asyncio.sleep(1.5)  # Throttled WS sub delay
+                    ctx.unsubscribe(to_unsub_depth, [SubType.Depth, SubType.Trade])
+                    self._depth_subscribed_symbols -= set(to_unsub_depth)
                 except Exception as e:
-                    logger.error(f"[SubscriptionManager] Subscribe batch error: {e}")
+                    logger.error(f"[SubscriptionManager] Unsubscribe depth/trade error: {e}")
 
-            logger.info(f"[SubscriptionManager] Tier 1 Resynced. Actives: {len(self._subscribed_symbols)}")
+            if to_sub_depth:
+                try:
+                    ctx.subscribe(to_sub_depth, [SubType.Depth, SubType.Trade])
+                    self._depth_subscribed_symbols |= set(to_sub_depth)
+                    logger.info(f"[SubscriptionManager] Subscribed Depth+Trade for Top 10 ATM: {to_sub_depth}")
+                except Exception as e:
+                    logger.error(f"[SubscriptionManager] Subscribe depth/trade error: {e}")
+
+        logger.info(f"[SubscriptionManager] Tier 1 Resynced. Actives: {len(self._subscribed_symbols)}, Depth: {len(self._depth_subscribed_symbols)}")
+

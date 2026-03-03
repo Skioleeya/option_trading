@@ -20,17 +20,21 @@ from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
+import numpy as np
+
 from longport.openapi import QuoteContext, Config, SubType
 from app.config import settings, convert_to_market_time
 from app.services.system.persistent_oi_store import PersistentOIStore
-from app.services.analysis.bsm import compute_greeks, get_trading_time_to_maturity, skew_adjust_iv
+from app.services.analysis.bsm import get_trading_time_to_maturity, skew_adjust_iv
+from app.services.analysis.bsm_fast import compute_greeks_batch, warmup as bsm_warmup
 
 from app.services.feeds.subscription_manager import SubscriptionManager
 from app.services.feeds.iv_baseline_sync import IVBaselineSync
 from app.services.feeds.tier2_poller import Tier2Poller
 from app.services.feeds.tier3_poller import Tier3Poller
 from app.services.feeds.rate_limiter import APIRateLimiter
-
+from app.services.analysis.depth_engine import DepthEngine
+from app.services.analysis.entropy_filter import EntropyFilter
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +48,7 @@ class OptionChainBuilder:
     - Tier2Poller (2DTE REST)
     - Tier3Poller (Weekly REST)
     - Local BSM Greeks enrichment
+    - DepthEngine (L2 Flow Toxicity)
     - WebSocket callback handling
     """
 
@@ -74,6 +79,13 @@ class OptionChainBuilder:
         self._iv_sync = IVBaselineSync(self._rate_limiter)
         self._tier2 = Tier2Poller(self._rate_limiter)
         self._tier3 = Tier3Poller(self._rate_limiter)
+        
+        # Depth Engine for Order Flow Toxicity and BBO Imbalance
+        self._depth_engine = DepthEngine(ewma_alpha=0.1)
+
+        # Shannon Entropy pre-filter: drops zero-information ticks before BSM
+        # min_entropy=0.05 means at least one field must change by ≥0.1% to pass
+        self._entropy_filter = EntropyFilter(min_entropy=0.05)
 
     async def initialize(self) -> None:
         """Initialize Longport quote context and start all components."""
@@ -89,9 +101,14 @@ class OptionChainBuilder:
             )
             self._quote_ctx = QuoteContext(config)
 
-            # Register WS callback and subscribe to SPY spot
+            # Register WS callbacks
             self._quote_ctx.set_on_quote(self._on_quote_callback)
-            self._quote_ctx.subscribe(["SPY.US"], [SubType.Quote])
+            self._quote_ctx.set_on_depth(self._on_depth_callback)
+            self._quote_ctx.set_on_trades(self._on_trades_callback)
+            
+            # Subscribe to SPY spot (Quote, Depth, Trade)
+            self._quote_ctx.subscribe(["SPY.US"], [SubType.Quote, SubType.Depth, SubType.Trade])
+            self._sub_mgr._depth_subscribed_symbols.add("SPY.US")
 
             self._initialized = True
             logger.info("[OptionChainBuilder] QuoteContext initialized")
@@ -107,6 +124,9 @@ class OptionChainBuilder:
             )
             self._tier2.start(self._quote_ctx, get_spot_fn=lambda: self._spot)
             self._tier3.start(self._quote_ctx, get_spot_fn=lambda: self._spot)
+
+            # Pre-compile Numba JIT kernel (one-time ~1600ms cost at startup)
+            bsm_warmup()
 
             # Start administrative management loop (Subscriptions & Warm-ups)
             self._mgmt_task = asyncio.create_task(self._management_loop())
@@ -131,8 +151,20 @@ class OptionChainBuilder:
             # Use `target_symbols` for stability, protecting against the WebSocket sync loop race
             target_set = self._sub_mgr.target_symbols
             chain_data = [data for sym, data in self._chain.items() if sym in target_set]
+
+            # Incorporate flow snapshots from Depth engine
+            flow_snap = self._depth_engine.get_flow_snapshot()
+            for data in chain_data:
+                sym = data["symbol"]
+                if sym in flow_snap:
+                    data["toxicity_score"] = flow_snap[sym]["toxicity_score"]
+                    data["bbo_imbalance"] = flow_snap[sym]["bbo_imbalance"]
+                else:
+                    data["toxicity_score"] = 0.0
+                    data["bbo_imbalance"] = 0.0
             
             # 2. Local Enrichment & Single-Pass Aggregation
+
             aggregate_greeks = self._enrich_chain_with_local_greeks(chain_data)
 
             self._last_update = now
@@ -207,126 +239,143 @@ class OptionChainBuilder:
     def _enrich_chain_with_local_greeks(self, chain_data: list[dict[str, Any]]) -> dict[str, Any]:
         """Compute Greeks for the whole chain in-place and return aggregates.
 
-        Single-Pass efficiency: Accumulates GEX and exposures while looping.
+        FAST PATH: builds NumPy arrays for the entire chain, calls the Numba
+        JIT batch engine (`compute_greeks_batch`), then writes results back in
+        a second O(n) pass. This eliminates the inner-loop Python overhead and
+        allows Numba to parallelise across CPU cores.
 
-        PP-1 FIX: WS IV values older than WS_IV_TTL are treated as stale and
-        fall back to the REST iv_cache, preventing 'zombie WS IV' oscillations
-        (e.g., a 60s-old push value being preferred over a fresh REST baseline).
-
-        PP-2 FIX: spot_ref is looked up per-symbol from iv_sync.spot_at_sync
-        (now a dict), guaranteeing each contract's skew_adjust_iv uses the spot
-        that was current when *its* IV was fetched, not the last chunk's spot.
-
-        PP-4 FIX: OI is smoothed with EMA(α=0.2) before entering the GEX
-        formula, absorbing the 5-min REST step-jump without blurring the
-        genuine intraday build-up signal.
+        PP-1 FIX: WS IV values older than WS_IV_TTL are treated as stale.
+        PP-2 FIX: spot_ref looked up per-symbol from iv_sync.spot_at_sync.
+        PP-4 FIX: OI smoothed with EMA(α=0.2).
         """
         if self._spot is None or self._spot <= 0:
             return {}
 
-        # PP-1 FIX: WS IV older than this threshold is considered stale.
-        # 60s is deliberately permissive (illiquid OTM contracts update rarely);
-        # tighten to 30s once the system is stable.
         WS_IV_TTL: float = 60.0
 
-        now = datetime.now(ZoneInfo("US/Eastern"))
-        t_years = get_trading_time_to_maturity(now)
+        now      = datetime.now(ZoneInfo("US/Eastern"))
+        t_years  = get_trading_time_to_maturity(now)
         now_mono = time.monotonic()
 
         agg = {
-            "net_gex": 0.0,
-            "net_vanna": 0.0,
-            "net_charm": 0.0,
-            "total_call_gex": 0.0,
-            "total_put_gex": 0.0,
-            "call_wall": None,
-            "put_wall": None,
-            "max_call_gex": 0.0,
-            "max_put_gex": 0.0,
-            "atm_iv": 0.0,
+            "net_gex": 0.0, "net_vanna": 0.0, "net_charm": 0.0,
+            "total_call_gex": 0.0, "total_put_gex": 0.0,
+            "call_wall": None, "put_wall": None,
+            "max_call_gex": 0.0, "max_put_gex": 0.0, "atm_iv": 0.0,
         }
         min_strike_diff = float("inf")
 
-        for entry in chain_data:
-            symbol = entry["symbol"]
-            strike = entry["strike"]
+        n = len(chain_data)
+        if n == 0:
+            return agg
+
+        # ── Phase 1: build input arrays and resolve IVs ────────────────────────
+        spots_arr   = np.empty(n, dtype=np.float64)
+        strikes_arr = np.empty(n, dtype=np.float64)
+        ivs_arr     = np.zeros(n,  dtype=np.float64)  # 0 = invalid / skip
+        is_call_arr = np.empty(n,  dtype=np.bool_)
+        adj_ivs     = np.zeros(n,  dtype=np.float64)  # skew-adjusted IV per entry
+
+        for idx, entry in enumerate(chain_data):
+            symbol   = entry["symbol"]
+            strike   = entry["strike"]
             opt_type = entry["type"].upper()
 
-            # === IV PRIORITY: WS real-time > REST cache (PP-1 FIX: TTL guard) ===
+            spots_arr[idx]   = self._spot
+            strikes_arr[idx] = strike
+            is_call_arr[idx] = opt_type in ("CALL", "C")
+
+            # IV resolution: WS real-time > REST cache (PP-1: TTL guard)
             ws_iv_raw = entry.get("implied_volatility")
-            iv_age = now_mono - entry.get("iv_timestamp", 0.0)
-            # Only trust WS IV if it arrived within the TTL window
-            ws_iv = ws_iv_raw if (ws_iv_raw and ws_iv_raw > 0 and iv_age < WS_IV_TTL) else None
-            rest_iv = self._iv_sync.iv_cache.get(symbol)
-            raw_iv = ws_iv if ws_iv is not None else rest_iv
+            iv_age    = now_mono - entry.get("iv_timestamp", 0.0)
+            ws_iv     = ws_iv_raw if (ws_iv_raw and ws_iv_raw > 0 and iv_age < WS_IV_TTL) else None
+            rest_iv   = self._iv_sync.iv_cache.get(symbol)
+            raw_iv    = ws_iv if ws_iv is not None else rest_iv
 
             if raw_iv and raw_iv > 0:
-                # PP-2 FIX: per-symbol spot reference (dict lookup, not global float)
+                # PP-2: per-symbol spot reference
                 spot_ref = self._iv_sync.spot_at_sync.get(symbol, self._spot)
-                adjusted_iv = skew_adjust_iv(
+                adj_iv   = skew_adjust_iv(
                     cached_iv=raw_iv,
                     spot_now=self._spot,
                     spot_ref=spot_ref,
                     opt_type=entry["type"],
                 )
-                greeks = compute_greeks(
-                    spot=self._spot,
-                    strike=strike,
-                    iv=adjusted_iv,
-                    t_years=t_years,
-                    opt_type=entry["type"],
-                    r=settings.risk_free_rate,
-                    q=settings.bsm_dividend_yield,
-                )
-                greeks["implied_volatility"] = adjusted_iv
-                entry.update(greeks)
+                ivs_arr[idx]  = adj_iv
+                adj_ivs[idx]  = adj_iv
 
-                # Fix B: Track ATM IV (skew-adjusted) for L2 consistency
-                strike_diff = abs(strike - self._spot)
-                if strike_diff < min_strike_diff:
-                    min_strike_diff = strike_diff
-                    agg["atm_iv"] = adjusted_iv
+        # ── Phase 2: batch Greeks (single Numba/NumPy call for entire chain) ──
+        batch = compute_greeks_batch(
+            spots_arr, strikes_arr, ivs_arr, t_years, is_call_arr,
+            r=settings.risk_free_rate,
+            q=settings.bsm_dividend_yield,
+        )
 
-                if symbol in self._chain:
-                    self._chain[symbol].update(greeks)
+        # ── Phase 3: write results back + aggregate ────────────────────────────
+        for idx, entry in enumerate(chain_data):
+            if ivs_arr[idx] <= 0:
+                continue  # no valid IV — skip
 
-                # --- Single-Pass Aggregation ---
-                raw_oi = self._iv_sync.oi_cache.get(symbol, 0)
-                # PP-4 FIX: EMA(α=0.2) smooths REST OI step-jumps.
-                # A sudden OI spike (e.g., 5k→28k over 10min) is absorbed over
-                # ~5 ticks rather than causing an instant 5x GEX discontinuity.
-                prev_smooth = self._oi_smooth.get(symbol, float(raw_oi))
-                smoothed_oi = prev_smooth + 0.2 * (raw_oi - prev_smooth)
-                self._oi_smooth[symbol] = smoothed_oi
-                oi = int(smoothed_oi)
-                entry["open_interest"] = oi
-                multiplier = entry.get("contract_multiplier", 100)
+            symbol   = entry["symbol"]
+            strike   = entry["strike"]
+            opt_type = entry["type"].upper()
+            adj_iv   = adj_ivs[idx]
 
-                # GEX_i = Gamma_i × OI_i × Spot² × Multiplier × 0.01 (per 1% move)
-                gex = greeks["gamma"] * oi * (self._spot ** 2) * multiplier * 0.01
-                vanna_exp = greeks["vanna"] * oi * multiplier
-                charm_exp = greeks["charm"] * oi * multiplier
+            greeks = {
+                "delta":            float(batch["delta"][idx]),
+                "gamma":            float(batch["gamma"][idx]),
+                "vega":             float(batch["vega"][idx]),
+                "vanna":            float(batch["vanna"][idx]),
+                "charm":            float(batch["charm"][idx]),
+                "theta":            float(batch["theta"][idx]),
+                "implied_volatility": adj_iv,
+            }
+            entry.update(greeks)
 
-                if opt_type in ("CALL", "C"):
-                    agg["total_call_gex"] += gex
-                    agg["net_gex"] += gex
-                    if gex > agg["max_call_gex"]:
-                        agg["max_call_gex"] = gex
-                        agg["call_wall"] = strike
-                else:
-                    agg["total_put_gex"] -= gex  # Put GEX is negative
-                    agg["net_gex"] -= gex
-                    if gex > agg["max_put_gex"]:
-                        agg["max_put_gex"] = gex
-                        agg["put_wall"] = strike
+            # ATM IV tracking
+            strike_diff = abs(strike - self._spot)
+            if strike_diff < min_strike_diff:
+                min_strike_diff = strike_diff
+                agg["atm_iv"] = adj_iv
 
-                agg["net_vanna"] += vanna_exp
-                agg["net_charm"] += charm_exp
+            if symbol in self._chain:
+                self._chain[symbol].update(greeks)
+
+            # OI resolution + EMA smoothing (PP-4)
+            raw_oi     = self._iv_sync.oi_cache.get(symbol, 0)
+            prev_smooth = self._oi_smooth.get(symbol, float(raw_oi))
+            smoothed_oi = prev_smooth + 0.2 * (raw_oi - prev_smooth)
+            self._oi_smooth[symbol] = smoothed_oi
+            oi = int(smoothed_oi)
+            entry["open_interest"] = oi
+            multiplier = entry.get("contract_multiplier", 100)
+
+            # Aggregation
+            gamma   = greeks["gamma"]
+            gex     = gamma * oi * (self._spot ** 2) * multiplier * 0.01
+            vanna_exp = greeks["vanna"] * oi * multiplier
+            charm_exp = greeks["charm"] * oi * multiplier
+
+            if opt_type in ("CALL", "C"):
+                agg["total_call_gex"] += gex
+                agg["net_gex"]        += gex
+                if gex > agg["max_call_gex"]:
+                    agg["max_call_gex"] = gex
+                    agg["call_wall"]    = strike
+            else:
+                agg["total_put_gex"] -= gex
+                agg["net_gex"]       -= gex
+                if gex > agg["max_put_gex"]:
+                    agg["max_put_gex"] = gex
+                    agg["put_wall"]    = strike
+
+            agg["net_vanna"] += vanna_exp
+            agg["net_charm"] += charm_exp
 
         # Normalize GEX to Millions
-        agg["net_gex"] /= 1_000_000.0
+        agg["net_gex"]        /= 1_000_000.0
         agg["total_call_gex"] /= 1_000_000.0
-        agg["total_put_gex"] /= 1_000_000.0
+        agg["total_put_gex"]  /= 1_000_000.0
 
         return agg
 
@@ -374,9 +423,27 @@ class OptionChainBuilder:
         time.monotonic(). The enrichment loop in _enrich_chain_with_local_greeks
         checks this timestamp and downgrades stale WS IV to the REST cache if
         it is older than WS_IV_TTL (60s), eliminating 'zombie IV' oscillation.
+
+        ENTROPY FIX: Zero-information ticks (no meaningful change across all
+        fields) are discarded early, preventing redundant BSM array allocation
+        and computation for unmodified data pushes.
         """
         strike = self._sub_mgr.symbol_to_strike.get(symbol)
         if strike is None:
+            return
+
+        # Build a candidate entry with incoming values for the entropy gate
+        new_values = {
+            "implied_volatility": float(getattr(q, 'implied_volatility', 0) or 0),
+            "volume":             float(getattr(q, 'volume', 0) or 0),
+            "bid":                float(getattr(q, 'bid', 0) or 0),
+            "ask":                float(getattr(q, 'ask', 0) or 0),
+            "last_price":         float(getattr(q, 'last_done', 0) or 0),
+            "open_interest":      float(getattr(q, 'open_interest', 0) or 0),
+        }
+
+        # Shannon entropy gate: discard zero-information ticks
+        if not self._entropy_filter.accept(symbol, new_values):
             return
 
         entry = self._chain.get(symbol, {
@@ -412,6 +479,37 @@ class OptionChainBuilder:
 
         entry["last_update"] = datetime.now(ZoneInfo("US/Eastern"))
         self._chain[symbol] = entry
+
+    def _on_depth_callback(self, symbol: str, event: Any) -> None:
+        """Callback handler for Longport WebSocket Depth pushes (OS thread)."""
+        if self._loop is None:
+            return
+        self._loop.call_soon_threadsafe(self._safe_on_depth, symbol, event)
+        
+    def _safe_on_depth(self, symbol: str, event: Any) -> None:
+        """Execute on asyncio thread to safely update DepthEngine."""
+        try:
+            bids = getattr(event, 'bids', [])
+            asks = getattr(event, 'asks', [])
+            if bids or asks:
+                self._depth_engine.update_depth(symbol, bids, asks)
+        except Exception as e:
+            logger.error(f"[OptionChainBuilder] Safe depth error for {symbol}: {e}")
+
+    def _on_trades_callback(self, symbol: str, event: Any) -> None:
+        """Callback handler for Longport WebSocket Trade pushes (OS thread)."""
+        if self._loop is None:
+            return
+        self._loop.call_soon_threadsafe(self._safe_on_trades, symbol, event)
+        
+    def _safe_on_trades(self, symbol: str, event: Any) -> None:
+        """Execute on asyncio thread to safely update DepthEngine."""
+        try:
+            trades = getattr(event, 'trades', [])
+            if trades:
+                self._depth_engine.update_trades(symbol, trades)
+        except Exception as e:
+            logger.error(f"[OptionChainBuilder] Safe trade error for {symbol}: {e}")
 
     # =========================================================================
     # Volume Research (Wide-window discovery)

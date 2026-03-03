@@ -158,7 +158,7 @@ export interface AgentGResult {
 }
 
 export interface DashboardPayload {
-    type: 'dashboard_update' | 'dashboard_init' | 'keepalive'
+    type: 'dashboard_update' | 'dashboard_init' | 'dashboard_delta' | 'keepalive'
     timestamp: string
     spot: number | null
     agent_g: AgentGResult | null

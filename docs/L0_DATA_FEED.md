@@ -20,7 +20,10 @@
 ### Tier 1 — WebSocket 实时推送 (`SubscriptionManager`)
 - **触发**: 常驻订阅，SPY 现货 + 0DTE/1DTE 期权合约
 - **窗口**: ATM ± 动态 strike window（`settings.strike_window_size`）
-- **数据**: Bid/Ask/Last/Volume/IV/Greeks（微秒级推送）
+- **数据**: 
+  - `SubType.Quote`: Bid/Ask/Last/Volume/IV/Greeks（1Hz - 实时）
+  - `SubType.Depth`: **Orderbook L1 深度**（买卖价量，用于 BBO Imbalance）
+  - `SubType.Trade`: **逐笔成交**（包含成交方向，用于 Toxicity Score）
 - **写入路径**: OS线程 → `_on_quote_callback` → `call_soon_threadsafe` → `_safe_on_quote` → `_chain[symbol]`
 
 ### Tier 2 — 2DTE REST 轮询 (`Tier2Poller`)
@@ -58,8 +61,9 @@ WS 推送 (实时)
 每 60 秒运行：
 
 1. **现货兜底**: 如果 WS 超过 10s 未更新 spot，通过 REST 补拉 `SPY.US` quote
-2. **订阅刷新**: 调用 `SubscriptionManager.refresh()` 重新计算 target_symbols
-3. **IV 暖启动**: 对新订阅的 symbol 调用 `IVBaselineSync.warm_up()` 预填缓存
+2. **订阅刷新**: 调用 `SubscriptionManager.refresh()` 重新计算 target_symbols。
+   - **L2 Policy**: 对成交量前 10 的 ATM 近端期权开启 `SubType.Depth` 和 `SubType.Trade`。
+3. **IV 暖启动**: 对新订阅的 symbol 调用 `IVBaselineSync.warm_up()` 预填缓存。
 4. **量研究**: 每 15 min 执行 `_run_volume_research`，宽窗口扫描所有 strike 的成交量，生成 `volume_map`
 
 ---

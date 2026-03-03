@@ -76,7 +76,8 @@ L1 snapshot + L2 AgentResult + ATM Decay payload
 
 ### 3.7 DepthProfilePresenter
 - **输入**: `per_strike_gex`, `spot`, `flip_level`
-- **输出**: 每个 strike 的 GEX 分布数据（用于 Gamma Profile 柱状图）
+- **输出**: 每个 strike 的 GEX 分布数据
+- **微观扩展**: 包含聚合后的 `toxicity_score` 和 `bbo_imbalance`，供前端渲染成交流毒性热力图或盘口倾向。
 
 ---
 

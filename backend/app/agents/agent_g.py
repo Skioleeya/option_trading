@@ -199,7 +199,77 @@ class AgentG:
         # Update weight engine
         self._weight_engine.update_market_state(spy_atm_iv, net_gex_f)
 
-        # Calculate fused signal
+        # Tactical Triad Metrics Computation
+        # PP-1 FIX: Use configurable baseline HV (was hardcoded 13.5).
+        # Override via VRP_BASELINE_HV env var or .env file.
+        baseline_hv = settings.vrp_baseline_hv
+        vrp = (spy_atm_iv - baseline_hv) if spy_atm_iv is not None else None
+        
+        premium_state = "FAIR"
+        if vrp is not None:
+            if vrp > settings.vrp_trap_threshold:
+                premium_state = "TRAP"
+            elif vrp > settings.vrp_expensive_threshold:
+                premium_state = "EXPENSIVE"
+            elif vrp < (settings.vrp_cheap_threshold * 3):
+                premium_state = "BARGAIN"
+            elif vrp < settings.vrp_cheap_threshold:
+                premium_state = "CHEAP"
+
+        # ── Phase 3: L2 Micro Flow Signal (ATM Toxicity + BBO Imbalance) ─────
+        # Academic references: OFI Papers 2022-2026 (MicroFlow_Research_2022_2026.md)
+        # Paper 1: ATM pooled OFI has strongest predictive power for same-day option returns
+        # Paper 3: GEX-adaptive BBO weight — negative GEX means market makers are aggressively
+        #          delta-hedging, increasing BBO signal quality; positive GEX → BBO suppressed
+        # Paper 4: 2022+ equal-weight (50:50) more robust; bias to BBO only in neg GEX
+        # Paper 5: |micro_score| < 0.2 is noise; use 0.25 threshold for buffer
+        per_strike = snapshot.get("per_strike_gex") or []
+        _spot = agent_a.data.get("spot") or 0.0
+
+        atm_tox_vals: list[float] = []
+        atm_bbo_vals: list[float] = []
+        for row in per_strike:
+            row_strike = row.get("strike", 0) if isinstance(row, dict) else getattr(row, "strike", 0)
+            if abs(row_strike - _spot) <= 3.0:   # ATM ±3 strike window (Paper 1: ATM OFI 更稳定)
+                tox = row.get("toxicity_score", 0.0) if isinstance(row, dict) else getattr(row, "toxicity_score", 0.0)
+                bbo = row.get("bbo_imbalance", 0.0) if isinstance(row, dict) else getattr(row, "bbo_imbalance", 0.0)
+                if tox != 0.0:
+                    atm_tox_vals.append(float(tox))
+                if bbo != 0.0:
+                    atm_bbo_vals.append(float(bbo))
+
+        avg_tox = sum(atm_tox_vals) / len(atm_tox_vals) if atm_tox_vals else 0.0
+        avg_bbo = sum(atm_bbo_vals) / len(atm_bbo_vals) if atm_bbo_vals else 0.0
+
+        # Paper 3: GEX-adaptive blend — neg GEX favors BBO (MM hedging signal quality rises)
+        _bbo_w = 0.60 if (net_gex_f is not None and net_gex_f < 0) else 0.40
+        _tox_w = 1.0 - _bbo_w
+        micro_score = _tox_w * avg_tox + _bbo_w * avg_bbo
+
+        _mf_th = settings.micro_flow_toxicity_threshold  # default 0.25
+        if micro_score > _mf_th:
+            micro_flow_direction = "BULLISH"
+            micro_flow_confidence = min(abs(micro_score), 1.0)
+        elif micro_score < -_mf_th:
+            micro_flow_direction = "BEARISH"
+            micro_flow_confidence = min(abs(micro_score), 1.0)
+        else:
+            micro_flow_direction = "NEUTRAL"
+            micro_flow_confidence = 0.0
+
+        micro_flow_signal_dict = {
+            "direction": micro_flow_direction,
+            "confidence": micro_flow_confidence,
+        }
+
+        if avg_tox != 0.0 or avg_bbo != 0.0:
+            logger.debug(
+                "[AgentG.Phase3] micro_flow: tox=%.3f bbo=%.3f score=%.3f → %s (conf=%.2f)",
+                avg_tox, avg_bbo, micro_score, micro_flow_direction, micro_flow_confidence,
+            )
+
+        # ── Calculate fused signal ──────────────────────────────────────────
+
         fused_signal = self._weight_engine.calculate_weights(
             iv_signal={"direction": iv_direction, "confidence": iv_confidence},
             wall_signal={"direction": wall_direction, "confidence": wall_confidence},
@@ -212,6 +282,7 @@ class AgentG:
                 "direction": vib_direction,
                 "confidence": vib_data.strength if vib_data else 0.0,
             },
+            micro_flow_signal=micro_flow_signal_dict,
         )
 
         # 1.5. Phase 27.3 — Jump Gate Safety Valve (P0.1, highest priority lockout)
@@ -233,22 +304,22 @@ class AgentG:
             )
 
         vrp_vetoed = False
-        if vrp_value is not None:
+        if vrp is not None:
             # Hysteresis: Entry > threshold, Exit < threshold * 0.95
             entry_th = settings.vrp_veto_threshold
             exit_th = entry_th * 0.95
             
-            if not self._vrp_active and vrp_value > entry_th:
+            if not self._vrp_active and vrp > entry_th:
                 self._vrp_active = True
-                logger.warning(f"[AgentG] VRP Veto ACTIVATED: {vrp_value:.1f} > {entry_th}")
-            elif self._vrp_active and vrp_value < exit_th:
+                logger.warning(f"[AgentG] VRP Veto ACTIVATED: {vrp:.1f} > {entry_th}")
+            elif self._vrp_active and vrp < exit_th:
                 self._vrp_active = False
-                logger.warning(f"[AgentG] VRP Veto DEACTIVATED: {vrp_value:.1f} < {exit_th}")
+                logger.warning(f"[AgentG] VRP Veto DEACTIVATED: {vrp:.1f} < {exit_th}")
 
             if self._vrp_active:
-                signal = f"NO_TRADE (VRP_VETO: VRP={vrp_value:.1f})"
+                signal = f"NO_TRADE (VRP_VETO: VRP={vrp:.1f})"
                 summary.append(
-                    f"VRP VETO (P0.5): IV={spy_atm_iv:.1f}% far too expensive (VRP={vrp_value:.1f}). "
+                    f"VRP VETO (P0.5): IV={spy_atm_iv:.1f}% far too expensive (VRP={vrp:.1f}). "
                     "Entry EV<0 per Muravyev et al. (SSRN #4019647)."
                 )
                 vrp_vetoed = True
@@ -280,10 +351,10 @@ class AgentG:
         if self._mtf_damped:
             fused_signal_confidence = fused_signal.confidence * 0.5
             summary.append(f"MTF ALIGN DAMP: alignment={mtf_alignment:.2f} → conf halved.")
-        elif mtf_alignment >= 0.67 and vrp_state == "BARGAIN":
+        elif mtf_alignment >= 0.67 and premium_state == "BARGAIN":
             # VRP Bargain + MTF fully aligned = best entry condition
             fused_signal_confidence = min(fused_signal.confidence * settings.vrp_bargain_boost, 1.0)
-            summary.append(f"VRP BARGAIN BOOST: alignment={mtf_alignment:.2f}, VRP={vrp_value:.1f}")
+            summary.append(f"VRP BARGAIN BOOST: alignment={mtf_alignment:.2f}, VRP={vrp:.1f}")
         else:
             fused_signal_confidence = fused_signal.confidence
 
@@ -392,7 +463,6 @@ class AgentG:
         # Extract Greeks for Tactical Triad
         # In a real scenario these come from Agent B's option scan / IV surfaces
         # We dummy-fallback to 0.0 if not fully integrated in `AgentB1Output` yet
-        vrp = vrp_value  # use real VRP from hv_analysis (not gamma_flip_level placeholder)
         net_charm = None  # Add to b1 schema later if needed
 
         return AgentResult(
@@ -427,14 +497,7 @@ class AgentG:
                         skew_val=agent_b.data.get("skew_analysis", {}).get("skew_value", 0.0),
                         state=agent_b.data.get("skew_analysis", {}).get("skew_state", "NEUTRAL")
                     ),
-                    "active_options": await self._active_options_presenter.build(
-                        chain=snapshot.get("chain", []),
-                        spot=snapshot.get("spot") or 0.0,
-                        atm_iv=agent_b.data.get("spy_atm_iv") or 0.0,
-                        gex_regime=_vanna_dict.get("gex_regime", "NEUTRAL"),
-                        redis=getattr(self, "_redis", None),
-                        limit=5
-                    ),
+                    "active_options": self._active_options_presenter.get_latest(),
                     "mtf_flow": MTFFlowPresenter.build(
                         mtf_consensus=mtf_consensus
                     )

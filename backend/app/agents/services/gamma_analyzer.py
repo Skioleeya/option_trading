@@ -61,7 +61,7 @@ class GammaAnalyzer:
             }
 
         # Aggregate GEX by strike
-        strike_gex: dict[float, dict[str, float]] = {}
+        strike_gex: dict[float, dict[str, Any]] = {}
 
         for opt in chain:
             strike = opt.get("strike", 0)
@@ -69,12 +69,20 @@ class GammaAnalyzer:
                 continue
 
             if strike not in strike_gex:
-                strike_gex[strike] = {"call_gex": 0.0, "put_gex": 0.0}
+                strike_gex[strike] = {
+                    "call_gex": 0.0, "put_gex": 0.0,
+                    "tox_sum": 0.0, "bbo_sum": 0.0, "count": 0
+                }
 
             gamma = opt.get("gamma", 0) or 0
             oi = opt.get("open_interest", 0) or 0
             multiplier = opt.get("contract_multiplier", 100) or 100
             opt_type = opt.get("option_type", opt.get("type", "")).upper()
+            
+            # Track flow metrics even if gamma/oi are zero (we still want depth info if available)
+            strike_gex[strike]["tox_sum"] += opt.get("toxicity_score", 0.0)
+            strike_gex[strike]["bbo_sum"] += opt.get("bbo_imbalance", 0.0)
+            strike_gex[strike]["count"] += 1
 
             if gamma <= 0 or oi <= 0:
                 # We do not compute GEX, but we already ensured the strike is in strike_gex
@@ -112,6 +120,9 @@ class GammaAnalyzer:
             call_g = data["call_gex"]
             put_g = data["put_gex"]
             net_g = call_g + put_g
+            cnt = data["count"]
+            avg_tox = data["tox_sum"] / cnt if cnt > 0 else 0.0
+            avg_bbo = data["bbo_sum"] / cnt if cnt > 0 else 0.0
 
             total_call_gex += call_g
             total_put_gex += put_g
@@ -121,6 +132,8 @@ class GammaAnalyzer:
                 "call_gex": call_g,
                 "put_gex": put_g,
                 "net_gex": net_g,
+                "toxicity_score": avg_tox,
+                "bbo_imbalance": avg_bbo,
             })
 
             # Track walls (max absolute GEX)

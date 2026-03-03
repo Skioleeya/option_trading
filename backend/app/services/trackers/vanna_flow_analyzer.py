@@ -18,6 +18,14 @@ from datetime import datetime
 from typing import Any, NamedTuple
 from zoneinfo import ZoneInfo
 
+try:
+    import ndm_rust
+    _NDM_RUST_AVAILABLE = True
+except ImportError:
+    _NDM_RUST_AVAILABLE = False
+    import logging
+    logging.getLogger(__name__).warning("ndm_rust not installed, falling back to pure Python")
+
 from app.config import settings
 from app.models.microstructure import (
     GexRegime,
@@ -250,7 +258,15 @@ class VannaFlowAnalyzer:
         if len(spots) < 2 or len(ivs) < 2:
             return None
 
-        # Basic Pearson Correlation Implementation
+        if _NDM_RUST_AVAILABLE:
+            try:
+                # O(N) compiled Rust SIMD-friendly extension
+                return ndm_rust.pearson_r(spots, ivs)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Rust math_engine error: {e}")
+
+        # Fallback: Basic Pearson Correlation Implementation (Python)
         n = len(spots)
         sum_x = sum(spots)
         sum_y = sum(ivs)
@@ -276,6 +292,15 @@ class VannaFlowAnalyzer:
         if current_corr is None or len(self._corr_history) < 10:
             return False
 
+        if _NDM_RUST_AVAILABLE:
+            try:
+                # O(1) compiled Rust scanner
+                return ndm_rust.detect_vanna_flip(now_mono, current_corr, list(self._corr_history))
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Rust detect_vanna_flip error: {e}")
+
+        # Fallback: Python implementation
         # Find correlation from ~2 minutes ago
         two_min_ago = now_mono - 120
         past_corr = None

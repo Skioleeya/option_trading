@@ -80,6 +80,7 @@ class DynamicWeightEngine:
         vanna_signal: dict[str, Any],
         mtf_signal: dict[str, Any],
         vib_signal: dict[str, Any],
+        micro_flow_signal: dict[str, Any] | None = None,
     ) -> FusedSignalResult:
         """Calculate fused directional signal.
 
@@ -98,6 +99,8 @@ class DynamicWeightEngine:
         w_vanna = settings.agent_g_vanna_weight
         w_mtf = settings.agent_g_mtf_weight
         w_vib = settings.agent_g_vib_weight  # PP-6 FIX: was hardcoded 0.20
+        # Phase 3: L2 Micro Flow component (OFI + BBO, academic Papers 1/3/4/5)
+        w_micro_flow = settings.agent_g_micro_flow_weight if micro_flow_signal else 0.0
 
         # Dynamic weight adjustments based on regime
         if self._iv_regime in (IVRegime.HIGH, IVRegime.EXTREME):
@@ -127,26 +130,33 @@ class DynamicWeightEngine:
             w_vib *= (1.0 + decay * 0.4)    # +40% weight at close
             w_wall *= (1.0 - decay * 0.3)   # -30% weight at close (pinning risk dissipates)
             w_iv *= (1.0 - decay * 0.2)     # -20% weight at close (historical relevance drops)
+            # Phase 3 Paper 5: Charm Surge zone OBI weight +35% near close
+            if w_micro_flow > 0:
+                w_micro_flow *= (1.0 + decay * 0.35)
 
-        # Normalize weights
-        total_w = w_iv + w_wall + w_vanna + w_mtf + w_vib
+        # Normalize weights (include micro_flow in total)
+        total_w = w_iv + w_wall + w_vanna + w_mtf + w_vib + w_micro_flow
         if total_w > 0:
             w_iv /= total_w
             w_wall /= total_w
             w_vanna /= total_w
             w_mtf /= total_w
             w_vib /= total_w
+            w_micro_flow /= total_w
 
         # Calculate directional score
         # +1 = BULLISH, -1 = BEARISH, 0 = NEUTRAL
         direction_map = {"BULLISH": 1.0, "BEARISH": -1.0, "NEUTRAL": 0.0}
 
+        # Resolve micro_flow component (default to NEUTRAL/0 if not provided)
+        _mf = micro_flow_signal or {"direction": "NEUTRAL", "confidence": 0.0}
         components = {
             "iv": {"direction": iv_signal["direction"], "confidence": iv_signal["confidence"], "weight": w_iv},
             "wall": {"direction": wall_signal["direction"], "confidence": wall_signal["confidence"], "weight": w_wall},
             "vanna": {"direction": vanna_signal["direction"], "confidence": vanna_signal["confidence"], "weight": w_vanna},
             "mtf": {"direction": mtf_signal["direction"], "confidence": mtf_signal["confidence"], "weight": w_mtf},
             "vib": {"direction": vib_signal["direction"], "confidence": vib_signal["confidence"], "weight": w_vib},
+            "micro_flow": {"direction": _mf["direction"], "confidence": _mf["confidence"], "weight": w_micro_flow},
         }
 
         weighted_score = 0.0
@@ -185,7 +195,7 @@ class DynamicWeightEngine:
         return FusedSignalResult(
             direction=direction,
             confidence=abs(weighted_confidence),
-            weights={"iv": w_iv, "wall": w_wall, "vanna": w_vanna, "mtf": w_mtf, "vib": w_vib},
+            weights={"iv": w_iv, "wall": w_wall, "vanna": w_vanna, "mtf": w_mtf, "vib": w_vib, "micro_flow": w_micro_flow},
             regime=regime,
             iv_regime=self._iv_regime,
             gex_intensity=self._gex_intensity,

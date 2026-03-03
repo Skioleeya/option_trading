@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { applyPatch } from 'fast-json-patch'
 import type { ConnectionStatus, DashboardPayload } from '../types/dashboard'
 
 const WS_URL = 'ws://localhost:8001/ws/dashboard'
@@ -28,8 +29,27 @@ export function useDashboardWS() {
         ws.onmessage = (evt) => {
             if (!mountedRef.current) return
             try {
-                const data: DashboardPayload = JSON.parse(evt.data)
+                const data: any = JSON.parse(evt.data)
                 if (data.type === 'keepalive') return
+
+                if (data.type === 'dashboard_delta') {
+                    setPayload(prev => {
+                        if (!prev) return prev;
+                        try {
+                            const result = applyPatch(prev, data.patch, false, false);
+                            return {
+                                ...(result.newDocument as DashboardPayload),
+                                heartbeat_timestamp: data.heartbeat_timestamp,
+                                timestamp: data.timestamp
+                            };
+                        } catch (e) {
+                            console.error("Failed to apply JSON patch", e);
+                            return prev;
+                        }
+                    });
+                    return;
+                }
+
                 // Merge instead of replace: preserve existing ui_state fields when
                 // a frame is incomplete (e.g. during agent early-returns or errors).
                 setPayload(prev => {

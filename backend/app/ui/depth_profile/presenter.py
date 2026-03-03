@@ -151,14 +151,20 @@ class DepthProfilePresenter:
             if hasattr(data, "get"):
                 raw_call = data.get("call_gex", 0.0) if data else 0.0
                 raw_put  = data.get("put_gex", 0.0)  if data else 0.0
+                raw_tox  = data.get("toxicity_score", 0.0) if data else 0.0
+                raw_bbo  = data.get("bbo_imbalance", 0.0)  if data else 0.0
             else:
                 raw_call = getattr(data, "call_gex", 0.0) if data else 0.0
                 raw_put  = getattr(data, "put_gex", 0.0)  if data else 0.0
+                raw_tox  = getattr(data, "toxicity_score", 0.0) if data else 0.0
+                raw_bbo  = getattr(data, "bbo_imbalance", 0.0)  if data else 0.0
 
             sk = f"{strike}"
             smoothed[strike] = {
                 "call_gex": _ema(f"call_{sk}", raw_call),
                 "put_gex":  _ema(f"put_{sk}",  raw_put),
+                "toxicity_score": raw_tox,
+                "bbo_imbalance": raw_bbo,
             }
 
         # ── Step 5: Stabilize normalization using asymmetric rise/fall EMA ────
@@ -216,6 +222,8 @@ class DepthProfilePresenter:
                 "is_spot":            is_spot,
                 "is_flip":            is_flip,
                 "strike_color":       strike_color,
+                "toxicity_score":     smoothed[strike]["toxicity_score"],
+                "bbo_imbalance":      smoothed[strike]["bbo_imbalance"],
             })
 
         return rows

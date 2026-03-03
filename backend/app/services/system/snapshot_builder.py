@@ -8,7 +8,6 @@ skeleton that would blank out the frontend components. If agent_data is
 stale or partially missing, ui_state is built from whatever is available.
 """
 
-import copy
 import logging
 from datetime import datetime
 from typing import Any, Optional
@@ -69,12 +68,13 @@ class SnapshotBuilder:
         spot = snapshot.get("spot")
 
         # Safely extract agent data — never short-circuit before building ui_state
-        agent_data = agent_result.model_dump() if agent_result else {}
+        # PP-L3G FIX: Use mode='json' to ensure datetime objects are stringified.
+        # This prevents TypeError in jsonpatch.make_patch during broadcast/shutdown.
+        agent_data = agent_result.model_dump(mode='json') if agent_result else {}
 
-        # RACE FIX (Race 4): deep-copy data_block so that injecting ui_state
-        # into it does NOT mutate the shared nested objects that may still be
-        # referenced by the previous _last_payload held by the broadcast loop.
-        data_block = copy.deepcopy(agent_data.get("data") or {})
+        # RACE FIX (Race 4): We avoid mutating the original pydantic dump by
+        # creating a shallow copy of the data_block before injecting ui_state.
+        data_block = agent_data.get("data") or {}
         b_data = data_block.get("agent_b", {}).get("data") or {}
         micro = (b_data.get("micro_structure") or {}).get("micro_structure_state") or {}
         
@@ -111,12 +111,15 @@ class SnapshotBuilder:
         # Net effect: new data wins; absent optional fields fall back to explicit null/[].
         if data_block:
             existing_ui = data_block.get("ui_state") or {}
-            data_block["ui_state"] = {
+            
+            # Create a new data block dict to avoid mutating the original in-place
+            new_data_block = dict(data_block)
+            new_data_block["ui_state"] = {
                 **SnapshotBuilder.UI_STATE_SKELETON,
                 **existing_ui,
                 **sb_additions,
             }
-            agent_data["data"] = data_block
+            agent_data["data"] = new_data_block
         else:
             agent_data["data"] = {
                 "ui_state": {**SnapshotBuilder.UI_STATE_SKELETON, **sb_additions}

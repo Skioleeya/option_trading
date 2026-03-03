@@ -9,7 +9,6 @@
 ```
 L1 快照 (snapshot)
      │
-     ├─→ AgentA (现货动量信号)
      ├─→ AgentB1 (期权结构 & 微观结构)
      │     ├─ GreeksExtractor
      │     ├─ IVVelocityTracker
@@ -17,6 +16,7 @@ L1 快照 (snapshot)
      │     ├─ VannaFlowAnalyzer
      │     ├─ MTFIVEngine (VSRSD)
      │     ├─ VolumeImbalanceEngine
+     │     ├─ DepthSignalSampler (Phase 3: ATM 聚合)
      │     └─ JumpDetector
      └─→ AgentG (顶层决策融合)
            ├─ DynamicWeightEngine
@@ -83,6 +83,14 @@ L1 快照 (snapshot)
 #### Volume Imbalance Engine (`VolumeImbalanceEngine`)
 计算当日 Call/Put 成交量不平衡度，输出 `{consensus, strength}`。
 
+#### Micro Flow Signal Component (Phase 3)
+聚合来自 `DepthEngine` 的实时微观指标：
+- **ATM 采样**: 聚合 Spot ± 3 点范围内的 `toxicity_score` 和 `bbo_imbalance`。
+- **混合逻辑**: 
+  - `micro_score = tox_weight × toxicity + bbo_weight × bbo`
+  - **自适应权重**: 负 GEX 时 `bbo_weight=0.6`（反映对冲紧迫性），正 GEX 时等权 (0.5/0.5) 或偏均值。
+- **门限**: `|micro_score| > 0.25` 触发方向信号。
+
 #### Jump Detector (`JumpDetector`)
 检测现货价格突然跳变（纸5 安全阀）：
 - `is_jump = True` 时立即触发 **P0.1 最高优先级锁单**，所有信号失效
@@ -144,6 +152,12 @@ fused_confidence (DynamicWeightEngine 输出)
 | `vanna_signal` | VannaFlowAnalyzer → 方向 + 置信度 |
 | `mtf_signal` | MTFIVEngine VSRSD → 方向 + 强度 |
 | `vib_signal` | VolumeImbalanceEngine → 共识 + 强度 |
+| `micro_flow` | Depth/Trade Engine → 混合得分 + 置信度 (Paper 1/3) |
+
+#### 学术依据 (Academic Baseline)
+- **Paper 1 (OFI)**: 市场商库存风险是首要驱动，ATM OFI 最具预测力。
+- **Paper 3 (0DTE SSRN 2024)**: 负 GEX 下买卖盘口不平衡与对冲行为高度相关。
+- **Paper 4/5**: 确定了 0.2-0.25 的噪音门限和 12% 的安全权重。
 
 输出: `FusedSignal(direction, confidence, weights, regime, iv_regime, gex_intensity, explanation, components)`
 

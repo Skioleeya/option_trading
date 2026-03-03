@@ -72,8 +72,13 @@ class ActiveOptionsPresenter:
         self._engine_g = FlowEngineG()
         self._composer = DEGComposer()
         self._oi_store = PersistentOIStore()
+        self._latest_payload: list[dict[str, Any]] = []
 
-    async def build(
+    def get_latest(self) -> list[dict[str, Any]]:
+        """Return the latest cached generated rows without blocking."""
+        return self._latest_payload
+
+    async def update_background(
         self,
         chain: list[dict[str, Any]],
         spot: float,
@@ -81,8 +86,8 @@ class ActiveOptionsPresenter:
         gex_regime: str = "NEUTRAL",
         redis: Any | None = None,
         limit: int = 5,
-    ) -> list[dict[str, Any]]:
-        """Run the full D+E+G pipeline and return UI-ready rows.
+    ) -> None:
+        """Run the full D+E+G pipeline and update the background cache.
 
         Args:
             chain:      Raw option chain (from OptionChainBuilder).
@@ -91,9 +96,6 @@ class ActiveOptionsPresenter:
             gex_regime: Current GEX regime string for adaptive weighting.
             redis:      Async Redis client (None → G engine degrades gracefully).
             limit:      Number of rows to return (default 5).
-
-        Returns:
-            List of dicts ready for the frontend ActiveOptions component.
         """
         # 1. Filter by minimum volume
         min_vol = settings.flow_active_min_volume
@@ -137,8 +139,8 @@ class ActiveOptionsPresenter:
         # 6. Sort by |flow_deg| descending and slice to limit
         top = sorted(outputs, key=lambda o: abs(o.flow_deg), reverse=True)[:limit]
 
-        # 7. Format for frontend
-        return [self._format_row(o) for o in top]
+        # 7. Format for frontend and store
+        self._latest_payload = [self._format_row(o) for o in top]
 
     @staticmethod
     def _format_row(o: FlowEngineOutput) -> dict[str, Any]:

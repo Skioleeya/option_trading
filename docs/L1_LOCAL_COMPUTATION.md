@@ -40,6 +40,13 @@
 5. 暴露度累积
    vanna_exp = vanna_i × OI_i × Multiplier
    charm_exp = charm_i × OI_i × Multiplier
+
+6. 订单流微观结构 (`DepthEngine`)
+   - **Toxicity Score**: 基于逐笔成交 (SubType.Trade) 计算的 volume-weighted 方向。
+     `toxicity = EWMA( (buy_vol - sell_vol) / total_vol )`
+   - **BBO Imbalance**: 基于盘口深度 (SubType.Depth) 计算的买卖挂单失衡。
+     `imbalance = EWMA( (bid_qty - ask_qty) / (bid_qty + ask_qty) )`
+   - **平滑因子**: 使用 EWMA (alpha=0.1) 抑制高频报价噪音，保留微观趋势。
 ```
 
 **时间衰减参数**: `get_trading_time_to_maturity(now)` → 使用交易时间（而非日历时间）计算 TTM，精确到 0DTE 当日剩余交易秒数。
@@ -115,6 +122,7 @@ t_years = 剩余秒数 / (252 × 6.5 × 3600)
 | 文件 | 职责 |
 |------|------|
 | `services/feeds/option_chain_builder.py` | `_enrich_chain_with_local_greeks()` — BSM 丰富 + 聚合 |
+| `services/analysis/depth_engine.py` | `DepthEngine` — Toxicity 与 BBO Imbalance 计算 |
 | `services/analysis/bsm.py` | BSM 公式：`compute_greeks`, `skew_adjust_iv`, `get_trading_time_to_maturity` |
 | `agents/services/greeks_extractor.py` | 聚合 → 高级指标（ATM IV、Walls、Gamma Profile） |
 | `services/feeds/iv_baseline_sync.py` | `iv_cache` / `oi_cache` 提供 IV 和 OI 给 BSM |

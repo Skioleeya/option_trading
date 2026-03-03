@@ -29,15 +29,15 @@
                                │  snapshot (已含 aggregate_greeks)
 ┌─────────────────────────────▼───────────────────────────────────┐
 │                     L1 — 本地计算层                              │
-│  BSM Greeks · Skew 调整 · GEX聚合 · Gamma Wall定位              │
-│  app/services/feeds/option_chain_builder._enrich_chain()         │
+│  BSM Greeks · Skew 调整 · GEX 聚合 · DepthEngine (微观结构)     │
+│  GreeksExtractor · app/services/analysis/depth_engine.py         │
 │  app/services/analysis/bsm.py · app/agents/services/            │
 └─────────────────────────────┬───────────────────────────────────┘
                                │  raw quotes (in-memory dict)
 ┌─────────────────────────────▼───────────────────────────────────┐
 │                     L0 — 数据摄取层                              │
-│  Tier1 WS (0/1DTE 实时推送) · Tier2 REST 2DTE · Tier3 周期权    │
-│  IVBaselineSync · APIRateLimiter (8 req/s)                       │
+│  Tier1 WS (含 SubType.Depth/Trade) · Tier2 REST · Tier3 周期权   │
+│  Dynamic ATM Subscription Policy · IVBaselineSync                │
 │  app/services/feeds/ · Longport OpenAPI SDK                      │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -51,16 +51,18 @@
    └─ 返回内存中已有 WS 推送数据，零延迟
 
 2. L1: _enrich_chain_with_local_greeks()
-   └─ 单次遍历：BSM 计算各合约 Greeks → 累积 Net GEX / Vanna / Charm
+   ├─ 单次遍历：BSM 计算各合约 Greeks → 累积 Net GEX / Vanna / Charm
+   └─ DepthEngine: 处理成交逐笔与盘口深度 → 产生 toxicity_score / bbo_imbalance
 
 3. L2: AgentG.run(snapshot)
    a. AgentB1.run(snapshot)
       ├─ GreeksExtractor → ATM IV, Gamma Walls, Flip Level
-      ├─ VannaFlowAnalyzer → GEX制度, momentum_slope_multiplier
+      ├─ VannaFlowAnalyzer → GEX 制度, momentum_slope_multiplier
       ├─ WallMigrationTracker → Call/Put Wall 位移
-      ├─ IVVelocityTracker → IV速度制度 (1m/5m/15m)
+      ├─ IVVelocityTracker → IV 速率制度 (1m/5m/15m)
       ├─ MTFIVEngine (VSRSD) → 多时间框架共识
-      ├─ VolumeImbalanceEngine → C/P量不平衡
+      ├─ VolumeImbalanceEngine → C/P 量不平衡
+      ├─ Depth Signal (Phase 3): 聚合 ATM 毒性与盘口失衡 (micro_flow)
       └─ JumpDetector → 跳变检测（P0.1 安全阀）
    b. AgentA.run(snapshot, slope_multiplier)
       └─ 现货动量方向
@@ -68,8 +70,8 @@
       ├─ P0.1 Jump Gate → HOLD
       ├─ P0.5 VRP Veto → NO_TRADE
       ├─ P1 陷阱优先
-      ├─ P1.5 融合高置信度 (DynamicWeightEngine)
-      └─ P2 趋势确认 (A + GEX方向)
+      ├─ P1.5 融合高置信度 (DynamicWeightEngine 加入 micro_flow)
+      └─ P2 趋势确认 (A + GEX 方向)
 
 4. L3: SnapshotBuilder.build(snapshot, agent_result, atm_decay)
    └─ 合并 AgentG ui_state + Wall Migration + Depth Profile + ATM数据
