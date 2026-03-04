@@ -1,0 +1,22 @@
+# config/signals/jump_sentinel.yaml
+# Jump Sentinel — detects price jump events that should suppress signals
+
+signal_name: "jump_sentinel"
+version: "1.0"
+description: "Detects spot price jumps using rolling volatility. Outputs 0 = normal, 1 = jump detected."
+
+inputs:
+  - feature: "spot_roc_1m"
+    transform: "abs"
+
+parameters:
+  # Jump detection threshold (multiple of rolling std)
+  jump_sigma_threshold: 3.0       # |ROC| > 3σ → jump
+  # Rolling window for std calculation (number of ticks)
+  rolling_window_ticks: 60
+  # Jump signal duration (how many ticks to maintain HALT signal)
+  jump_hold_ticks: 5
+  # Minimum ROC for jump (absolute, fractional)
+  min_jump_roc: 0.004             # minimum 0.4% move to be a jump
+
+output_type: "binary"             # 0 = NEUTRAL (safe), 1 = JUMP (suppress)
