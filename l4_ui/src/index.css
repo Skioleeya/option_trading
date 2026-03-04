@@ -1,0 +1,242 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Core Base */
+  --bg-primary: #0a0a0a;
+  --bg-card: #161616;
+  --bg-border: #222222;
+
+  /* Asian Dragon Market Colors */
+  --market-up: #ef4444;
+  /* Red for Call / Positive */
+  --market-down: #10b981;
+  /* Green for Put / Negative */
+  --market-neutral: #71717a;
+
+  /* UI Accents */
+  --accent-green: #00d68f;
+  --accent-red: #ff4d6d;
+  --accent-amber: #f59e0b;
+  --accent-purple: #a855f7;
+  --accent-cyan: #06b6d4;
+  --accent-blue: #3b82f6;
+
+  /* Wall & Highlighting Variants */
+  --wall-call-bg: #2a1318;
+  --wall-put-bg: #0f2115;
+  --wall-highlight-border: rgba(245, 158, 11, 0.7);
+  --wall-highlight-bg: rgba(245, 158, 11, 0.08);
+  --spot-highlight-bg: rgba(255, 255, 255, 0.05);
+
+  /* Typography */
+  --text-primary: #e4e4e7;
+  --text-secondary: #71717a;
+  --text-muted: #3f3f46;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0a0a0a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Glassmorphism */
+.glass {
+  background: rgba(16, 16, 16, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Monospace values */
+.mono {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+/* Section headers */
+.section-header {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* Badge variants */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.badge-amber {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.badge-red {
+  background: rgba(255, 77, 109, 0.15);
+  color: #ff4d6d;
+  border: 1px solid rgba(255, 77, 109, 0.4);
+}
+
+.badge-green {
+  background: rgba(0, 214, 143, 0.15);
+  color: #00d68f;
+  border: 1px solid rgba(0, 214, 143, 0.4);
+}
+
+.badge-purple {
+  background: rgba(168, 85, 247, 0.15);
+  color: #a855f7;
+  border: 1px solid rgba(168, 85, 247, 0.4);
+}
+
+.badge-cyan {
+  background: rgba(6, 182, 212, 0.15);
+  color: #06b6d4;
+  border: 1px solid rgba(6, 182, 212, 0.4);
+}
+
+.badge-neutral {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Hollow badges (transparent bg, solid border) */
+.badge-hollow-purple {
+  background: transparent;
+  color: #a855f7;
+  border: 1px solid #7c3aed;
+}
+
+.badge-hollow-amber {
+  background: transparent;
+  color: #fbbf24;
+  border: 1px solid #f59e0b;
+}
+
+.badge-hollow-cyan {
+  background: transparent;
+  color: #22d3ee;
+  border: 1px solid #06b6d4;
+}
+
+/* Badge: Hollow Green — DAMPING / 稳定对冲区 */
+.badge-hollow-green {
+  background: transparent;
+  color: #00d68f;
+  border: 1px solid rgba(0, 214, 143, 0.6);
+}
+
+/* Badge: Red Dim — 上涨动能 (亚洲龙：红=涨) 暗调版 */
+.badge-red-dim {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+/* Progress bar */
+.progress-track {
+  height: 3px;
+  background: #222;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.5s ease;
+}
+
+/* Panel dividers */
+.panel-border-right {
+  border-right: 1px solid #1e1e1e;
+}
+
+.panel-border-bottom {
+  border-bottom: 1px solid #1e1e1e;
+}
+
+/* Animated dot */
+@keyframes pulse-dot {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.dot-live {
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+/* Depth bar animation */
+@keyframes bar-expand {
+  from {
+    width: 0;
+  }
+
+  to {
+    width: var(--bar-width);
+  }
+}
+
+/* Value flash */
+@keyframes flash-value {
+  0% {
+    color: #fbbf24;
+  }
+
+  100% {
+    color: inherit;
+  }
+}
+
+.value-updated {
+  animation: flash-value 0.4s ease-out;
+}

@@ -1,0 +1,28 @@
+# config/signals/micro_flow.yaml
+# Micro Flow Signal — VPIN + BBO composite microstructure signal
+
+signal_name: "micro_flow"
+version: "2.0"
+description: "VPIN toxicity + BBO imbalance + volume acceleration composite"
+
+inputs:
+  - feature: "vpin_composite"
+    transform: "none"
+  - feature: "bbo_imbalance_ewma"
+    transform: "none"
+  - feature: "vol_accel_ratio"
+    transform: "none"
+
+parameters:
+  # Weights for composite
+  weight_vpin: 0.40
+  weight_bbo: 0.40
+  weight_vol_accel: 0.20
+  # VPIN toxicity threshold (above → HIGH_TOXICITY gate)
+  vpin_toxicity_threshold: 0.25
+  # BBO persistence threshold
+  bbo_persistence_threshold: 0.3
+  # Directional threshold
+  directional_threshold: 0.15
+
+output_type: "continuous"

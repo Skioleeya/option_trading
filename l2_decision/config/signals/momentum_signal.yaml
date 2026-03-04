@@ -1,0 +1,25 @@
+# config/signals/momentum_signal.yaml
+# Momentum Signal Generator — VWAP-based directional bias
+# Migrated from: backend/app/agents/agent_a.py
+
+signal_name: "momentum_signal"
+version: "2.0"
+description: "VWAP-anchored spot momentum — classifies short-term directional bias"
+
+inputs:
+  - feature: "spot_roc_1m"
+    transform: "none"
+  - feature: "bbo_imbalance_ewma"
+    transform: "none"
+
+parameters:
+  # ROC threshold to classify as directional (fractional)
+  roc_bull_threshold: 0.0015      # +0.15% per minute = BULLISH
+  roc_bear_threshold: -0.0015     # -0.15% per minute = BEARISH
+  # BBO confirmation requirement (signal must align)
+  bbo_confirmation_min: 0.1       # |bbo| > 0.1 to confirm direction
+  # Confidence scaling
+  max_roc_reference: 0.005        # 0.5% ROC → 100% confidence
+  confidence_floor: 0.3           # minimum confidence when directional
+
+output_type: "categorical"        # BULLISH | BEARISH | NEUTRAL
