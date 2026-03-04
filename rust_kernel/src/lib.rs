@@ -1,4 +1,5 @@
 use pyo3::prelude::*;
+use numpy::{PyArray1, PyReadonlyArray1};
 
 /// Computes the Pearson correlation coefficient between two slices of f64.
 /// 
@@ -144,6 +145,50 @@ fn compute_vol_accel(
     Ok((new_ema, ratio))
 }
 
+/// Phase 2: Zero-Copy Bridge Test
+/// Accepts contiguous Python float32 (NumPy) arrays directly as C-layout memory.
+#[pyfunction]
+#[pyo3(signature = (spots, strikes, ivs, is_call))]
+fn compute_from_arrays<'py>(
+    _py: Python<'py>,
+    spots: PyReadonlyArray1<'py, f32>,
+    strikes: PyReadonlyArray1<'py, f32>,
+    ivs: PyReadonlyArray1<'py, f32>,
+    is_call: PyReadonlyArray1<'py, bool>, // Numpy uses 1 byte per bool
+) -> PyResult<u32> {
+    // 1. Borrow raw C-contiguous memory slices without copying
+    // Safety: we must guarantee that the Python GC does not move or drop the underlying NumPy array.
+    // PyReadonlyArray1 already enforces this via the PyO3 GIL lock.
+    let spots_slice = unsafe { spots.as_slice().unwrap() };
+    let strikes_slice = unsafe { strikes.as_slice().unwrap() };
+    let ivs_slice = unsafe { ivs.as_slice().unwrap() };
+    let is_call_slice = unsafe { is_call.as_slice().unwrap() };
+
+    let n = spots_slice.len();
+    if n != strikes_slice.len() || n != ivs_slice.len() || n != is_call_slice.len() {
+        return Err(pyo3::exceptions::PyValueError::new_err("Array length mismatch"));
+    }
+
+    // 2. Demonstration of processing the native pointers
+    let mut black_hole_accumulator = 0.0f32;
+    for i in 0..n {
+        let spot = spots_slice[i];
+        let strk = strikes_slice[i];
+        let iv = ivs_slice[i];
+        let call = is_call_slice[i];
+        
+        // Dummy math to prove memory access is valid and fast
+        if call {
+            black_hole_accumulator += spot * iv - strk;
+        } else {
+            black_hole_accumulator += strk * iv - spot;
+        }
+    }
+
+    // Return the length to prove processing completed
+    Ok(n as u32)
+}
+
 /// A Python module implemented in Rust.
 #[pymodule]
 fn rust_kernel(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -151,5 +196,6 @@ fn rust_kernel(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(detect_vanna_flip, m)?)?;
     m.add_function(wrap_pyfunction!(update_vpin_logic, m)?)?;
     m.add_function(wrap_pyfunction!(compute_vol_accel, m)?)?;
+    m.add_function(wrap_pyfunction!(compute_from_arrays, m)?)?;
     Ok(())
 }
