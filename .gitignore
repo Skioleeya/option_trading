@@ -40,6 +40,7 @@ desktop.ini
 
 # Logs
 *.log
+logs/*.json
 
 # Redis binary (too large for git)
 infra/bin/

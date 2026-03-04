@@ -50,13 +50,21 @@ const formatET = (time: number) =>
         hour12: false, hour: '2-digit', minute: '2-digit',
     })
 
+/**
+ * Gate: keep only intraday ticks.
+ * Lower bound: 09:25 ET (pre-market warm-up allowed).
+ * Upper bound: 20:00 ET — covers RTH (09:30–16:00), SPY option late close
+ * (16:15), and any after-hours decay monitoring.
+ * Previously capped at 16:15, which silently dropped ALL decay ticks
+ * computed after market close during after-hours testing.
+ */
 function isMarketHours(ts: string): boolean {
     const s = new Date(ts).toLocaleTimeString('en-US', {
         timeZone: 'America/New_York', hour: 'numeric', minute: 'numeric', hour12: false,
     })
     const [h, m] = s.split(':').map(Number)
     const t = h * 100 + m
-    return t >= 925 && t <= 1615
+    return t >= 925 && t <= 2000
 }
 
 function buildPoints(data: AtmDecay[], key: keyof AtmDecay) {
@@ -70,6 +78,7 @@ function buildPoints(data: AtmDecay[], key: keyof AtmDecay) {
         }, [])
         .sort((a, b) => (a.time as number) - (b.time as number))
 }
+
 
 // ── Component ─────────────────────────────────────────────────────────────────
 // The return type of chart.addSeries(LineSeries, ...) per the official v5 docs is
@@ -174,7 +183,10 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
         if (!chart || !srs.length || !data.length) return
 
         if (!initialised.current) {
-            // Full initial load
+            // Full initial load — only committed when at least one series has data.
+            // If all points are filtered (e.g. outside market window), skip so the
+            // next tick retries the full-load path instead of silently locking out.
+            let anyDataLoaded = false
             SERIES_CFG.forEach(({ key }, i) => {
                 const pts = buildPoints(data, key)
                 if (pts.length) {
@@ -183,11 +195,15 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
                     if (lastPt) {
                         lastTimeRef.current = Math.max(lastTimeRef.current, lastPt.time as number)
                     }
+                    anyDataLoaded = true
                 }
             })
-            chart.timeScale().fitContent()
-            initialised.current = true
-            prevLen.current = data.length
+            if (anyDataLoaded) {
+                chart.timeScale().fitContent()
+                initialised.current = true
+                prevLen.current = data.length
+            }
+            // If no data yet, leave initialised=false so we retry on next tick
         } else {
             // Incremental tick append
             const delta = data.length - prevLen.current
@@ -210,6 +226,7 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
             prevLen.current = data.length
         }
     }, [data])
+
 
 
     return (

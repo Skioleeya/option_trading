@@ -54,6 +54,10 @@ class SubscriptionManager:
     def symbol_to_strike(self) -> dict[str, float]:
         return self._symbol_to_strike
 
+    def resolve_strike(self, symbol: str) -> float | None:
+        """Resolve strike for a given symbol."""
+        return self._symbol_to_strike.get(symbol)
+
     async def refresh(self, ctx: QuoteContext, spot: float | None, mandatory_symbols: set[str] | None = None) -> set[str]:
         """Collect core symbols and sync subscriptions. Returns the target set."""
         target_set = await self._collect_core_symbols(ctx, spot)

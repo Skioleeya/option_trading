@@ -25,6 +25,10 @@ class DepthProfilePresenterV2:
 
         Delegates EMA computation and sticky-cache to the legacy presenter.
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"[DepthProfilePresenterV2] build called with {len(per_strike_gex) if per_strike_gex else 0} strikes, spot={spot}")
+
         try:
             from l3_assembly.presenters.ui.depth_profile.presenter import DepthProfilePresenter
             raw_rows: list[dict[str, Any]] = DepthProfilePresenter.build(
@@ -32,7 +36,9 @@ class DepthProfilePresenterV2:
                 spot=spot,
                 flip_level=flip_level,
             )
-        except ImportError:
+            logger.warning(f"[DepthProfilePresenterV2] inner build returned {len(raw_rows)} rows")
+        except Exception as e:
+            logger.error(f"[DepthProfilePresenterV2] inner build FAILED: {repr(e)}")
             raw_rows = []
 
         rows = []
@@ -47,18 +53,19 @@ class DepthProfilePresenterV2:
     @staticmethod
     def _row_from_dict(d: dict[str, Any]) -> DepthProfileRow:
         import math
-        call_gex = float(d.get("call_gex", 0.0) or 0.0)
-        put_gex = float(d.get("put_gex", 0.0) or 0.0)
+        call_pct = float(d.get("call_pct", 0.0) or 0.0)
+        put_pct = float(d.get("put_pct", 0.0) or 0.0)
         # Guard against NaN/Inf from EMA on first tick
-        if not math.isfinite(call_gex):
-            call_gex = 0.0
-        if not math.isfinite(put_gex):
-            put_gex = 0.0
+        if not math.isfinite(call_pct):
+            call_pct = 0.0
+        if not math.isfinite(put_pct):
+            put_pct = 0.0
         return DepthProfileRow(
             strike=float(d.get("strike", 0.0) or 0.0),
-            call_gex=call_gex,
-            put_gex=put_gex,
-            is_atm=bool(d.get("is_atm", False)),
+            call_pct=call_pct,
+            put_pct=put_pct,
+            is_atm=bool(d.get("is_spot", False)), # Map legacy `is_spot` to `is_atm`
             is_flip=bool(d.get("is_flip", False)),
-            pct_max=float(d.get("pct_max", 0.0) or 0.0),
+            is_dominant_put=bool(d.get("is_dominant_put", False)),
+            is_dominant_call=bool(d.get("is_dominant_call", False)),
         )

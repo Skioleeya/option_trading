@@ -26,7 +26,7 @@ import {
 // Config (kept identical to original for easy comparison)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const WS_URL = 'ws://localhost:8000/ws/dashboard'
+const WS_URL = 'ws://localhost:8001/ws/dashboard'
 const RECONNECT_DELAY_MS = 2000
 const MAX_RECONNECT_DELAY_MS = 30_000
 

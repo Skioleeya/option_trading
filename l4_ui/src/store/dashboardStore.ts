@@ -136,7 +136,10 @@ function extractIvPct(p: DashboardPayload): number | null {
 }
 
 function extractAtm(p: DashboardPayload): AtmDecay | null {
-    return p?.agent_g?.data?.ui_state?.atm ?? null
+    // FrozenPayload.to_dict() places atm at the payload root (payload.atm),
+    // NOT inside agent_g.data.ui_state. UIState.to_dict() emits no 'atm' key.
+    // Fallback to ui_state.atm kept for forward-compat if schema is ever mirrored.
+    return p?.atm ?? p?.agent_g?.data?.ui_state?.atm ?? null
 }
 
 /**

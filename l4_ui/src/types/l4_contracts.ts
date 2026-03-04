@@ -61,17 +61,11 @@ export interface L4MicroStats {
  * shape for zero component prop change.
  */
 export interface L4WallMigrationRow {
-    type_label: string
-    type_bg: string
-    type_text: string
-    h1: number | null
-    h2: number | null
-    current: number | null
-    dot_color: string
-    current_border: string
-    current_bg: string
-    current_shadow: string
-    current_text: string
+    label: string
+    strike: number | null
+    state: string
+    history: number[]
+    lights: Record<string, string>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

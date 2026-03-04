@@ -41,8 +41,8 @@ class IVBaselineSync:
         self.oi_cache: dict[str, int] = {}            # symbol -> open_interest
         # PP-2/3 FIX: per-symbol spot reference (replaces single global float).
         # Each symbol now records the spot price at the moment its IV was
-        # fetched from REST, so skew_adjust_iv always uses the correct baseline.
         self.spot_at_sync: dict[str, float] = {}     # symbol -> spot @ IV-sync time
+        self._on_update: Callable[[str, Any], None] | None = None
         self._task: asyncio.Task | None = None
         self._warming_up = False
         self._limiter = rate_limiter
@@ -99,11 +99,13 @@ class IVBaselineSync:
             self.oi_cache[symbol] = oi
 
     def start(self, ctx: QuoteContext, get_symbols_fn: Callable[[], set[str]],
-              get_spot_fn: Callable[[], float | None]) -> None:
+              get_spot_fn: Callable[[], float | None],
+              on_update: Callable[[str, Any], None] | None = None) -> None:
         """Start the background sync loop."""
         self._ctx = ctx
         self._get_symbols = get_symbols_fn
         self._get_spot = get_spot_fn
+        self._on_update = on_update
         if self._task is None:
             self._task = asyncio.create_task(self._loop_task())
 
@@ -132,14 +134,14 @@ class IVBaselineSync:
             batch_size = 50
             for i in range(0, len(symbols), batch_size):
                 batch = symbols[i:i + batch_size]
-                logger.warning(f"[IVSync] Warm-up batch {i//batch_size + 1}/{len(symbols)//batch_size + 1} starting...")
+                logger.warning(f"[IVSync] Warm-up batch {i//batch_size + 1} STARTING (batch size {len(batch)})...")
                 async with self._limiter.acquire():
                     try:
-                        logger.warning(f"[IVSync] Calling calc_indexes for {len(batch)} symbols...")
                         results = self._ctx.calc_indexes(
                             batch, [CalcIndex.ImpliedVolatility, CalcIndex.OpenInterest]
                         )
-                        logger.warning(f"[IVSync] Received {len(results or [])} items.")
+                        n_res = len(results or [])
+                        logger.warning(f"[IVSync] Batch SUCCESS: Received {n_res} results.")
                         for item in results:
                             iv_raw = item.implied_volatility
                             iv = None
@@ -158,6 +160,8 @@ class IVBaselineSync:
                                 except (ValueError, TypeError): pass
                                 
                             self.apply_iv_update(item.symbol, iv, oi)
+                            if self._on_update:
+                                self._on_update(item.symbol, item)
                             if spot is not None:
                                 self.spot_at_sync[item.symbol] = spot
                     except Exception as e:
@@ -177,15 +181,32 @@ class IVBaselineSync:
     # --- Internal ---
 
     async def _loop_task(self) -> None:
-        """Background loop: staggered sync then sleep."""
+        """Background loop: initial warm-up, then staggered sync every 60s."""
+        logger.warning("[IVSync] Background loop task STARTED.")
+        
+        # ── Initial warm-up: populate iv_cache before the first L1 tick ──
+        # Wait briefly for subscriptions to arrive before fetching IV
+        await asyncio.sleep(3.0)
+        try:
+            symbols = list(self._get_symbols())
+            if symbols:
+                logger.info("[IVSync] Triggering initial warm_up for %d symbols.", len(symbols))
+                await self.warm_up(symbols)
+            else:
+                logger.warning("[IVSync] No symbols yet for initial warm_up — will retry in 60s loop.")
+        except Exception as e:
+            logger.error("[IVSync] Initial warm_up failed: %s", e)
+        
         while True:
             try:
                 symbols = self._get_symbols()
                 if symbols:
                     await self._staggered_sync(list(symbols))
+                else:
+                    logger.debug("[IVSync] No symbols to sync.")
             except Exception as e:
                 logger.error(f"[IVBaselineSync] Loop error: {e}")
-            await asyncio.sleep(60)  # Refresh every 60s: calc_indexes is the ONLY IV source (WS never carries IV)
+            await asyncio.sleep(60)  # Refresh every 60s
 
     async def _staggered_sync(self, symbols: list[str]) -> None:
         """2-chunk staggered sync: ATM chunk first, then OTM chunk.
@@ -246,6 +267,8 @@ class IVBaselineSync:
                                 except (ValueError, TypeError): pass
                                 
                             self.apply_iv_update(item.symbol, iv, oi)
+                            if self._on_update:
+                                self._on_update(item.symbol, item)
                             # PP-2/3 FIX: per-symbol spot ref recorded at batch time
                             if spot_ref_now is not None:
                                 self.spot_at_sync[item.symbol] = spot_ref_now

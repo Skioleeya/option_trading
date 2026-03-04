@@ -102,6 +102,7 @@ class PayloadAssemblerV2:
             signal=signal,
             ui_state=ui_state,
             atm=atm_decay,
+            atm_iv=snap_data.atm_iv,
         )
 
         logger.debug(
@@ -119,6 +120,7 @@ class PayloadAssemblerV2:
         # L1 EnrichedSnapshot (typed)
         if hasattr(snapshot, "spot") and hasattr(snapshot, "aggregates"):
             data.spot = float(snapshot.spot or 0.0)
+            data.atm_iv = float(snapshot.aggregates.atm_iv or 0.0)
             data.flip_level = float(snapshot.aggregates.flip_level or 0.0)
             data.snapshot_time = getattr(snapshot, "computed_at", None)
             # Chain → per_strike_gex (legacy presenters expect list[dict])
@@ -132,11 +134,11 @@ class PayloadAssemblerV2:
                         data.per_strike_gex = list(chain)
                 except Exception:
                     data.per_strike_gex = []
-            return data
 
         # Legacy dict (from OptionChainBuilder.fetch_chain())
-        if isinstance(snapshot, dict):
+        elif isinstance(snapshot, dict):
             data.spot = float(snapshot.get("spot", 0.0) or 0.0)
+            data.atm_iv = float(snapshot.get("atm_iv", snapshot.get("spy_atm_iv", 0.0)) or 0.0)
             data.snapshot_time = snapshot.get("as_of")
             data.volume_map = snapshot.get("volume_map") or {}
 
@@ -292,7 +294,7 @@ class _SnapshotData:
     Not exposed as a public API.
     """
     __slots__ = (
-        "spot", "flip_level", "snapshot_time", "gex_regime", "vanna_state",
+        "spot", "atm_iv", "flip_level", "snapshot_time", "gex_regime", "vanna_state",
         "momentum", "vrp", "vrp_state", "net_charm", "svol_corr", "svol_state",
         "fused_signal_direction", "wall_dyn", "wall_migration_data",
         "per_strike_gex", "mtf_consensus", "skew_dynamics", "volume_map",
@@ -300,6 +302,7 @@ class _SnapshotData:
 
     def __init__(self) -> None:
         self.spot: float = 0.0
+        self.atm_iv: float = 0.0
         self.flip_level: float = 0.0
         self.snapshot_time: Any = None
         self.gex_regime: str = "NEUTRAL"

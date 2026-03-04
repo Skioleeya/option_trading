@@ -10,21 +10,11 @@ const selectWallMigration = (s: ReturnType<typeof useDashboardStore.getState>) =
     s.payload?.agent_g?.data?.ui_state?.wall_migration ?? null
 
 interface PropTableRow {
-    type_label: string
-    type_bg: string
-    type_text: string
-    h1: number | null
-    h2: number | null
-    current: number | null
-    dot_color: string
-    current_border: string
-    current_bg: string
-    current_shadow: string
-    current_text: string
-    current_pulse: string
-    wall_dyn_badge: string
-    wall_dyn_color: string
+    label: string
+    strike: number | null
     state: string
+    history: number[]
+    lights: Record<string, string>
 }
 
 interface Props {
@@ -55,7 +45,7 @@ export const WallMigration: React.FC<Props> = memo(({ rows: propRows }) => {
             </div>
 
             {rows.map((row, i) => {
-                const isCall = row.type_label === 'C'
+                const isCall = row.label === 'C'
                 const baseColor = isCall ? '#ef4444' : '#10b981'
                 const baseBorder = isCall ? 'rgba(239,68,68,0.3)' : 'rgba(16,185,129,0.3)'
                 const baseBg = isCall ? 'rgba(69,10,10,0.5)' : 'rgba(2,44,34,0.5)'
@@ -63,30 +53,33 @@ export const WallMigration: React.FC<Props> = memo(({ rows: propRows }) => {
                 const isDecaying = row.state.includes('DECAYING')
                 const isReinforced = row.state.includes('REINFORCED')
                 const isRetreating = row.state.includes('RETREATING')
-                const badgeColor = row.wall_dyn_color || '#a1a1aa'
+                const badgeColor = row.lights?.wall_dyn_color || '#a1a1aa'
+
+                const h1 = row.history && row.history.length > 0 && row.history[0] ? row.history[0] : null;
+                const h2 = row.history && row.history.length > 1 && row.history[1] ? row.history[1] : null;
 
                 return (
                     <div key={i} className="flex items-center gap-1 px-1 relative">
                         <div className="w-6 h-[22px] flex items-center justify-center text-[10px] font-black flex-shrink-0 rounded-[2px]"
                             style={{ color: baseColor, border: `1px solid ${baseBorder}`, backgroundColor: baseBg }}>
-                            {row.type_label}
+                            {row.label}
                         </div>
 
                         <div className="flex-1 flex items-center justify-center h-[22px] bg-[#0a0a0a] border border-white/[0.03] rounded-[2px]">
                             <span className="font-mono text-[11px] font-medium text-[#3f3f46]">
-                                {row.h1 != null ? fmtPrice(row.h1) : '—'}
+                                {h1 != null && h1 > 0 ? fmtPrice(h1) : '—'}
                             </span>
                         </div>
 
                         <div className="flex-1 flex items-center justify-center h-[22px] bg-[#0a0a0a] border border-white/[0.06] rounded-[2px]">
                             <span className="font-mono text-[11px] font-medium text-[#71717a]">
-                                {row.h2 != null ? fmtPrice(row.h2) : '—'}
+                                {h2 != null && h2 > 0 ? fmtPrice(h2) : '—'}
                             </span>
                         </div>
 
                         <div className="flex-1 flex items-center justify-center h-[22px] relative overflow-hidden rounded-[2px] transition-colors duration-300"
                             style={{
-                                border: `1px solid ${row.current_border || 'rgba(255,255,255,0.1)'}`,
+                                border: `1px solid ${row.lights?.current_border || 'rgba(255,255,255,0.1)'}`,
                                 backgroundColor: isDecaying ? '#060606' : 'rgba(18,18,20,0.8)',
                             }}>
                             {isBreached && <div className="absolute inset-0 shadow-[inset_0_0_8px_rgba(255,255,255,0.3)] pointer-events-none"></div>}
@@ -96,14 +89,14 @@ export const WallMigration: React.FC<Props> = memo(({ rows: propRows }) => {
                             <span className={`font-mono text-[12px] relative z-10 ${isDecaying ? 'text-[#52525b] font-medium' :
                                 isBreached ? 'text-white font-black drop-shadow-[0_0_4px_rgba(255,255,255,0.8)]' :
                                     'text-[#e4e4e7] font-bold'}`}>
-                                {row.current != null ? fmtPrice(row.current) : '—'}
+                                {row.strike != null && row.strike > 0 ? fmtPrice(row.strike) : '—'}
                             </span>
                         </div>
 
                         <div className="w-[54px] flex items-center justify-end pl-1 flex-shrink-0">
                             <span className={`text-[9px] font-mono font-bold tracking-wider truncate ${isBreached ? 'animate-pulse' : ''}`}
                                 style={{ color: badgeColor, textShadow: isDecaying ? 'none' : `0 0 6px ${badgeColor}60` }}>
-                                {row.wall_dyn_badge}
+                                {row.lights?.wall_dyn_badge || row.state}
                             </span>
                         </div>
                     </div>

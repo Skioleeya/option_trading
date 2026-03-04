@@ -52,7 +52,9 @@ from longport.openapi import Config
 
 from shared.config import settings
 from l0_ingest.feeds.market_data_gateway import MarketDataGateway
-from l0_ingest.feeds.sanitization import SanitizationPipeline, RawMarketEvent
+from l0_ingest.feeds.sanitization import (
+    SanitizationPipeline, RawMarketEvent, CleanQuoteEvent, EventType, _infer_opt_type
+)
 from l0_ingest.feeds.chain_state_store import ChainStateStore
 from l0_ingest.feeds.feed_orchestrator import FeedOrchestrator
 from l1_compute.analysis.greeks_engine import GreeksEngine
@@ -130,14 +132,32 @@ class OptionChainBuilder:
             
             # OI hot-start from disk
             today_str = datetime.now(ZoneInfo("US/Eastern")).strftime("%Y%m%d")
-            preloaded = self._iv_sync.preload_oi_from_disk(today_str)
-            logger.info(f"[OptionChainBuilder] OI preloaded: {preloaded} symbols")
+            preloaded_count = self._iv_sync.preload_oi_from_disk(today_str)
+            logger.info(f"[OptionChainBuilder] OI preloaded: {preloaded_count} symbols")
+            
+            # Seed the store with hot-start data
+            if preloaded_count > 0:
+                for sym, oi in self._iv_sync.oi_cache.items():
+                    strike = self._sub_mgr.resolve_strike(sym)
+                    if strike:
+                        # Use apply_oi_smooth or direct? 
+                        # Direct update to ensure it's there for n_valid check
+                        self._store.apply_event(CleanQuoteEvent(
+                            seq_no=0, event_type=EventType.REST, symbol=sym, strike=strike,
+                            opt_type=_infer_opt_type(sym),
+                            bid=None, ask=None, last_price=None, volume=None,
+                            open_interest=oi, implied_volatility=None, iv_timestamp=None,
+                            delta=None, gamma=None, theta=None, vega=None,
+                            current_volume=None, turnover=None, arrival_mono=time.monotonic()
+                        ))
+                logger.info("[OptionChainBuilder] ChainStateStore seeded with preloaded OI.")
 
             # Start Pollers
             self._iv_sync.start(
                 self._gateway.quote_ctx,
                 get_symbols_fn=lambda: self._sub_mgr.subscribed_symbols,
                 get_spot_fn=lambda: self._store.spot,
+                on_update=self._handle_rest_update
             )
             if settings.enable_tier2_polling:
                 self._tier2.start(self._gateway.quote_ctx, get_spot_fn=lambda: self._store.spot)
@@ -189,6 +209,19 @@ class OptionChainBuilder:
         except Exception as e:
             logger.error(f"[OptionChainBuilder] fetch_chain failure: {e}")
             return {"spot": self._store.spot, "chain": [], "as_of": now}
+
+    def _handle_rest_update(self, symbol: str, item: Any) -> None:
+        """Update store from REST-fetched metadata (IV/OI)."""
+        strike = self._sub_mgr.resolve_strike(symbol)
+        if strike:
+            clean = self._sanitizer.parse_rest_item(symbol, strike, item)
+            if clean:
+                applied = self._store.apply_event(clean)
+                logger.debug("[OptionChainBuilder] REST update for %s | strike=%s | applied=%s", symbol, strike, applied)
+            else:
+                logger.warning("[OptionChainBuilder] REST update for %s failed to sanitize", symbol)
+        else:
+            logger.warning("[OptionChainBuilder] REST update for %s dropped: strike UNRESOLVED", symbol)
 
     async def _event_consumer_loop(self) -> None:
         """The Pipeline Consumer: Raw Queue → Sanitizer → Entropy → Store."""

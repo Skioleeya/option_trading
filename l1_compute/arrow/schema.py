@@ -45,10 +45,15 @@ def dicts_to_record_batch(chain_snapshot: List[dict[str, Any]]) -> pa.RecordBatc
         # Both "CALL" and "C" signify a Call option
         is_calls.append(opt_type in ("CALL", "C"))
         
-        bids.append(float(entry.get("bid", 0.0)))
-        asks.append(float(entry.get("ask", 0.0)))
-        ivs.append(float(entry.get("iv", 0.0)))
-        volumes.append(float(entry.get("volume", 0.0)))
+        bids.append(float(entry.get("bid", 0.0) or 0.0))
+        asks.append(float(entry.get("ask", 0.0) or 0.0))
+        
+        iv_val = entry.get("iv")
+        if iv_val is None:
+            iv_val = entry.get("implied_volatility", 0.0)
+        ivs.append(float(iv_val or 0.0))
+        
+        volumes.append(float(entry.get("volume", 0.0) or 0.0))
         ois.append(float(entry.get("open_interest", 0.0)))
         mults.append(float(entry.get("contract_multiplier", 100.0)))
 

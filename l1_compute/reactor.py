@@ -271,6 +271,11 @@ class L1ComputeReactor:
         # ── Extra Step: Populate Arrow Output ─────────────────────────────────
         # In a fully unified world we would append Greeks as Arrow columns. Keep original RB.
         out_batch = rb.append_column("computed_iv", pa.array(ivs_arr))
+        out_batch = out_batch.append_column("gex", pa.array(matrix.gex_per_contract))
+
+        # Split into call_gex / put_gex for legacy consumers
+        out_batch = out_batch.append_column("call_gex", pa.array(matrix.call_gex))
+        out_batch = out_batch.append_column("put_gex", pa.array(matrix.put_gex))
 
         # ── Step 6: Microstructure composite ──────────────────────────────────
         with self._inst.span_microstructure():

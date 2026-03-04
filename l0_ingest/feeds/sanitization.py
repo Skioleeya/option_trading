@@ -196,7 +196,18 @@ class SanitizationPipeline:
         volume    = _safe_int(getattr(q, "volume", None))
         cv        = _safe_float(getattr(q, "current_volume", None))
         turnover  = _safe_float(getattr(q, "turnover", None))
-        oi        = _safe_int(getattr(q, "open_interest", None))
+        opt_ext = getattr(raw.payload, "option_extend", None)
+        
+        logger.debug(
+            "[SANITIZER] symbol=%s top_oi=%s top_iv=%s ext_oi=%s ext_iv=%s",
+            raw.symbol,
+            getattr(raw.payload, "open_interest", "MISSING"),
+            getattr(raw.payload, "implied_volatility", "MISSING"),
+            getattr(opt_ext, "open_interest", "MISSING") if opt_ext else "NO_EXT",
+            getattr(opt_ext, "implied_volatility", "MISSING") if opt_ext else "NO_EXT"
+        )
+        
+        oi = _safe_int(getattr(raw.payload, "open_interest", None))
 
         # ── Greeks (rarely on WS) ─────────────────────────────────────────────
         delta = _safe_float(getattr(q, "delta", None))
@@ -208,7 +219,7 @@ class SanitizationPipeline:
         iv: float | None = None
         iv_ts: float | None = None
 
-        opt_ext = getattr(q, "option_extend", None)
+        # opt_ext = getattr(q, "option_extend", None) # This line is now redundant due to the earlier assignment
         iv_raw  = (
             getattr(opt_ext, "implied_volatility", None)
             if opt_ext
@@ -219,7 +230,9 @@ class SanitizationPipeline:
 
         f_iv = _safe_float(iv_raw)
         if f_iv is not None and f_iv > 0:
-            iv    = f_iv / 100.0    # scale percent → decimal
+            # Longport opt_ext.implied_volatility is a percentage string (e.g. "20.51" = 20.51%)
+            # Divide by 100 to get the decimal fraction needed by BSM (0.2051)
+            iv    = f_iv / 100.0
             iv_ts = time.monotonic()
 
         # ── Guard: must carry at least one useful field ───────────────────────
@@ -300,5 +313,7 @@ class SanitizationPipeline:
         )
         ev = self.parse_quote(raw, strike)
         if ev is None:
-            logger.debug("[SanitizationPipeline] %s: REST item %s had no useful fields", tier, symbol)
+            logger.warning("[SANITIZATION] %s: REST item %s FAILED to parse", tier, symbol)
+        else:
+            logger.info("[SANITIZATION] %s: Filtered REST item %s | iv=%s oi=%s", tier, symbol, ev.implied_volatility, ev.open_interest)
         return ev

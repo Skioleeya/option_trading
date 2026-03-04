@@ -9,9 +9,6 @@ a purpose-built store that enforces:
      accidentally mutate the internal state through the returned list.
   4. Flow-merge: `get_flow_merged_snapshot()` inlines DepthEngine toxicity/BBO
      fields before returning to the caller, keeping DepthEngine decoupled.
-
-Future: The internal `_chain` dict can be swapped for a Redis hash or a
-Cap'n Proto SharedMemory segment without changing the calling interface.
 """
 
 from __future__ import annotations
@@ -22,7 +19,7 @@ from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from l0_ingest.feeds.sanitization import CleanQuoteEvent, CleanDepthEvent
+from l0_ingest.feeds.sanitization import CleanQuoteEvent, CleanDepthEvent, EventType
 
 logger = logging.getLogger(__name__)
 
@@ -30,9 +27,8 @@ logger = logging.getLogger(__name__)
 class ChainStateStore:
     """Sole owner of the in-memory option chain.
 
-    THREAD SAFETY: All methods are called exclusively from the asyncio event
-    loop thread (same thread as the WS callback consumer). No locking needed
-    as long as this invariant is maintained by the orchestrator.
+    THREAD SAFETY: All methods are called from the asyncio event loop.
+    Mutations are protected by a baseline sequence-number check.
     """
 
     def __init__(self) -> None:
@@ -66,7 +62,7 @@ class ChainStateStore:
         self._spot = price
         self._last_spot_update = datetime.now(ZoneInfo("US/Eastern"))
 
-    # ── Quote events ──────────────────────────────────────────────────────────
+    # ── Quote / Depth Events ──────────────────────────────────────────────────
 
     def apply_event(self, event: CleanQuoteEvent) -> bool:
         """Write a sanitized quote event into the store.
@@ -74,42 +70,37 @@ class ChainStateStore:
         Sequence-number guard: if a previous event with a HIGHER seq_no has
         already been applied for this symbol, the incoming event is dropped.
         This prevents slow REST batches from overwriting fresh WS pushes.
-
-        Returns:
-            True  — state was changed.
-            False — event was dropped (no-op or stale).
         """
         symbol = event.symbol
         last = self._last_seq.get(symbol, 0)
 
         # Allow WS events (always fresh) to skip the seq check for REST events.
         # REST events only win if they are strictly newer than any prior event.
-        from l0_ingest.feeds.sanitization import EventType
         if event.event_type == EventType.REST and event.seq_no <= last:
-            logger.debug(
-                "[ChainStateStore] Dropped stale REST event for %s (seq %d ≤ %d)",
-                symbol, event.seq_no, last,
-            )
             return False
 
         # Build or update the entry
-        entry = self._chain.get(symbol, {
-            "symbol":         symbol,
-            "strike":         event.strike,
-            "type":           event.opt_type,
-            "bid":            0.0,
-            "ask":            0.0,
-            "last_price":     0.0,
-            "volume":         0,
-            "open_interest":  0,
-            "implied_volatility": 0.0,
-            "iv_timestamp":   0.0,
-            "delta":          0.0,
-            "gamma":          0.0,
-            "theta":          0.0,
-            "vega":           0.0,
-        })
+        if symbol not in self._chain:
+            self._chain[symbol] = {
+                "symbol":         symbol,
+                "strike":         event.strike,
+                "type":           event.opt_type,
+                "bid":            0.0,
+                "ask":            0.0,
+                "last_price":     0.0,
+                "volume":         0,
+                "open_interest":  0,
+                "implied_volatility": 0.0,
+                "iv_timestamp":   0.0,
+                "delta":          0.0,
+                "gamma":          0.0,
+                "theta":          0.0,
+                "vega":           0.0,
+                "current_volume": 0.0,
+                "turnover":       0.0,
+            }
 
+        entry = self._chain[symbol]
         changed = False
 
         def _set(key: str, val: Any) -> None:
@@ -132,15 +123,15 @@ class ChainStateStore:
         _set("vega",               event.vega)
 
         if event.open_interest is not None:
-            _set("open_interest", event.open_interest)
+             # Apply smoothing or direct update? 
+             # For Depth Profile logic, we typically want smoothed but 
+             # hot-start seeding should be prioritized.
+             _set("open_interest", event.open_interest)
 
         entry["last_update"] = datetime.now(ZoneInfo("US/Eastern"))
-        self._chain[symbol] = entry
         self._last_seq[symbol] = event.seq_no
 
-        return changed
-
-    # ── Depth events ──────────────────────────────────────────────────────────
+        return True
 
     def apply_depth(self, event: CleanDepthEvent) -> None:
         """Update top-of-book bid/ask from a depth event."""
@@ -155,11 +146,7 @@ class ChainStateStore:
     # ── Greeks patch (from GreeksEngine) ─────────────────────────────────────
 
     def apply_greeks(self, symbol: str, greeks: dict[str, float]) -> None:
-        """Write BSM-computed Greeks back into the store.
-
-        Called by GreeksEngine after each enrichment cycle.
-        Only updates fields present in `greeks`.
-        """
+        """Write BSM-computed Greeks back into the store."""
         if symbol not in self._chain:
             return
         self._chain[symbol].update(greeks)
@@ -189,12 +176,7 @@ class ChainStateStore:
     # ── Read interface ────────────────────────────────────────────────────────
 
     def get_snapshot(self, target_symbols: set[str] | None = None) -> list[dict[str, Any]]:
-        """Return a read-only shallow copy of chain entries.
-
-        Args:
-            target_symbols: If provided, only include symbols in this set.
-                            Typically `SubscriptionManager.target_symbols`.
-        """
+        """Return a read-only shallow copy of chain entries."""
         if target_symbols is not None:
             return [dict(v) for k, v in self._chain.items() if k in target_symbols]
         return [dict(v) for v in self._chain.values()]
@@ -204,12 +186,7 @@ class ChainStateStore:
         flow_snapshot: dict[str, dict[str, float]],
         target_symbols: set[str] | None = None,
     ) -> list[dict[str, Any]]:
-        """Return snapshot with DepthEngine toxicity/BBO fields merged in.
-
-        Args:
-            flow_snapshot:  Output of DepthEngine.get_flow_snapshot().
-            target_symbols: Optional symbol filter.
-        """
+        """Return snapshot with DepthEngine toxicity/BBO fields merged in."""
         snapshot = self.get_snapshot(target_symbols)
         for entry in snapshot:
             sym = entry["symbol"]

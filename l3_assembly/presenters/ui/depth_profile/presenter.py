@@ -260,20 +260,33 @@ class DepthProfilePresenter:
         raw_tox    = np.zeros(count, dtype=np.float64)
         raw_bbo    = np.zeros(count, dtype=np.float64)
 
+        if not raw_by_strike:
+            logger.warning("[DepthProfilePresenter] raw_by_strike is EMPTY. Snapshot size: %d", len(per_strike_gex))
+            return []
+
+        # Find spot proximity for debugging
+        logger.info("[DepthProfilePresenter] Build started. Spot: %.2f, Strikes: %d", spot if spot is not None else -1.0, len(contiguous_strikes))
+        
+        # Build raw rows with fallback matching
         for idx, strike in enumerate(contiguous_strikes):
             data = raw_by_strike.get(strike)
-            if data is None:
-                for k in raw_by_strike:
-                    if abs(k - strike) <= spacing * 0.5:
-                        data = raw_by_strike[k]
-                        break
-
+            if data:
+                logger.debug("[DepthProfilePresenter] Match found for strike %.2f", strike)
+            else:
+                # Proximity check (matches current logic but logs it)
+                matches = [s for s in raw_by_strike if abs(s - strike) <= spacing * 0.5]
+                if matches:
+                    data = raw_by_strike[matches[0]]
+                    logger.debug("[DepthProfilePresenter] Proximity match for %.2f -> %.2f", strike, matches[0])
+                else:
+                    logger.debug("[DepthProfilePresenter] No data for strike %.2f", strike)
+            
             if hasattr(data, "get"):
                 raw_calls[idx] = data.get("call_gex", 0.0) if data else 0.0
                 raw_puts[idx]  = data.get("put_gex",  0.0) if data else 0.0
                 raw_tox[idx]   = data.get("toxicity_score", 0.0) if data else 0.0
                 raw_bbo[idx]   = data.get("bbo_imbalance",  0.0) if data else 0.0
-            else:
+            else: 
                 raw_calls[idx] = getattr(data, "call_gex",        0.0) if data else 0.0
                 raw_puts[idx]  = getattr(data, "put_gex",          0.0) if data else 0.0
                 raw_tox[idx]   = getattr(data, "toxicity_score",   0.0) if data else 0.0

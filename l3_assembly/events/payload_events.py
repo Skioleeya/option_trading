@@ -158,26 +158,29 @@ class DepthProfileRow:
     Includes EMA-smoothed call/put GEX values and render-hint booleans.
     """
     strike: float
-    call_gex: float
-    put_gex: float
+    call_pct: float
+    put_pct: float
     is_atm: bool
     is_flip: bool
-    pct_max: float          # scaled to [-1.0, +1.0] for bar width
+    is_dominant_put: bool
+    is_dominant_call: bool
 
     def __post_init__(self) -> None:
-        if not math.isfinite(self.call_gex):
-            raise ValueError(f"DepthProfileRow.call_gex must be finite, got {self.call_gex}")
-        if not math.isfinite(self.put_gex):
-            raise ValueError(f"DepthProfileRow.put_gex must be finite, got {self.put_gex}")
+        if not math.isfinite(self.call_pct):
+            raise ValueError(f"DepthProfileRow.call_pct must be finite, got {self.call_pct}")
+        if not math.isfinite(self.put_pct):
+            raise ValueError(f"DepthProfileRow.put_pct must be finite, got {self.put_pct}")
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "strike":   self.strike,
-            "call_gex": self.call_gex,
-            "put_gex":  self.put_gex,
-            "is_atm":   self.is_atm,
-            "is_flip":  self.is_flip,
-            "pct_max":  self.pct_max,
+            "strike":           self.strike,
+            "call_pct":         self.call_pct,
+            "put_pct":          self.put_pct,
+            "is_atm":           self.is_atm,
+            "is_spot":          self.is_atm, 
+            "is_flip":          self.is_flip,
+            "is_dominant_put":  self.is_dominant_put,
+            "is_dominant_call": self.is_dominant_call,
         }
 
 
@@ -423,6 +426,7 @@ class FrozenPayload:
     signal: SignalData
     ui_state: UIState
     atm: dict[str, Any] | None
+    atm_iv: float = 0.0
 
     # Broadcast-layer fields (set by BroadcastGovernor, not PayloadAssembler)
     heartbeat_timestamp: str = ""
@@ -451,7 +455,7 @@ class FrozenPayload:
                 "data": {
                     "ui_state":    self.ui_state.to_dict(),
                     **self.signal.to_dict(),
-                    "spy_atm_iv":  self.signal.signal_summary.get("atm_iv", 0.0),
+                    "spy_atm_iv":  self.atm_iv,
                     "as_of":       self.signal.computed_at,
                     "version":     self.version,
                 }

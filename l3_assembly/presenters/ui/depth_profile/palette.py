@@ -3,7 +3,7 @@
 Colors that are ONLY used by the DepthProfile bar chart.
 """
 
-from l3_assembly.presenters import theme
+from l3_assembly.presenters.ui import theme
 
 # Horizontal bars
 PUT_BAR_COLOR  = f"bg-{theme.MARKET_DOWN}"   # Green bar (put)

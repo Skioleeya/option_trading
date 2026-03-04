@@ -123,6 +123,10 @@ class EnrichedSnapshot:
     def flip_level(self) -> float:
         return self.aggregates.flip_level
 
+    @property
+    def per_strike_gex(self) -> list[dict]:
+        return self.aggregates.per_strike_gex
+
     def to_legacy_dict(self) -> dict:
         """Compatibility shim: produce the dict schema consumed by existing agents.
 
@@ -152,4 +156,5 @@ class EnrichedSnapshot:
             "version":        self.version,
             "computed_at":    self.computed_at.isoformat(),
             "chain_elements": chain_elements,
+            "per_strike_gex": self.aggregates.per_strike_gex,
         }

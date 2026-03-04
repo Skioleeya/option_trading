@@ -40,21 +40,39 @@ class UIStateTracker:
         """Update trackers and return UI-formatted dictionary."""
         now_mono = time.monotonic()
         
+        def _get(obj, attr, default=0.0):
+            if hasattr(obj, attr):
+                return getattr(obj, attr)
+            if isinstance(obj, dict):
+                return obj.get(attr, default)
+            return default
+
         try:
-            spot = float(snapshot.spot)
-            agg = snapshot.aggregates
-            atm_iv = float(agg.atm_iv)
-            net_gex = float(agg.net_gex)
-            call_wall = float(agg.call_wall)
-            put_wall = float(agg.put_wall)
-            net_charm = float(agg.net_charm)
+            spot = float(_get(snapshot, "spot"))
+            
+            # Extract aggregates
+            if hasattr(snapshot, "aggregates"):
+                agg = snapshot.aggregates
+            elif isinstance(snapshot, dict):
+                agg = snapshot.get("aggregates", snapshot) # fallback to self if flat
+            else:
+                import logging
+                logging.getLogger(__name__).error(f"[UIStateTracker] Unsupported snapshot type: {type(snapshot)}")
+                return {}
+
+            atm_iv = float(_get(agg, "atm_iv"))
+            net_gex = float(_get(agg, "net_gex"))
+            call_wall = float(_get(agg, "call_wall"))
+            put_wall = float(_get(agg, "put_wall"))
+            net_charm = float(_get(agg, "net_charm"))
             
             # Using 0 for volumes as they are only used for some advanced micro features that we can bypass here
             call_wall_vol = 0 
             put_wall_vol = 0
             
-        except AttributeError:
-            # Fallback if somehow not an EnrichedSnapshot
+        except (AttributeError, KeyError, TypeError, ValueError) as e:
+            import logging
+            logging.getLogger(__name__).error(f"[UIStateTracker] Extraction failed: {e}")
             return {}
 
         # 1. Vanna Flow

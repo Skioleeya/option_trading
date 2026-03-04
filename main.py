@@ -292,9 +292,12 @@ class AppContainer:
                 if result and self._l3_reactor:
                     active_opts = self.agent_g._active_options_presenter.get_latest()
                     
+                    # Use l1_snap if available for richer assembly
+                    target_snap = l1_snap if (USE_L2 and 'l1_snap' in locals()) else snapshot
+
                     frozen = await self._l3_reactor.tick(
                         decision=decision,
-                        snapshot=snapshot,
+                        snapshot=target_snap,
                         atm_decay=atm_decay_payload,
                         active_options=active_opts
                     )

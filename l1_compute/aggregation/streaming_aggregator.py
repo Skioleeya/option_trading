@@ -55,6 +55,7 @@ class AggregateGreeks:
     total_call_gex: float
     total_put_gex: float
     num_contracts: int
+    per_strike_gex: list[dict] = field(default_factory=list)
 
 
 class StreamingAggregator:
@@ -227,6 +228,17 @@ class StreamingAggregator:
             self._recompute_walls()
             self._dirty_walls = False
 
+        # Build per_strike_gex list
+        per_strike_list = [
+            {
+                "strike": k,
+                "call_gex": v.call_gex,
+                "put_gex": v.put_gex,
+                "net_gex": v.net_gex
+            }
+            for k, v in self._per_strike.items()
+        ]
+
         return AggregateGreeks(
             net_gex=self._net_gex,
             net_vanna=self._net_vanna,
@@ -239,6 +251,7 @@ class StreamingAggregator:
             total_call_gex=self._total_call_gex,
             total_put_gex=self._total_put_gex,
             num_contracts=len(self._per_symbol),
+            per_strike_gex=per_strike_list,
         )
 
     # ── Private ───────────────────────────────────────────────────────────────
