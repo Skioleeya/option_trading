@@ -44,11 +44,6 @@ const SERIES_CFG = [
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const toUnixSec = (ts: string) => Math.floor(new Date(ts).getTime() / 1000)
 
-const formatET = (time: number) =>
-    new Date(time * 1000).toLocaleTimeString('en-US', {
-        timeZone: 'America/New_York',
-        hour12: false, hour: '2-digit', minute: '2-digit',
-    })
 
 /**
  * Gate: keep only intraday ticks.
@@ -118,9 +113,25 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
                 vertLine: { color: HAIR, style: LineStyle.Solid, width: 1, labelBackgroundColor: '#18181b' },
                 horzLine: { color: HAIR, style: LineStyle.Solid, width: 1, labelBackgroundColor: '#18181b' },
             },
-            localization: { timeFormatter: formatET },
+            localization: {
+                timeFormatter: (time: number) =>
+                    new Date(time * 1000).toLocaleTimeString('en-US', {
+                        timeZone: 'America/New_York',
+                        hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'
+                    })
+            },
             rightPriceScale: { borderColor: BORDER },
-            timeScale: { borderColor: BORDER, timeVisible: true, secondsVisible: true },
+            timeScale: {
+                borderColor: BORDER,
+                timeVisible: true,
+                secondsVisible: true,
+                tickMarkFormatter: (time: number) => {
+                    return new Date(time * 1000).toLocaleTimeString('en-US', {
+                        timeZone: 'America/New_York',
+                        hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'
+                    })
+                }
+            },
         })
 
         // Official v5 API: chart.addSeries(LineSeries, options)

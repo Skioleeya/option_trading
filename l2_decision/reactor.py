@@ -207,7 +207,10 @@ class L2DecisionReactor:
             fusion_weights=dict(fused.fusion_weights),
             pre_guard_direction=guarded.pre_guard_direction,
             guard_actions=list(guarded.guard_actions),
-            signal_summary={n: s.direction for n, s in raw_signals.items()},
+            signal_summary={
+                n: {"direction": s.direction, "confidence": s.confidence} 
+                for n, s in raw_signals.items()
+            },
             latency_ms=total_latency_ms,
             version=version,
             computed_at=datetime.now(_ET),

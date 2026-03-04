@@ -63,7 +63,7 @@ class TacticalTriadPresenter:
             },
             "charm": {
                 **charm_ui,
-                "sub_intensity": "HIGH" if (net_charm or 0) > 50 else "LOW",
+                "sub_intensity": "HIGH" if abs(net_charm or 0) > 50 else "LOW",
                 "sub_label": charm_sub
             },
             "svol": {

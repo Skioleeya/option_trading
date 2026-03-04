@@ -26,7 +26,7 @@ export const TacticalTriad: React.FC<Props> = memo(({ uiState: propState }) => {
         <div className="border-t border-bg-border p-2">
             <div className="flex items-center justify-between mb-2">
                 <span className="section-header">TACTICAL TRIAD</span>
-                <span className="section-header text-text-muted">S-VOL / CHARM / VRP</span>
+                <span className="section-header text-text-muted">MICRO DYNAMICS</span>
             </div>
 
             <div className="grid grid-cols-3 gap-1.5">

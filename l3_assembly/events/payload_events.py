@@ -428,6 +428,14 @@ class FrozenPayload:
     atm: dict[str, Any] | None
     atm_iv: float = 0.0
 
+    # GEX aggregates (Phase 3: GexStatusBar sync)
+    net_gex: float = 0.0
+    gamma_walls: dict[str, float | None] = field(default_factory=lambda: {"call_wall": None, "put_wall": None})
+    gamma_flip_level: float = 0.0
+
+    # Decision Engine: full fused_signal dict from AgentG (Phase 4: DecisionEngine sync)
+    fused_signal: dict[str, Any] | None = None
+
     # Broadcast-layer fields (set by BroadcastGovernor, not PayloadAssembler)
     heartbeat_timestamp: str = ""
     is_stale: bool = False
@@ -458,6 +466,12 @@ class FrozenPayload:
                     "spy_atm_iv":  self.atm_iv,
                     "as_of":       self.signal.computed_at,
                     "version":     self.version,
+                    # GexStatusBar fields
+                    "net_gex":          self.net_gex,
+                    "gamma_walls":      self.gamma_walls,
+                    "gamma_flip_level": self.gamma_flip_level,
+                    # DecisionEngine: fused_signal from AgentG.data (Phase 4)
+                    "fused_signal":     self.fused_signal,
                 }
             },
         }

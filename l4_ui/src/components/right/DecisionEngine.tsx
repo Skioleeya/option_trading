@@ -51,12 +51,13 @@ export const DecisionEngine: React.FC<Props> = memo(({ fused: propFused }) => {
     const explanation = fused?.explanation ?? ''
 
     const quadrants = [
-        { key: 'iv', label: 'IV VEL', icon: <Zap /> },
-        { key: 'wall', label: 'WALL DYN', icon: <Target size={9} className="text-text-secondary" /> },
-        { key: 'vanna', label: 'VANNA', icon: <Activity size={9} className="text-text-secondary" /> },
-        { key: 'mtf', label: 'MTF', icon: <TrendingUp size={9} className="text-text-secondary" /> },
-        { key: 'vib', label: 'C/P VOL', icon: <BarChart3 size={9} className="text-text-secondary" /> },
+        { key: 'momentum_signal', label: 'MOMENTUM', icon: <TrendingUp size={9} className="text-text-secondary" /> },
+        { key: 'trap_detector', label: 'TRAPS', icon: <Target size={9} className="text-text-secondary" /> },
+        { key: 'flow_analyzer', label: 'FLOW DYN', icon: <Zap /> },
+        { key: 'micro_flow', label: 'MICRO FLOW', icon: <BarChart3 size={9} className="text-text-secondary" /> },
+        { key: 'iv_regime', label: 'IV REGIME', icon: <Activity size={9} className="text-text-secondary" /> },
     ]
+
 
     return (
         <div className="p-2 space-y-1.5">

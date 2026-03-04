@@ -160,10 +160,11 @@ class DecisionOutput:
     fusion_weights: dict[str, float]        # signal_name → weight used in fusion
     pre_guard_direction: str
     guard_actions: list[str]
-    signal_summary: dict[str, str]         # name → direction (for dashboard)
+    signal_summary: dict[str, Any]         # name → dict with direction/confidence
     latency_ms: float
     version: int                            # L0 MVCC version propagated from L1
     computed_at: datetime
+
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -178,30 +179,60 @@ class DecisionOutput:
             "computed_at": self.computed_at.isoformat(),
         }
 
+    @property
+    def data(self) -> dict[str, Any]:
+        """Expose fused_signal dict for PayloadAssemblerV2.assemble() extraction.
+
+        PayloadAssemblerV2 reads `getattr(decision, 'data', {}).get('fused_signal')`.
+        This property satisfies that contract without requiring changes in the assembler.
+        The schema matches what the frontend `selectFused` selector expects:
+          { direction, confidence, weights, components, regime, gex_intensity, explanation }
+        """
+        # Ensure fallback to 0.0 if component dictionary doesn't have confidence
+        components = {}
+        for name, value in self.signal_summary.items():
+            if isinstance(value, dict):
+                direction = value.get("direction", "NEUTRAL")
+                
+                # Special translation for IV Regime which uses generic BULLISH/BEARISH enum 
+                # but semantically means LOW_VOL/HIGH_VOL in the Fusion Engine
+                if name == "iv_regime":
+                    if direction == "BULLISH":
+                        direction = "LOW_VOL"
+                    elif direction == "BEARISH":
+                        direction = "HIGH_VOL"
+
+                components[name] = {
+                    "direction": direction,
+                    "confidence": value.get("confidence", 0.0)
+                }
+            else:
+                components[name] = {"direction": value, "confidence": 0.0}
+
+        return {
+            "fused_signal": {
+                "direction":    self.direction,
+                "confidence":   round(self.confidence, 4),
+                "weights":      {k: round(v, 4) for k, v in self.fusion_weights.items()},
+                "components":   components,
+                "regime":          "NORMAL",
+                "iv_regime":       components.get("iv_regime", {}).get("direction", "NORMAL"),
+                "gex_intensity":   "NEUTRAL",
+                "explanation":     f"Guard: {self.guard_actions[0]}" if self.guard_actions else "",
+            }
+        }
+
     def to_legacy_agent_result(self) -> dict[str, Any]:
         """Convert to legacy AgentG result dict for L3 / PayloadAssemblerV2 compatibility.
 
-        L3 PayloadAssemblerV2 reads from result["data"]["fused"] and
+        L3 PayloadAssemblerV2 reads from result["data"]["fused_signal"] and
         result["data"]["ui_state"]. This shim ensures zero changes needed in L3.
         """
         return {
             "direction": self.direction,
             "confidence": self.confidence,
             "data": {
-                "fused": {
-                    "direction": self.direction,
-                    "confidence": round(self.confidence, 4),
-                    "summary": (
-                        f"L2 Reactor: {self.direction} @ {self.confidence:.1%}"
-                        + (f" [guard: {self.guard_actions[0]}]" if self.guard_actions else "")
-                    ),
-                    "pre_guard_direction": self.pre_guard_direction,
-                    "guard_actions": list(self.guard_actions),
-                    "fusion_weights": {k: round(v, 4) for k, v in self.fusion_weights.items()},
-                    "signal_summary": dict(self.signal_summary),
-                    "latency_ms": round(self.latency_ms, 2),
-                    "version": self.version,
-                },
+                **self.data,   # includes fused_signal
                 # ui_state sub-blocks will be populated by L3 presenters
                 # from the L1 EnrichedSnapshot — no data needed here
                 "ui_state": {},

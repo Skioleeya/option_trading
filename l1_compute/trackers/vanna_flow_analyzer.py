@@ -199,7 +199,7 @@ class VannaFlowAnalyzer:
 
         # Differentiate "Warming Up" from "Unavailable"
         history_count = len(self._history)
-        if history_count < self.ROLLING_WINDOW_SIZE:
+        if history_count < 2:
             return VannaFlowResult(
                 state=VannaFlowState.UNAVAILABLE,
                 gex_regime=gex_regime,
@@ -250,7 +250,8 @@ class VannaFlowAnalyzer:
 
     def _calculate_correlation(self) -> float | None:
         """Calculate Spot-Vol correlation (Vanna Flow)."""
-        if len(self._history) < self.ROLLING_WINDOW_SIZE:
+        # Minimum required history is 2 points to compute a functional Pearson corr.
+        if len(self._history) < 2:
             return None
 
         # Extract recent history

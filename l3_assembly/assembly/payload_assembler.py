@@ -89,7 +89,18 @@ class PayloadAssemblerV2:
         # ── 4. Build UIState via Presenter V2 calls ────────────────────────
         ui_state = self._build_ui_state(snap_data, active_options or ())
 
-        # ── 5. Timestamps ──────────────────────────────────────────────────
+        # ── 5. Extract fused_signal from L2 AgentG AgentResult.data ──────────
+        # AgentG._decide_impl writes fused_signal under AgentResult.data["fused_signal"]
+        # This is never extracted by SignalData which only reads top-level attributes.
+        fused_signal_dict: dict | None = None
+        try:
+            if decision is not None:
+                raw_data = getattr(decision, "data", None) or {}
+                fused_signal_dict = raw_data.get("fused_signal")
+        except Exception as exc:
+            logger.warning(f"[L3 Assembler] fused_signal extraction failed: {exc}")
+
+        # ── 6. Timestamps ─────────────────────────────────────────────────────
         now_iso = datetime.now(timezone.utc).isoformat()
 
         payload = FrozenPayload(
@@ -103,6 +114,10 @@ class PayloadAssemblerV2:
             ui_state=ui_state,
             atm=atm_decay,
             atm_iv=snap_data.atm_iv,
+            net_gex=snap_data.net_gex,
+            gamma_walls={"call_wall": snap_data.call_wall, "put_wall": snap_data.put_wall},
+            gamma_flip_level=snap_data.flip_level,
+            fused_signal=fused_signal_dict,
         )
 
         logger.debug(
@@ -134,6 +149,10 @@ class PayloadAssemblerV2:
                         data.per_strike_gex = list(chain)
                 except Exception:
                     data.per_strike_gex = []
+            
+            data.net_gex = float(snapshot.aggregates.net_gex or 0.0)
+            data.call_wall = float(snapshot.aggregates.call_wall or 0.0)
+            data.put_wall = float(snapshot.aggregates.put_wall or 0.0)
 
         # Legacy dict (from OptionChainBuilder.fetch_chain())
         elif isinstance(snapshot, dict):
@@ -141,6 +160,10 @@ class PayloadAssemblerV2:
             data.atm_iv = float(snapshot.get("atm_iv", snapshot.get("spy_atm_iv", 0.0)) or 0.0)
             data.snapshot_time = snapshot.get("as_of")
             data.volume_map = snapshot.get("volume_map") or {}
+            data.net_gex = float(snapshot.get("net_gex", 0.0) or 0.0)
+            data.call_wall = float(snapshot.get("call_wall", 0.0) or 0.0)
+            data.put_wall = float(snapshot.get("put_wall", 0.0) or 0.0)
+            data.flip_level = float(snapshot.get("flip_level", 0.0) or 0.0)
 
         # Supplement from L2 decision's data block if available
         if decision is not None:
@@ -195,6 +218,8 @@ class PayloadAssemblerV2:
                 fused_signal_direction=snap.fused_signal_direction,
             )
         except Exception as exc:
+            import traceback
+            traceback.print_exc()
             logger.warning(f"[L3 Assembler] TacticalTriad failed: {exc}")
             tactical_triad = TacticalTriadState.zero_state()
 
@@ -298,6 +323,7 @@ class _SnapshotData:
         "momentum", "vrp", "vrp_state", "net_charm", "svol_corr", "svol_state",
         "fused_signal_direction", "wall_dyn", "wall_migration_data",
         "per_strike_gex", "mtf_consensus", "skew_dynamics", "volume_map",
+        "net_gex", "call_wall", "put_wall",
     )
 
     def __init__(self) -> None:
@@ -320,6 +346,9 @@ class _SnapshotData:
         self.mtf_consensus: dict = {}
         self.skew_dynamics: dict = {}
         self.volume_map: dict = {}
+        self.net_gex: float = 0.0
+        self.call_wall: float = 0.0
+        self.put_wall: float = 0.0
 
 
 def _convert_active_option(d: dict) -> Any:

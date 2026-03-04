@@ -164,6 +164,6 @@ class UIStateTracker:
             "net_charm": net_charm,
             "skew_dynamics": skew_dynamics,
             "momentum": momentum_direction,
-            "svol_corr": vanna_result.correlation if vanna_result else 0.0,
+            "svol_corr": (vanna_result.correlation if vanna_result and vanna_result.correlation is not None else 0.0),
             "svol_state": "DANGER_ZONE" if vanna_state_str == "DANGER_ZONE" else "NORMAL"
         }
