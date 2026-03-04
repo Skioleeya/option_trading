@@ -164,6 +164,10 @@ class AgentB1:
                 "wall_confidence": micro.get("wall_confidence", 0),
                 "vanna_confidence": micro.get("vanna_confidence", 0),
                 "mtf_consensus": micro.get("mtf_consensus", {}),
+                # PP-6 FIX: Preserve Analysis fields during throttled runs
+                "hv_analysis": updated_data.get("hv_analysis"),
+                "charm_analysis": updated_data.get("charm_analysis"),
+                "skew_analysis": updated_data.get("skew_analysis"),
                 # PP-5 FIX: Dual-rate sync diagnostics
                 "trap_computed_at": self._trap_updated_at,
                 "micro_computed_at": self._micro_updated_at,
@@ -202,8 +206,10 @@ class AgentB1:
         atm_iv = greeks.get("atm_iv", 0) or 0.0
         # PP-1 FIX: Use configurable baseline HV (was hardcoded 13.5).
         # Override via VRP_BASELINE_HV env var or .env file.
+        # Ensure atm_iv is converted from decimal to percentage before comparison.
+        atm_iv_pct = atm_iv * 100.0
         baseline_hv = settings.vrp_baseline_hv
-        vrp = atm_iv - baseline_hv
+        vrp = atm_iv_pct - baseline_hv
         
         premium_state = "FAIR"
         if vrp > settings.vrp_trap_threshold:
@@ -509,19 +515,39 @@ class AgentB1:
         return self._state
 
     def _idle_result(self, now: datetime, snapshot: dict[str, Any]) -> AgentResult:
-        """Return an IDLE result."""
+        """Return an IDLE result.
+        
+        PP-6 FIX: Preserve market structure history during idle ticks to prevent UI flickering.
+        BUG-5 FIX: Also preserve per_strike_gex and gamma_profile so DepthProfile
+        does not flash blank when spot is temporarily unavailable.
+        """
+        last_data = getattr(self, '_last_result', None).data if getattr(self, '_last_result', None) else {}
+        
         return AgentResult(
             agent=self.AGENT_ID,
             signal=DivergenceState.IDLE.value,
             as_of=now,
             data={
-                "net_gex": None,
-                "gamma_walls": {},
-                "gamma_flip": False,
-                "gamma_flip_level": None,
-                "micro_structure": {},
+                "net_gex": last_data.get("net_gex"),
+                "spy_atm_iv": last_data.get("spy_atm_iv"),
+                "gamma_walls": last_data.get("gamma_walls", {}),
+                "gamma_flip": last_data.get("gamma_flip", False),
+                "gamma_flip_level": last_data.get("gamma_flip_level"),
+                "micro_structure": last_data.get("micro_structure", {}),
+                # Preserve Analysis fields
+                "hv_analysis": last_data.get("hv_analysis"),
+                "charm_analysis": last_data.get("charm_analysis"),
+                "skew_analysis": last_data.get("skew_analysis"),
+                "iv_confidence": last_data.get("iv_confidence"),
+                "wall_confidence": last_data.get("wall_confidence"),
+                "vanna_confidence": last_data.get("vanna_confidence"),
+                "mtf_consensus": last_data.get("mtf_consensus"),
+                # BUG-5 FIX: Preserve per_strike_gex + gamma_profile so DepthProfile
+                # component does not flash blank on idle ticks (spot=None or empty chain).
+                "per_strike_gex": last_data.get("per_strike_gex", []),
+                "gamma_profile":  last_data.get("gamma_profile", []),
             },
-            summary="IDLE",
+            summary="IDLE (Stale Data Preserved)",
         )
 
     # Store last result for throttling

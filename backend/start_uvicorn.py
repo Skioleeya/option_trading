@@ -9,11 +9,11 @@ os.chdir(r"e:\US.market\Option_v3\backend")
 print("Starting Uvicorn...")
 process = subprocess.Popen(
     ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001", "--log-level", "debug"],
-    stdout=open("diag_output_v3.log", "w"),
+    stdout=open("logs/fresh_uvicorn.log", "w"),
     stderr=subprocess.STDOUT,
     env={**os.environ, "PYTHONPATH": "."}
 )
 
-time.sleep(15) # Wait for it to initialize and get some data
-print(f"Uvicorn started with PID {process.pid}")
+time.sleep(2) # Brief wait to spawn process
+print(f"Uvicorn started with PID {process.pid} logging to fresh_uvicorn.log")
 # Process remains running in background

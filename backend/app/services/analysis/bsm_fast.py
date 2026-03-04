@@ -362,8 +362,8 @@ def _bsm_batch_cupy(
             "max_put_gex": max_put_gex,
             "call_wall": call_wall,
             "put_wall": put_wall,
-            "net_vanna": float(cp.sum(vanna_exp).item()),
-            "net_charm": float(cp.sum(charm_exp).item()),
+            "net_vanna": float(cp.sum(vanna_exp).item()) / 1_000_000.0,
+            "net_charm": float(cp.sum(charm_exp).item()) / 1_000_000.0,
         }
 
     # Transfer back to CPU — the rest of the pipeline is CPU-side
@@ -417,8 +417,8 @@ def _aggregate_greeks_cpu(
         "max_put_gex": max_put_gex,
         "call_wall": call_wall,
         "put_wall": put_wall,
-        "net_vanna": float(np.sum(vanna_exp)),
-        "net_charm": float(np.sum(charm_exp)),
+        "net_vanna": float(np.sum(vanna_exp)) / 1_000_000.0,
+        "net_charm": float(np.sum(charm_exp)) / 1_000_000.0,
     }
 
 def compute_greeks_batch(

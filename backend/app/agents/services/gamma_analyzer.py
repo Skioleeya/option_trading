@@ -302,7 +302,7 @@ class GammaAnalyzer:
 
             total_vanna += vanna * oi * multiplier
 
-        return total_vanna
+        return total_vanna / 1_000_000.0
 
     # =========================================================================
     # Net Charm Exposure
@@ -329,4 +329,4 @@ class GammaAnalyzer:
 
             total_charm += charm * oi * multiplier
 
-        return total_charm
+        return total_charm / 1_000_000.0

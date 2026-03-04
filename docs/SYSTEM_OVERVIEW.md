@@ -1,115 +1,152 @@
-# SPY 0DTE Dashboard — 系统架构概览
+# SPY 0DTE Dashboard — 2025–2026 架构重构总览
 
-> **系统定位**: 用于 SPY 0DTE 期权交易的实时决策支持仪表板。以 1Hz 刷新频率从 Longport API 采集数据，通过多信号融合引擎输出结构化交易信号，并在浏览器端实时展示。
+> **系统定位**: 机构级 SPY 0DTE 期权实时决策支持平台。
+>
+> **文档版本**: v4.0 — 2025–2026 主流金融架构重构指引
+>
+> **上一版本**: 见 `docs/backup/` 目录
 
 ---
 
-## 架构分层
+## 架构演进方向
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                     L4 — 前端展示层                              │
-│        React (3栏仪表板) · WebSocket Client · Recharts           │
-│        src/components/** · src/hooks/useDashboardWS              │
-└─────────────────────────────┬───────────────────────────────────┘
-                               │  ws://  1Hz push
-┌─────────────────────────────▼───────────────────────────────────┐
-│                     L3 — 输出组装层                              │
-│  SnapshotBuilder · 7个 UI Presenters · AtmDecayTracker           │
-│  双循环广播 (compute 1~3s / broadcast 1Hz) · Redis 持久化        │
-│  app/services/system/ · app/ui/                                  │
-└─────────────────────────────┬───────────────────────────────────┘
-                               │  AgentResult
-┌─────────────────────────────▼───────────────────────────────────┐
-│                     L2 — 决策分析层                              │
-│  AgentA (动量) · AgentB1 (陷阱+微观结构) · AgentG (顶层融合)    │
-│  DynamicWeightEngine · 5级门控决策 · VRP/MTF/Vanna/Jump 信号    │
-│  app/agents/ · app/services/trackers/ · app/services/analysis/  │
-└─────────────────────────────┬───────────────────────────────────┘
-                               │  snapshot (已含 aggregate_greeks)
-┌─────────────────────────────▼───────────────────────────────────┐
-│                     L1 — 本地计算层                              │
-│  BSM Greeks · Skew 调整 · GEX 聚合 · DepthEngine (微观结构)     │
-│  GreeksExtractor · app/services/analysis/depth_engine.py         │
-│  app/services/analysis/bsm.py · app/agents/services/            │
-└─────────────────────────────┬───────────────────────────────────┘
-                               │  raw quotes (in-memory dict)
-┌─────────────────────────────▼───────────────────────────────────┐
-│                     L0 — 数据摄取层                              │
-│  Tier1 WS (含 SubType.Depth/Trade) · Tier2 REST · Tier3 周期权   │
-│  Dynamic ATM Subscription Policy · IVBaselineSync                │
-│  app/services/feeds/ · Longport OpenAPI SDK                      │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│  v3 (当前)                    →  v4 (2025–2026 目标)                 │
+│                                                                      │
+│  Python 回调 + OS 线程        →  Rust Tokio IngestWorker + EventBus  │
+│  dict-of-dicts 内存模型       →  Arrow RecordBatch + MVCC            │
+│  单线程 BSM 遍历              →  GPU Batch (CuPy) + Streaming Agg   │
+│  线性 Sticky-Strike           →  SABR / SVI 校准                    │
+│  硬编码门控规则                →  Feature Store + ML Attention Fusion│
+│  AgentA/B1/G 紧耦合           →  Signal Generators + Guard Rails     │
+│  deepcopy JSON 广播            →  COW + Delta Encoding + Protobuf   │
+│  三栏固定布局 React            →  Widget Compositor + WebGL + PWA    │
+│  print 日志                    →  OpenTelemetry 全链路可观测         │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 数据流程（单次 compute tick）
+## 重构架构分层
 
 ```
-1. L0: OptionChainBuilder.fetch_chain()
-   └─ 返回内存中已有 WS 推送数据，零延迟
-
-2. L1: _enrich_chain_with_local_greeks()
-   ├─ 单次遍历：BSM 计算各合约 Greeks → 累积 Net GEX / Vanna / Charm
-   └─ DepthEngine: 处理成交逐笔与盘口深度 → 产生 toxicity_score / bbo_imbalance
-
-3. L2: AgentG.run(snapshot)
-   a. AgentB1.run(snapshot)
-      ├─ GreeksExtractor → ATM IV, Gamma Walls, Flip Level
-      ├─ VannaFlowAnalyzer → GEX 制度, momentum_slope_multiplier
-      ├─ WallMigrationTracker → Call/Put Wall 位移
-      ├─ IVVelocityTracker → IV 速率制度 (1m/5m/15m)
-      ├─ MTFIVEngine (VSRSD) → 多时间框架共识
-      ├─ VolumeImbalanceEngine → C/P 量不平衡
-      ├─ Depth Signal (Phase 3): 聚合 ATM 毒性与盘口失衡 (micro_flow)
-      └─ JumpDetector → 跳变检测（P0.1 安全阀）
-   b. AgentA.run(snapshot, slope_multiplier)
-      └─ 现货动量方向
-   c. AgentG._decide_impl()
-      ├─ P0.1 Jump Gate → HOLD
-      ├─ P0.5 VRP Veto → NO_TRADE
-      ├─ P1 陷阱优先
-      ├─ P1.5 融合高置信度 (DynamicWeightEngine 加入 micro_flow)
-      └─ P2 趋势确认 (A + GEX 方向)
-
-4. L3: SnapshotBuilder.build(snapshot, agent_result, atm_decay)
-   └─ 合并 AgentG ui_state + Wall Migration + Depth Profile + ATM数据
-   └─ deepcopy 隔离后写入 AppContainer._last_payload
-
-5. L3: _broadcast_loop (1Hz)
-   └─ 注入新鲜时间戳 → 发给所有 WS 客户端
-
-6. L4: React 渲染
-   └─ 盲渲染 ui_state 中的所有组件
+┌─────────────────────────────────────────────────────────────────────┐
+│                     L4 — 前端展示层                                  │
+│  Widget Compositor · Zustand Store · WebGL/Canvas · PWA             │
+│  Binary Protocol (Protobuf) · Command Palette (Ctrl+K)              │
+│  Lightweight Charts · Responsive Panels · Custom Alerts             │
+└─────────────────────────────┬───────────────────────────────────────┘
+                               │  Protobuf binary / JSON (1Hz push)
+┌─────────────────────────────▼───────────────────────────────────────┐
+│                     L3 — 输出组装层                                  │
+│  PayloadAssembler (COW) · DeltaEncoder · Multi-Channel Distributor  │
+│  Time-Series Store (Hot/Warm/Cold) · Presenter v2 (Pydantic)        │
+│  Protobuf Schema · gRPC Stream · NATS/Kafka Event Bus               │
+└─────────────────────────────┬───────────────────────────────────────┘
+                               │  DecisionOutput + Audit Trail
+┌─────────────────────────────▼───────────────────────────────────────┐
+│                     L2 — 决策分析层                                  │
+│  Feature Store (Redis + Arrow) · Signal Generators (YAML config)    │
+│  Attention Fusion (ML-Assisted) · Risk Guard Rails (Independent)    │
+│  SHAP Explainer · Backtest Engine · Shadow Mode Deployment          │
+└─────────────────────────────┬───────────────────────────────────────┘
+                               │  EnrichedSnapshot (Arrow + Aggregates)
+┌─────────────────────────────▼───────────────────────────────────────┐
+│                     L1 — 本地计算层                                  │
+│  GPU Greeks Kernel (CuPy Batch) · Compute Router (GPU/Rust/Numba)  │
+│  Streaming Aggregator (Incremental GEX) · SABR/SVI Calibration      │
+│  Multi-freq VPIN (Rust SIMD) · L2 Depth BBO · Volume Entropy       │
+└─────────────────────────────┬───────────────────────────────────────┘
+                               │  Arrow RecordBatch (zero-copy)
+┌─────────────────────────────▼───────────────────────────────────────┐
+│                     L0 — 数据摄取层                                  │
+│  Rust IngestWorker (Tokio WS) · SanitizePipeline v2 (Stat Breaker) │
+│  MVCC ChainStateStore · Adaptive Rate Governor · SPSC EventBus      │
+│  Multi-Source Feed Abstraction · FPGA-Ready Interface               │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 关键时序参数
+## 关键时序参数（重构后）
 
-| 参数 | 值 | 说明 |
-|------|----|------|
-| `compute_interval` | 1~3s（动态） | 由 `longport_limiter.get_dynamic_interval()` 决定 |
-| `ws_broadcast_interval` | 1s（固定） | 设置项 `WS_BROADCAST_INTERVAL` |
-| `management_loop` | 60s | 订阅刷新、OI 同步 |
-| `iv_baseline_sync` | 120s | IV/OI REST 基线轮询 |
-| `volume_research` | 15min | 宽窗口成交量分布扫描 |
-| `Tier2Poller` | 120s | 2DTE REST 轮询 |
-| `Tier3Poller` | 10min | 周期权 REST 轮询 |
-| API 速率限制 | 8 req/s, burst 8 | 令牌桶，max_concurrent=4 |
+| 参数 | 当前值 | 目标值 | 说明 |
+|------|--------|--------|------|
+| `ingest_latency` | 5–15 ms | **< 1 ms** | Rust IngestWorker |
+| `greeks_compute` | 30–80 ms | **< 5 ms** | GPU batch BSM |
+| `decision_latency` | 50–200 ms | **< 20 ms** | Feature Store + ML Fusion |
+| `assembly_latency` | 5–15 ms | **< 1 ms** | COW + Delta Encoding |
+| `ws_broadcast` | 1s (固定) | 1s (可配置) | 背压感知 |
+| `e2e_tick_to_render` | ~200–400 ms | **< 30 ms** | 全链路优化 |
 
 ---
 
 ## 层级文档索引
 
-| 文档 | 层级 | 说明 |
+| 文档 | 层级 | 核心重构方向 |
+|------|------|------------|
+| [L0_DATA_FEED.md](./L0_DATA_FEED.md) | L0 | Event-First · Rust Ingest · MVCC · 统计断路器 |
+| [L1_LOCAL_COMPUTATION.md](./L1_LOCAL_COMPUTATION.md) | L1 | GPU Batch BSM · 增量聚合 · SABR 校准 · 多频 VPIN |
+| [L2_DECISION_ANALYSIS.md](./L2_DECISION_ANALYSIS.md) | L2 | Feature Store · ML Fusion · Guard Rails · XAI · 回测 |
+| [L3_OUTPUT_ASSEMBLY.md](./L3_OUTPUT_ASSEMBLY.md) | L3 | COW 组装 · Delta 编码 · Protobuf · 多通道分发 · 时序存储 |
+| [L4_FRONTEND.md](./L4_FRONTEND.md) | L4 | Binary Protocol · Zustand · WebGL · Widget · PWA |
+
+---
+
+## 总体迁移路线图
+
+```
+2025 Q3 ─────────────────────────────────────────────────────
+  L0: SanitizePipeline 统计断路器 + OTel
+  L1: CuPy GPU BSM batch + compute router
+  L2: Feature Store 基础设施
+  L3: Presenter 强类型化 (Pydantic)
+  L4: Zustand state store
+
+2025 Q4 ─────────────────────────────────────────────────────
+  L0: Rust IngestWorker + SPSC EventBus
+  L1: StreamingAggregator 增量聚合
+  L2: Signal Generator 配置化 + Guard Rails
+  L3: DeltaEncoder + Protobuf schema
+  L4: Lightweight Charts + Canvas rendering
+
+2026 Q1 ─────────────────────────────────────────────────────
+  L0: MVCC ChainStateStore + Arrow 输出
+  L1: SABR 校准 + 多频 VPIN + L2 depth BBO
+  L2: Attention Fusion + Shadow Mode + SHAP
+  L3: 多通道分发 (gRPC) + 三层时序存储
+  L4: Protobuf binary WS + Widget compositor
+
+2026 Q2 ─────────────────────────────────────────────────────
+  L0: 多源 Feed 抽象 (Polygon/Databento)
+  L1: Arrow RecordBatch 零拷贝交接
+  L2: 回测框架 + Historical Feature Replay
+  L3: Broadcast Governor + 背压感知
+  L4: PWA 离线 + Command Palette
+
+2026 H2 ─────────────────────────────────────────────────────
+  L0: FPGA/Kernel Bypass 接口预留
+  L1: SVI 校准 + fused Rust SIMD
+  L2: Online A/B Testing + AutoML
+  L3: Arrow Flight + Kafka/NATS
+  L4: WebGL 渲染器 + Tauri 桌面版
+```
+
+---
+
+## 原始文档归档
+
+所有 v3 原始文档已备份至 `docs/backup/` 目录:
+
+| 文件 | 大小 | 说明 |
 |------|------|------|
-| [L0_DATA_FEED.md](./L0_DATA_FEED.md) | L0 | Longport 数据摄取、三层订阅、速率限制 |
-| [L1_LOCAL_COMPUTATION.md](./L1_LOCAL_COMPUTATION.md) | L1 | BSM Greeks、GEX聚合、Skew调整 |
-| [L2_DECISION_ANALYSIS.md](./L2_DECISION_ANALYSIS.md) | L2 | Agent A/B1/G、微观结构分析、多级门控决策 |
-| [L3_OUTPUT_ASSEMBLY.md](./L3_OUTPUT_ASSEMBLY.md) | L3 | SnapshotBuilder、Presenters、双循环广播 |
-| [L4_FRONTEND.md](./L4_FRONTEND.md) | L4 | React 仪表板、组件清单、数据路由图 |
+| `backup/SYSTEM_OVERVIEW.md` | 7.6 KB | v3 架构总览 |
+| `backup/L0_DATA_FEED.md` | 5.6 KB | v3 L0 数据摄取层 |
+| `backup/L1_LOCAL_COMPUTATION.md` | 5.7 KB | v3 L1 本地计算层 |
+| `backup/L2_DECISION_ANALYSIS.md` | 9.2 KB | v3 L2 决策分析层 |
+| `backup/L3_OUTPUT_ASSEMBLY.md` | 6.8 KB | v3 L3 输出组装层 |
+| `backup/L4_FRONTEND.md` | 8.0 KB | v3 L4 前端展示层 |
 
 ---
 

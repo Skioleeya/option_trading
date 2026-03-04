@@ -58,19 +58,22 @@ export const App: React.FC = () => {
 
     const spot = payload?.spot ?? null
     const agentG = payload?.agent_g ?? null
-    const agentBData = agentG?.data?.agent_b?.data
     const fused = agentG?.data?.fused_signal ?? null
 
     // Derived values
-    const netGex = agentBData?.net_gex ?? null
-    const callWall = agentBData?.gamma_walls?.call_wall ?? null
-    const putWall = agentBData?.gamma_walls?.put_wall ?? null
-    const flipLevel = agentBData?.gamma_flip_level ?? null
-    const ivPct = agentBData?.spy_atm_iv ?? null
+    const netGex = agentG?.data?.net_gex ?? null
+    const callWall = agentG?.data?.gamma_walls?.call_wall ?? null
+    const putWall = agentG?.data?.gamma_walls?.put_wall ?? null
+    const flipLevel = agentG?.data?.gamma_flip_level ?? null
+    const ivPct = agentG?.data?.spy_atm_iv ?? null
     const ivRegime = fused?.iv_regime ?? 'NORMAL'
 
     // ── DECOUPLED UI Architecture ──
     // Backend computes the badges and states precisely, React blindly renders them.
+    if (payload && !payload.agent_g?.data?.ui_state) {
+        console.warn("[L4 App] Backend violated invariant: ui_state missing from payload. Using hardcoded fallback.");
+    }
+
     const uiState: any = agentG?.data?.ui_state ?? {
         micro_stats: {
             net_gex: { label: '—', badge: 'badge-neutral' },

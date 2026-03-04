@@ -58,9 +58,13 @@ class GreeksExtractor:
             logger.warning("[GreeksExtractor] Empty chain or invalid spot")
             return self._empty_result()
 
+        # BUG-2 FIX: Removed redundant compute_net_gex() call here.
+        # The original log line caused a full O(N) GEX traversal purely for
+        # the log message—before the authoritative call at line 104 below.
+        # Net GEX is logged AFTER the fast path resolves it from aggregate_greeks.
         logger.info(
-            f"[GreeksExtractor] Chain length={len(chain)}, spot={spot}, "
-            f"net_gex={self._gamma_analyzer.compute_net_gex(chain, spot)['net_gex']}"
+            f"[GreeksExtractor] Chain length={len(chain)}, spot={spot:.2f}, "
+            f"has_aggregate={aggregate_greeks is not None}"
         )
 
         # Log sample call for diagnostics
@@ -123,8 +127,6 @@ class GreeksExtractor:
             otm_put_vol = 0
             total_chain_vol = 0
 
-        # 2. ATM IV extraction
-        atm_iv = self._extract_atm_iv(chain, spot)
 
         # 3. Gamma profile (DYNAMIC simulation - Fixed math)
         gamma_profile = self._gamma_analyzer.compute_gamma_profile(chain, spot)

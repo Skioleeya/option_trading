@@ -112,6 +112,7 @@ export interface AgentGResult {
         gex_regime: GexRegime
         gamma_walls: GammaWalls
         gamma_flip_level: number | null
+        spy_atm_iv: number | null
         trap_state: string
         fused_signal: FusedSignal
         micro_structure: { micro_structure_state: MicroStructureState } | null

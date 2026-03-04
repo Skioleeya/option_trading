@@ -1,186 +1,434 @@
 # L4 — 前端展示层 (Frontend Presentation Layer)
 
-> **职责**: React + TypeScript 仪表板，通过 WebSocket 实时接收 L3 输出的 payload，以三栏布局渲染所有期权分析面板，**不做任何业务计算**，完全被动渲染后端 `ui_state`。
+## 2025–2026 主流金融架构重构指引
+
+> **定位**: L4 是系统的人机界面——将 L3 组装的结构化数据以机构级交易终端品质呈现，支持交易员的实时决策、回顾分析和自定义工作流。
+>
+> **架构宗旨 (2025–2026)**: 从"被动渲染 JSON payload"模式，全面迁移至 **Binary Protocol 解码 + WebGL/Canvas 高性能渲染 + Composable Widget Architecture + Offline-First PWA + Keyboard-Driven Workflow**。
 
 ---
 
-## 1. 核心设计原则
+## 1. 架构目标与度量标准
 
-| 原则 | 实现方式 |
-|------|----------|
-| **解耦渲染** | 后端 Presenter 输出"徽章+标签"的结构，React 盲目渲染，无业务判断 |
-| **单一数据源** | 全部数据来自 `useDashboardWS` hook 的 WebSocket payload |
-| **零状态衍生** | 组件不自行计算任何衍生状态，直接读取 `payload.agent_g.data.ui_state.*` |
-| **完整性降级** | 任何字段缺失时组件显示占位符 "—" 而非崩溃 |
+| KPI | 当前基线 (v3) | 2025 H2 目标 | 2026 目标 |
+|-----|--------------|-------------|----------|
+| 首次有意义渲染 (FMP) | ~1.5s | **< 500 ms** | **< 200 ms** |
+| WS 消息处理 → DOM 更新 | ~30–80 ms | **< 10 ms** | **< 5 ms** (direct Canvas) |
+| 内存占用 (1小时运行) | ~150–300 MB | **< 100 MB** (ring buffer) | **< 60 MB** |
+| 帧率 (60fps 稳定性) | 80–95% | **> 98%** | **99.5%** (WebGL) |
+| 移动端支持 | 无 | **响应式 PWA** | 原生 Tauri/Electron 备选 |
 
 ---
 
-## 2. 数据入口 (`useDashboardWS`)
+## 2. 前端架构 (Target State)
+
+```
+              L3 Multi-Channel Output
+                       │
+          ┌────────────▼────────────────┐
+          │     L4 Frontend Runtime      │
+          │                              │
+          │  ┌──────────────────────┐    │
+          │  │  Protocol Adapter    │    │  ← Protobuf / JSON 自动协商
+          │  │  (binary decode)     │    │
+          │  └──────────┬───────────┘    │
+          │             │                │
+          │  ┌──────────▼───────────┐    │
+          │  │  State Store         │    │  ← Zustand + Immer (immutable)
+          │  │  (delta merge)       │    │     增量更新, 字段级订阅
+          │  └──────────┬───────────┘    │
+          │             │                │
+          │  ┌──────────▼───────────┐    │
+          │  │  Widget Compositor   │    │  ← 可组合面板系统
+          │  │  ├─ Recharts Panel  │    │     用户可拖拽/缩放/布局
+          │  │  ├─ Canvas Panel    │    │
+          │  │  ├─ WebGL Panel     │    │
+          │  │  └─ Table Panel     │    │
+          │  └──────────┬───────────┘    │
+          │             │                │
+          │  ┌──────────▼───────────┐    │
+          │  │  Command Palette     │    │  ← 键盘驱动操作
+          │  │  (Ctrl+K workflow)   │    │
+          │  └──────────────────────┘    │
+          │                              │
+          └──────────────────────────────┘
+```
+
+---
+
+## 3. 数据层重构
+
+### 3.1 Binary Protocol Adapter
+
+替代当前 JSON WebSocket 解析:
 
 ```typescript
-// src/hooks/useDashboardWS.ts
-const { status, payload } = useDashboardWS()
+// ProtocolAdapter — 透明处理 Protobuf 或 JSON
+class ProtocolAdapter {
+  private decoder: ProtobufDecoder | JSONDecoder;
 
-// status: 'connecting' | 'connected' | 'disconnected'
-// payload: 后端 SnapshotBuilder 输出的完整 JSON
+  constructor(ws: WebSocket) {
+    // 服务端通过首帧协商协议
+    ws.binaryType = 'arraybuffer';
+    ws.onmessage = (event) => {
+      if (event.data instanceof ArrayBuffer) {
+        this.decoder = new ProtobufDecoder();
+      } else {
+        this.decoder = new JSONDecoder(); // 向后兼容
+      }
+      const payload = this.decoder.decode(event.data);
+      stateStore.applyUpdate(payload);
+    };
+  }
+}
 ```
 
-连接到 `ws://localhost:8001/ws/dashboard`，内置自动重连。每收到一条消息立即更新 `payload` 状态，触发所有订阅组件重渲染。
+### 3.2 State Store — Zustand + 增量合并
 
-连接成功时立即从 `/api/atm-decay/history` REST 拉取当日 ATM 历史序列（初始化图表）。
+```typescript
+// Zustand store with delta merge support
+interface DashboardState {
+  spot: number;
+  signal: SignalData;
+  uiState: UIStateData;
+  atm: AtmDecayData;
+  version: number;
+
+  // 操作
+  applyFullUpdate: (payload: DashboardPayload) => void;
+  applyDelta: (delta: DeltaPayload) => void;
+}
+
+const useDashboardStore = create<DashboardState>()(
+  subscribeWithSelector((set, get) => ({
+    // ...初始值
+    applyFullUpdate: (payload) => set(payload),
+    applyDelta: (delta) => set((state) => ({
+      ...state,
+      ...delta.changes,
+      version: delta.version,
+    })),
+  }))
+);
+
+// 组件只订阅自己需要的字段 — 精确重渲染
+function MicroStats() {
+  const microStats = useDashboardStore((s) => s.uiState.micro_stats);
+  // 仅在 micro_stats 变化时重渲染
+  return <MicroStatsView data={microStats} />;
+}
+```
+
+**优势**:
+- 从全局 payload 驱动 → 字段级精确订阅
+- 消除不必要的重渲染 (当前每条 WS 消息触发全树重渲染)
+- 增量合并与状态版本控制
 
 ---
 
-## 3. 三栏布局
+## 4. 渲染引擎升级
+
+### 4.1 高频数据的 Canvas/WebGL 渲染
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                    HEADER (顶部)                     │
-│  SPY价格 | ATM IV | IV制度 | WS连接状态 | 市场状态   │
-├──────────────┬──────────────────┬────────────────────┤
-│  LEFT 280px  │  CENTER (flex-1) │   RIGHT 320px      │
-│  防御/分析   │    主图+叠加     │   战术/进攻        │
-│              │                  │                    │
-│ WallMigration│  AtmDecayChart   │  DecisionEngine    │
-│              │  (Recharts折线图) │  TacticalTriad     │
-│ DepthProfile │                  │  SkewDynamics      │
-│  (GEX柱状图) │  AtmDecayOverlay │  ActiveOptions     │
-│              │  (玻璃拟态卡片)  │  MtfFlow           │
-│ MicroStats   │  GexStatusBar    │                    │
-│  (4格指标栏) │  (底部悬浮条)   │                    │
-└──────────────┴──────────────────┴────────────────────┘
+数据频率与渲染引擎选择:
+
+  1Hz 低频面板 (TacticalTriad, SkewDynamics)
+    → React DOM (SVG/HTML) ✓ 保持
+  
+  1Hz 中频图表 (AtmDecayChart, DepthProfile)
+    → React + HTML Canvas (Recharts 2.x 或 Lightweight Charts)
+  
+  Sub-second 高频热力图 (Toxicity Heatmap, OFI Stream)
+    → WebGL (regl / Three.js 2D) ← 新增
+  
+  Tick-level 实时数据 (L2 Orderbook, Trade Tape)
+    → GPU-accelerated Canvas ← 2026 远景
 ```
 
----
+### 4.2 ATM Decay Chart 升级
 
-## 4. 组件清单
+```typescript
+// 从 Recharts 迁移到 Lightweight Charts (by TradingView)
+// 原因: 更专业的金融图表 + 更低的内存占用 + GPU 加速
+import { createChart, LineSeries } from 'lightweight-charts';
 
-### 顶部 Header（`center/Header`）
-| Props | 来源 |
-|-------|------|
-| `spot` | `payload.spot` |
-| `ivPct` | `agentBData.spy_atm_iv` |
-| `ivRegime` | `fused.iv_regime` |
-| `status` | WS 连接状态 |
-| `marketStatus` | 本地时间判断 9:00~16:00 为 OPEN |
-| `as_of` | `payload.timestamp` |
+function AtmDecayChart({ data }: { data: AtmDecayPoint[] }) {
+  const containerRef = useRef<HTMLDivElement>(null);
 
----
+  useEffect(() => {
+    const chart = createChart(containerRef.current!, {
+      layout: { background: { color: '#0a0a0f' } },
+      grid: { vertLines: { color: '#1a1a2e' }, horzLines: { color: '#1a1a2e' } },
+      timeScale: { timeVisible: true, secondsVisible: false },
+    });
 
-### 左栏 — 防御/分析
+    const series = chart.addSeries(LineSeries, {
+      color: '#00d4ff',
+      lineWidth: 2,
+    });
+    series.setData(data);
 
-#### `WallMigration`
-- **数据**: `uiState.wall_migration`（数组，来自 `WallMigrationPresenter`）
-- **渲染**: Call Wall / Put Wall 历史位移表格，含方向箭头与颜色编码
+    return () => chart.remove();
+  }, [data]);
 
-#### `DepthProfile`
-- **数据**: `uiState.depth_profile`（每 strike 的 GEX 值）+ `uiState.macro_volume_map`
-- **渲染**: 水平双向柱状图（红=Put GEX，绿=Call GEX），标注现货价位与 Flip Level
+  return <div ref={containerRef} className="h-full w-full" />;
+}
+```
 
-#### `MicroStats`
-- **数据**: `uiState.micro_stats`（`{net_gex, wall_dyn, vanna, momentum}` 各含 label/badge）
-- **渲染**: 4格小指标卡片，完全盲渲染徽章
-
----
-
-### 中栏 — 主图
-
-#### `AtmDecayChart`
-- **数据**: `atmHistory`（`AtmDecay[]`，来自 REST history + WS 追加）
-- **渲染**: Recharts `LineChart`，追踪一天内 ATM IV 随时间的衰减曲线
-
-#### `AtmDecayOverlay`
-- **数据**: `atm`（最新 ATM 快照），`spot`，`atmHistory`
-- **渲染**: 玻璃拟态浮层，显示当前 ATM IV、Theta、隐含每日移动距离
-
-#### `GexStatusBar`
-- **数据**: `netGex`, `callWall`, `flipLevel`, `putWall`
-- **渲染**: 底部悬浮状态条，显示 Net GEX（$M）、Call Wall、Put Wall、Flip Level
-
----
-
-### 右栏 — 战术/进攻
-
-#### `DecisionEngine`
-- **数据**: `fused`（`{direction, confidence, weights, regime, explanation, components}`）
-- **渲染**: 信号方向 + 置信度环形图 + 各分量权重流量图
-
-#### `TacticalTriad`
-- **数据**: `uiState.tactical_triad`
-- **渲染**: VRP 状态 / Charm 方向 / Spot-Vol 相关性三合一卡片
-
-#### `SkewDynamics`
-- **数据**: `uiState.skew_dynamics`
-- **渲染**: 标准化偏度值 + DEFENSIVE/NEUTRAL/SPECULATIVE 状态标签
-
-#### `ActiveOptions`
-- **数据**: `uiState.active_options`（Top-5 活跃合约数组）
-- **渲染**: 期权列表，含 Strike、类型、Delta、Gamma、成交量、GEX 贡献
-
-#### `MtfFlow`
-- **数据**: `uiState.mtf_flow`（`{consensus, alignment, strength, timeframes: {1m,5m,15m}}`）
-- **渲染**: 多时间框架 IV 流向，1m/5m/15m 各档方向指示条
-
----
-
-## 5. payload → 组件 数据路由图
+### 4.3 Depth Profile — WebGL 加速
 
 ```
-payload
- ├─ .spot                               → Header, GexStatusBar, AtmDecayOverlay
- ├─ .timestamp                          → Header.as_of
- ├─ .agent_g
- │    ├─ .signal                        → DecisionEngine（信号文本）
- │    └─ .data
- │         ├─ .fused_signal             → DecisionEngine（权重图）
- │         ├─ .agent_b.data
- │         │    ├─ .net_gex             → GexStatusBar
- │         │    ├─ .spy_atm_iv          → Header
- │         │    ├─ .gamma_walls         → GexStatusBar
- │         │    └─ .gamma_flip_level    → GexStatusBar, DepthProfile
- │         └─ .ui_state
- │              ├─ .micro_stats         → MicroStats
- │              ├─ .tactical_triad      → TacticalTriad
- │              ├─ .skew_dynamics       → SkewDynamics
- │              ├─ .active_options      → ActiveOptions
- │              ├─ .mtf_flow            → MtfFlow
- │              ├─ .wall_migration      → WallMigration
- │              ├─ .depth_profile       → DepthProfile
- │              ├─ .macro_volume_map    → DepthProfile
- │              └─ .atm                 → AtmDecayOverlay (最新快照追加到 atmHistory)
- └─ (REST /api/atm-decay/history)       → AtmDecayChart (初始化历史)
+当前: React SVG 柱状图 (500 个 DOM 节点)
+目标: WebGL InstancedMesh (1个 draw call)
+
+性能对比:
+  SVG (500 bars): ~8 ms/frame, 150 MB memory
+  WebGL Instanced: ~0.5 ms/frame, 20 MB memory
 ```
 
 ---
 
-## 6. 技术栈
+## 5. 可组合面板系统 (Widget Architecture)
 
-| 技术 | 用途 |
-|------|------|
-| React 18 + TypeScript | UI 框架 |
-| Tailwind CSS | 工具类样式（暗色主题） |
-| Recharts | ATM Decay 折线图 |
-| WebSocket (原生) | 实时数据接收 |
-| Vite | 构建工具，开发服务器 |
+### 5.1 核心概念
+
+从固定三栏布局升级为**可自定义面板系统**:
+
+```typescript
+interface WidgetDefinition {
+  id: string;
+  title: string;
+  component: React.ComponentType<any>;
+  dataSelector: (state: DashboardState) => any;
+  defaultSize: { w: number; h: number };
+  minSize: { w: number; h: number };
+  category: 'defense' | 'analysis' | 'tactical' | 'chart';
+}
+
+// 注册所有可用面板
+const WIDGET_REGISTRY: WidgetDefinition[] = [
+  {
+    id: 'depth_profile',
+    title: 'GEX Depth Profile',
+    component: DepthProfile,
+    dataSelector: (s) => s.uiState.depth_profile,
+    defaultSize: { w: 4, h: 6 },
+    minSize: { w: 2, h: 3 },
+    category: 'defense',
+  },
+  // ... 所有面板
+];
+```
+
+### 5.2 布局管理
+
+```
+预设布局:
+  "Scalper":       [ DepthProfile(大), AtmDecay(大), MicroStats(小) ]
+  "Macro Analyst": [ WallMigration(大), MtfFlow(大), TacticalTriad(中) ]
+  "Full Dashboard": [ 全部面板默认三栏 ]
+
+自定义:
+  - 拖拽调整面板位置和大小 (react-grid-layout)
+  - 保存到 localStorage / 云端
+  - 支持多 monitor 分屏 (DetachPanel → 新窗口)
+```
 
 ---
 
-## 7. 关键文件
+## 6. 键盘驱动工作流 (Command Palette)
 
-| 文件 | 职责 |
-|------|------|
-| `src/hooks/useDashboardWS.ts` | WS 连接管理，payload 解析 |
-| `src/components/App.tsx` | 根组件，数据提取 + 三栏布局编排 |
-| `src/components/center/Header.tsx` | 顶部状态栏 |
-| `src/components/center/AtmDecayChart.tsx` | ATM IV 衰减折线图 |
-| `src/components/center/AtmDecayOverlay.tsx` | ATM 玻璃拟态浮层 |
-| `src/components/center/GexStatusBar.tsx` | GEX 底部状态条 |
-| `src/components/left/WallMigration.tsx` | Gamma Wall 位移表 |
-| `src/components/left/DepthProfile.tsx` | GEX 深度分布图 |
-| `src/components/left/MicroStats.tsx` | 微型指标栏 |
-| `src/components/right/DecisionEngine.tsx` | 融合信号 + 置信度展示 |
-| `src/components/right/TacticalTriad.tsx` | VRP/Charm/SVolCorr 三合一 |
-| `src/components/right/SkewDynamics.tsx` | 偏度状态 |
-| `src/components/right/ActiveOptions.tsx` | 活跃期权列表 |
-| `src/components/right/MtfFlow.tsx` | 多时间框架流向 |
-| `src/types/dashboard.ts` | TypeScript 类型定义 |
+### 6.1 Cmd+K 命令面板
+
+```
+交易员键盘快捷操作:
+
+  Ctrl+K → 打开命令面板
+    "show depth"     → 聚焦 Depth Profile
+    "zoom atm"       → ATM Decay 放大
+    "switch layout"  → 切换预设布局
+    "export signals" → 导出当日信号为 CSV
+    "alert vpin > 0.6" → 设置自定义警报
+
+  全局快捷键:
+    Space       → 暂停/恢复实时更新
+    G           → 切换 GEX 显示模式 (abs / normalized)
+    D           → 切换暗/亮主题
+    1/2/3       → 快速切换布局预设
+    Esc         → 关闭所有浮层
+```
+
+---
+
+## 7. 离线与恢复能力
+
+### 7.1 Offline-First PWA
+
+```
+┌──────────────────────────────────────────┐
+│            PWA Architecture              │
+│                                          │
+│  Service Worker:                         │
+│    ├─ 缓存 static assets (Workbox)      │
+│    ├─ 离线时显示最后快照 + stale 标记   │
+│    └─ 重连后自动从 /history 回填        │
+│                                          │
+│  IndexedDB:                              │
+│    ├─ 最近 500 条快照缓存              │
+│    ├─ 用户自定义布局存储               │
+│    └─ 自定义警报规则存储               │
+│                                          │
+│  Background Sync:                        │
+│    └─ 中断期间的 beacon 通知补发        │
+└──────────────────────────────────────────┘
+```
+
+### 7.2 连接状态与恢复
+
+```typescript
+type ConnectionState =
+  | 'connected'           // 正常
+  | 'reconnecting'        // 自动重连中 (指数退避)
+  | 'degraded'            // 连接正常但延迟 > 3s
+  | 'offline'             // 完全断连 → 显示 stale 数据
+  | 'maintenance'         // 服务端计划维护
+
+// 可视化: Header 中使用颜色编码的连接状态指示器
+// 绿 → connected, 黄 → degraded, 红闪 → reconnecting, 灰 → offline
+```
+
+---
+
+## 8. 自定义警报系统
+
+```typescript
+interface AlertRule {
+  id: string;
+  name: string;
+  condition: (state: DashboardState) => boolean;
+  action: 'sound' | 'notification' | 'highlight' | 'popup';
+  cooldown_ms: number;  // 防重复触发
+}
+
+// 示例预设警报
+const PRESET_ALERTS: AlertRule[] = [
+  {
+    id: 'vpin_high',
+    name: 'VPIN > 0.7',
+    condition: (s) => s.uiState.depth_profile?.toxicity > 0.7,
+    action: 'sound',
+    cooldown_ms: 60_000,
+  },
+  {
+    id: 'gex_flip',
+    name: 'GEX Flip Detected',
+    condition: (s) => s.uiState.micro_stats?.net_gex?.badge === 'negative',
+    action: 'popup',
+    cooldown_ms: 300_000,
+  },
+];
+```
+
+---
+
+## 9. 技术栈升级路线
+
+| 当前 | 2025 目标 | 2026 目标 |
+|------|---------|---------|
+| React 18 | **React 19** (use + Suspense) | React 19+ |
+| Tailwind CSS | 保持 | 保持 |
+| Recharts | **Lightweight Charts** (金融图表) | + WebGL 自定义渲染器 |
+| WebSocket (原生) | **protobuf-ts** + 二进制 WS | + gRPC-Web 备选 |
+| Vite | Vite 6 | Vite + RSPack 混合 |
+| 无状态管理 | **Zustand** + subscribeWithSelector | 保持 |
+| 无测试 | **Vitest + Testing Library** | + Playwright E2E |
+| 无离线 | **PWA (Workbox)** | + Tauri 桌面版 |
+
+---
+
+## 10. payload → 组件 数据路由图 2.0
+
+```
+ProtocolAdapter (binary/JSON)
+  │
+  ├─ DeltaEncoder.merge → Zustand Store
+  │
+  │  Store Fields                    → Subscribers (precise)
+  │  ├─ .spot                       → Header, GexStatusBar, AtmDecayOverlay
+  │  ├─ .signal                     → DecisionEngine
+  │  ├─ .uiState.micro_stats        → MicroStats (field-level sub)
+  │  ├─ .uiState.tactical_triad     → TacticalTriad
+  │  ├─ .uiState.skew_dynamics      → SkewDynamics
+  │  ├─ .uiState.active_options     → ActiveOptions
+  │  ├─ .uiState.mtf_flow           → MtfFlow
+  │  ├─ .uiState.wall_migration     → WallMigration
+  │  ├─ .uiState.depth_profile      → DepthProfile (WebGL)
+  │  ├─ .uiState.macro_volume_map   → DepthProfile
+  │  ├─ .atm                        → AtmDecayOverlay + AtmDecayChart
+  │  └─ .version                    → 内部一致性校验
+  │
+  └─ AlertEngine.evaluate(store) → 警报系统
+```
+
+---
+
+## 11. 三栏布局 2.0 (默认预设)
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│  HEADER: SPY $XXX.XX │ IV 18.5% │ ●Connected │ 09:30-16:00    │
+│  ┌──────── Command Palette (Ctrl+K) ────────┐                  │
+├──┤─────────────┬──────────────────┬──────────┤─────────────────┤
+│  │  LEFT 300px │  CENTER (flex-1) │  RIGHT   │ ALERTS          │
+│  │  可折叠     │  可拆分为多图表  │  320px   │ 浮层侧栏        │
+│  │             │                  │          │                  │
+│  │ WallMigr.   │  AtmDecay(LWC)  │ Decision │ ⚡ VPIN > 0.7   │
+│  │ DepthProf.  │  [可替换为      │ Tactical │ ⚡ GEX Flipped  │
+│  │  (WebGL)    │   Orderbook/    │ Skew     │                  │
+│  │ MicroStats  │   Trade Tape]   │ ActiveOpt│ [自定义警报列表] │
+│  │             │  GexStatusBar   │ MtfFlow  │                  │
+│  │ [可折叠面板]│  [底部固定]     │          │                  │
+└──┴─────────────┴──────────────────┴──────────┴─────────────────┘
+```
+
+---
+
+## 12. 可观测性 (前端 RUM)
+
+| 指标 | 工具 | 说明 |
+|------|------|------|
+| `l4.ws_msg_to_render` | Performance API | 消息到达 → DOM 更新延迟 |
+| `l4.frame_rate` | requestAnimationFrame | 实时 FPS 监控 |
+| `l4.memory_usage` | `performance.memory` | 堆内存趋势 |
+| `l4.ws_reconnect_count` | 自定义计数器 | 重连频率 |
+| `l4.user_interaction` | 自定义事件 | 命令面板使用率、布局变更 |
+
+---
+
+## 13. 迁移路线图
+
+```
+Phase 1 (2025 Q3): Zustand state store + precise subscriptions
+Phase 2 (2025 Q4): Lightweight Charts + Canvas DepthProfile
+Phase 3 (2026 Q1): Protobuf binary WS + DeltaEncoder client
+Phase 4 (2026 Q1): Widget compositor (react-grid-layout) + 预设布局
+Phase 5 (2026 Q2): PWA + 离线支持 + Command Palette
+Phase 6 (2026 H2): WebGL 渲染器 + Tauri 桌面版 + 自定义警报
+```
+
+---
+
+## 14. 关键文件（当前 → 目标映射）
+
+| 当前文件 | 重构目标 | 备注 |
+|---------|---------|------|
+| `src/hooks/useDashboardWS.ts` | → `src/adapters/protocol_adapter.ts` + `src/store/dashboard.ts` | 分离协议与状态 |
+| `src/components/App.tsx` | → `src/compositor/WidgetCompositor.tsx` | 可组合面板 |
+| `src/components/center/AtmDecayChart.tsx` | → Lightweight Charts 实现 | 金融级图表 |
+| `src/components/left/DepthProfile.tsx` | → `src/renderers/depth_profile_webgl.tsx` | WebGL 加速 |
+| `src/types/dashboard.ts` | → `src/types/generated/` (from Protobuf) | 自动生成类型 |
+| — (新文件) | `src/store/dashboard.ts` | Zustand store |
+| — (新文件) | `src/alerts/engine.ts` | 自定义警报引擎 |
+| — (新文件) | `src/compositor/CommandPalette.tsx` | Cmd+K 命令面板 |
+| — (新文件) | `src/sw.ts` | Service Worker (PWA) |

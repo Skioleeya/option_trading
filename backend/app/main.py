@@ -87,7 +87,14 @@ class AppContainer:
         # 2. Initialize data feed and tracker
         await self.option_chain_builder.initialize()
         self.atm_decay_tracker.ctx = self.option_chain_builder._quote_ctx
-        await self.atm_decay_tracker.initialize()
+
+        # Fetch current spot for anchor staleness validation
+        try:
+            _init_snapshot = await self.option_chain_builder.fetch_chain()
+            _init_spot = _init_snapshot.get("spot", 0.0)
+        except Exception:
+            _init_spot = 0.0
+        await self.atm_decay_tracker.initialize(spot=_init_spot)
         self.quote_hub_ready.set()
 
         # Start agent runner loop (compute every 3s) and broadcast loop (1Hz)
@@ -119,7 +126,7 @@ class AppContainer:
         Decouples the slow Redis OI aggregation and D/E/G flow engine
         from the microsecond-sensitive AgentG compute loop.
         """
-        update_interval = 3.0  # Runs roughly every 3 seconds
+        update_interval = settings.websocket_update_interval
         next_tick = time.monotonic()
         
         while self._running:
@@ -162,7 +169,7 @@ class AppContainer:
     async def _agent_runner_loop(self) -> None:
         """Compute loop: fetch data → run agents → build payload → save Redis.
 
-        Dynamically paces between 1s (idle API) and 3s (heavy API load).
+        Runs at a constant 1Hz cadence.
         Does NOT broadcast — that is handled by _broadcast_loop.
 
         RACE FIX (Race 1): payload is stored as copy.deepcopy so the broadcast
@@ -174,7 +181,7 @@ class AppContainer:
 
         while self._running:
             # 0. Dynamically adjust interval based on available API tokens
-            compute_interval = float(longport_limiter.get_dynamic_interval())
+            compute_interval = settings.websocket_update_interval
             # PP-L3D: Expose current compute_interval so broadcast_loop can
             # calculate a dynamic is_stale threshold.
             self._current_compute_interval = compute_interval
@@ -198,6 +205,12 @@ class AppContainer:
                     snapshot.get("chain", []),
                     snapshot.get("spot", 0.0)
                 )
+                
+                # 2.6 Sync mandatory symbols (ATM anchors) back to data feed
+                # This ensures the symbols used for the chart are always depth-subscribed.
+                anchor_symbols = self.atm_decay_tracker.get_anchor_symbols()
+                if anchor_symbols:
+                    self.option_chain_builder.set_mandatory_symbols(anchor_symbols)
 
                 agent_time = time.monotonic() - agent_start
 
@@ -257,62 +270,65 @@ class AppContainer:
         next_tick = time.monotonic()
 
         while self._running:
-            if self._last_payload is not None:
-                # PP-L3E FIX: Use shallow copy instead of deepcopy for performance.
-                # Since we only mutate top-level keys (heartbeat_timestamp, is_stale, timestamp),
-                # the nested dictionaries remain fully isolated. Deepcopy incurred a 9-30ms penalty.
-                fresh_payload = dict(self._last_payload)
-                fresh_payload["heartbeat_timestamp"] = datetime.now(ZoneInfo("US/Eastern")).isoformat()
-                
-                # PP-L3D FIX: Dynamic is_stale threshold scaled to current
-                # compute_interval, so the stale flag only fires when the
-                # payload is older than 2.5× the *actual* compute cadence,
-                # not a hard-coded constant that may not match.
-                payload_age = time.monotonic() - self._last_payload_time
-                stale_threshold = self._current_compute_interval * 2.5
-                fresh_payload["is_stale"] = payload_age > stale_threshold
+            try:
+                if self._last_payload is not None:
+                    # PP-L3E FIX: Use shallow copy instead of deepcopy for performance.
+                    # Since we only mutate top-level keys (heartbeat_timestamp, is_stale, timestamp),
+                    # the nested dictionaries remain fully isolated. Deepcopy incurred a 9-30ms penalty.
+                    fresh_payload = dict(self._last_payload)
+                    fresh_payload["heartbeat_timestamp"] = datetime.now(ZoneInfo("US/Eastern")).isoformat()
+                    
+                    # PP-L3D FIX: Dynamic is_stale threshold scaled to current
+                    # compute_interval, so the stale flag only fires when the
+                    # payload is older than 2.5× the *actual* compute cadence,
+                    # not a hard-coded constant that may not match.
+                    payload_age = time.monotonic() - self._last_payload_time
+                    stale_threshold = self._current_compute_interval * 2.5
+                    fresh_payload["is_stale"] = payload_age > stale_threshold
 
-                # PP-L3F FIX: Expose a canonical `timestamp` alias at the top
-                # level so the frontend Header component reads a consistent
-                # key name regardless of internal rename history.
-                fresh_payload["timestamp"] = fresh_payload.get("data_timestamp", "")
+                    # PP-L3F FIX: Expose a canonical `timestamp` alias at the top
+                    # level so the frontend Header component reads a consistent
+                    # key name regardless of internal rename history.
+                    fresh_payload["timestamp"] = fresh_payload.get("data_timestamp", "")
 
-                # Delta Push optimization: only send differences if we already sent a full payload recently
-                now_time = time.monotonic()
-                if (
-                    not self._last_broadcast_payload or 
-                    (now_time - self._last_full_snapshot_time > 30.0)
-                ):
-                    # Send full snapshot
-                    msg = {**fresh_payload, "type": "dashboard_update"}
-                    self._last_broadcast_payload = fresh_payload
-                    self._last_full_snapshot_time = now_time
-                else:
-                    # Calculate JSON patch
-                    try:
-                        patch_obj = jsonpatch.make_patch(self._last_broadcast_payload, fresh_payload)
-                        msg = {
-                            "type": "dashboard_delta",
-                            "patch": patch_obj.patch,
-                            "timestamp": fresh_payload["timestamp"],
-                            "heartbeat_timestamp": fresh_payload["heartbeat_timestamp"]
-                        }
-                        self._last_broadcast_payload = fresh_payload
-                    except Exception as patch_err:
-                        logger.warning(f"[L3 Broadcast] Delta patch generation failed: {patch_err}. Falling back to full snapshot.")
+                    # Delta Push optimization: only send differences if we already sent a full payload recently
+                    now_time = time.monotonic()
+                    if (
+                        not self._last_broadcast_payload or 
+                        (now_time - self._last_full_snapshot_time > 30.0)
+                    ):
+                        # Send full snapshot
                         msg = {**fresh_payload, "type": "dashboard_update"}
                         self._last_broadcast_payload = fresh_payload
                         self._last_full_snapshot_time = now_time
+                    else:
+                        # Calculate JSON patch
+                        try:
+                            patch_obj = jsonpatch.make_patch(self._last_broadcast_payload, fresh_payload)
+                            msg = {
+                                "type": "dashboard_delta",
+                                "patch": patch_obj.patch,
+                                "timestamp": fresh_payload["timestamp"],
+                                "heartbeat_timestamp": fresh_payload["heartbeat_timestamp"]
+                            }
+                            self._last_broadcast_payload = fresh_payload
+                        except Exception as patch_err:
+                            logger.warning(f"[L3 Broadcast] Delta patch generation failed: {patch_err}. Falling back to full snapshot.")
+                            msg = {**fresh_payload, "type": "dashboard_update"}
+                            self._last_broadcast_payload = fresh_payload
+                            self._last_full_snapshot_time = now_time
 
-                client_count = len(self._ws_clients)
-                logger.debug(
-                    f"[RACE_PROBE] broadcast: payload_age={payload_age:.2f}s, "
-                    f"ws_clients={client_count}, type={msg['type']}"
-                )
+                    client_count = len(self._ws_clients)
+                    logger.debug(
+                        f"[RACE_PROBE] broadcast: payload_age={payload_age:.2f}s, "
+                        f"ws_clients={client_count}, type={msg['type']}"
+                    )
 
-                await self._broadcast(msg)
-            else:
-                logger.debug(f"[L3 Broadcast] Skipped: _last_payload is None. Compute loop may be stalled. (Stalled for {(time.monotonic() - next_tick):.1f}s)")
+                    await self._broadcast(msg)
+                else:
+                    logger.debug(f"[L3 Broadcast] Skipped: _last_payload is None. Compute loop may be stalled. (Stalled for {(time.monotonic() - next_tick):.1f}s)")
+            except Exception as e:
+                logger.error(f"[L3 Broadcast Loop] Unexpected error: {e}", exc_info=True)
 
             next_tick += broadcast_interval
             sleep_dur = next_tick - time.monotonic()
@@ -333,10 +349,12 @@ class AppContainer:
         for ws in self._ws_clients:
             try:
                 await ws.send_text(message)
-            except Exception:
+            except Exception as e:
+                logger.debug(f"[L3 Broadcast] Disconnecting WS client due to error: {e}")
                 disconnected.add(ws)
 
-        self._ws_clients -= disconnected
+        if disconnected:
+            self._ws_clients -= disconnected
 
     def register_ws(self, ws: WebSocket) -> None:
         """Register a WebSocket client."""
@@ -474,6 +492,21 @@ async def get_atm_decay_history():
     
     return {
         "date": date_str,
+        "history": history,
+        "count": len(history)
+    }
+
+@app.post("/api/atm-decay/flush-history")
+async def flush_atm_decay_history():
+    """Flush and rebuild the ATM decay history from the Intraday API."""
+    container: AppContainer = app.state.container
+    date_str = datetime.now(ZoneInfo("US/Eastern")).strftime("%Y%m%d")
+    await container.atm_decay_tracker.flush_and_rebuild()
+    history = await container.atm_decay_tracker.get_history(date_str)
+    
+    return {
+        "date": date_str,
+        "message": "History flushed and rebuilt",
         "history": history,
         "count": len(history)
     }

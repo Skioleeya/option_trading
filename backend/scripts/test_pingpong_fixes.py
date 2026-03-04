@@ -431,17 +431,109 @@ ok25 = check(
 )
 
 # ===========================================================================
+# PP-OI-HOTSTART: OI 冷启动修复 — 磁盘预填验证
+# ===========================================================================
+print()
+print(SEP)
+print("PP-OI-HOTSTART: OI disk preload hot-start fix")
+print(SEP)
+
+import tempfile, json
+from pathlib import Path
+from app.services.system.persistent_oi_store import PersistentOIStore
+from app.services.feeds.iv_baseline_sync import IVBaselineSync
+from app.services.feeds.rate_limiter import APIRateLimiter
+
+DATE_STR = "20260303"
+TEST_OI = {
+    "SPY260303C600000.US": 15000,
+    "SPY260303P580000.US": 9500,
+    "SPY260303C620000.US": 0,  # zero OI → should be skipped
+}
+
+with tempfile.TemporaryDirectory() as tmpdir:
+    # Seed a disk baseline
+    store = PersistentOIStore(data_dir=tmpdir)
+    chain_like = [{"symbol": s, "open_interest": oi} for s, oi in TEST_OI.items()]
+    store.save_baseline(DATE_STR, chain_like)
+
+    # Build a minimal IVBaselineSync (without rate limiter overhead)
+    sync = IVBaselineSync.__new__(IVBaselineSync)
+    sync.iv_cache = {}
+    sync.oi_cache = {}
+    sync.spot_at_sync = {}
+    sync._task = None
+    sync._warming_up = False
+    sync._limiter = None
+    sync._loop = None
+    sync._oi_store = PersistentOIStore(data_dir=tmpdir)
+
+    # PP-OI-HOTSTART-1: returns correct count (only symbols with OI > 0)
+    count = sync.preload_oi_from_disk(DATE_STR)
+    ok_h1 = check(
+        "PP-OI-HOTSTART-1: preload_oi_from_disk returns count of non-zero entries",
+        count == 2,  # zero-OI entry skipped
+        f"got {count}, expected 2"
+    )
+
+    # PP-OI-HOTSTART-2: oi_cache is correctly populated
+    ok_h2 = check(
+        "PP-OI-HOTSTART-2: oi_cache filled with correct OI values",
+        sync.oi_cache.get("SPY260303C600000.US") == 15000
+        and sync.oi_cache.get("SPY260303P580000.US") == 9500,
+        f"oi_cache={sync.oi_cache}"
+    )
+
+    # PP-OI-HOTSTART-3: zero-OI symbol is excluded
+    ok_h3 = check(
+        "PP-OI-HOTSTART-3: zero-OI baseline entry is NOT loaded into oi_cache",
+        "SPY260303C620000.US" not in sync.oi_cache,
+        f"oi_cache has zero entry: {sync.oi_cache.get('SPY260303C620000.US')}"
+    )
+
+    # PP-OI-HOTSTART-4: preload does NOT overwrite existing REST values in oi_cache
+    sync.oi_cache["SPY260303C600000.US"] = 99999  # simulate REST already loaded this
+    sync2 = IVBaselineSync.__new__(IVBaselineSync)
+    sync2.iv_cache = {}
+    sync2.oi_cache = {"SPY260303C600000.US": 99999}
+    sync2.spot_at_sync = {}
+    sync2._task = None
+    sync2._warming_up = False
+    sync2._limiter = None
+    sync2._loop = None
+    sync2._oi_store = PersistentOIStore(data_dir=tmpdir)
+    sync2.preload_oi_from_disk(DATE_STR)
+    ok_h4 = check(
+        "PP-OI-HOTSTART-4: existing REST value in oi_cache is NOT overwritten by disk preload",
+        sync2.oi_cache.get("SPY260303C600000.US") == 99999,
+        f"got {sync2.oi_cache.get('SPY260303C600000.US')}, expected 99999 (REST wins)"
+    )
+
+    # PP-OI-PERSIST: _persist_oi_to_disk writes oi_cache to disk
+    sync3 = IVBaselineSync.__new__(IVBaselineSync)
+    sync3.oi_cache = {"SPY260303C550000.US": 7777}
+    sync3._oi_store = PersistentOIStore(data_dir=tmpdir)
+    sync3._persist_oi_to_disk("20260304")
+    reloaded = PersistentOIStore(data_dir=tmpdir).get_baseline("20260304")
+    ok_h5 = check(
+        "PP-OI-PERSIST: _persist_oi_to_disk writes oi_cache to disk correctly",
+        reloaded.get("SPY260303C550000.US") == 7777,
+        f"reloaded={reloaded}"
+    )
+
+# ===========================================================================
 # Summary
 # ===========================================================================
 all_ok = [ok1,ok2,ok3,ok4,ok5,ok6,ok7,ok8,ok9,ok10,ok11,ok12,ok13,ok14,ok15,ok16,ok17,
-          ok18,ok19,ok20,ok21,ok22,ok23,ok24,ok25,ok26]
+          ok18,ok19,ok20,ok21,ok22,ok23,ok24,ok25,ok26,
+          ok_h1,ok_h2,ok_h3,ok_h4,ok_h5]
 passed = sum(all_ok)
 total  = len(all_ok)
 
 print()
 print(SEP)
 if passed == total:
-    print(f"\033[92m✓ ALL {total}/{total} CHECKS PASSED — PP-1 ~ PP-4 + PP-VPIN + PP-ACCEL fixes verified.\033[0m")
+    print(f"\033[92m✓ ALL {total}/{total} CHECKS PASSED — PP-1 ~ PP-4 + PP-VPIN + PP-ACCEL + PP-OI-HOTSTART fixes verified.\033[0m")
 else:
     print(f"\033[91m✗ {passed}/{total} CHECKS PASSED — review failures above.\033[0m")
 print(SEP)

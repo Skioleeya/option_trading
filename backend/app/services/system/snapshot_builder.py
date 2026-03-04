@@ -35,6 +35,12 @@ class SnapshotBuilder:
     # ABSENT from a payload would never be cleared (zombie data).
     # By always emitting this skeleton, we give the frontend an explicit reset
     # signal for every field that the current tick has no data for.
+    #
+    # STICKY FIELDS: wall_migration, depth_profile, active_options, macro_volume_map
+    # are intentionally EXCLUDED from this skeleton. Their presenters now cache
+    # the last valid output and return it on empty input, so we never need to
+    # emit empty arrays. Including them here would cause blanking when data is
+    # transiently unavailable (the original root cause of this bug).
     UI_STATE_SKELETON: dict[str, Any] = {
         "micro_stats": {
             "net_gex":  {"label": "—", "badge": "badge-neutral"},
@@ -42,13 +48,10 @@ class SnapshotBuilder:
             "vanna":    {"label": "—", "badge": "badge-neutral"},
             "momentum": {"label": "—", "badge": "badge-neutral"},
         },
-        "tactical_triad":   None,
-        "skew_dynamics":    None,
-        "active_options":   [],
-        "mtf_flow":         None,
-        "wall_migration":   [],
-        "depth_profile":    [],
-        "macro_volume_map": {},
+        # PP-STICKY FIX: tactical_triad, skew_dynamics, etc. are excluded so
+        # the frontend keeps previous state when AgentG has no new data.
+        # wall_migration, depth_profile, active_options, macro_volume_map are
+        # also excluded — presenters cache last-valid and never return empty.
         "atm":              None,
     }
 
@@ -110,25 +113,36 @@ class SnapshotBuilder:
         # 3. Overlay SnapshotBuilder's own additions (wall_migration, depth_profile).
         # Net effect: new data wins; absent optional fields fall back to explicit null/[].
         if data_block:
-            existing_ui = data_block.get("ui_state") or {}
-            
             # Create a new data block dict to avoid mutating the original in-place
             new_data_block = dict(data_block)
+            existing_ui = data_block.get("ui_state") or {}
+            
             new_data_block["ui_state"] = {
                 **SnapshotBuilder.UI_STATE_SKELETON,
                 **existing_ui,
                 **sb_additions,
             }
+
+            dp = new_data_block["ui_state"].get("depth_profile", [])
+            strikes = [r.get("strike") for r in dp]
+            if len(strikes) != len(set(strikes)):
+                logger.error(f"[SnapshotBuilder] DUPLICATE STRIKES DETECTED in depth_profile: {strikes}")
+
             agent_data["data"] = new_data_block
         else:
             agent_data["data"] = {
                 "ui_state": {**SnapshotBuilder.UI_STATE_SKELETON, **sb_additions}
             }
+            new_data_block = agent_data["data"]
+            
+            dp = new_data_block["ui_state"].get("depth_profile", [])
+            strikes = [r.get("strike") for r in dp]
+            if len(strikes) != len(set(strikes)):
+                logger.error(f"[SnapshotBuilder] DUPLICATE STRIKES DETECTED in depth_profile: {strikes}")
 
         # PP-3 FIX: Detect OOD (Out-of-Date) Tick Drift between L0 snapshot and L2 agent decision
-        # We assume 'as_of' in snapshot and 'as_of' in agent_result are strings or datetime
-        snapshot_time = snapshot.get("as_of")  # This is usually a datetime from Tier2/WS
-        agent_as_of = data_block.get("as_of")  # This is from AgentG -> GreeksExtractor
+        snapshot_time = snapshot.get("as_of")
+        agent_as_of = data_block.get("as_of")
         
         drift_warning = False
         drift_ms = 0.0
@@ -140,19 +154,17 @@ class SnapshotBuilder:
                 agent_as_of = datetime.fromisoformat(agent_as_of)
                 
             if snapshot_time and agent_as_of:
-                # Drift is the lag between raw data arrival and decision finalization
                 delay = (agent_as_of - snapshot_time).total_seconds()
                 drift_ms = delay * 1000
-                if delay > 0.8: # Threshold: 800ms lag is significant for 0DTE
+                if delay > 0.8:
                     drift_warning = True
-                    logger.warning(f"[SnapshotBuilder] OOD Drift Detected: {drift_ms:.0f}ms")
         except Exception as e:
-            logger.debug(f"[L3 SnapshotBuilder] Failed to calc drift: {e}. snapshot_time type: {type(snapshot_time)}, agent_as_of type: {type(agent_as_of)}. snapshot_time: {snapshot_time}, agent_as_of: {agent_as_of}")
+            logger.debug(f"[L3 SnapshotBuilder] Failed to calc drift: {e}")
 
         return {
             "type": "dashboard_update",
-            "data_timestamp": now.isoformat(), # Re-mapping to logical name
-            "broadcast_timestamp": now.isoformat(), # Legacy fallback
+            "data_timestamp": now.isoformat(),
+            "broadcast_timestamp": now.isoformat(),
             "spot": spot,
             "drift_ms": drift_ms,
             "drift_warning": drift_warning,

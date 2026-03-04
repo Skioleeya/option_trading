@@ -90,6 +90,15 @@ _ema_max_gex: float = 0.0
 _MAX_EMA_ALPHA_RISE: float = 0.80   # fast response to new highs
 _MAX_EMA_ALPHA_FALL: float = 0.05   # slow decay when below previous high
 
+# BUG-4 FIX: Track the calendar date the EMA state was last reset.
+# On the first tick of a new trading day, all EMA state is flushed to cold-start
+# values, preventing prior-day GEX peaks from suppressing new-day bar heights
+# when the process runs continuously across midnight.
+_current_ema_date: str = ""   # YYYYMMDD; empty = not yet initialised
+
+# Sticky cache — preserves last valid rows across ticks where per_strike_gex is empty
+_last_valid_depth: list[dict[str, Any]] = []
+
 
 # ─── Internal helpers (CPU-side, scalar) ─────────────────────────────────────
 
@@ -184,10 +193,26 @@ class DepthProfilePresenter:
            preventing the entire chart from rescaling when the dominant
            bar briefly drops.
         """
-        global _ema_max_gex, _center_ema
-
+        global _ema_max_gex, _center_ema, _last_valid_depth
         if not per_strike_gex:
-            return []
+            # Sticky: return cached result so frontend doesn't blank during transient gaps
+            return _last_valid_depth
+
+        # BUG-4 FIX: Reset all module-level EMA state when the trading date rolls over.
+        # Without this, a long-running process carries yesterday's EMA peaks into the
+        # new session, causing all bars to appear tiny until the legacy peak decays
+        # (which takes ~20+ ticks at _MAX_EMA_ALPHA_FALL=0.05).
+        from datetime import datetime as _dt
+        from zoneinfo import ZoneInfo as _ZI
+        global _prev_calls, _prev_puts, _current_ema_date
+        today = _dt.now(_ZI("US/Eastern")).strftime("%Y%m%d")
+        if today != _current_ema_date:
+            logger.info(f"[DepthProfile EMA] New trading day {today} — resetting EMA state.")
+            _prev_calls = None
+            _prev_puts = None
+            _center_ema = 0.0
+            _ema_max_gex = 0.0
+            _current_ema_date = today
 
         # ── Step 1: Build lookup from raw data ────────────────────────────────
         raw_by_strike: dict[float, Any] = {}
@@ -307,4 +332,5 @@ class DepthProfilePresenter:
                 "bbo_imbalance":    float(raw_bbo[idx]),
             })
 
+        _last_valid_depth = rows
         return rows

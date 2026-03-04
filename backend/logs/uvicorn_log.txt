@@ -1,0 +1,852 @@
+INFO:     Started server process [13132]
+INFO:     Waiting for application startup.
+15:42:40.441 INFO app.services.system.redis_service: Connected to Redis at 127.0.0.1:6380
+15:42:40.443 INFO app.services.feeds.option_chain_builder: [OptionChainBuilder] Token Diag: key=d5c6d5fde18fd250ab1e028caf9b1fb5 token=m_eyJ...Vg6fk len=1054
++----------+----------------------+
+| CN       | LV1 Real-time Quotes |
+|----------+----------------------|
+| US       | Nasdaq Basic         |
+|----------+----------------------|
+| HK       | LV1 Real-time Quotes |
+|----------+----------------------|
+| USOption | LV1 Real-time Quotes |
++----------+----------------------+
+15:42:42.461 INFO app.services.feeds.option_chain_builder: [OptionChainBuilder] QuoteContext initialized
+15:42:42.461 INFO app.services.feeds.option_chain_builder: [OptionChainBuilder] Tier 2 polling (2DTE) is DISABLED per config
+15:42:42.461 INFO app.services.feeds.option_chain_builder: [OptionChainBuilder] Tier 3 polling (Weekly) is DISABLED per config
+15:42:42.461 INFO app.services.analysis.bsm_fast: [bsm_fast.warmup] Starting CuPy GPU pre-compilation …
+15:42:42.704 INFO app.services.analysis.bsm_fast: [bsm_fast.warmup] CuPy GPU pre-compilation complete in 243 ms — subsequent calls will be near-zero latency.
+15:42:43.106 INFO app.services.analysis.atm_decay_tracker: [AtmDecayTracker] Restored anchor from Redis: strike=680.0 (spot=N/A)
+15:42:43.106 INFO app.main: [AppContainer] All services initialized
+15:42:43.106 WARNING app.agents.services.greeks_extractor: [GreeksExtractor] Empty chain or invalid spot
+15:42:43.107 INFO app.agents.agent_g: [AgentG] MTF Damping ACTIVATED: alignment=0.00 < 0.34
+15:42:43.109 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:42:43.109 INFO app.services.feeds.option_chain_builder: [OptionChainBuilder] Updated mandatory symbols: {'SPY260303P680000.US', 'SPY260303C680000.US'}
+15:42:43.109 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=0.0ms, interval=1.0s
+15:42:43.115 WARNING app.ui.active_options.presenter: [ActiveOptionsPresenter] No options above min_volume threshold
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+15:42:44.148 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=10, spot=680.495, net_gex=0.0
+15:42:44.149 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:42:44.149 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=0.0ms, interval=1.0s
+15:42:45.123 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=20, spot=680.48, net_gex=0.0
+15:42:45.124 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:42:45.124 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=0.0ms, interval=1.0s
+15:42:46.137 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=20, spot=680.496, net_gex=0.0
+15:42:46.138 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:42:46.138 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=0.0ms, interval=1.0s
+15:42:47.124 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=30, spot=680.5, net_gex=0.0
+15:42:47.125 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:42:47.125 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=0.0ms, interval=1.0s
+INFO:     127.0.0.1:9824 - "WebSocket /ws/dashboard" [accepted]
+INFO:     connection open
+[DEBUG] ========== LIFESPAN START ==========
+INFO:     127.0.0.1:9827 - "GET /api/atm-decay/history HTTP/1.1" 200 OK
+15:42:48.140 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=40, spot=680.48, net_gex=0.0
+15:42:48.141 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:42:48.141 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=0.0ms, interval=1.0s
+15:42:49.136 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=40, spot=680.5, net_gex=0.0
+15:42:49.137 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:42:49.137 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=15.0ms, interval=1.0s
+15:42:50.131 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=50, spot=680.475, net_gex=0.0
+15:42:50.133 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:42:50.133 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=0.0ms, interval=1.0s
+15:42:51.147 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=50, spot=680.48, net_gex=0.0
+15:42:51.148 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:42:51.148 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=0.0ms, interval=1.0s
+15:42:52.144 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=60, spot=680.48, net_gex=0.0
+15:42:52.145 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:42:52.145 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=0.0ms, interval=1.0s
+15:42:53.126 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=70, spot=680.45, net_gex=0.0
+15:42:53.127 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:42:53.128 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=0.0ms, interval=1.0s
+15:42:54.146 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=70, spot=680.427, net_gex=0.0
+15:42:54.148 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:42:54.148 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=0.0ms, interval=1.0s
+15:42:55.131 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=80, spot=680.43, net_gex=0.0
+15:42:55.133 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:42:55.133 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=0.0ms, interval=1.0s
+15:42:56.124 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=80, spot=680.43, net_gex=0.0
+15:42:56.126 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:42:56.126 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=0.0ms, interval=1.0s
+INFO:     127.0.0.1:9838 - "WebSocket /ws/dashboard" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:9828 - "GET /api/atm-decay/history HTTP/1.1" 200 OK
+15:42:57.131 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=90, spot=680.39, net_gex=0.0
+15:42:57.133 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:42:57.133 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=0.0ms, interval=1.0s
+15:42:58.129 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=100, spot=680.415, net_gex=0.0
+15:42:58.131 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:42:58.132 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=0.0ms, interval=1.0s
+15:42:59.140 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=100, spot=680.4, net_gex=0.0
+15:42:59.143 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:42:59.143 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=0.0ms, interval=1.0s
+15:43:00.155 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=110, spot=680.38, net_gex=0.0
+15:43:00.158 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:43:00.159 INFO app.main: [PERF] build_payload breakdown: snapshot=31.0ms, agent=0.0ms, interval=1.0s
+15:43:01.142 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=110, spot=680.4, net_gex=0.0
+15:43:01.145 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:43:01.145 INFO app.main: [PERF] build_payload breakdown: snapshot=31.0ms, agent=0.0ms, interval=1.0s
+15:43:02.155 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=120, spot=680.44, net_gex=0.0
+15:43:02.158 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:43:02.158 INFO app.main: [PERF] build_payload breakdown: snapshot=31.0ms, agent=0.0ms, interval=1.0s
+15:43:03.132 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=130, spot=680.38, net_gex=0.0
+15:43:03.135 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:43:03.135 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=0.0ms, interval=1.0s
+15:43:04.129 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=130, spot=680.375, net_gex=0.0
+15:43:04.132 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:43:04.132 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=0.0ms, interval=1.0s
+15:43:05.141 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=140, spot=680.36, net_gex=0.0
+15:43:05.145 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:43:05.145 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=0.0ms, interval=1.0s
+15:43:06.124 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=140, spot=680.32, net_gex=0.0
+15:43:06.127 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:43:06.127 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=0.0ms, interval=1.0s
+15:43:07.143 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=150, spot=680.28, net_gex=0.0
+15:43:07.147 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:43:07.147 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=0.0ms, interval=1.0s
+15:43:08.143 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=160, spot=680.27, net_gex=0.0
+15:43:08.146 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:43:08.146 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1765  P:-0.3902  S:-0.2717 (stored)
+15:43:08.146 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=0.0ms, interval=1.0s
+15:43:09.151 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=160, spot=680.235, net_gex=0.0
+15:43:09.154 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:43:09.155 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.2451  P:-0.3902  S:-0.3098 (stored)
+15:43:09.155 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=16.0ms, interval=1.0s
+15:43:10.144 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=170, spot=680.235, net_gex=0.0
+15:43:10.148 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:43:10.148 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.2451  P:-0.3902  S:-0.3098 (dedup)
+15:43:10.148 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=0.0ms, interval=1.0s
+15:43:11.227 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=170, spot=680.24, net_gex=0.0
+15:43:11.231 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:43:11.231 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.2451  P:-0.3902  S:-0.3098 (dedup)
+15:43:11.231 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=0.0ms, interval=1.0s
+15:43:12.129 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=180, spot=680.21, net_gex=0.0
+15:43:12.133 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:43:12.133 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.2451  P:-0.3902  S:-0.3098 (dedup)
+15:43:12.133 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=0.0ms, interval=1.0s
+15:43:13.166 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=190, spot=680.23, net_gex=0.0
+15:43:13.171 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:43:13.171 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.2451  P:-0.3902  S:-0.3098 (dedup)
+15:43:13.171 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=15.0ms, interval=1.0s
+15:43:14.169 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=190, spot=680.25, net_gex=0.0
+15:43:14.172 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:43:14.172 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.2451  P:-0.3902  S:-0.3098 (dedup)
+15:43:14.172 INFO app.main: [PERF] build_payload breakdown: snapshot=31.0ms, agent=15.0ms, interval=1.0s
+15:43:15.147 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=200, spot=680.205, net_gex=0.0
+15:43:15.152 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:43:15.152 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.2451  P:-0.3902  S:-0.3098 (dedup)
+15:43:15.152 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=0.0ms, interval=1.0s
+15:43:16.140 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=200, spot=680.25, net_gex=0.0
+15:43:16.144 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:43:16.144 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.2451  P:-0.3902  S:-0.3098 (dedup)
+15:43:16.144 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=0.0ms, interval=1.0s
+15:43:17.156 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=210, spot=680.255, net_gex=0.0
+15:43:17.159 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:43:17.160 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.2451  P:-0.3902  S:-0.3098 (dedup)
+15:43:17.160 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=0.0ms, interval=1.0s
+15:43:18.133 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=220, spot=680.265, net_gex=0.0
+15:43:18.137 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:43:18.137 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.2451  P:-0.3902  S:-0.3098 (dedup)
+15:43:18.137 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=15.0ms, interval=1.0s
+15:43:19.144 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=220, spot=680.265, net_gex=0.0
+15:43:19.150 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:43:19.151 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.2255  P:-0.3902  S:-0.2989 (stored)
+15:43:19.151 INFO app.main: [PERF] build_payload breakdown: snapshot=31.0ms, agent=0.0ms, interval=1.0s
+15:43:20.136 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.27, net_gex=0.0
+15:43:20.141 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:43:20.142 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.2255  P:-0.3902  S:-0.2989 (dedup)
+15:43:20.142 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=15.0ms, interval=1.0s
+15:43:20.958 INFO app.services.feeds.subscription_manager: [SubscriptionManager] Subscribed Depth+Trade for ATM/Mandatory: ['SPY260303C681000.US', 'SPY260303P681000.US', 'SPY260303C680000.US', 'SPY260304C681000.US', 'SPY260304C679000.US', 'SPY260304P681000.US', 'SPY260304C680000.US', 'SPY260303P680000.US', 'SPY260304P680000.US', 'SPY260303C679000.US']
+15:43:20.958 INFO app.services.feeds.subscription_manager: [SubscriptionManager] Tier 1 Resynced. Actives: 224, Depth: 11
+15:43:20.958 INFO app.services.feeds.option_chain_builder: [OptionChainBuilder] Detected 224 new symbols. Triggering sync warm-up...
+15:43:20.958 INFO app.services.feeds.iv_baseline_sync: [IVBaselineSync] Warming up 224 symbols.
+15:43:20.958 WARNING app.services.feeds.iv_baseline_sync: [IVSync] Warm-up batch 1/5 starting...
+15:43:20.958 WARNING app.services.feeds.iv_baseline_sync: [IVSync] Calling calc_indexes for 50 symbols...
+15:43:21.079 WARNING app.services.feeds.iv_baseline_sync: [IVSync] Received 50 items.
+15:43:21.080 WARNING app.services.feeds.iv_baseline_sync: [IVSync] Warm-up batch 2/5 starting...
+15:43:21.080 WARNING app.services.feeds.iv_baseline_sync: [IVSync] Calling calc_indexes for 50 symbols...
+15:43:21.275 WARNING app.services.feeds.iv_baseline_sync: [IVSync] Received 50 items.
+15:43:21.276 WARNING app.services.feeds.iv_baseline_sync: [IVSync] Warm-up batch 3/5 starting...
+15:43:21.276 WARNING app.services.feeds.iv_baseline_sync: [IVSync] Calling calc_indexes for 50 symbols...
+15:43:21.372 WARNING app.services.feeds.iv_baseline_sync: [IVSync] Received 50 items.
+15:43:21.372 WARNING app.services.feeds.iv_baseline_sync: [IVSync] Warm-up batch 4/5 starting...
+15:43:21.372 WARNING app.services.feeds.iv_baseline_sync: [IVSync] Calling calc_indexes for 50 symbols...
+15:43:21.554 WARNING app.services.feeds.iv_baseline_sync: [IVSync] Received 50 items.
+15:43:21.555 WARNING app.services.feeds.iv_baseline_sync: [IVSync] Warm-up batch 5/5 starting...
+15:43:21.555 WARNING app.services.feeds.iv_baseline_sync: [IVSync] Calling calc_indexes for 24 symbols...
+15:43:21.630 WARNING app.services.feeds.iv_baseline_sync: [IVSync] Received 24 items.
+15:43:22.119 ERROR app.services.feeds.option_chain_builder: [OptionChainBuilder] Research batch failure: OpenApiException: (kind=ErrorKind.OpenApi, code=301607, trace_id=) Too many option securities request within one minute
+15:43:22.119 INFO app.services.feeds.option_chain_builder: [OptionChainBuilder] Volume map: 75 strikes
+15:43:22.144 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.3, net_gex=-2793.7014674296574
+15:43:22.222 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:22.222 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.2108  P:-0.3902  S:-0.2908 (stored)
+15:43:22.222 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=78.0ms, interval=1.0s
+15:43:22.310 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.34, net_gex=-4530.7191443058
+15:43:22.401 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:22.402 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.2108  P:-0.3841  S:-0.2880 (stored)
+15:43:22.402 INFO app.main: [PERF] build_payload breakdown: snapshot=31.0ms, agent=78.0ms, interval=1.0s
+15:43:23.322 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.305, net_gex=-5720.014447344984
+15:43:23.405 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:23.405 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.2157  P:-0.3841  S:-0.2908 (stored)
+15:43:23.405 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=94.0ms, interval=1.0s
+15:43:24.312 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.28, net_gex=-6493.970325284052
+15:43:24.391 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:24.392 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.2157  P:-0.3841  S:-0.2908 (dedup)
+15:43:24.392 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:43:25.293 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.27, net_gex=-6983.183844270239
+15:43:25.372 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:25.373 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.2108  P:-0.3841  S:-0.2880 (stored)
+15:43:25.373 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=94.0ms, interval=1.0s
+15:43:26.309 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.28, net_gex=-7270.677284934916
+15:43:26.389 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:26.389 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.2108  P:-0.3720  S:-0.2826 (stored)
+15:43:26.389 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=94.0ms, interval=1.0s
+15:43:27.300 INFO app.services.feeds.subscription_manager: [SubscriptionManager] Tier 1 Resynced. Actives: 224, Depth: 11
+15:43:27.362 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.26, net_gex=-7499.626437048192
+15:43:27.439 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:27.439 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.2108  P:-0.3720  S:-0.2826 (dedup)
+15:43:27.439 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:43:28.307 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.275, net_gex=-7600.369056567041
+15:43:28.388 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:28.388 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.2108  P:-0.3720  S:-0.2826 (dedup)
+15:43:28.388 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=94.0ms, interval=1.0s
+15:43:29.297 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.35, net_gex=-7525.1530174228
+15:43:29.377 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:29.377 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.2108  P:-0.4207  S:-0.3043 (stored)
+15:43:29.377 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:43:30.295 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.4, net_gex=-7447.506352122744
+15:43:30.371 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:30.371 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1765  P:-0.4207  S:-0.2853 (stored)
+15:43:30.371 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=63.0ms, interval=1.0s
+15:43:31.309 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.397, net_gex=-7488.609244780714
+15:43:31.389 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:31.389 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1569  P:-0.4390  S:-0.2826 (stored)
+15:43:31.389 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=94.0ms, interval=1.0s
+15:43:32.312 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.39, net_gex=-7529.534170175211
+15:43:32.390 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:32.390 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1569  P:-0.4451  S:-0.2853 (stored)
+15:43:32.390 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:43:32.573 INFO app.services.feeds.subscription_manager: [SubscriptionManager] Tier 1 Resynced. Actives: 224, Depth: 11
+15:43:33.292 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.41, net_gex=-7487.963524249332
+15:43:33.377 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:33.378 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1520  P:-0.4451  S:-0.2826 (stored)
+15:43:33.378 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=94.0ms, interval=1.0s
+15:43:34.315 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.415, net_gex=-7483.354554761072
+15:43:34.392 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:34.393 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1520  P:-0.4573  S:-0.2880 (stored)
+15:43:34.393 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:43:35.312 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.42, net_gex=-7475.515580110219
+15:43:35.390 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:35.390 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1520  P:-0.4573  S:-0.2880 (dedup)
+15:43:35.390 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:43:36.314 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.39, net_gex=-7565.697468090404
+15:43:36.389 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:36.389 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1520  P:-0.4390  S:-0.2799 (stored)
+15:43:36.390 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:43:37.300 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.37, net_gex=-7622.885293676881
+15:43:37.382 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:37.382 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1814  P:-0.4329  S:-0.2935 (stored)
+15:43:37.382 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:43:37.757 INFO app.services.feeds.subscription_manager: [SubscriptionManager] Tier 1 Resynced. Actives: 224, Depth: 11
+15:43:38.311 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.37, net_gex=-7626.289114514017
+15:43:38.392 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:38.393 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1814  P:-0.4329  S:-0.2935 (dedup)
+15:43:38.393 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:43:39.315 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.36, net_gex=-7654.395561680751
+15:43:39.401 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:39.401 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1716  P:-0.4329  S:-0.2880 (stored)
+15:43:39.401 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:43:40.345 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.38, net_gex=-7604.726491399749
+15:43:40.425 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:40.425 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1716  P:-0.4451  S:-0.2935 (stored)
+15:43:40.425 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=78.0ms, interval=1.0s
+15:43:41.296 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.43, net_gex=-7463.311915937042
+15:43:41.374 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:41.374 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1716  P:-0.4634  S:-0.3016 (stored)
+15:43:41.374 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:43:42.311 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.42, net_gex=-7495.064082684514
+15:43:42.385 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:42.385 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1716  P:-0.4634  S:-0.3016 (dedup)
+15:43:42.386 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=63.0ms, interval=1.0s
+15:43:42.702 WARNING app.services.feeds.iv_baseline_sync: [IVSync] FULL CYCLE START: 224 symbols, iv_cache_size=224, spot=680.425
+15:43:42.702 WARNING app.services.feeds.iv_baseline_sync: [IVSync] chunk 1/2 START: 112 syms, iv_cache_size=224, spot=680.425
+15:43:42.746 WARNING app.services.feeds.rate_limiter: [RateLimiter] Global Cooldown triggered for 60s
+15:43:43.304 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.42, net_gex=-7496.785315846224
+15:43:43.391 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:43.391 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1471  P:-0.4634  S:-0.2880 (stored)
+15:43:43.391 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=94.0ms, interval=1.0s
+15:43:44.313 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.44, net_gex=-7437.389555121495
+15:43:44.392 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:44.393 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1471  P:-0.4695  S:-0.2908 (stored)
+15:43:44.393 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:43:45.300 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.445, net_gex=-7423.1512800205655
+15:43:45.376 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:45.377 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1471  P:-0.4695  S:-0.2908 (dedup)
+15:43:45.377 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:43:46.294 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.4, net_gex=-7559.7474035976575
+15:43:46.370 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:46.370 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1422  P:-0.4695  S:-0.2880 (stored)
+15:43:46.370 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=63.0ms, interval=1.0s
+15:43:47.313 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.41, net_gex=-7532.441833072886
+15:43:47.389 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:47.389 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1422  P:-0.4695  S:-0.2880 (dedup)
+15:43:47.389 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:43:47.742 WARNING app.services.feeds.iv_baseline_sync: [IVBaselineSync] Batch failed: OpenApiException: (kind=ErrorKind.OpenApi, code=301607, trace_id=) Too many option securities request within one minute
+15:43:48.342 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.4, net_gex=-7563.016384830169
+15:43:48.419 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:48.419 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1618  P:-0.4695  S:-0.2989 (stored)
+15:43:48.419 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=78.0ms, interval=1.0s
+15:43:49.310 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.44, net_gex=-7444.523575464522
+15:43:49.386 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:49.386 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1618  P:-0.4695  S:-0.2989 (dedup)
+15:43:49.386 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=79.0ms, interval=1.0s
+15:43:50.309 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.44, net_gex=-7445.9397112131255
+15:43:50.386 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:50.386 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1520  P:-0.4695  S:-0.2935 (stored)
+15:43:50.386 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:43:51.301 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.365, net_gex=-7663.968837427451
+15:43:51.379 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:51.379 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1520  P:-0.4695  S:-0.2935 (dedup)
+15:43:51.379 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:43:52.297 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.38, net_gex=-7625.52965828521
+15:43:52.373 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:52.373 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1520  P:-0.4451  S:-0.2826 (stored)
+15:43:52.373 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:43:53.311 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.385, net_gex=-7613.447385108584
+15:43:53.385 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:53.385 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1716  P:-0.4451  S:-0.2935 (stored)
+15:43:53.385 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=63.0ms, interval=1.0s
+15:43:54.308 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.38, net_gex=-7628.923729917277
+15:43:54.389 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:54.390 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1716  P:-0.4451  S:-0.2935 (dedup)
+15:43:54.390 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=94.0ms, interval=1.0s
+15:43:55.311 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.38, net_gex=-7630.628398075424
+15:43:55.388 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:55.389 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1716  P:-0.4329  S:-0.2880 (stored)
+15:43:55.389 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:43:56.298 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.38, net_gex=-7632.305771335975
+15:43:56.373 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:56.373 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1520  P:-0.4573  S:-0.2880 (stored)
+15:43:56.373 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:43:57.310 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.38, net_gex=-7634.0275825830895
+15:43:57.385 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:57.386 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1225  P:-0.4817  S:-0.2826 (stored)
+15:43:57.386 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=63.0ms, interval=1.0s
+15:43:58.297 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.38, net_gex=-7635.711330710322
+15:43:58.374 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:43:58.374 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1225  P:-0.5061  S:-0.2935 (stored)
+15:43:58.374 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:43:59.310 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.55, net_gex=-7074.779213773518
+15:43:59.387 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0735  P:-0.5061  S:-0.2663 (stored)
+15:43:59.388 INFO app.main: [PERF] build_payload breakdown: snapshot=31.0ms, agent=78.0ms, interval=1.0s
+15:44:00.310 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.56, net_gex=-7037.752978000149
+15:44:00.389 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0735  P:-0.5305  S:-0.2772 (stored)
+15:44:00.389 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:44:01.303 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.52, net_gex=-7187.939236813331
+15:44:01.385 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0735  P:-0.5183  S:-0.2717 (stored)
+15:44:01.385 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:44:02.307 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.53, net_gex=-7152.3274426816615
+15:44:02.400 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0980  P:-0.5183  S:-0.2853 (stored)
+15:44:02.400 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=94.0ms, interval=1.0s
+15:44:03.305 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.565, net_gex=-7021.1798458676785
+15:44:03.381 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0735  P:-0.5305  S:-0.2772 (stored)
+15:44:03.381 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=79.0ms, interval=1.0s
+15:44:04.307 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.58, net_gex=-6963.7380023937
+15:44:04.390 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0588  P:-0.5366  S:-0.2717 (stored)
+15:44:04.390 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=94.0ms, interval=1.0s
+15:44:05.298 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.59, net_gex=-6925.123069719124
+15:44:05.375 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0441  P:-0.5427  S:-0.2663 (stored)
+15:44:05.375 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:44:06.290 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.58, net_gex=-6965.294812087246
+15:44:06.363 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0588  P:-0.5427  S:-0.2745 (stored)
+15:44:06.363 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=78.0ms, interval=1.0s
+15:44:07.298 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.55, net_gex=-7082.172868162569
+15:44:07.375 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0637  P:-0.5305  S:-0.2717 (stored)
+15:44:07.375 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:44:08.311 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.53, net_gex=-7158.445739625725
+15:44:08.390 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0882  P:-0.5183  S:-0.2799 (stored)
+15:44:08.390 INFO app.main: [PERF] build_payload breakdown: snapshot=31.0ms, agent=78.0ms, interval=1.0s
+15:44:09.294 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.41, net_gex=-7567.00931183348
+15:44:09.371 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0882  P:-0.5183  S:-0.2799 (dedup)
+15:44:09.371 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=63.0ms, interval=1.0s
+15:44:10.309 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.43, net_gex=-7506.684140955578
+15:44:10.387 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0882  P:-0.5183  S:-0.2799 (dedup)
+15:44:10.387 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:44:11.302 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.38, net_gex=-7657.980384750366
+15:44:11.376 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0882  P:-0.5183  S:-0.2799 (dedup)
+15:44:11.376 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:44:12.357 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.39, net_gex=-7631.22244969302
+15:44:12.433 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0882  P:-0.4573  S:-0.2527 (stored)
+15:44:12.433 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=62.0ms, interval=1.0s
+15:44:13.301 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.415, net_gex=-7558.070436138265
+15:44:13.375 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1667  P:-0.4695  S:-0.3016 (stored)
+15:44:13.375 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:44:14.317 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.42, net_gex=-7544.163754877071
+15:44:14.392 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1667  P:-0.4695  S:-0.3016 (dedup)
+15:44:14.392 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:44:15.329 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.45, net_gex=-7449.15359459992
+15:44:15.406 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1618  P:-0.4695  S:-0.2989 (stored)
+15:44:15.406 INFO app.main: [PERF] build_payload breakdown: snapshot=32.0ms, agent=78.0ms, interval=1.0s
+15:44:16.305 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.46, net_gex=-7417.043664720088
+15:44:16.380 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1618  P:-0.4817  S:-0.3043 (stored)
+15:44:16.380 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:44:17.312 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.48, net_gex=-7349.505475583224
+15:44:17.388 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1618  P:-0.4817  S:-0.3043 (dedup)
+15:44:17.388 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:44:18.320 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.465, net_gex=-7402.7567374415385
+15:44:18.393 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1618  P:-0.4817  S:-0.3043 (dedup)
+15:44:18.393 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:44:19.297 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.5, net_gex=-7280.637485520863
+15:44:19.372 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1176  P:-0.5061  S:-0.2908 (stored)
+15:44:19.372 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:44:20.307 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.55, net_gex=-7094.180433796964
+15:44:20.385 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1176  P:-0.5305  S:-0.3016 (stored)
+15:44:20.385 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:44:21.309 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.57, net_gex=-7016.778250135252
+15:44:21.385 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0735  P:-0.5427  S:-0.2826 (stored)
+15:44:21.385 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=79.0ms, interval=1.0s
+15:44:22.302 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.621, net_gex=-6810.80289266007
+15:44:22.377 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0245  P:-0.5732  S:-0.2690 (stored)
+15:44:22.377 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:44:23.303 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.59, net_gex=-6938.305241209415
+15:44:23.380 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0539  P:-0.5671  S:-0.2826 (stored)
+15:44:23.380 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:44:24.306 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.59, net_gex=-6939.0392049397315
+15:44:24.379 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0539  P:-0.5549  S:-0.2772 (stored)
+15:44:24.379 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:44:25.298 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.574, net_gex=-7004.114497664209
+15:44:25.372 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0539  P:-0.5549  S:-0.2772 (dedup)
+15:44:25.372 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:44:26.306 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.52, net_gex=-7214.624947512285
+15:44:26.379 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0735  P:-0.5549  S:-0.2880 (stored)
+15:44:26.380 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:44:27.304 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.53, net_gex=-7177.79440921789
+15:44:27.380 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0735  P:-0.5244  S:-0.2745 (stored)
+15:44:27.380 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:44:28.311 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.53, net_gex=-7178.8194660695945
+15:44:28.388 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0980  P:-0.5305  S:-0.2908 (stored)
+15:44:28.389 INFO app.main: [PERF] build_payload breakdown: snapshot=31.0ms, agent=78.0ms, interval=1.0s
+15:44:29.312 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.52, net_gex=-7217.834606644957
+15:44:29.387 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0980  P:-0.5305  S:-0.2908 (dedup)
+15:44:29.388 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:44:30.303 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.51, net_gex=-7256.438181429769
+15:44:30.385 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0980  P:-0.5183  S:-0.2853 (stored)
+15:44:30.385 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:44:31.299 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.48, net_gex=-7367.1994972507755
+15:44:31.372 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0980  P:-0.5122  S:-0.2826 (stored)
+15:44:31.372 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:44:32.322 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.46, net_gex=-7438.868570134056
+15:44:32.397 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0980  P:-0.5061  S:-0.2799 (stored)
+15:44:32.397 INFO app.main: [PERF] build_payload breakdown: snapshot=31.0ms, agent=78.0ms, interval=1.0s
+15:44:33.314 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.46, net_gex=-7440.244600149486
+15:44:33.389 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0980  P:-0.5061  S:-0.2799 (dedup)
+15:44:33.389 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:44:34.298 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.459, net_gex=-7445.057184150698
+15:44:34.372 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0980  P:-0.4939  S:-0.2745 (stored)
+15:44:34.372 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:44:35.312 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.44, net_gex=-7511.231681786701
+15:44:35.389 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1422  P:-0.4939  S:-0.2989 (stored)
+15:44:35.389 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:44:36.297 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.4, net_gex=-7641.449920350839
+15:44:36.373 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1422  P:-0.4695  S:-0.2880 (stored)
+15:44:36.373 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:44:37.313 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.42, net_gex=-7580.030451976212
+15:44:37.387 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1716  P:-0.4695  S:-0.3043 (stored)
+15:44:37.387 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:44:38.310 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.415, net_gex=-7597.676849940214
+15:44:38.384 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1618  P:-0.4817  S:-0.3043 (stored)
+15:44:38.384 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=63.0ms, interval=1.0s
+15:44:39.322 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.45, net_gex=-7483.126735395074
+15:44:39.395 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1569  P:-0.5061  S:-0.3125 (stored)
+15:44:39.395 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:44:40.302 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.475, net_gex=-7396.656562842591
+15:44:40.377 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1569  P:-0.5061  S:-0.3125 (dedup)
+15:44:40.377 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:44:41.312 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.45, net_gex=-7485.9701051980055
+15:44:41.386 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1569  P:-0.5061  S:-0.3125 (dedup)
+15:44:41.386 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=63.0ms, interval=1.0s
+15:44:42.302 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.52, net_gex=-7231.697490745416
+15:44:42.376 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0980  P:-0.5061  S:-0.2799 (stored)
+15:44:42.376 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:44:42.991 WARNING app.services.feeds.iv_baseline_sync: [IVSync] chunk 1/2 END: iv_cache_size=224 (+0 added), spot_at_sync_entries=224
+15:44:42.991 WARNING app.services.feeds.iv_baseline_sync: [IVSync] chunk 2/2 START: 112 syms, iv_cache_size=224, spot=680.52
+15:44:43.430 WARNING app.services.feeds.iv_baseline_sync: [IVSync] chunk 2/2 END: iv_cache_size=224 (+0 added), spot_at_sync_entries=224
+15:44:43.430 WARNING app.services.feeds.iv_baseline_sync: [IVSync] FULL CYCLE END: iv_cache_size=224
+15:44:43.604 INFO app.services.feeds.subscription_manager: [SubscriptionManager] Tier 1 Resynced. Actives: 224, Depth: 11
+15:44:43.690 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.525, net_gex=-7218.325119495453
+15:44:43.766 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0980  P:-0.5061  S:-0.2799 (dedup)
+15:44:43.767 INFO app.main: [PERF] build_payload breakdown: snapshot=31.0ms, agent=78.0ms, interval=1.0s
+15:44:44.289 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.54, net_gex=-7160.3973325103025
+15:44:44.369 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0980  P:-0.5305  S:-0.2908 (stored)
+15:44:44.369 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=78.0ms, interval=1.0s
+15:44:45.321 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.58, net_gex=-7000.244907982378
+15:44:45.405 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0637  P:-0.5427  S:-0.2772 (stored)
+15:44:45.405 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=94.0ms, interval=1.0s
+15:44:46.334 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.58, net_gex=-7000.980651448347
+15:44:46.410 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0637  P:-0.5427  S:-0.2772 (dedup)
+15:44:46.410 INFO app.main: [PERF] build_payload breakdown: snapshot=32.0ms, agent=78.0ms, interval=1.0s
+15:44:47.315 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.6, net_gex=-6918.6640509770605
+15:44:47.391 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0588  P:-0.5427  S:-0.2745 (stored)
+15:44:47.391 INFO app.main: [PERF] build_payload breakdown: snapshot=31.0ms, agent=78.0ms, interval=1.0s
+15:44:48.316 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.595, net_gex=-6940.211616364455
+15:44:48.391 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0490  P:-0.5671  S:-0.2799 (stored)
+15:44:48.391 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:44:48.866 INFO app.services.feeds.subscription_manager: [SubscriptionManager] Subscribed Depth+Trade for ATM/Mandatory: ['SPY260304P682000.US', 'SPY260303P682000.US']
+15:44:48.867 INFO app.services.feeds.subscription_manager: [SubscriptionManager] Tier 1 Resynced. Actives: 224, Depth: 11
+15:44:49.311 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.62, net_gex=-6835.38354224758
+15:44:49.386 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0392  P:-0.5671  S:-0.2745 (stored)
+15:44:49.386 INFO app.main: [PERF] build_payload breakdown: snapshot=31.0ms, agent=63.0ms, interval=1.0s
+15:44:50.311 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.615, net_gex=-6857.188429504116
+15:44:50.386 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0392  P:-0.5671  S:-0.2745 (dedup)
+15:44:50.386 INFO app.main: [PERF] build_payload breakdown: snapshot=31.0ms, agent=63.0ms, interval=1.0s
+15:44:51.311 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.6, net_gex=-6921.184473165746
+15:44:51.385 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0441  P:-0.5671  S:-0.2772 (stored)
+15:44:51.385 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=63.0ms, interval=1.0s
+15:44:52.307 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.57, net_gex=-7046.594657353218
+15:44:52.380 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0735  P:-0.5549  S:-0.2880 (stored)
+15:44:52.380 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=79.0ms, interval=1.0s
+15:44:53.297 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.53, net_gex=-7208.460490521315
+15:44:53.371 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0735  P:-0.5549  S:-0.2880 (dedup)
+15:44:53.371 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:44:54.064 INFO app.services.feeds.subscription_manager: [SubscriptionManager] Tier 1 Resynced. Actives: 224, Depth: 11
+15:44:54.320 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.56, net_gex=-7089.1116112298905
+15:44:54.396 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0882  P:-0.5427  S:-0.2908 (stored)
+15:44:54.396 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:44:55.308 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.54, net_gex=-7170.719130903026
+15:44:55.384 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0882  P:-0.5427  S:-0.2908 (dedup)
+15:44:55.384 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:44:56.305 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.49, net_gex=-7365.682328022868
+15:44:56.378 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1127  P:-0.5305  S:-0.2989 (stored)
+15:44:56.378 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:44:57.307 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.47, net_gex=-7440.920660078633
+15:44:57.382 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1127  P:-0.5183  S:-0.2935 (stored)
+15:44:57.382 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=79.0ms, interval=1.0s
+15:44:58.309 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.48, net_gex=-7405.4550633198305
+15:44:58.385 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1324  P:-0.5183  S:-0.3043 (stored)
+15:44:58.385 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=79.0ms, interval=1.0s
+15:44:59.374 INFO app.services.feeds.subscription_manager: [SubscriptionManager] Subscribed Depth+Trade for ATM/Mandatory: ['SPY260304C679000.US', 'SPY260303C679000.US']
+15:44:59.374 INFO app.services.feeds.subscription_manager: [SubscriptionManager] Tier 1 Resynced. Actives: 224, Depth: 11
+15:44:59.453 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.5, net_gex=-7331.506329611025
+15:44:59.532 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1324  P:-0.5183  S:-0.3043 (dedup)
+15:44:59.532 INFO app.main: [PERF] build_payload breakdown: snapshot=32.0ms, agent=78.0ms, interval=1.0s
+15:45:00.300 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.51, net_gex=-7293.95274438854
+15:45:00.377 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1176  P:-0.5305  S:-0.3016 (stored)
+15:45:00.377 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:45:01.308 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.47, net_gex=-7446.138786802369
+15:45:01.385 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1176  P:-0.5183  S:-0.2962 (stored)
+15:45:01.385 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:45:02.305 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.46, net_gex=-7483.855872267475
+15:45:02.381 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1520  P:-0.5122  S:-0.3125 (stored)
+15:45:02.381 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:45:03.291 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.49, net_gex=-7374.103583344061
+15:45:03.367 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1275  P:-0.5305  S:-0.3071 (stored)
+15:45:03.367 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=78.0ms, interval=1.0s
+15:45:04.300 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.555, net_gex=-7117.971218273006
+15:45:04.380 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0784  P:-0.5549  S:-0.2908 (stored)
+15:45:04.380 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:45:04.671 INFO app.services.feeds.subscription_manager: [SubscriptionManager] Subscribed Depth+Trade for ATM/Mandatory: ['SPY260304P682000.US', 'SPY260303P682000.US']
+15:45:04.671 INFO app.services.feeds.subscription_manager: [SubscriptionManager] Tier 1 Resynced. Actives: 224, Depth: 11
+15:45:05.302 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.64, net_gex=-6756.483853622939
+15:45:05.380 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0343  P:-0.5915  S:-0.2826 (stored)
+15:45:05.380 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:45:06.305 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.65, net_gex=-6712.868514871001
+15:45:06.387 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0294  P:-0.6037  S:-0.2853 (stored)
+15:45:06.387 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=79.0ms, interval=1.0s
+15:45:07.310 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.675, net_gex=-6602.138578093348
+15:45:07.386 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0343  P:-0.6159  S:-0.2935 (stored)
+15:45:07.386 INFO app.main: [PERF] build_payload breakdown: snapshot=31.0ms, agent=63.0ms, interval=1.0s
+15:45:08.360 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.69, net_gex=-6535.156735019713
+15:45:08.437 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0098  P:-0.6159  S:-0.2799 (stored)
+15:45:08.437 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:45:09.308 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.655, net_gex=-6691.779359028038
+15:45:09.385 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:45:09.386 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0147  P:-0.6037  S:-0.2772 (stored)
+15:45:09.386 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:45:09.841 INFO app.services.feeds.subscription_manager: [SubscriptionManager] Tier 1 Resynced. Actives: 224, Depth: 11
+15:45:10.313 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.59, net_gex=-6975.810923769664
+15:45:10.391 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:45:10.392 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0735  P:-0.5915  S:-0.3043 (stored)
+15:45:10.392 INFO app.main: [PERF] build_payload breakdown: snapshot=31.0ms, agent=78.0ms, interval=1.0s
+15:45:11.334 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.67, net_gex=-6625.50476560174
+15:45:11.411 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:45:11.412 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0588  P:-0.6159  S:-0.3071 (stored)
+15:45:11.412 INFO app.main: [PERF] build_payload breakdown: snapshot=32.0ms, agent=78.0ms, interval=1.0s
+15:45:12.293 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.551, net_gex=-7141.3379759917825
+15:45:12.373 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0588  P:-0.5915  S:-0.2962 (stored)
+15:45:12.373 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=94.0ms, interval=1.0s
+15:45:13.294 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.54, net_gex=-7187.49047762217
+15:45:13.372 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1275  P:-0.5793  S:-0.3288 (stored)
+15:45:13.372 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:45:14.305 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.515, net_gex=-7289.454626676319
+15:45:14.379 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1225  P:-0.5671  S:-0.3207 (stored)
+15:45:14.379 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:45:15.026 INFO app.services.feeds.subscription_manager: [SubscriptionManager] Tier 1 Resynced. Actives: 224, Depth: 11
+15:45:15.308 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.49, net_gex=-7388.5852007806
+15:45:15.382 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1471  P:-0.5671  S:-0.3342 (stored)
+15:45:15.383 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=79.0ms, interval=1.0s
+15:45:16.308 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.565, net_gex=-7086.2276746751295
+15:45:16.385 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1029  P:-0.5793  S:-0.3152 (stored)
+15:45:16.385 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:45:17.299 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.62, net_gex=-6849.7929093714865
+15:45:17.377 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1029  P:-0.5793  S:-0.3152 (dedup)
+15:45:17.377 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:45:18.310 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.625, net_gex=-6828.2489027736965
+15:45:18.389 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1029  P:-0.6037  S:-0.3261 (stored)
+15:45:18.389 INFO app.main: [PERF] build_payload breakdown: snapshot=31.0ms, agent=78.0ms, interval=1.0s
+15:45:19.292 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.62, net_gex=-6850.784576321558
+15:45:19.366 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0686  P:-0.6037  S:-0.3071 (stored)
+15:45:19.366 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=78.0ms, interval=1.0s
+15:45:20.197 INFO app.services.feeds.subscription_manager: [SubscriptionManager] Tier 1 Resynced. Actives: 224, Depth: 11
+15:45:20.323 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.59, net_gex=-6982.388082873127
+15:45:20.399 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0686  P:-0.6037  S:-0.3071 (dedup)
+15:45:20.399 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:45:21.299 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.63, net_gex=-6807.465503472268
+15:45:21.373 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0686  P:-0.6037  S:-0.3071 (dedup)
+15:45:21.373 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:45:22.321 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.62, net_gex=-6852.27476791773
+15:45:22.397 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0686  P:-0.6037  S:-0.3071 (dedup)
+15:45:22.397 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:45:23.307 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.68, net_gex=-6583.084241331121
+15:45:23.382 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0441  P:-0.6037  S:-0.2935 (stored)
+15:45:23.382 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:45:24.319 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.645, net_gex=-6741.648702361765
+15:45:24.399 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0490  P:-0.6159  S:-0.3016 (stored)
+15:45:24.399 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:45:25.375 INFO app.services.feeds.subscription_manager: [SubscriptionManager] Tier 1 Resynced. Actives: 224, Depth: 11
+15:45:25.400 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.62, net_gex=-6853.786173905859
+15:45:25.476 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0490  P:-0.6159  S:-0.3016 (dedup)
+15:45:25.477 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=78.0ms, interval=1.0s
+15:45:26.322 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.662, net_gex=-6665.541365067189
+15:45:26.396 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0441  P:-0.6159  S:-0.2989 (stored)
+15:45:26.396 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:45:27.304 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.65, net_gex=-6720.156219269904
+15:45:27.379 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0441  P:-0.6159  S:-0.2989 (dedup)
+15:45:27.379 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:45:28.314 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.68, net_gex=-6584.020188888275
+15:45:28.411 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0343  P:-0.6280  S:-0.2989 (stored)
+15:45:28.411 INFO app.main: [PERF] build_payload breakdown: snapshot=31.0ms, agent=94.0ms, interval=1.0s
+15:45:29.312 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.69, net_gex=-6538.368847623565
+15:45:29.389 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0196  P:-0.6280  S:-0.2908 (stored)
+15:45:29.389 INFO app.main: [PERF] build_payload breakdown: snapshot=31.0ms, agent=78.0ms, interval=1.0s
+15:45:30.309 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.7, net_gex=-6492.508850482184
+15:45:30.385 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0147  P:-0.6402  S:-0.2935 (stored)
+15:45:30.385 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:45:30.565 INFO app.services.feeds.subscription_manager: [SubscriptionManager] Tier 1 Resynced. Actives: 224, Depth: 11
+15:45:31.314 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.72, net_gex=-6400.256231589337
+15:45:31.389 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:+0.0000  P:-0.6524  S:-0.2908 (stored)
+15:45:31.389 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:45:32.307 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.72, net_gex=-6400.249536316951
+15:45:32.397 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:+0.0000  P:-0.6524  S:-0.2908 (dedup)
+15:45:32.397 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=94.0ms, interval=1.0s
+15:45:33.295 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.725, net_gex=-6377.0731477808495
+15:45:33.380 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:+0.0000  P:-0.6524  S:-0.2908 (dedup)
+15:45:33.380 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:45:34.299 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.76, net_gex=-6214.54062691733
+15:45:34.376 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:+0.0196  P:-0.6646  S:-0.2853 (stored)
+15:45:34.376 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:45:35.315 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.715, net_gex=-6423.41511016461
+15:45:35.395 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0098  P:-0.6646  S:-0.3016 (stored)
+15:45:35.395 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:45:35.755 INFO app.services.feeds.subscription_manager: [SubscriptionManager] Tier 1 Resynced. Actives: 224, Depth: 11
+15:45:36.294 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.72, net_gex=-6400.201113235047
+15:45:36.373 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0098  P:-0.6646  S:-0.3016 (dedup)
+15:45:36.373 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=94.0ms, interval=1.0s
+15:45:37.287 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.73, net_gex=-6353.664728491898
+15:45:37.363 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:+0.0049  P:-0.6524  S:-0.2880 (stored)
+15:45:37.363 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=78.0ms, interval=1.0s
+15:45:38.299 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.735, net_gex=-6330.307546760141
+15:45:38.373 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0049  P:-0.6524  S:-0.2935 (stored)
+15:45:38.374 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:45:39.292 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.7, net_gex=-6493.195506523786
+15:45:39.368 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0196  P:-0.6524  S:-0.3016 (stored)
+15:45:39.368 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=78.0ms, interval=1.0s
+15:45:40.299 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.69, net_gex=-6539.718645406926
+15:45:40.374 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0147  P:-0.6402  S:-0.2935 (stored)
+15:45:40.375 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:45:40.936 INFO app.services.feeds.subscription_manager: [SubscriptionManager] Tier 1 Resynced. Actives: 224, Depth: 11
+15:45:41.290 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.615, net_gex=-6883.928034646134
+15:45:41.369 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0343  P:-0.6402  S:-0.3043 (stored)
+15:45:41.369 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=78.0ms, interval=1.0s
+15:45:42.316 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.62, net_gex=-6861.815888124422
+15:45:42.393 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0343  P:-0.6037  S:-0.2880 (stored)
+15:45:42.393 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:45:43.324 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.66, net_gex=-6679.1578853967685
+15:45:43.407 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0343  P:-0.6037  S:-0.2880 (dedup)
+15:45:43.407 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=94.0ms, interval=1.0s
+15:45:43.415 WARNING app.services.feeds.iv_baseline_sync: [IVSync] FULL CYCLE START: 224 symbols, iv_cache_size=224, spot=680.66
+15:45:43.415 WARNING app.services.feeds.iv_baseline_sync: [IVSync] chunk 1/2 START: 112 syms, iv_cache_size=224, spot=680.66
+15:45:43.722 WARNING app.services.feeds.iv_baseline_sync: [IVSync] chunk 1/2 END: iv_cache_size=224 (+0 added), spot_at_sync_entries=224
+15:45:43.723 WARNING app.services.feeds.iv_baseline_sync: [IVSync] chunk 2/2 START: 112 syms, iv_cache_size=224, spot=680.66
+15:45:44.362 WARNING app.services.feeds.iv_baseline_sync: [IVSync] chunk 2/2 END: iv_cache_size=224 (+0 added), spot_at_sync_entries=224
+15:45:44.363 WARNING app.services.feeds.iv_baseline_sync: [IVSync] FULL CYCLE END: iv_cache_size=224
+15:45:44.457 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.65, net_gex=-6719.026861356786
+15:45:44.531 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0441  P:-0.6037  S:-0.2935 (stored)
+15:45:44.531 INFO app.main: [PERF] build_payload breakdown: snapshot=32.0ms, agent=78.0ms, interval=1.0s
+15:45:45.314 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.59, net_gex=-7021.380986218497
+15:45:45.390 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0931  P:-0.6037  S:-0.3207 (stored)
+15:45:45.390 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:45:46.131 INFO app.services.feeds.subscription_manager: [SubscriptionManager] Tier 1 Resynced. Actives: 224, Depth: 11
+15:45:46.309 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.59, net_gex=-7021.711870329886
+15:45:46.386 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0833  P:-0.5915  S:-0.3098 (stored)
+15:45:46.386 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:45:47.317 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.64, net_gex=-6769.695273351671
+15:45:47.391 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0588  P:-0.5915  S:-0.2962 (stored)
+15:45:47.391 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:45:48.293 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.68, net_gex=-6566.324648006054
+15:45:48.372 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0588  P:-0.5915  S:-0.2962 (dedup)
+15:45:48.372 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=94.0ms, interval=1.0s
+15:45:49.309 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.65, net_gex=-6718.8484235684955
+15:45:49.383 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0588  P:-0.6280  S:-0.3125 (stored)
+15:45:49.383 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:45:50.317 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.62, net_gex=-6871.435261680376
+15:45:50.391 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0686  P:-0.6098  S:-0.3098 (stored)
+15:45:50.391 INFO app.main: [PERF] build_payload breakdown: snapshot=31.0ms, agent=78.0ms, interval=1.0s
+15:45:51.341 INFO app.services.feeds.subscription_manager: [SubscriptionManager] Tier 1 Resynced. Actives: 224, Depth: 11
+15:45:51.382 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.6, net_gex=-6972.944087399385
+15:45:51.459 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0686  P:-0.5915  S:-0.3016 (stored)
+15:45:51.459 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:45:52.298 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.57, net_gex=-7124.03832543593
+15:45:52.374 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0686  P:-0.5915  S:-0.3016 (dedup)
+15:45:52.374 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:45:53.292 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.5, net_gex=-7466.319218952256
+15:45:53.368 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0686  P:-0.5671  S:-0.2908 (stored)
+15:45:53.368 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=78.0ms, interval=1.0s
+15:45:54.307 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.572, net_gex=-7114.935698250074
+15:45:54.384 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1225  P:-0.5793  S:-0.3261 (stored)
+15:45:54.384 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=79.0ms, interval=1.0s
+15:45:55.292 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.57, net_gex=-7125.400915587351
+15:45:55.370 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1078  P:-0.5915  S:-0.3234 (stored)
+15:45:55.370 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=78.0ms, interval=1.0s
+15:45:56.308 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.6, net_gex=-6974.21136955094
+15:45:56.384 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1078  P:-0.6037  S:-0.3288 (stored)
+15:45:56.384 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=79.0ms, interval=1.0s
+15:45:56.571 INFO app.services.feeds.subscription_manager: [SubscriptionManager] Tier 1 Resynced. Actives: 224, Depth: 11
+15:45:57.354 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.592, net_gex=-7015.1474795936
+15:45:57.428 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1078  P:-0.6037  S:-0.3288 (dedup)
+15:45:57.428 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=78.0ms, interval=1.0s
+15:45:58.307 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.53, net_gex=-7325.732745227312
+15:45:58.380 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1127  P:-0.5915  S:-0.3261 (stored)
+15:45:58.380 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=79.0ms, interval=1.0s
+15:45:59.297 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.54, net_gex=-7277.133972937002
+15:45:59.371 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1324  P:-0.5915  S:-0.3370 (stored)
+15:45:59.371 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=63.0ms, interval=1.0s
+15:46:00.300 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.53, net_gex=-7327.175348338555
+15:46:00.377 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1324  P:-0.5793  S:-0.3315 (stored)
+15:46:00.377 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:46:01.305 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.48, net_gex=-7568.777501253534
+15:46:01.381 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1373  P:-0.5793  S:-0.3342 (stored)
+15:46:01.381 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:46:01.767 INFO app.services.feeds.subscription_manager: [SubscriptionManager] Tier 1 Resynced. Actives: 224, Depth: 11
+15:46:02.290 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.54, net_gex=-7279.08912188982
+15:46:02.367 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1373  P:-0.5793  S:-0.3342 (dedup)
+15:46:02.367 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=78.0ms, interval=1.0s
+15:46:03.312 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.56, net_gex=-7179.538810915677
+15:46:03.390 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1078  P:-0.5915  S:-0.3234 (stored)
+15:46:03.390 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:46:04.289 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.57, net_gex=-7129.41805032396
+15:46:04.373 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1078  P:-0.5915  S:-0.3234 (dedup)
+15:46:04.373 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=94.0ms, interval=1.0s
+15:46:05.305 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.57, net_gex=-7129.859410365548
+15:46:05.382 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1078  P:-0.5915  S:-0.3234 (dedup)
+15:46:05.382 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:46:06.322 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.62, net_gex=-6873.387020280428
+15:46:06.397 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1078  P:-0.6037  S:-0.3288 (stored)
+15:46:06.397 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:46:06.924 INFO app.services.feeds.subscription_manager: [SubscriptionManager] Tier 1 Resynced. Actives: 224, Depth: 11
+15:46:07.289 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.63, net_gex=-6821.6342972958355
+15:46:07.364 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1078  P:-0.6037  S:-0.3288 (dedup)
+15:46:07.364 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=78.0ms, interval=1.0s
+15:46:08.315 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.67, net_gex=-6613.646571861198
+15:46:08.391 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1078  P:-0.6159  S:-0.3342 (stored)
+15:46:08.391 INFO app.main: [PERF] build_payload breakdown: snapshot=31.0ms, agent=78.0ms, interval=1.0s
+15:46:09.315 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.65, net_gex=-6717.590279321367
+15:46:09.390 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0588  P:-0.6159  S:-0.3071 (stored)
+15:46:09.390 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:46:10.318 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.64, net_gex=-6769.643597313227
+15:46:10.394 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0588  P:-0.6159  S:-0.3071 (dedup)
+15:46:10.394 INFO app.main: [PERF] build_payload breakdown: snapshot=31.0ms, agent=78.0ms, interval=1.0s
+15:46:11.303 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.65, net_gex=-6717.417153367373
+15:46:11.377 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0539  P:-0.6280  S:-0.3098 (stored)
+15:46:11.377 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:46:12.102 INFO app.services.feeds.subscription_manager: [SubscriptionManager] Tier 1 Resynced. Actives: 224, Depth: 11
+15:46:12.313 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.65, net_gex=-6717.325351755415
+15:46:12.390 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:46:12.390 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0539  P:-0.6280  S:-0.3098 (dedup)
+15:46:12.390 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:46:13.328 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.68, net_gex=-6560.382423946302
+15:46:13.409 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:46:13.409 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0539  P:-0.6280  S:-0.3098 (dedup)
+15:46:13.409 INFO app.main: [PERF] build_payload breakdown: snapshot=47.0ms, agent=78.0ms, interval=1.0s
+15:46:14.290 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.7, net_gex=-6455.808947765607
+15:46:14.370 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:46:14.370 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0539  P:-0.6402  S:-0.3152 (stored)
+15:46:14.370 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=78.0ms, interval=1.0s
+15:46:15.310 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.705, net_gex=-6429.3994475607005
+15:46:15.389 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:46:15.389 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0196  P:-0.6463  S:-0.2989 (stored)
+15:46:15.390 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=94.0ms, interval=1.0s
+15:46:16.310 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.61, net_gex=-6926.690086556972
+15:46:16.389 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:46:16.390 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0196  P:-0.6463  S:-0.2989 (dedup)
+15:46:16.390 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=94.0ms, interval=1.0s
+15:46:17.289 INFO app.services.feeds.subscription_manager: [SubscriptionManager] Tier 1 Resynced. Actives: 224, Depth: 11
+15:46:17.319 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.61, net_gex=-6926.843420492508
+15:46:17.400 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:46:17.400 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0196  P:-0.6159  S:-0.2853 (stored)
+15:46:17.400 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=78.0ms, interval=1.0s
+15:46:18.294 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.64, net_gex=-6769.3586734657265
+15:46:18.382 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:46:18.383 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0196  P:-0.6159  S:-0.2853 (dedup)
+15:46:18.383 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=94.0ms, interval=1.0s
+15:46:19.307 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.645, net_gex=-6742.968558314806
+15:46:19.385 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:46:19.385 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0196  P:-0.6159  S:-0.2853 (dedup)
+15:46:19.386 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=79.0ms, interval=1.0s
+15:46:20.302 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.65, net_gex=-6716.515091507355
+15:46:20.380 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:46:20.381 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0539  P:-0.6159  S:-0.3043 (stored)
+15:46:20.381 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:46:21.302 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.64, net_gex=-6769.213545216364
+15:46:21.378 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:46:21.378 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0539  P:-0.6159  S:-0.3043 (dedup)
+15:46:21.378 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:46:22.307 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.625, net_gex=-6848.428482242296
+15:46:22.387 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:46:22.387 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0539  P:-0.6159  S:-0.3043 (dedup)
+15:46:22.387 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=94.0ms, interval=1.0s
+15:46:22.578 INFO app.services.feeds.subscription_manager: [SubscriptionManager] Tier 1 Resynced. Actives: 224, Depth: 11
+15:46:23.337 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.635, net_gex=-6795.567248419482
+15:46:23.415 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:46:23.416 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0588  P:-0.6159  S:-0.3071 (stored)
+15:46:23.416 INFO app.main: [PERF] build_payload breakdown: snapshot=32.0ms, agent=78.0ms, interval=1.0s
+15:46:24.297 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.6, net_gex=-6980.592465200063
+15:46:24.377 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:46:24.377 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0588  P:-0.6159  S:-0.3071 (dedup)
+15:46:24.378 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=79.0ms, interval=1.0s
+15:46:25.306 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.574, net_gex=-7117.438185797171
+15:46:25.387 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:46:25.387 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0833  P:-0.6037  S:-0.3152 (stored)
+15:46:25.387 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=79.0ms, interval=1.0s
+15:46:26.327 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.51, net_gex=-7447.10065437126
+15:46:26.403 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:46:26.404 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0833  P:-0.5671  S:-0.2989 (stored)
+15:46:26.404 INFO app.main: [PERF] build_payload breakdown: snapshot=32.0ms, agent=78.0ms, interval=1.0s
+15:46:27.323 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.44, net_gex=-7787.806291855288
+15:46:27.401 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:46:27.401 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0833  P:-0.5427  S:-0.2880 (stored)
+15:46:27.401 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s
+15:46:27.848 INFO app.services.feeds.subscription_manager: [SubscriptionManager] Subscribed Depth+Trade for ATM/Mandatory: ['SPY260304C679000.US', 'SPY260303C679000.US']
+15:46:27.848 INFO app.services.feeds.subscription_manager: [SubscriptionManager] Tier 1 Resynced. Actives: 224, Depth: 11
+15:46:28.319 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.43, net_gex=-7835.364349062183
+15:46:28.411 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:46:28.412 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.0833  P:-0.5427  S:-0.2880 (dedup)
+15:46:28.412 INFO app.main: [PERF] build_payload breakdown: snapshot=31.0ms, agent=94.0ms, interval=1.0s
+15:46:29.353 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.47, net_gex=-7647.8979745019515
+15:46:29.437 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:46:29.437 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1814  P:-0.5427  S:-0.3424 (stored)
+15:46:29.437 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=94.0ms, interval=1.0s
+15:46:30.316 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=224, spot=680.5, net_gex=-7500.862653605477
+15:46:30.392 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NEUTRAL | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 → conf halved.; GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).; Negative Gamma but Spot Neutral. A=NEUTRAL; WARNING: Gamma Flip detected.
+15:46:30.392 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.1814  P:-0.5427  S:-0.3424 (dedup)
+15:46:30.392 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=78.0ms, interval=1.0s

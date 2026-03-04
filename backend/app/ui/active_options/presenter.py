@@ -102,8 +102,11 @@ class ActiveOptionsPresenter:
         filtered = [o for o in chain if int(o.get("volume", 0) or 0) >= min_vol]
 
         if not filtered:
-            logger.warning("[ActiveOptionsPresenter] No options above min_volume threshold")
-            return []
+            logger.warning(
+                "[ActiveOptionsPresenter] No options above min_volume threshold — "
+                "retaining last valid payload (market closed or cold-start)."
+            )
+            return  # Preserve _latest_payload — do NOT blank out after market close
 
         # 2. Persist OI snapshot (for next cycle's ΔOI)
         if redis:

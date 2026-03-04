@@ -15,7 +15,7 @@ export function fmtGex(val: number | null | undefined): string {
 
 export function fmtPct(val: number | null | undefined, decimals = 1): string {
     if (val == null) return '—'
-    return `${val > 0 ? '+' : ''}${val.toFixed(decimals)}%`
+    return `${val > 0 ? '+' : ''}${(val * 100).toFixed(decimals)}%`
 }
 
 export function fmtPrice(val: number | null | undefined): string {

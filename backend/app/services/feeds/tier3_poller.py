@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 from datetime import datetime, date, timedelta
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
@@ -132,6 +133,16 @@ class Tier3Poller:
                             strike = sym_to_strike.get(r.symbol, 0.0)
                             opt_type = "CALL" if "C" in r.symbol else "PUT"
                             oi = int(r.open_interest) if r.open_interest else 0
+                            iv_raw = r.implied_volatility
+                            iv_val = 0.0
+                            if iv_raw:
+                                try:
+                                    f_iv = float(iv_raw)
+                                    if math.isfinite(f_iv):
+                                        iv_val = f_iv
+                                except (ValueError, TypeError):
+                                    pass
+
                             all_data.append({
                                 "symbol": r.symbol,
                                 "strike": strike,
@@ -140,7 +151,7 @@ class Tier3Poller:
                                 "tier": "T3",
                                 "volume": int(r.volume) if r.volume else 0,
                                 "open_interest": oi,
-                                "implied_volatility": float(r.implied_volatility) if r.implied_volatility else 0.0,
+                                "implied_volatility": iv_val,
                             })
                     except Exception as e:
                         if "301607" in str(e):

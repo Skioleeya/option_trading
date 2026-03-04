@@ -133,13 +133,19 @@ _PUT_STATE_LIGHTING: dict[str, dict[str, str]] = {
 }
 
 
+# Sticky cache — preserves last valid rows across ticks where input is empty
+_last_valid_wall: list[dict[str, Any]] = []
+
+
 class WallMigrationPresenter:
 
     @classmethod
     def build(cls, wall_migration: dict[str, Any]) -> list[dict[str, Any]]:
         """Build the WallMigration row list for the frontend with 5-scenario lighting."""
+        global _last_valid_wall
         if not wall_migration:
-            return []
+            # Sticky: return cached result so frontend doesn't blank during transient gaps
+            return _last_valid_wall
 
         n = thresholds.HISTORY_DEPTH
 
@@ -180,7 +186,9 @@ class WallMigrationPresenter:
                 "state":          state,
             }
 
-        return [
+        result = [
             _row(call_padded, mappings.CALL_ROW, call_lights, call_state_str),
             _row(put_padded,  mappings.PUT_ROW,  put_lights,  put_state_str),
         ]
+        _last_valid_wall = result
+        return result

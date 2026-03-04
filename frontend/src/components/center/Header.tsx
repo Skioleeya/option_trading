@@ -93,7 +93,7 @@ export const Header: React.FC<Props> = ({
                 <div className="flex items-center gap-1.5">
                     <span className="text-[10px] font-bold text-[#71717a]">IV</span>
                     <span className={`font-mono text-[12px] font-black ${ivRegimeColor}`}>
-                        {ivPct != null ? `${ivPct.toFixed(2)}%` : '—'}
+                        {ivPct != null ? `${(ivPct * 100).toFixed(2)}%` : '—'}
                     </span>
                     <span className={`text-[9px] font-black tracking-widest px-1.5 py-[1px] rounded-[2px] border ${ivBadgeCls}`}>
                         {ivRegime}

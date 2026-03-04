@@ -29,6 +29,11 @@ class AgentB1Output(BaseModel):
     # Microstructure analysis (Agent B1 v2.0)
     micro_structure: MicroStructureAnalysis | None = None
 
+    # Market structure analysis (Agent B1 for Agent G)
+    hv_analysis: dict[str, Any] | None = None
+    charm_analysis: dict[str, Any] | None = None
+    skew_analysis: dict[str, Any] | None = None
+
     # Confidence values from individual trackers
     iv_confidence: float | None = None
     wall_confidence: float | None = None

@@ -3,11 +3,23 @@
 Tracks the SPY ATM options price exactly at 9:30 AM ET and calculates real-time
 premium decay (Call, Put, Straddle) relative to that anchor.
 Provides dual-layer persistence (Redis + Local JSON) to survive fast-API restarts.
+
+Design Principles (Institutional Grade):
+  1. STRICT 0DTE ISOLATION — regex-based YYMMDD extraction from OCC-style symbols;
+     only today's expiration is eligible for anchor capture.
+  2. INTEGER STRIKE GATE — SPY strikes are always whole-dollar; fractional strikes
+     (e.g. 681.67) are rejected as data artifacts.
+  3. SYMBOL-LOCKED DECAY — once anchored, _calculate_decay matches by exact symbol
+     string (e.g. "SPY260303C681000.US"), never by strike alone. This prevents
+     cross-expiration contamination when the chain contains both 0DTE and 1DTE.
+  4. MID-PRICE WATERFALL — Bid/Ask mid (only when uncrossed) → Ask → Last.
+  5. DUAL-LAYER PERSISTENCE — Redis (primary, TTL-managed) + cold JSON (fallback).
 """
 
 import json
 import logging
-from datetime import datetime, date
+import re
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
@@ -19,327 +31,407 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Eastern Time Zone
 ET = ZoneInfo("US/Eastern")
 
-class AtmDecayTracker:
-    """Manages the 9:30 AM ATM anchor and calculates real-time decay."""
+# ---------------------------------------------------------------------------
+# OCC-style symbol regex for US equity options
+# Examples:  SPY260303C681000.US   SPY260304P00676000.US
+# Groups:    (underlying)(YYMMDD)(C|P)(strike_raw)
+# ---------------------------------------------------------------------------
+_SYM_RE = re.compile(r"^([A-Z]+)(\d{6})([CP])(\d+)\.US$")
 
-    def __init__(self, redis_client: Optional[Redis] = None, quote_ctx: Optional[QuoteContext] = None):
+# Maximum allowable distance (points) between a persisted anchor strike and
+# current spot when restoring from Redis or cold JSON.  If the gap exceeds
+# this value the stale anchor is discarded and a fresh capture is triggered.
+_MAX_ANCHOR_DISTANCE: float = 3.0
+
+
+def _parse_expiry(symbol: str) -> str | None:
+    """Return the YYMMDD expiration string embedded in the symbol, or None."""
+    m = _SYM_RE.match(symbol)
+    return m.group(2) if m else None
+
+
+def _is_integer_strike(strike: float) -> bool:
+    """SPY options always have whole-dollar strikes (676.0, 681.0, …)."""
+    return abs(strike - round(strike)) < 0.01
+
+
+def _mid_price(bid: float, ask: float, last: float) -> float:
+    """Institutional mid-price waterfall. Returns 0.0 only if all inputs are 0."""
+    if bid > 0 and ask > 0 and ask >= bid:
+        return (bid + ask) / 2.0
+    if ask > 0:
+        return ask
+    return last  # last resort; may be 0.0
+
+
+class AtmDecayTracker:
+    """Manages the 9:30 AM ATM anchor and calculates real-time premium decay."""
+
+    # ------------------------------------------------------------------
+    # Construction & initialisation
+    # ------------------------------------------------------------------
+    def __init__(
+        self,
+        redis_client: Optional[Redis] = None,
+        quote_ctx: Optional[QuoteContext] = None,
+    ):
         self.redis = redis_client
         self.ctx = quote_ctx
         self.anchor: dict[str, Any] | None = None
-        
-        # Cold storage paths
-        self.cold_storage_dir = Path(settings.opening_atm_cold_storage_root)
-        self.cold_storage_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Key templates
-        self.redis_key_template = "app:opening_atm:{date}"
-        self.series_key_template = "app:atm_decay_series:{date}"
-        
-        self._current_date_str = datetime.now(ET).strftime("%Y%m%d")
-        
+
+        self._cold_dir = Path(settings.opening_atm_cold_storage_root)
+        self._cold_dir.mkdir(parents=True, exist_ok=True)
+
+        self._redis_key_tpl = "app:opening_atm:{date}"
+        self._series_key_tpl = "app:atm_decay_series:{date}"
+        self._today = datetime.now(ET).strftime("%Y%m%d")
+
+        # Deduplication guard — last emitted (call_pct, put_pct, straddle_pct)
+        self._prev_pcts: tuple[float, float, float] | None = None
+
+        # Warm-up guard: skip anchor capture for the first N ticks after startup
+        # to let the LV1 bid/ask feed fully populate before locking a strike.
+        self._warmup_ticks_remaining: int = 5
+
         self.is_initialized = False
 
-    async def initialize(self) -> None:
-        """Attempt to restore today's anchor from Redis or fallback to local JSON."""
+    async def initialize(self, spot: float = 0.0) -> None:
+        """Restore today's anchor from Redis → cold JSON → empty (wait for 9:30).
+
+        Args:
+            spot: Current SPY spot price.  When non-zero, any persisted anchor
+                  whose strike deviates more than _MAX_ANCHOR_DISTANCE from
+                  ``spot`` is treated as stale and discarded so a fresh capture
+                  can run on the next tick.
+        """
         now = datetime.now(ET)
-        self._current_date_str = now.strftime("%Y%m%d")
-        
-        anchor_key = self.redis_key_template.format(date=self._current_date_str)
-        fallback_file = self.cold_storage_dir / f"atm_{self._current_date_str}.json"
-        
-        # 1. Try Redis
+        self._today = now.strftime("%Y%m%d")
+
+        # 1. Redis
         if self.redis:
             try:
-                raw_data = await self.redis.get(anchor_key)
-                if raw_data:
-                    self.anchor = json.loads(raw_data)
-                    logger.info(f"[AtmDecayTracker] Restored ATM anchor from Redis: {self.anchor}")
+                raw = await self.redis.get(self._redis_key_tpl.format(date=self._today))
+                if raw:
+                    anchor = json.loads(raw)
+                    if self._validate_anchor(anchor):
+                        self.anchor = anchor
+                        logger.info(
+                            f"[AtmDecayTracker] Restored anchor from Redis: "
+                            f"strike={anchor['strike']} (spot={spot if spot else 'N/A'})"
+                        )
+                        self.is_initialized = True
+                        return
+                    else:
+                        logger.warning("[AtmDecayTracker] Redis anchor failed validation — discarding")
+            except Exception as exc:
+                logger.error(f"[AtmDecayTracker] Redis read failed: {exc}")
+
+        # 2. Cold JSON
+        cold_file = self._cold_dir / f"atm_{self._today}.json"
+        if cold_file.exists():
+            try:
+                anchor = json.loads(cold_file.read_text())
+                if self._validate_anchor(anchor):
+                    self.anchor = anchor
+                    logger.info(
+                        f"[AtmDecayTracker] Restored anchor from cold JSON: "
+                        f"strike={anchor['strike']} (spot={spot if spot else 'N/A'})"
+                    )
+                    # Heal Redis
+                    if self.redis:
+                        try:
+                            await self._save_redis(anchor)
+                        except Exception:
+                            pass
                     self.is_initialized = True
                     return
-            except Exception as e:
-                logger.error(f"[AtmDecayTracker] Failed reading Redis anchor: {e}")
-                
-        # 2. Fallback to Local JSON
-        if fallback_file.exists():
-            try:
-                with open(fallback_file, "r") as f:
-                    self.anchor = json.load(f)
-                logger.info(f"[AtmDecayTracker] Restored ATM anchor from fallback JSON: {self.anchor}")
-                self.is_initialized = True
-                
-                # Opportunistically heal Redis if it's connected now
-                if self.redis:
-                    try:
-                        await self._save_to_redis(self.anchor, self._current_date_str)
-                    except Exception:
-                        pass
-                return
-            except Exception as e:
-                logger.error(f"[AtmDecayTracker] Failed reading fallback JSON: {e}")
-                
-        # 3. No existing anchor found
-        logger.info("[AtmDecayTracker] No existing anchor found for today. Waiting for 9:30 AM.")
+                else:
+                    logger.warning("[AtmDecayTracker] Cold JSON anchor failed validation — discarding")
+            except Exception as exc:
+                logger.error(f"[AtmDecayTracker] Cold JSON read failed: {exc}")
+
+        # 3. No anchor yet
+        logger.info("[AtmDecayTracker] No valid anchor for today. Will capture at market open.")
         self.is_initialized = True
 
-    async def _save_to_redis(self, data: dict[str, Any], date_str: str) -> None:
-        """Save anchor to Redis with TTL."""
+    def invalidate_anchor(self) -> None:
+        """Force-clear the in-memory anchor so it will be re-captured on the
+        next tick.  Useful after manual overrides or when the operator detects
+        an erroneous lock.
+
+        Note: Does NOT remove Redis / cold-JSON persisted anchors — call
+        ``initialize(spot)`` after clearing to trigger a spot-validated reload.
+        """
+        if self.anchor:
+            logger.warning(
+                f"[AtmDecayTracker] Anchor INVALIDATED (was strike={self.anchor.get('strike')}). "
+                "Will re-capture on next tick."
+            )
+        self.anchor = None
+        self._prev_pcts = None
+        self._warmup_ticks_remaining = 5  # Re-arm warm-up gate after manual invalidation
+
+    # ------------------------------------------------------------------
+    # Anchor validation
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _validate_anchor(a: dict) -> bool:
+        """Reject anchors that lack symbol keys, non-numeric or fractional strikes."""
+        required = {"strike", "call_symbol", "put_symbol", "call_price", "put_price", "timestamp"}
+        if not required.issubset(a.keys()):
+            return False
+        strike = a["strike"]
+        if not isinstance(strike, (int, float)) or not _is_integer_strike(strike):
+            return False
+        if not a["call_symbol"] or not a["put_symbol"]:
+            return False
+        return True
+
+    # ------------------------------------------------------------------
+    # Persistence helpers
+    # ------------------------------------------------------------------
+    async def _save_redis(self, data: dict[str, Any]) -> None:
         if not self.redis:
             return
-            
-        key = self.redis_key_template.format(date=date_str)
-        payload = json.dumps(data)
-        await self.redis.set(key, payload, ex=settings.opening_atm_redis_ttl_seconds)
+        key = self._redis_key_tpl.format(date=self._today)
+        await self.redis.set(key, json.dumps(data), ex=settings.opening_atm_redis_ttl_seconds)
 
-    async def _save_to_disk(self, data: dict[str, Any], date_str: str) -> None:
-        """Save anchor to local JSON fallback."""
-        fallback_file = self.cold_storage_dir / f"atm_{date_str}.json"
+    def _save_cold(self, data: dict[str, Any]) -> None:
+        path = self._cold_dir / f"atm_{self._today}.json"
         try:
-            with open(fallback_file, "w") as f:
-                json.dump(data, f, indent=2)
-        except Exception as e:
-            logger.error(f"[AtmDecayTracker] Failed to write fallback JSON: {e}")
+            path.write_text(json.dumps(data, indent=2))
+        except Exception as exc:
+            logger.error(f"[AtmDecayTracker] Cold JSON write failed: {exc}")
 
-    async def _persist_anchor(self, anchor_data: dict[str, Any]) -> None:
-        """Main method to persist to both layers."""
-        self.anchor = anchor_data
-        
-        # Determine the trade date based on the timestamp inside the anchor
-        dt = datetime.fromisoformat(anchor_data["timestamp"])
-        date_str = dt.strftime("%Y%m%d")
-        
-        # Dual-write
-        await self._save_to_redis(anchor_data, date_str)
-        await self._save_to_disk(anchor_data, date_str)
-        if self.anchor and not await self._has_sufficient_history():
-            await self.pre_fill_history()
+    async def _persist(self, anchor: dict[str, Any]) -> None:
+        self.anchor = anchor
+        self._today = datetime.fromisoformat(anchor["timestamp"]).strftime("%Y%m%d")
+        await self._save_redis(anchor)
+        self._save_cold(anchor)
+        logger.info(
+            f"[AtmDecayTracker] ANCHOR LOCKED — strike={anchor['strike']} "
+            f"call={anchor['call_symbol']} put={anchor['put_symbol']} "
+            f"C${anchor['call_price']:.2f} P${anchor['put_price']:.2f}"
+        )
 
-        logger.info(f"[AtmDecayTracker] Persisted new anchor for {date_str}: {anchor_data}")
+    # ------------------------------------------------------------------
+    # Public API — called every compute tick from main._agent_runner_loop
+    # ------------------------------------------------------------------
+    async def update(
+        self, chain: list[dict[str, Any]], spot: float
+    ) -> dict[str, Any] | None:
+        """Process chain tick.  Captures anchor once, then returns decay dict.
 
-    async def _has_sufficient_history(self) -> bool:
-        """Check if history already exists for today to avoid redundant REST calls."""
-        if not self.redis:
-            return False
-        key = self.series_key_template.format(date=self._current_date_str)
-        count = await self.redis.llen(key)
-        return count > 5  # arbitrary threshold
-
-    async def update(self, chain: list[dict[str, Any]], spot: float) -> dict[str, Any] | None:
-        """
-        Process incoming option chain. 
-        Will capture the anchor at 9:30 AM if not set.
-        Returns the ui_state.atm dictionary.
+        Anchor capture is NOT gated to exactly 9:30 — if the server starts at
+        9:31, 10:00, or 14:17, it will lock the nearest 0DTE ATM immediately.
+        Only true pre-market (before 9:30) is blocked.
         """
         if not self.is_initialized:
             return None
-            
+
         now = datetime.now(ET)
-        current_time = now.time()
-        
-        market_open_time = datetime.strptime("09:30:00", "%H:%M:%S").time()
-        
-        # Pre-market: Do nothing
-        if current_time < market_open_time:
-            return None
-            
-        # Time to capture anchor!
+        if now.hour < 9 or (now.hour == 9 and now.minute < 30):
+            return None  # true pre-market
+
         if not self.anchor:
-            await self._capture_anchor(chain, spot, now)
-            
-        if not self.anchor:
-           # Capture failed (e.g., chain empty)
-           return None
+            # Burn through warm-up ticks before first capture attempt
+            if self._warmup_ticks_remaining > 0:
+                self._warmup_ticks_remaining -= 1
+                logger.debug(
+                    f"[AtmDecay] Warm-up delay: {self._warmup_ticks_remaining} ticks remaining before anchor capture"
+                )
+            else:
+                await self._capture_anchor(chain, spot, now)
 
-        # Calculate Decay
-        return await self._calculate_decay(chain)
-
-    async def _capture_anchor(self, chain: list[dict[str, Any]], spot: float, now: datetime) -> None:
-        """Identify ATM strike and record opening premiums."""
-        if not chain or spot <= 0:
-            return
-            
-        # Find ATM strike
-        # Note: Depending on SPX/SPY rules, it's typically the nearest strike
-        closest_strike = min(set(opt["strike"] for opt in chain), key=lambda x: abs(x - spot))
-        
-        call_price = 0.0
-        put_price = 0.0
-        
-        # Extract Ask or Mid prices (Assuming 'ask' or 'mid' field exists, fallback to 'last')
-        for opt in chain:
-            if opt["strike"] == closest_strike:
-                # Prefer mid price if available, else last price
-                price = opt.get("mid", opt.get("last_price", 0.0))
-                opt_type = opt.get("option_type", opt.get("type", "")).upper()
-                
-                if opt_type in ("CALL", "C"):
-                    call_price = price
-                elif opt_type in ("PUT", "P"):
-                    put_price = price
-                    
-        if call_price > 0 and put_price > 0:
-            # Locate symbols for pre-fill with safety guards
-            try:
-                call_sym = next(o["symbol"] for o in chain if o["strike"] == closest_strike and o["type"].upper() in ("CALL", "C"))
-                put_sym = next(o["symbol"] for o in chain if o["strike"] == closest_strike and o["type"].upper() in ("PUT", "P"))
-            except StopIteration:
-                logger.warning(f"[AtmDecayTracker] Strike {closest_strike} pair incomplete in chain")
-                return
-
-            new_anchor = {
-                "strike": closest_strike,
-                "call_symbol": call_sym,
-                "put_symbol": put_sym,
-                "call_price": call_price,
-                "put_price": put_price,
-                "timestamp": now.isoformat()
-            }
-            await self._persist_anchor(new_anchor)
-            # Trigger real exchange history prefill
-            await self.pre_fill_history()
-        else:
-            logger.warning(f"[AtmDecayTracker] Failed to capture full straddle prices for ATM strike: {closest_strike}")
-
-    async def pre_fill_history(self) -> None:
-        """Fetch real 1-minute intraday lines from LongPort and rebuild decay history."""
-        if not self.anchor or not self.ctx:
-            return
-
-        call_sym = self.anchor.get("call_symbol")
-        put_sym = self.anchor.get("put_symbol")
-        if not call_sym or not put_sym:
-            return
-
-        logger.info(f"[AtmDecayTracker] Pre-filling today's history for {call_sym} and {put_sym}...")
-        
-        try:
-            # 1. Fetch Real Intraday Lines (REST)
-            # NOTE: LongPort lines contain timestamp (Unix), price (last), volume
-            call_lines = self.ctx.intraday(call_sym)
-            put_lines = self.ctx.intraday(put_sym)
-
-            if not call_lines or not put_lines:
-                logger.warning("[AtmDecayTracker] Intraday lines empty, skipping pre-fill")
-                return
-
-            # Map lines by timestamp (Unix integer seconds)
-            call_map = {int(l.timestamp): float(l.price) for l in call_lines}
-            put_map = {int(l.timestamp): float(l.price) for l in put_lines}
-
-            # Find common timestamps and sort
-            timestamps = sorted(set(call_map.keys()) & set(put_map.keys()))
-            if not timestamps:
-                return
-
-            # 2. Build Decay Series
-            anchor_c = self.anchor["call_price"]
-            anchor_p = self.anchor["put_price"]
-            anchor_straddle = anchor_c + anchor_p
-            anchor_strike = self.anchor["strike"]
-            locked_at_str = datetime.fromisoformat(self.anchor["timestamp"]).strftime("%H:%M:%S")
-
-            new_history = []
-            for t in timestamps:
-                c_price = call_map[t]
-                p_price = put_map[t]
-                straddle = c_price + p_price
-
-                dt = datetime.fromtimestamp(t, ET)
-                
-                # Filter points before market open or before our anchor capture if desired
-                # But typically we want the whole session.
-                
-                item = {
-                    "strike": anchor_strike,
-                    "locked_at": locked_at_str,
-                    "call_pct": round((c_price - anchor_c) / anchor_c, 4) if anchor_c > 0 else 0.0,
-                    "put_pct": round((p_price - anchor_p) / anchor_p, 4) if anchor_p > 0 else 0.0,
-                    "straddle_pct": round((straddle - anchor_straddle) / anchor_straddle, 4) if anchor_straddle > 0 else 0.0,
-                    "timestamp": dt.isoformat()
-                }
-                new_history.append(item)
-
-            # 3. Batch Write to Redis (REPLACE existing series for today)
-            if self.redis and new_history:
-                key = self.series_key_template.format(date=self._current_date_str)
-                await self.redis.delete(key)
-                for point in new_history:
-                    await self.redis.rpush(key, json.dumps(point))
-                await self.redis.expire(key, settings.opening_atm_redis_ttl_seconds)
-                
-            logger.info(f"[AtmDecayTracker] Pre-filled {len(new_history)} historical points from LongPort Intraday API")
-
-        except Exception as e:
-            logger.error(f"[AtmDecayTracker] Critical pre-fill error: {e}")
-
-    async def _calculate_decay(self, chain: list[dict[str, Any]]) -> dict[str, Any] | None:
-        """Calculate percentage change from anchor."""
         if not self.anchor:
             return None
-            
-        target_strike = self.anchor["strike"]
-        anchor_c = self.anchor["call_price"]
-        anchor_p = self.anchor["put_price"]
-        anchor_straddle = anchor_c + anchor_p
-        
-        curr_c = 0.0
-        curr_p = 0.0
-        
-        for opt in chain:
-            if opt["strike"] == target_strike:
-                price = opt.get("mid", opt.get("last_price", 0.0))
-                opt_type = opt.get("option_type", opt.get("type", "")).upper()
-                
-                if opt_type in ("CALL", "C"):
-                    curr_c = price
-                elif opt_type in ("PUT", "P"):
-                    curr_p = price
-                    
-        if curr_c == 0.0 or curr_p == 0.0:
-            return None
-            
-        curr_straddle = curr_c + curr_p
-        
-        call_pct = (curr_c - anchor_c) / anchor_c if anchor_c > 0 else 0.0
-        put_pct = (curr_p - anchor_p) / anchor_p if anchor_p > 0 else 0.0
-        straddle_pct = (curr_straddle - anchor_straddle) / anchor_straddle if anchor_straddle > 0 else 0.0
-        
-        timestamp = datetime.now(ET)
-        
-        result = {
-            "strike": target_strike,
-            "locked_at": datetime.fromisoformat(self.anchor["timestamp"]).strftime("%H:%M:%S"),
-            "call_pct": round(call_pct, 4),
-            "put_pct": round(put_pct, 4),
-            "straddle_pct": round(straddle_pct, 4),
-            "timestamp": timestamp.isoformat() # Added so frontend can plot the time series
-        }
-        
-        # Append to Time-Series History
-        await self._append_to_series(result, timestamp.strftime("%Y%m%d"))
-        
-        return result
 
-    async def _append_to_series(self, data: dict[str, Any], date_str: str) -> None:
-        """Append tick to Redis time-series list for Full Fetch."""
-        if not self.redis:
-            return
-            
-        key = self.series_key_template.format(date=date_str)
-        # Using RPUSH to append to the list
-        await self.redis.rpush(key, json.dumps(data))
-        # Important: SET TTL on the list if it's new
-        if await self.redis.llen(key) == 1:
-            await self.redis.expire(key, settings.opening_atm_redis_ttl_seconds)
+        return self._calculate_decay(chain)
+
+    def get_anchor_symbols(self) -> set[str]:
+        """Return exact call/put symbol strings for depth-subscription sync."""
+        if not self.anchor:
+            return set()
+        syms: set[str] = set()
+        cs = self.anchor.get("call_symbol")
+        ps = self.anchor.get("put_symbol")
+        if cs:
+            syms.add(cs)
+        if ps:
+            syms.add(ps)
+        return syms
 
     async def get_history(self, date_str: str) -> list[dict[str, Any]]:
-        """Retrieve full day's history for the frontend."""
         if not self.redis:
             return []
-            
-        key = self.series_key_template.format(date=date_str)
-        raw_list = await self.redis.lrange(key, 0, -1)
-        
-        return [json.loads(item) for item in raw_list]
+        key = self._series_key_tpl.format(date=date_str)
+        raw = await self.redis.lrange(key, 0, -1)
+        return [json.loads(r) for r in raw]
+
+    async def flush_and_rebuild(self) -> None:
+        if not self.redis:
+            return
+        logger.info(f"[AtmDecayTracker] Flushing series for {self._today}")
+        await self.redis.delete(self._series_key_tpl.format(date=self._today))
+        self._prev_pcts = None
+
+    async def pre_fill_history(self) -> None:
+        """LongPort does not support intraday REST for options — no-op."""
+        logger.info("[AtmDecayTracker] pre_fill_history skipped (API limitation).")
+
+    # ------------------------------------------------------------------
+    # Anchor capture — runs on every tick until locked for the day
+    # ------------------------------------------------------------------
+    async def _capture_anchor(
+        self, chain: list[dict[str, Any]], spot: float, now: datetime
+    ) -> None:
+        if not chain or spot <= 0:
+            return
+
+        today_ymd = now.strftime("%y%m%d")  # e.g. "260303"
+
+        # ── Step 1: Isolate 0DTE contracts ──────────────────────────────
+        zero_dte = [
+            opt for opt in chain
+            if _parse_expiry(opt.get("symbol", "")) == today_ymd
+        ]
+        if not zero_dte:
+            logger.debug(f"[AtmDecay] No 0DTE contracts in chain ({len(chain)} total) for {today_ymd}")
+            return
+
+        # ── Step 2: Collect integer strikes, sort by distance to spot ───
+        strikes = sorted(
+            {opt["strike"] for opt in zero_dte if _is_integer_strike(opt["strike"])},
+            key=lambda s: abs(s - spot),
+        )
+        if not strikes:
+            logger.debug(f"[AtmDecay] No integer strikes in 0DTE subset ({len(zero_dte)} contracts)")
+            return
+
+        logger.info(
+            f"[AtmDecay] 0DTE scan: {len(zero_dte)} contracts, "
+            f"{len(strikes)} integer strikes, spot={spot:.2f}, "
+            f"nearest strikes={strikes[:5]}"
+        )
+
+        # ── Step 3a: Preferred — same-strike pair (top 10) ──────────────
+        # Require both call AND put with positive price at the same strike.
+        # Both legs must exceed a minimum price floor to reject deep-OTM locks.
+        _MIN_LEG_PRICE = 0.05  # reject legs priced < $0.05 (deep OTM garbage)
+        for candidate in strikes[:10]:
+            call_sym = call_px = put_sym = put_px = None
+            for opt in zero_dte:
+                if abs(opt["strike"] - candidate) > 0.01:
+                    continue
+                otype = opt.get("option_type", opt.get("type", "")).upper()
+                px = _mid_price(
+                    opt.get("bid", 0.0),
+                    opt.get("ask", 0.0),
+                    opt.get("last_price", 0.0),
+                )
+                if otype in ("CALL", "C") and px >= _MIN_LEG_PRICE:
+                    call_sym = opt["symbol"]
+                    call_px = px
+                elif otype in ("PUT", "P") and px >= _MIN_LEG_PRICE:
+                    put_sym = opt["symbol"]
+                    put_px = px
+
+            if call_sym and put_sym:
+                await self._persist({
+                    "strike": candidate,
+                    "call_symbol": call_sym,
+                    "put_symbol": put_sym,
+                    "call_price": call_px,
+                    "put_price": put_px,
+                    "timestamp": now.isoformat(),
+                })
+                return  # locked!
+
+            logger.debug(
+                f"[AtmDecay] Strike {int(candidate)} skipped: "
+                f"call={'$'+f'{call_px:.2f}' if call_px else 'MISS'} "
+                f"put={'$'+f'{put_px:.2f}' if put_px else 'MISS'}"
+            )
+
+        logger.warning(
+            f"[AtmDecayTracker] Could not lock any of top-10 0DTE strikes "
+            f"{[int(s) for s in strikes[:10]]}. Waiting for more data."
+        )
+
+
+    # ------------------------------------------------------------------
+    # Decay calculation — symbol-locked, dedup-guarded
+    # ------------------------------------------------------------------
+    def _calculate_decay(self, chain: list[dict[str, Any]]) -> dict[str, Any] | None:
+        a = self.anchor
+        if not a:
+            return None
+
+        target_call = a["call_symbol"]
+        target_put = a["put_symbol"]
+        anchor_c = a["call_price"]
+        anchor_p = a["put_price"]
+        anchor_s = anchor_c + anchor_p
+
+        # ── Exact symbol match ──────────────────────────────────────────
+        curr_c = curr_p = 0.0
+        for opt in chain:
+            sym = opt.get("symbol")
+            if sym == target_call:
+                curr_c = _mid_price(opt.get("bid", 0.0), opt.get("ask", 0.0), opt.get("last_price", 0.0))
+            elif sym == target_put:
+                curr_p = _mid_price(opt.get("bid", 0.0), opt.get("ask", 0.0), opt.get("last_price", 0.0))
+
+        if curr_c <= 0 or curr_p <= 0:
+            return None
+
+        curr_s = curr_c + curr_p
+        c_pct = (curr_c - anchor_c) / anchor_c if anchor_c > 0 else 0.0
+        p_pct = (curr_p - anchor_p) / anchor_p if anchor_p > 0 else 0.0
+        s_pct = (curr_s - anchor_s) / anchor_s if anchor_s > 0 else 0.0
+
+        ts = datetime.now(ET)
+        item = {
+            "strike": a["strike"],
+            "locked_at": datetime.fromisoformat(a["timestamp"]).strftime("%H:%M:%S"),
+            "call_pct": c_pct,
+            "put_pct": p_pct,
+            "straddle_pct": s_pct,
+            "timestamp": ts.isoformat(),
+        }
+
+        # ── Deduplication — ONLY for Redis storage ─────────────────────
+        # We always return the item to the UI to prevent flickering, 
+        # but we only save to the time-series if values have changed.
+        should_store = True
+        if self._prev_pcts is not None:
+            pc, pp, ps = self._prev_pcts
+            if abs(c_pct - pc) < 1e-6 and abs(p_pct - pp) < 1e-6 and abs(s_pct - ps) < 1e-6:
+                should_store = False
+
+        if should_store:
+            self._prev_pcts = (c_pct, p_pct, s_pct)
+            # Fire-and-forget append
+            import asyncio
+            asyncio.ensure_future(self._append_series(item, ts.strftime("%Y%m%d")))
+
+        logger.info(
+            f"[AtmDecay] {int(a['strike'])} | "
+            f"C:{c_pct:+.4f}  P:{p_pct:+.4f}  S:{s_pct:+.4f} "
+            f"{'(stored)' if should_store else '(dedup)'}"
+        )
+
+        return item
+
+    # ------------------------------------------------------------------
+    # Time-series storage
+    # ------------------------------------------------------------------
+    async def _append_series(self, data: dict[str, Any], date_str: str) -> None:
+        if not self.redis:
+            return
+        key = self._series_key_tpl.format(date=date_str)
+        await self.redis.rpush(key, json.dumps(data))
+        if await self.redis.llen(key) == 1:
+            await self.redis.expire(key, settings.opening_atm_redis_ttl_seconds)

@@ -1,0 +1,139 @@
+INFO:     Started server process [11500]
+INFO:     Waiting for application startup.
+15:46:44.000 INFO app.services.system.redis_service: Connected to Redis at 127.0.0.1:6380
+15:46:44.002 INFO app.services.feeds.option_chain_builder: [OptionChainBuilder] Token Diag: key=d5c6d5fde18fd250ab1e028caf9b1fb5 token=m_eyJ...Vg6fk len=1054
++----------+----------------------+
+| HK       | LV1 Real-time Quotes |
+|----------+----------------------|
+| CN       | LV1 Real-time Quotes |
+|----------+----------------------|
+| USOption | LV1 Real-time Quotes |
+|----------+----------------------|
+| US       | Nasdaq Basic         |
++----------+----------------------+
+15:46:46.095 INFO app.services.feeds.option_chain_builder: [OptionChainBuilder] QuoteContext initialized
+15:46:46.095 INFO app.services.feeds.option_chain_builder: [OptionChainBuilder] Tier 2 polling (2DTE) is DISABLED per config
+15:46:46.096 INFO app.services.feeds.option_chain_builder: [OptionChainBuilder] Tier 3 polling (Weekly) is DISABLED per config
+15:46:46.096 INFO app.services.analysis.bsm_fast: [bsm_fast.warmup] Starting CuPy GPU pre-compilation 鈥?
+15:46:46.342 INFO app.services.analysis.bsm_fast: [bsm_fast.warmup] CuPy GPU pre-compilation complete in 247 ms 鈥?subsequent calls will be near-zero latency.
+15:46:46.668 INFO app.services.analysis.atm_decay_tracker: [AtmDecayTracker] Restored anchor from Redis: strike=680.0 (spot=N/A)
+15:46:46.668 INFO app.main: [AppContainer] All services initialized
+15:46:46.693 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=1, spot=680.55, net_gex=0.0
+15:46:46.694 INFO app.agents.agent_g: [AgentG] MTF Damping ACTIVATED: alignment=0.00 < 0.34
+15:46:46.696 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:46:46.696 INFO app.services.feeds.option_chain_builder: [OptionChainBuilder] Updated mandatory symbols: {'SPY260303P680000.US', 'SPY260303C680000.US'}
+15:46:46.696 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=0.0ms, interval=1.0s
+15:46:46.708 WARNING app.ui.active_options.presenter: [ActiveOptionsPresenter] No options above min_volume threshold
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+15:46:47.692 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=10, spot=680.43, net_gex=0.0
+15:46:47.693 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=BEARISH, GEX=0.0
+15:46:47.693 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=0.0ms, interval=1.0s
+15:46:48.687 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=20, spot=680.47, net_gex=0.0
+15:46:48.688 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:46:48.688 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=0.0ms, interval=1.0s
+15:46:49.682 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=20, spot=680.44, net_gex=0.0
+15:46:49.683 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:46:49.684 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=0.0ms, interval=1.0s
+15:46:50.682 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=30, spot=680.45, net_gex=0.0
+15:46:50.683 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:46:50.683 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=0.0ms, interval=1.0s
+15:46:51.692 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=40, spot=680.46, net_gex=0.0
+15:46:51.693 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:46:51.693 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=0.0ms, interval=1.0s
+INFO:     127.0.0.1:10043 - "WebSocket /ws/dashboard" [accepted]
+INFO:     connection open
+[DEBUG] ========== LIFESPAN START ==========
+INFO:     127.0.0.1:10046 - "GET /api/atm-decay/history HTTP/1.1" 200 OK
+15:46:52.687 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=40, spot=680.43, net_gex=0.0
+15:46:52.688 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:46:52.688 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=0.0ms, interval=1.0s
+15:46:53.686 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=50, spot=680.42, net_gex=0.0
+15:46:53.688 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:46:53.688 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=0.0ms, interval=1.0s
+15:46:54.668 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=50, spot=680.42, net_gex=0.0
+15:46:54.670 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:46:54.670 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=0.0ms, interval=1.0s
+15:46:55.681 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=60, spot=680.46, net_gex=0.0
+15:46:55.683 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:46:55.683 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=0.0ms, interval=1.0s
+15:46:56.713 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=60, spot=680.39, net_gex=0.0
+15:46:56.714 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:46:56.714 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=0.0ms, interval=1.0s
+15:46:57.676 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=70, spot=680.38, net_gex=0.0
+15:46:57.677 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:46:57.677 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=0.0ms, interval=1.0s
+15:46:58.678 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=80, spot=680.38, net_gex=0.0
+15:46:58.681 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:46:58.681 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=0.0ms, interval=1.0s
+15:46:59.689 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=80, spot=680.38, net_gex=0.0
+15:46:59.691 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:46:59.691 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=0.0ms, interval=1.0s
+15:47:00.686 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=90, spot=680.407, net_gex=0.0
+15:47:00.688 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:47:00.688 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=0.0ms, interval=1.0s
+INFO:     127.0.0.1:10051 - "WebSocket /ws/dashboard" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:10047 - "GET /api/atm-decay/history HTTP/1.1" 200 OK
+15:47:01.748 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=90, spot=680.41, net_gex=0.0
+15:47:01.750 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:47:01.750 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=0.0ms, interval=1.0s
+15:47:02.684 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=100, spot=680.42, net_gex=0.0
+15:47:02.686 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:47:02.686 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=16.0ms, interval=1.0s
+15:47:03.687 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=110, spot=680.49, net_gex=0.0
+15:47:03.690 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:47:03.690 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=0.0ms, interval=1.0s
+15:47:04.671 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=110, spot=680.425, net_gex=0.0
+15:47:04.673 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:47:04.673 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=0.0ms, interval=1.0s
+15:47:05.686 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=120, spot=680.38, net_gex=0.0
+15:47:05.688 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:47:05.688 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=0.0ms, interval=1.0s
+15:47:06.714 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=120, spot=680.39, net_gex=0.0
+15:47:06.716 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:47:06.716 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=15.0ms, interval=1.0s
+15:47:07.682 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=130, spot=680.37, net_gex=0.0
+15:47:07.685 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:47:07.685 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=16.0ms, interval=1.0s
+15:47:08.686 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=140, spot=680.335, net_gex=0.0
+15:47:08.689 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:47:08.689 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=0.0ms, interval=1.0s
+15:47:09.683 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=140, spot=680.33, net_gex=0.0
+15:47:09.685 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:47:09.685 INFO app.main: [PERF] build_payload breakdown: snapshot=0.0ms, agent=16.0ms, interval=1.0s
+15:47:10.672 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=150, spot=680.36, net_gex=0.0
+15:47:10.675 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:47:10.676 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=0.0ms, interval=1.0s
+15:47:11.686 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=160, spot=680.36, net_gex=0.0
+15:47:11.690 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:47:11.691 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=0.0ms, interval=1.0s
+15:47:12.688 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=160, spot=680.34, net_gex=0.0
+15:47:12.691 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:47:12.691 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=0.0ms, interval=1.0s
+15:47:13.699 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=170, spot=680.315, net_gex=0.0
+15:47:13.703 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:47:13.703 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=16.0ms, interval=1.0s
+15:47:14.695 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=170, spot=680.3, net_gex=0.0
+15:47:14.699 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:47:14.699 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=0.0ms, interval=1.0s
+15:47:15.677 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=180, spot=680.29, net_gex=0.0
+15:47:15.680 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:47:15.680 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=0.0ms, interval=1.0s
+15:47:16.680 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=190, spot=680.3, net_gex=0.0
+15:47:16.683 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:47:16.683 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.2647  P:-0.4634  S:-0.3533 (stored)
+15:47:16.683 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=0.0ms, interval=1.0s
+15:47:17.687 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=190, spot=680.29, net_gex=0.0
+15:47:17.692 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:47:17.692 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.2647  P:-0.4634  S:-0.3533 (dedup)
+15:47:17.692 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=0.0ms, interval=1.0s
+15:47:18.705 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=200, spot=680.337, net_gex=0.0
+15:47:18.709 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:47:18.709 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.2647  P:-0.4878  S:-0.3641 (stored)
+15:47:18.709 INFO app.main: [PERF] build_payload breakdown: snapshot=16.0ms, agent=0.0ms, interval=1.0s
+15:47:19.683 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=200, spot=680.3, net_gex=0.0
+15:47:19.686 INFO app.agents.agent_g: [L2 AgentG] Final Signal: NO_TRADE | Gate Winner Statement: MTF ALIGN DAMP: alignment=0.00 鈫?conf halved.; No signal. A=NEUTRAL, GEX=0.0
+15:47:19.686 INFO app.services.analysis.atm_decay_tracker: [AtmDecay] 680 | C:-0.2647  P:-0.4512  S:-0.3478 (stored)
+15:47:19.687 INFO app.main: [PERF] build_payload breakdown: snapshot=15.0ms, agent=16.0ms, interval=1.0s
+15:47:20.681 INFO app.agents.services.greeks_extractor: [GreeksExtractor] Chain length=210, spot=680.28, net_gex=0.0

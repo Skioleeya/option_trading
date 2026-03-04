@@ -94,26 +94,14 @@ class APIRateLimiter:
             yield
 
     def get_dynamic_interval(self) -> int:
-        """Returns a suggested loop interval in seconds based on token load.
-        
-        - 1s: API is mostly idle (lots of tokens).
-        - 2s: API is under moderate load.
-        - 3s: API is heavily utilized (few tokens).
-        """
-        # Estimate current tokens without waiting
-        now = time.monotonic()
-        elapsed = now - self._last_refill
-        estimated_tokens = min(
-            float(self._burst),
-            self._tokens + elapsed * self._rate,
-        )
+        """Force 1s interval to meet dashboard 1Hz requirement."""
+        return 1
+from app.config import settings
 
-        if estimated_tokens >= 6.0:
-            return 1
-        elif estimated_tokens >= 3.0:
-            return 2
-        else:
-            return 3
 # Module-level singleton — shared across all REST callers in the same process
-# PP-LIMIT FIX: Longport 30req/30s limit is strict. Using 0.9/s with burst=1.
-longport_limiter = APIRateLimiter(rate=0.9, burst=1, max_concurrent=2)
+# Configured for 1Hz updates: Unified via global settings (default 8.0 req/s, 5 concurrency).
+longport_limiter = APIRateLimiter(
+    rate=settings.longport_api_rate_limit,
+    burst=settings.longport_api_burst,
+    max_concurrent=settings.longport_api_max_concurrent
+)

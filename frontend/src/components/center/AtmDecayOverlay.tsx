@@ -9,9 +9,12 @@ interface Props {
     history: AtmDecay[];
 }
 
-export const AtmDecayOverlay: React.FC<Props> = ({ atm, spot }) => {
-    const lockPrice = atm?.strike ?? spot
-    const lockedTime = atm?.locked_at ?? '9:30:00 AM'
+export const AtmDecayOverlay: React.FC<Props> = ({ atm }) => {
+    // Only show a price when we have a confirmed anchor from the backend.
+    // Do NOT fall back to `spot` float — that would display fractional numbers
+    // (e.g. 680.40) that look like real locks but are just the live spot feed.
+    const lockPrice = atm?.strike ?? null
+    const lockedTime = atm?.locked_at ?? null
 
     return (
         <div className="absolute top-4 left-4 bg-[#121214]/95 border border-[#27272a] rounded-xl p-3 shadow-2xl z-10 font-sans pointer-events-none w-max">
@@ -24,8 +27,12 @@ export const AtmDecayOverlay: React.FC<Props> = ({ atm, spot }) => {
 
             {/* Sub Header */}
             <div className="flex items-baseline gap-1.5 mb-4">
-                <span className="text-[12px] font-black text-[#e4e4e7]">OPENING ATM {fmtPrice(lockPrice)}</span>
-                <span className="text-[10px] font-medium text-[#52525b] uppercase">(LOCKED {lockedTime} ET)</span>
+                <span className="text-[12px] font-black text-[#e4e4e7]">
+                    OPENING ATM {lockPrice != null ? fmtPrice(lockPrice) : <span className="text-[#52525b]">-- PENDING</span>}
+                </span>
+                <span className="text-[10px] font-medium text-[#52525b] uppercase">
+                    {lockedTime ? `(LOCKED ${lockedTime} ET)` : '(AWAITING LOCK)'}
+                </span>
             </div>
 
             {/* Readout Pills Row */}

@@ -31,6 +31,7 @@ export const DepthProfile: React.FC<Props> = ({ rows, macroVolumeMap, spot }) =>
 
     useEffect(() => {
         if (spotRef.current) {
+            console.debug(`[L4 DepthProfile] Scrolling to new spot focus: ${currentSpot}`);
             spotRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
         }
     }, [currentSpot])

@@ -54,14 +54,19 @@ class SubscriptionManager:
     def symbol_to_strike(self) -> dict[str, float]:
         return self._symbol_to_strike
 
-    async def refresh(self, ctx: QuoteContext, spot: float | None) -> set[str]:
+    async def refresh(self, ctx: QuoteContext, spot: float | None, mandatory_symbols: set[str] | None = None) -> set[str]:
         """Collect core symbols and sync subscriptions. Returns the target set."""
         target_set = await self._collect_core_symbols(ctx, spot)
+        
+        # Ensure mandatory symbols (like ATM anchors) are in the target set
+        if mandatory_symbols:
+            target_set.update(mandatory_symbols)
+
         # Instantly update the intentional target set (used by payload builder)
         self._target_symbols = target_set
 
         # Slowly sync physical WebSocket status in the background
-        await self._sync_subscriptions(ctx, target_set, spot)
+        await self._sync_subscriptions(ctx, target_set, spot, mandatory_symbols)
         return target_set
 
 
@@ -114,12 +119,12 @@ class SubscriptionManager:
         self._symbol_to_strike = new_symbol_to_strike
         return target_symbols
 
-    async def _sync_subscriptions(self, ctx: QuoteContext, target_set: set[str], spot: float | None) -> None:
+    async def _sync_subscriptions(self, ctx: QuoteContext, target_set: set[str], spot: float | None, mandatory_symbols: set[str] | None = None) -> None:
         """
         Dynamic Promotion & Sliding:
         - Symbols leaving the core zone are dropped instantly.
         - Symbols entering the core zone are subscribed in micro-batches (5 per 50ms).
-        - Manage SubType.Depth and SubType.Trade for only the Top 10 closest strikes to Spot.
+        - Manage SubType.Depth and SubType.Trade for ONLY the Top 10 closest strikes to Spot PLUS mandatory ones.
         """
         to_subscribe = list(target_set - self._subscribed_symbols)
         to_unsubscribe = list(self._subscribed_symbols - target_set)
@@ -151,7 +156,7 @@ class SubscriptionManager:
                     except Exception as e:
                         logger.error(f"[SubscriptionManager] Subscribe batch error: {e}")
 
-        # 3. Synchronize SubType.Depth and SubType.Trade for Top 10 ATM contracts + SPY.US
+        # 3. Synchronize SubType.Depth and SubType.Trade for Top 10 ATM contracts + SPY.US + Mandatory
         if spot is not None and self._subscribed_symbols:
             # Sort all subscribed options by distance to spot
             sorted_symbols = sorted(
@@ -159,8 +164,12 @@ class SubscriptionManager:
                 key=lambda s: abs(self._symbol_to_strike.get(s, float('inf')) - spot)
             )
             
-            # Select top 10 (approx 5 Call + 5 Put ATM) + SPY
+            # Select top 10 (approx 5 Call + 5 Put ATM)
             target_depth_set = set(sorted_symbols[:10])
+            
+            # ALWAYS include mandatory symbols (ATM anchors) and SPY
+            if mandatory_symbols:
+                target_depth_set.update(mandatory_symbols)
             target_depth_set.add("SPY.US")
 
             to_sub_depth = list(target_depth_set - self._depth_subscribed_symbols)
@@ -177,7 +186,7 @@ class SubscriptionManager:
                 try:
                     ctx.subscribe(to_sub_depth, [SubType.Depth, SubType.Trade])
                     self._depth_subscribed_symbols |= set(to_sub_depth)
-                    logger.info(f"[SubscriptionManager] Subscribed Depth+Trade for Top 10 ATM: {to_sub_depth}")
+                    logger.info(f"[SubscriptionManager] Subscribed Depth+Trade for ATM/Mandatory: {to_sub_depth}")
                 except Exception as e:
                     logger.error(f"[SubscriptionManager] Subscribe depth/trade error: {e}")
 

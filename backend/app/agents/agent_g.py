@@ -48,6 +48,9 @@ class AgentG:
 
         # PP-2 FIX: EWMA smoothed MTF alignment to eliminate single-tick discrete jumps
         self._mtf_alignment_ema: float | None = None
+        
+        # PP-L3C FIX: Persist last valid UI state to bridge transient calculation gaps
+        self._last_ui_state: dict[str, Any] = {}
 
     async def set_redis_client(self, client: Any) -> None:
         """Inject shared Redis client into sub-agents and self (for DEG-FLOW)."""
@@ -116,26 +119,36 @@ class AgentG:
     async def decide(self, *, agent_a: AgentResult, agent_b: AgentResult, snapshot: dict[str, Any]) -> AgentResult:
         """Top-level guard wrapper."""
         try:
-            return await self._decide_impl(agent_a=agent_a, agent_b=agent_b, snapshot=snapshot)
+            res = await self._decide_impl(agent_a=agent_a, agent_b=agent_b, snapshot=snapshot)
+            # PP-L3C: Record the ui_state if present
+            if res.data and "ui_state" in res.data:
+                self._last_ui_state = res.data["ui_state"]
+            return res
         except Exception:
             logger.exception("[AgentG] decide() crashed; emitting NO_TRADE safety fallback")
+            
+            # PP-L3C: Fallback still tries to provide UI state
+            data = {
+                "error": "decide_crashed",
+                "fused_signal": {
+                    "direction": "NEUTRAL",
+                    "confidence": 0.0,
+                    "weights": {},
+                    "regime": "UNKNOWN",
+                    "iv_regime": "NORMAL",
+                    "gex_intensity": "NEUTRAL",
+                    "explanation": "AgentG.decide() exception; NO_TRADE issued.",
+                    "components": {},
+                },
+            }
+            if self._last_ui_state:
+                data["ui_state"] = self._last_ui_state
+                
             return AgentResult(
                 agent=self.AGENT_ID,
                 signal="NO_TRADE",
                 as_of=agent_a.as_of,
-                data={
-                    "error": "decide_crashed",
-                    "fused_signal": {
-                        "direction": "NEUTRAL",
-                        "confidence": 0.0,
-                        "weights": {},
-                        "regime": "UNKNOWN",
-                        "iv_regime": "NORMAL",
-                        "gex_intensity": "NEUTRAL",
-                        "explanation": "AgentG.decide() exception; NO_TRADE issued.",
-                        "components": {},
-                    },
-                },
+                data=data,
                 summary="AgentG.decide() exception; NO_TRADE issued.",
             )
 
@@ -519,16 +532,16 @@ class AgentG:
                         momentum=agent_a.signal,
                     ),
                     "tactical_triad": TacticalTriadPresenter.build(
-                        vrp=agent_b.data.get("hv_analysis", {}).get("vrp"),
-                        vrp_state=agent_b.data.get("hv_analysis", {}).get("premium_state", "FAIR"),
-                        net_charm=agent_b.data.get("charm_analysis", {}).get("net_charm"),
+                        vrp=b_output.hv_analysis.get("vrp") if b_output.hv_analysis else None,
+                        vrp_state=b_output.hv_analysis.get("premium_state", "FAIR") if b_output.hv_analysis else "FAIR",
+                        net_charm=b_output.charm_analysis.get("net_charm") if b_output.charm_analysis else None,
                         svol_corr=vanna_data.correlation if vanna_data else None,
                         svol_state=vanna_data.state if vanna_data else "NORMAL",
                         fused_signal_direction=fused_signal.direction
                     ),
                     "skew_dynamics": SkewDynamicsPresenter.build(
-                        skew_val=agent_b.data.get("skew_analysis", {}).get("skew_value", 0.0),
-                        state=agent_b.data.get("skew_analysis", {}).get("skew_state", "NEUTRAL")
+                        skew_val=b_output.skew_analysis.get("skew_value", 0.0) if b_output.skew_analysis else 0.0,
+                        state=b_output.skew_analysis.get("skew_state", "NEUTRAL") if b_output.skew_analysis else "NEUTRAL"
                     ),
                     "active_options": self._active_options_presenter.get_latest(),
                     "mtf_flow": MTFFlowPresenter.build(
