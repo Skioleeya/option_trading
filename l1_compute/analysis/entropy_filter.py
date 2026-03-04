@@ -52,6 +52,12 @@ class EntropyFilter:
     # Number of observed fields per tick used in entropy estimation
     _FIELDS = ("implied_volatility", "volume", "bid", "ask", "last_price", "open_interest")
 
+    def _to_dict(self, entry: Any) -> dict:
+        if isinstance(entry, dict): return entry
+        if hasattr(entry, "model_dump"): return entry.model_dump()
+        if hasattr(entry, "__dict__"): return entry.__dict__
+        return {}
+
     def __init__(self, min_entropy: float = 0.05) -> None:
         """
         Args:
@@ -85,26 +91,17 @@ class EntropyFilter:
         # log2(1 + change) gives bits: 0.002 for 0.1% change, 1.0 for 100% change
         return math.log2(1.0 + change_capped)
 
-    def accept(self, symbol: str, entry: dict[str, Any]) -> bool:
-        """Decide whether to pass a tick through to the BSM computation.
-
-        A tick is accepted if its aggregate Shannon entropy > min_entropy,
-        meaning at least one field changed by a meaningful amount.
-
-        Args:
-            symbol: Option contract symbol (for per-symbol state tracking).
-            entry:  Current tick data dictionary.
-
-        Returns:
-            True  → pass the tick through (worth computing Greeks).
-            False → discard (identical or near-identical to previous tick).
-        """
+    def accept(self, symbol: str, entry: Any) -> bool:
+        """Decide whether to pass a tick through to the BSM computation."""
         self._total += 1
+
+        # Consistent normalization to dict
+        data = self._to_dict(entry)
 
         # First tick for each symbol always passes through
         if symbol not in self._state:
             self._state[symbol] = {
-                f: float(entry.get(f) or 0.0) for f in self._FIELDS
+                f: float(data.get(f) or 0.0) for f in self._FIELDS
             }
             self._accepted += 1
             return True
@@ -114,13 +111,13 @@ class EntropyFilter:
         # Compute aggregate entropy across all fields
         total_entropy = 0.0
         for field in self._FIELDS:
-            curr_val = float(entry.get(field) or 0.0)
+            curr_val = float(data.get(field) or 0.0)
             prev_val = prev.get(field, 0.0)
             total_entropy += self._field_entropy(prev_val, curr_val)
 
         # Update state regardless of accept/reject so state doesn't drift
         for field in self._FIELDS:
-            prev[field] = float(entry.get(field) or 0.0)
+            prev[field] = float(data.get(field) or 0.0)
 
         if total_entropy < self.min_entropy:
             # Log very occasionally so we can see the filter working

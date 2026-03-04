@@ -1,0 +1,971 @@
+[
+  {
+    "timestamp": "2026-03-04T14:02:46.936126",
+    "cpu_percent": 18.0,
+    "memory_percent": 44.3,
+    "gpu": {
+      "gpu_util": 5.0,
+      "gpu_mem_used": 1455.0,
+      "gpu_mem_util": 10.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 333.7265625
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:02:47.999484",
+    "cpu_percent": 5.5,
+    "memory_percent": 44.4,
+    "gpu": {
+      "gpu_util": 4.0,
+      "gpu_mem_used": 1457.0,
+      "gpu_mem_util": 10.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 333.73828125
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:02:49.067899",
+    "cpu_percent": 9.3,
+    "memory_percent": 44.3,
+    "gpu": {
+      "gpu_util": 2.0,
+      "gpu_mem_used": 1457.0,
+      "gpu_mem_util": 9.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 333.7890625
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:02:50.140133",
+    "cpu_percent": 9.0,
+    "memory_percent": 44.4,
+    "gpu": {
+      "gpu_util": 4.0,
+      "gpu_mem_used": 1456.0,
+      "gpu_mem_util": 9.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 333.8984375
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:02:51.209134",
+    "cpu_percent": 11.6,
+    "memory_percent": 44.4,
+    "gpu": {
+      "gpu_util": 5.0,
+      "gpu_mem_used": 1461.0,
+      "gpu_mem_util": 10.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 333.90625
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:02:52.279008",
+    "cpu_percent": 8.5,
+    "memory_percent": 44.5,
+    "gpu": {
+      "gpu_util": 5.0,
+      "gpu_mem_used": 1456.0,
+      "gpu_mem_util": 10.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 334.00390625
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:02:53.347307",
+    "cpu_percent": 13.0,
+    "memory_percent": 44.5,
+    "gpu": {
+      "gpu_util": 4.0,
+      "gpu_mem_used": 1456.0,
+      "gpu_mem_util": 10.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 334.15234375
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:02:54.417639",
+    "cpu_percent": 3.8,
+    "memory_percent": 44.6,
+    "gpu": {
+      "gpu_util": 3.0,
+      "gpu_mem_used": 1456.0,
+      "gpu_mem_util": 9.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 334.21484375
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:02:55.487954",
+    "cpu_percent": 8.6,
+    "memory_percent": 44.5,
+    "gpu": {
+      "gpu_util": 4.0,
+      "gpu_mem_used": 1460.0,
+      "gpu_mem_util": 10.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 334.36328125
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:02:56.557219",
+    "cpu_percent": 12.0,
+    "memory_percent": 44.5,
+    "gpu": {
+      "gpu_util": 5.0,
+      "gpu_mem_used": 1460.0,
+      "gpu_mem_util": 10.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 334.4765625
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:02:57.628876",
+    "cpu_percent": 48.3,
+    "memory_percent": 47.1,
+    "gpu": {
+      "gpu_util": 5.0,
+      "gpu_mem_used": 1460.0,
+      "gpu_mem_util": 10.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 334.546875
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:02:58.695751",
+    "cpu_percent": 14.1,
+    "memory_percent": 46.7,
+    "gpu": {
+      "gpu_util": 9.0,
+      "gpu_mem_used": 1459.0,
+      "gpu_mem_util": 11.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 334.66015625
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:02:59.763930",
+    "cpu_percent": 30.5,
+    "memory_percent": 46.9,
+    "gpu": {
+      "gpu_util": 10.0,
+      "gpu_mem_used": 1459.0,
+      "gpu_mem_util": 11.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 334.88671875
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:00.830962",
+    "cpu_percent": 39.6,
+    "memory_percent": 47.2,
+    "gpu": {
+      "gpu_util": 26.0,
+      "gpu_mem_used": 1517.0,
+      "gpu_mem_util": 20.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 349.52734375
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:01.913988",
+    "cpu_percent": 26.2,
+    "memory_percent": 47.0,
+    "gpu": {
+      "gpu_util": 21.0,
+      "gpu_mem_used": 2065.0,
+      "gpu_mem_util": 4.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 347.6171875
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:02.977637",
+    "cpu_percent": 19.1,
+    "memory_percent": 47.1,
+    "gpu": {
+      "gpu_util": 17.0,
+      "gpu_mem_used": 2064.0,
+      "gpu_mem_util": 8.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 347.69140625
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:04.036484",
+    "cpu_percent": 12.4,
+    "memory_percent": 47.1,
+    "gpu": {
+      "gpu_util": 7.0,
+      "gpu_mem_used": 2064.0,
+      "gpu_mem_util": 4.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 347.6953125
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:05.104834",
+    "cpu_percent": 6.7,
+    "memory_percent": 47.0,
+    "gpu": {
+      "gpu_util": 9.0,
+      "gpu_mem_used": 2064.0,
+      "gpu_mem_util": 3.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 347.69921875
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:06.175507",
+    "cpu_percent": 10.5,
+    "memory_percent": 47.0,
+    "gpu": {
+      "gpu_util": 9.0,
+      "gpu_mem_used": 2064.0,
+      "gpu_mem_util": 4.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 347.7890625
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:07.233577",
+    "cpu_percent": 12.0,
+    "memory_percent": 47.0,
+    "gpu": {
+      "gpu_util": 12.0,
+      "gpu_mem_used": 2056.0,
+      "gpu_mem_util": 4.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 347.80859375
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:08.299703",
+    "cpu_percent": 17.4,
+    "memory_percent": 47.0,
+    "gpu": {
+      "gpu_util": 9.0,
+      "gpu_mem_used": 2064.0,
+      "gpu_mem_util": 4.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 347.80859375
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:09.363829",
+    "cpu_percent": 12.3,
+    "memory_percent": 46.9,
+    "gpu": {
+      "gpu_util": 11.0,
+      "gpu_mem_used": 2067.0,
+      "gpu_mem_util": 4.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 347.81640625
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:10.434100",
+    "cpu_percent": 10.6,
+    "memory_percent": 46.7,
+    "gpu": {
+      "gpu_util": 8.0,
+      "gpu_mem_used": 2056.0,
+      "gpu_mem_util": 4.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 347.81640625
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:11.500212",
+    "cpu_percent": 9.2,
+    "memory_percent": 46.7,
+    "gpu": {
+      "gpu_util": 12.0,
+      "gpu_mem_used": 2055.0,
+      "gpu_mem_util": 4.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 347.87890625
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:12.568346",
+    "cpu_percent": 9.2,
+    "memory_percent": 46.8,
+    "gpu": {
+      "gpu_util": 9.0,
+      "gpu_mem_used": 2051.0,
+      "gpu_mem_util": 4.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 347.9296875
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:13.648197",
+    "cpu_percent": 13.7,
+    "memory_percent": 46.7,
+    "gpu": {
+      "gpu_util": 9.0,
+      "gpu_mem_used": 2056.0,
+      "gpu_mem_util": 4.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 347.95703125
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:14.707941",
+    "cpu_percent": 24.4,
+    "memory_percent": 44.2,
+    "gpu": {
+      "gpu_util": 12.0,
+      "gpu_mem_used": 2056.0,
+      "gpu_mem_util": 5.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 28.02734375
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:15.773769",
+    "cpu_percent": 21.8,
+    "memory_percent": 43.4,
+    "gpu": {
+      "gpu_util": 9.0,
+      "gpu_mem_used": 2056.0,
+      "gpu_mem_util": 4.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 31.14453125
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:16.843153",
+    "cpu_percent": 31.0,
+    "memory_percent": 42.7,
+    "gpu": {
+      "gpu_util": 9.0,
+      "gpu_mem_used": 2051.0,
+      "gpu_mem_util": 4.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 32.56640625
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:17.914945",
+    "cpu_percent": 25.1,
+    "memory_percent": 42.2,
+    "gpu": {
+      "gpu_util": 23.0,
+      "gpu_mem_used": 2051.0,
+      "gpu_mem_util": 8.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 33.1171875
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:18.995631",
+    "cpu_percent": 27.5,
+    "memory_percent": 41.1,
+    "gpu": {
+      "gpu_util": 7.0,
+      "gpu_mem_used": 2056.0,
+      "gpu_mem_util": 4.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 33.98828125
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:20.066672",
+    "cpu_percent": 7.8,
+    "memory_percent": 41.2,
+    "gpu": {
+      "gpu_util": 13.0,
+      "gpu_mem_used": 2056.0,
+      "gpu_mem_util": 6.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 34.59765625
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:21.138667",
+    "cpu_percent": 12.1,
+    "memory_percent": 41.2,
+    "gpu": {
+      "gpu_util": 12.0,
+      "gpu_mem_used": 2055.0,
+      "gpu_mem_util": 5.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 35.11328125
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:22.203895",
+    "cpu_percent": 8.2,
+    "memory_percent": 41.2,
+    "gpu": {
+      "gpu_util": 10.0,
+      "gpu_mem_used": 2055.0,
+      "gpu_mem_util": 4.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 35.671875
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:23.267856",
+    "cpu_percent": 9.2,
+    "memory_percent": 41.3,
+    "gpu": {
+      "gpu_util": 9.0,
+      "gpu_mem_used": 2051.0,
+      "gpu_mem_util": 4.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 40.12890625
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:24.338483",
+    "cpu_percent": 11.8,
+    "memory_percent": 41.3,
+    "gpu": {
+      "gpu_util": 23.0,
+      "gpu_mem_used": 2056.0,
+      "gpu_mem_util": 17.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 40.40234375
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:25.414211",
+    "cpu_percent": 11.9,
+    "memory_percent": 41.4,
+    "gpu": {
+      "gpu_util": 7.0,
+      "gpu_mem_used": 2056.0,
+      "gpu_mem_util": 4.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 41.10546875
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:26.484629",
+    "cpu_percent": 9.7,
+    "memory_percent": 41.4,
+    "gpu": {
+      "gpu_util": 8.0,
+      "gpu_mem_used": 2056.0,
+      "gpu_mem_util": 4.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 41.37109375
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:27.553643",
+    "cpu_percent": 6.8,
+    "memory_percent": 41.4,
+    "gpu": {
+      "gpu_util": 13.0,
+      "gpu_mem_used": 2059.0,
+      "gpu_mem_util": 5.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 41.546875
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:28.621121",
+    "cpu_percent": 17.4,
+    "memory_percent": 41.7,
+    "gpu": {
+      "gpu_util": 16.0,
+      "gpu_mem_used": 2055.0,
+      "gpu_mem_util": 5.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 41.58984375
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:29.686383",
+    "cpu_percent": 12.2,
+    "memory_percent": 41.7,
+    "gpu": {
+      "gpu_util": 25.0,
+      "gpu_mem_used": 2060.0,
+      "gpu_mem_util": 9.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 41.65234375
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:30.753761",
+    "cpu_percent": 8.7,
+    "memory_percent": 41.5,
+    "gpu": {
+      "gpu_util": 7.0,
+      "gpu_mem_used": 2060.0,
+      "gpu_mem_util": 4.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 41.7578125
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:31.822952",
+    "cpu_percent": 11.1,
+    "memory_percent": 41.5,
+    "gpu": {
+      "gpu_util": 9.0,
+      "gpu_mem_used": 2059.0,
+      "gpu_mem_util": 5.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 41.8046875
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:32.888592",
+    "cpu_percent": 8.9,
+    "memory_percent": 41.9,
+    "gpu": {
+      "gpu_util": 23.0,
+      "gpu_mem_used": 2054.0,
+      "gpu_mem_util": 8.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 41.984375
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:33.958114",
+    "cpu_percent": 11.6,
+    "memory_percent": 42.0,
+    "gpu": {
+      "gpu_util": 7.0,
+      "gpu_mem_used": 2062.0,
+      "gpu_mem_util": 4.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 63.91796875
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:35.023560",
+    "cpu_percent": 12.0,
+    "memory_percent": 42.0,
+    "gpu": {
+      "gpu_util": 9.0,
+      "gpu_mem_used": 2055.0,
+      "gpu_mem_util": 5.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 64.15625
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:36.088412",
+    "cpu_percent": 8.9,
+    "memory_percent": 42.0,
+    "gpu": {
+      "gpu_util": 27.0,
+      "gpu_mem_used": 2055.0,
+      "gpu_mem_util": 9.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 64.23828125
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:37.157651",
+    "cpu_percent": 9.4,
+    "memory_percent": 42.0,
+    "gpu": {
+      "gpu_util": 7.0,
+      "gpu_mem_used": 2055.0,
+      "gpu_mem_util": 4.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 64.34375
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:38.224524",
+    "cpu_percent": 17.7,
+    "memory_percent": 42.7,
+    "gpu": {
+      "gpu_util": 26.0,
+      "gpu_mem_used": 2050.0,
+      "gpu_mem_util": 13.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 64.4921875
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:39.287392",
+    "cpu_percent": 14.0,
+    "memory_percent": 42.5,
+    "gpu": {
+      "gpu_util": 7.0,
+      "gpu_mem_used": 2055.0,
+      "gpu_mem_util": 3.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 64.5
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:40.358932",
+    "cpu_percent": 4.1,
+    "memory_percent": 42.4,
+    "gpu": {
+      "gpu_util": 7.0,
+      "gpu_mem_used": 2055.0,
+      "gpu_mem_util": 3.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 64.81640625
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:41.423804",
+    "cpu_percent": 6.9,
+    "memory_percent": 42.5,
+    "gpu": {
+      "gpu_util": 13.0,
+      "gpu_mem_used": 2055.0,
+      "gpu_mem_util": 4.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 65.125
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:42.494533",
+    "cpu_percent": 5.4,
+    "memory_percent": 42.5,
+    "gpu": {
+      "gpu_util": 9.0,
+      "gpu_mem_used": 2055.0,
+      "gpu_mem_util": 3.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 65.2421875
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:43.566105",
+    "cpu_percent": 4.8,
+    "memory_percent": 42.5,
+    "gpu": {
+      "gpu_util": 9.0,
+      "gpu_mem_used": 2055.0,
+      "gpu_mem_util": 4.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 65.359375
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:44.631166",
+    "cpu_percent": 18.3,
+    "memory_percent": 42.8,
+    "gpu": {
+      "gpu_util": 16.0,
+      "gpu_mem_used": 2057.0,
+      "gpu_mem_util": 9.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 65.38671875
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:45.688451",
+    "cpu_percent": 14.7,
+    "memory_percent": 42.9,
+    "gpu": {
+      "gpu_util": 12.0,
+      "gpu_mem_used": 2058.0,
+      "gpu_mem_util": 4.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 65.3984375
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-04T14:03:46.755303",
+    "cpu_percent": 8.1,
+    "memory_percent": 42.9,
+    "gpu": {
+      "gpu_util": 11.0,
+      "gpu_mem_used": 2056.0,
+      "gpu_mem_util": 4.0
+    },
+    "process_stats": [
+      {
+        "pid": 14688,
+        "cpu_percent": 0.0,
+        "mem_rss_mb": 65.42578125
+      }
+    ]
+  }
+]

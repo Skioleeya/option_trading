@@ -128,12 +128,12 @@ class CleanTradeEvent:
 
 def _safe_float(val: Any) -> float | None:
     """Cast to float; return None if absent, non-finite, or unconvertible."""
-    if val is None:
+    if val is None or val == "":
         return None
     try:
         f = float(val)
         return f if math.isfinite(f) else None
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, AttributeError):
         return None
 
 
@@ -144,11 +144,12 @@ def _safe_positive_float(val: Any) -> float | None:
 
 
 def _safe_int(val: Any) -> int | None:
-    if val is None:
+    if val is None or val == "":
         return None
     try:
-        return int(val)
-    except (ValueError, TypeError):
+        # Handle cases where val might be a float string '123.0' or 'I'
+        return int(float(val))
+    except (ValueError, TypeError, AttributeError):
         return None
 
 

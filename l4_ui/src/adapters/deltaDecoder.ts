@@ -9,6 +9,8 @@
  *
  * Usage:
  *   const result = DeltaDecoder.applyPatch(prev, data.patch)
+ *   // OR
+ *   const result = DeltaDecoder.applyChanges(prev, data.changes)
  *   if (result.ok) store.applyMergedPayload(result.value)
  */
 
@@ -63,6 +65,59 @@ export const DeltaDecoder = {
             }
 
             return { ok: true, value: withMeta }
+        } catch (error) {
+            return { ok: false, error }
+        }
+    },
+
+    /**
+     * Apply a field-level changes dictionary (Backend preferred format).
+     * Maps flat keys like 'agent_g_ui_state' to nested store paths.
+     */
+    applyChanges(
+        prev: DashboardPayload,
+        changes: Record<string, any>,
+        meta?: { heartbeat_timestamp?: string; timestamp?: string }
+    ): DecodeResult<DashboardPayload> {
+        try {
+            // Deep clone to avoid mutation
+            const next: DashboardPayload = JSON.parse(JSON.stringify(prev))
+
+            // 1. Scalar top-level fields
+            const topLevel = ["spot", "drift_ms", "drift_warning", "is_stale", "version", "data_timestamp", "heartbeat_timestamp"]
+            for (const key of topLevel) {
+                if (changes[key] !== undefined) {
+                    (next as any)[key] = changes[key]
+                }
+            }
+
+            // 2. Signal (maps to agent_g.data)
+            if (changes.signal && next.agent_g?.data) {
+                next.agent_g.data = {
+                    ...next.agent_g.data,
+                    ...changes.signal
+                }
+            }
+
+            // 3. UI State (maps to agent_g.data.ui_state)
+            if (changes.agent_g_ui_state && next.agent_g?.data?.ui_state) {
+                next.agent_g.data.ui_state = {
+                    ...next.agent_g.data.ui_state,
+                    ...changes.agent_g_ui_state
+                }
+            }
+
+            // 4. ATM
+            if (changes.atm !== undefined) {
+                next.atm = changes.atm
+            }
+
+            // 5. Inject meta
+            if (meta?.heartbeat_timestamp) next.heartbeat_timestamp = meta.heartbeat_timestamp
+            if (meta?.timestamp) next.timestamp = meta.timestamp
+            if (changes.heartbeat_timestamp) next.heartbeat_timestamp = changes.heartbeat_timestamp
+
+            return { ok: true, value: next }
         } catch (error) {
             return { ok: false, error }
         }

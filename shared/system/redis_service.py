@@ -23,20 +23,21 @@ class RedisService:
         self.client: Optional[redis.Redis] = None
         self._process: Optional[subprocess.Popen] = None
         
-        # Paths
-        self.root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../.."))
+        # Paths (Corrected for project root)
+        self.root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
         self.bin_path = os.path.join(self.root_dir, "infra/bin/redis-server.exe")
         self.conf_path = os.path.join(self.root_dir, "infra/redis/redis.conf.local")
         self.data_dir = os.path.join(self.root_dir, "infra/redis/data")
 
     async def start(self) -> None:
         """Starts the local Redis server and connects the client."""
-        if not os.path.exists(self.bin_path):
-            logger.error(f"Redis binary not found at {self.bin_path}")
-            return
+        port_open = await self._is_port_open(settings.redis_host, settings.redis_port)
+        
+        if not port_open:
+            if not os.path.exists(self.bin_path):
+                logger.error(f"Redis binary not found at {self.bin_path} and port {settings.redis_port} is closed.")
+                return
 
-        # 1. Start process if not already running on port 6380
-        if not await self._is_port_open(settings.redis_host, settings.redis_port):
             logger.info(f"Starting Redis server on port {settings.redis_port}...")
             
             # Ensure data dir exists

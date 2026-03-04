@@ -45,6 +45,7 @@ from l3_assembly.assembly.delta_encoder import FieldDeltaEncoder
 from l3_assembly.broadcast.broadcast_governor import BroadcastGovernor
 from l3_assembly.storage.timeseries_store import TimeSeriesStoreV2
 from l3_assembly.observability.l3_instrumentation import L3Instrumentation
+from l3_assembly.assembly.ui_state_tracker import UIStateTracker
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,7 @@ class L3AssemblyReactor:
         self.governor = BroadcastGovernor(encoder=self.encoder)
         self.store = TimeSeriesStoreV2(max_hot=max_hot, redis=redis)
         self.instrumentation = L3Instrumentation()
+        self.ui_tracker = UIStateTracker()
         self.shadow_mode = shadow_mode
 
         self._total_ticks = 0
@@ -101,6 +103,7 @@ class L3AssemblyReactor:
 
         try:
             spot = self._extract_spot(snapshot)
+            ui_metrics = self.ui_tracker.tick(snapshot, decision)
 
             with self.instrumentation.span_assemble(spot=spot):
                 payload = await asyncio.to_thread(
@@ -109,6 +112,7 @@ class L3AssemblyReactor:
                     snapshot,
                     atm_decay,
                     active_options,
+                    ui_metrics,
                 )
 
             with self.instrumentation.span_timeseries():

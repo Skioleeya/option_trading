@@ -54,6 +54,7 @@ class PayloadAssemblerV2:
         snapshot: Any,            # L1 EnrichedSnapshot (typed)  OR  legacy dict
         atm_decay: dict[str, Any] | None,
         active_options: Any = None,  # tuple[ActiveOptionRow, ...] or []
+        ui_metrics: dict[str, Any] = None,
     ) -> FrozenPayload:
         """Assemble an immutable FrozenPayload from L2+L1 inputs.
 
@@ -77,7 +78,7 @@ class PayloadAssemblerV2:
 
         # ── 2. Extract raw fields for presenters ───────────────────────────
         try:
-            snap_data = self._extract_snapshot_data(snapshot, decision)
+            snap_data = self._extract_snapshot_data(snapshot, decision, ui_metrics)
         except Exception as exc:
             logger.warning(f"[L3 Assembler] Snapshot extraction failed: {exc}")
             snap_data = _SnapshotData()
@@ -111,7 +112,7 @@ class PayloadAssemblerV2:
 
     # ── Private helpers ────────────────────────────────────────────────────
 
-    def _extract_snapshot_data(self, snapshot: Any, decision: Any) -> "_SnapshotData":
+    def _extract_snapshot_data(self, snapshot: Any, decision: Any, ui_metrics: dict[str, Any] = None) -> "_SnapshotData":
         """Extract raw display fields from snapshot (supports both typed + legacy dict)."""
         data = _SnapshotData()
 
@@ -147,6 +148,19 @@ class PayloadAssemblerV2:
                 data.vanna_state = decision.signal_summary.get("vanna_state", "NORMAL")
             except AttributeError:
                 pass
+
+        if ui_metrics:
+            data.gex_regime = ui_metrics.get("gex_regime", data.gex_regime)
+            data.vanna_state = ui_metrics.get("vanna_state", data.vanna_state)
+            data.momentum = ui_metrics.get("momentum", data.momentum)
+            data.vrp = ui_metrics.get("vrp", data.vrp)
+            data.vrp_state = ui_metrics.get("vrp_state", data.vrp_state)
+            data.net_charm = ui_metrics.get("net_charm", data.net_charm)
+            data.svol_corr = ui_metrics.get("svol_corr", data.svol_corr)
+            data.svol_state = ui_metrics.get("svol_state", data.svol_state)
+            data.wall_migration_data = ui_metrics.get("wall_migration_data", data.wall_migration_data)
+            data.mtf_consensus = ui_metrics.get("mtf_consensus", data.mtf_consensus)
+            data.skew_dynamics = ui_metrics.get("skew_dynamics", data.skew_dynamics)
 
         return data
 

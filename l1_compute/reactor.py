@@ -188,6 +188,7 @@ class L1ComputeReactor:
         self._inst.set_chain_size(n)
 
         if n == 0 or spot <= 0.0:
+            logger.debug("[L1ComputeReactor] Skipping: snapshot empty or spot <= 0")
             return self._empty_snapshot(l0_version)
 
         # ── Step 1: IV Resolution ──────────────────────────────────────────────
@@ -237,6 +238,7 @@ class L1ComputeReactor:
         iv_stats = self._iv_resolver.stats
 
         if n_valid == 0:
+            logger.info("[L1ComputeReactor] compute bypassed: n_valid = 0 (Total n=%d)", n)
             return self._empty_snapshot(l0_version)
 
         # ── Step 4: Greeks batch compute ──────────────────────────────────────
@@ -320,7 +322,7 @@ class L1ComputeReactor:
         ttm_seconds = ttm_years * 252.0 * 6.5 * 3600.0
 
         total_ms = (time.monotonic() - t_start) * 1000.0
-        logger.debug(
+        logger.info(
             "[L1ComputeReactor] compute n=%d tier=%s t=%.1fms gex=%.2f",
             n_valid, decision.tier.value, total_ms, agg.net_gex,
         )

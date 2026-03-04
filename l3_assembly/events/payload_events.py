@@ -445,6 +445,7 @@ class FrozenPayload:
             "drift_ms":            self.drift_ms,
             "drift_warning":       self.drift_warning,
             "is_stale":            self.is_stale,
+            "atm":                 self.atm,
             # Legacy: frontend reads agent_g.data.* paths
             "agent_g": {
                 "data": {

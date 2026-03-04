@@ -261,7 +261,16 @@ class OptionChainBuilder:
                                 d["dir"] = dir_sign
                                 trade_dicts.append(d)
                             else:
-                                vol = float(getattr(t, "volume", 0))
+                                # Safe parsing for TRADE objects
+                                def _local_safe_float(v, default=0.0):
+                                    try: return float(v)
+                                    except: return default
+                                
+                                def _local_safe_int(v, default=0):
+                                    try: return int(float(v))
+                                    except: return default
+
+                                vol = _local_safe_float(getattr(t, "volume", 0))
                                 ts = getattr(t, "timestamp", 0)
                                 def to_ts_int(val):
                                     if hasattr(val, "timestamp"): return int(val.timestamp())
@@ -270,13 +279,13 @@ class OptionChainBuilder:
 
                                 ts_int = to_ts_int(ts)
                                 trade_dicts.append({
-                                    "price": float(getattr(t, "price", 0.0)),
+                                    "price": _local_safe_float(getattr(t, "price", 0.0)),
                                     "vol": vol,
                                     "volume": vol,
                                     "timestamp": ts_int,
                                     "dir": dir_sign,
                                     "direction": dir_sign,
-                                    "trade_type": int(getattr(t, "trade_type", 0))
+                                    "trade_type": _local_safe_int(getattr(t, "trade_type", 0))
                                 })
                         
                         self._depth_engine.update_trades(raw_event.symbol, trade_dicts)

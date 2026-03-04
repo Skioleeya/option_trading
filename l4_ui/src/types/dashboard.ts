@@ -165,8 +165,10 @@ export interface AgentGResult {
 export interface DashboardPayload {
     type: 'dashboard_update' | 'dashboard_init' | 'dashboard_delta' | 'keepalive'
     timestamp: string
+    heartbeat_timestamp?: string
     spot: number | null
     agent_g: AgentGResult | null
+    atm?: AtmDecay | null
 }
 
 // ATM Decay

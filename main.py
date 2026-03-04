@@ -106,6 +106,7 @@ class AppContainer:
             self.atm_decay_tracker.redis = self.redis_service.client
             # 1.5 Initialize L3 Reactor
             self._l3_reactor = L3AssemblyReactor(redis=self.redis_service.client)
+            await self._l3_reactor.ui_tracker.set_redis_client(self.redis_service.client)
 
         # 1.6 Initialize L1 + L2 Reactors (runs regardless of Redis)
         if USE_L2:

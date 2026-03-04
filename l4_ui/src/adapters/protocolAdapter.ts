@@ -163,7 +163,7 @@ export class ProtocolAdapter {
             return
         }
 
-        // ── dashboard_delta (JSON-Patch) ─────────────────────────────────────────
+        // ── dashboard_delta (JSON-Patch or Field-level Changes) ───────────────────
         if (DeltaDecoder.isDelta(msg)) {
             const data = msg as any
             const current = this._getCurrentPayload()
@@ -175,19 +175,32 @@ export class ProtocolAdapter {
                 return
             }
 
-            const result = DeltaDecoder.applyPatch(current, data.patch, {
-                heartbeat_timestamp: data.heartbeat_timestamp,
-                timestamp: data.timestamp,
-            })
+            let result: any
+            if (data.patch) {
+                // Legacy RFC 6902 path
+                result = DeltaDecoder.applyPatch(current, data.patch, {
+                    heartbeat_timestamp: data.heartbeat_timestamp,
+                    timestamp: data.timestamp,
+                })
+            } else if (data.changes) {
+                // Backend preferred structural diff path
+                result = DeltaDecoder.applyChanges(current, data.changes, {
+                    heartbeat_timestamp: data.heartbeat_timestamp,
+                    timestamp: data.timestamp,
+                })
+            } else {
+                console.warn('[L4 ProtocolAdapter] Delta received without patch or changes field.')
+                return
+            }
 
             if (result.ok) {
                 this.store.applyMergedPayload(result.value)
             } else {
                 console.error(
-                    '[L4 ProtocolAdapter] Failed to apply JSON patch:',
+                    '[L4 ProtocolAdapter] Failed to apply delta:',
                     result.error,
-                    'Patch:',
-                    data.patch
+                    'Data:',
+                    data
                 )
             }
             return
