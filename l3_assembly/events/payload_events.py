@@ -332,7 +332,7 @@ class SignalData:
     computed_at: str            # ISO-format string
 
     def __post_init__(self) -> None:
-        if self.direction not in ("BULLISH", "BEARISH", "NEUTRAL", "HALT"):
+        if self.direction not in ("BULLISH", "BEARISH", "NEUTRAL", "HALT", "NO_TRADE"):
             raise ValueError(f"SignalData.direction invalid: {self.direction!r}")
         if not (0.0 <= self.confidence <= 1.0):
             raise ValueError(f"SignalData.confidence must be in [0,1], got {self.confidence}")
@@ -353,18 +353,26 @@ class SignalData:
     @classmethod
     def from_decision_output(cls, decision: Any) -> "SignalData":
         """Construct from L2 DecisionOutput (duck-typed for testability)."""
+        # Note: AgentResult (L2) uses 'signal' vs legacy 'direction'.
+        direction = getattr(decision, "signal", None) or getattr(decision, "direction", "NEUTRAL")
+        
+        # Safe confidence extraction
+        confidence = getattr(decision, "confidence", 0.0)
+        if not confidence and "confidence" in getattr(decision, "data", {}):
+            confidence = decision.data["confidence"]
+
         return cls(
-            direction=decision.direction,
-            confidence=decision.confidence,
-            pre_guard_direction=decision.pre_guard_direction,
-            guard_actions=tuple(decision.guard_actions),
-            signal_summary=dict(decision.signal_summary),
-            fusion_weights=dict(decision.fusion_weights),
-            latency_ms=decision.latency_ms,
-            version=decision.version,
+            direction=direction,
+            confidence=float(confidence or 0.0),
+            pre_guard_direction=getattr(decision, "pre_guard_direction", "NEUTRAL"),
+            guard_actions=tuple(getattr(decision, "guard_actions", ())),
+            signal_summary=dict(getattr(decision, "signal_summary", {})),
+            fusion_weights=dict(getattr(decision, "fusion_weights", {})),
+            latency_ms=getattr(decision, "latency_ms", 0.0),
+            version=getattr(decision, "version", 0),
             computed_at=decision.computed_at.isoformat()
-            if hasattr(decision.computed_at, "isoformat")
-            else str(decision.computed_at),
+            if hasattr(decision, "computed_at") and hasattr(decision.computed_at, "isoformat")
+            else str(getattr(decision, "computed_at", "")),
         )
 
     @classmethod

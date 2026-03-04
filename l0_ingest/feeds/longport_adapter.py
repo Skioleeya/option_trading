@@ -25,7 +25,7 @@ try:
     _backend_root = os.path.join(os.path.dirname(__file__), "..", "..", "backend")
     if _backend_root not in sys.path:
         sys.path.insert(0, _backend_root)
-    from app.services.feeds.market_data_gateway import MarketDataGateway
+    from l0_ingest.feeds.market_data_gateway import MarketDataGateway
     _GATEWAY_AVAILABLE = True
 except ImportError:
     MarketDataGateway = None  # type: ignore[assignment]

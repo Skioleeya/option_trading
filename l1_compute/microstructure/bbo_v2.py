@@ -4,7 +4,7 @@ Improvements over DepthEngine.update_depth (v1):
     1. Top-5 price levels weighted imbalance (vs Top-1)
     2. EWMA time-weighting: distinguish transient vs persistent imbalance
     3. Cross-contract ATM ± 3 point aggregation
-    4. ndm_rust bridge interface reserved for Phase 2
+    4. rust_kernel bridge interface reserved for Phase 2
 
 Price-level weighting: inversely proportional to distance from BBO.
     weight_i = 1 / (1 + i)   where i = level index (0=best, 4=5th level)
@@ -87,9 +87,9 @@ class BBOv2:
             atm_strike=560.0,
         )
 
-    ndm_rust Bridge (Phase 2):
+    rust_kernel Bridge (Phase 2):
         When _RUST_AVAILABLE, update() inner loop will be handled by
-        ndm_rust.compute_bbo_weighted() for branchless SIMD execution.
+        rust_kernel.compute_bbo_weighted() for branchless SIMD execution.
     """
 
     def __init__(

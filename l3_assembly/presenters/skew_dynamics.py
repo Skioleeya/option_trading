@@ -17,7 +17,7 @@ class SkewDynamicsPresenterV2:
     def build(cls, skew_data: dict[str, Any]) -> dict[str, Any]:
         """Return skew dynamics dict (pass-through for backward compat)."""
         try:
-            from app.ui.skew_dynamics.presenter import SkewDynamicsPresenter
+            from l3_assembly.presenters.ui.skew_dynamics.presenter import SkewDynamicsPresenter
             return SkewDynamicsPresenter.build(skew_data=skew_data) or {}
         except (ImportError, Exception):
             # Skew dynamics may not be available in all deployment configs

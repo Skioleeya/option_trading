@@ -21,7 +21,7 @@ class TacticalTriadPresenterV2:
         fused_signal_direction: str | None = None,
     ) -> TacticalTriadState:
         try:
-            from app.ui.tactical_triad.presenter import TacticalTriadPresenter
+            from l3_assembly.presenters.ui.tactical_triad.presenter import TacticalTriadPresenter
             raw = TacticalTriadPresenter.build(
                 vrp=vrp, vrp_state=vrp_state, net_charm=net_charm,
                 svol_corr=svol_corr, svol_state=svol_state,

@@ -28,7 +28,7 @@ class WallMigrationPresenterV2:
         behaviour.  Parses the resulting dicts into typed WallMigrationRow.
         """
         try:
-            from app.ui.wall_migration.presenter import WallMigrationPresenter
+            from l3_assembly.presenters.ui.wall_migration.presenter import WallMigrationPresenter
             raw_rows: list[dict[str, Any]] = WallMigrationPresenter.build(
                 wall_migration=wall_migration,
             )

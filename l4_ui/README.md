@@ -1,4 +1,4 @@
-# l4_frontend — L4 前端表现层
+# l4_ui — L4 前端表现层
 
 > **Strangler Fig 模式** — 从 `frontend/` 完整迁移，与原版并存，验证通过后替换。
 
@@ -32,7 +32,7 @@ L3 FrozenPayload (WebSocket JSON)
 
 ```bash
 # 安装依赖
-cd l4_frontend
+cd l4_ui
 npm install
 
 # 开发模式 (连接 ws://localhost:8001)
@@ -51,7 +51,7 @@ npm run build
 ## 文件结构
 
 ```
-l4_frontend/
+l4_ui/
 ├── src/
 │   ├── store/
 │   │   ├── dashboardStore.ts          ← Zustand 状态树 (Phase 1)

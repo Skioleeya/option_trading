@@ -1,11 +1,11 @@
-# l1_refactor — L1 Local Computation Layer Refactoring Package
+# l1_compute — L1 Local Computation Layer Refactoring Package
 
 > **Strangler Fig 模式** — 与 `backend/app/services/analysis/` 并存，验证通过后逐步替换。
 
 ## 架构总览
 
 ```
-l1_refactor/
+l1_compute/
 ├── arrow/           # Schema & dicts_to_record_batch Converter (Zero-copy payload)
 ├── compute/         # GPUGreeksKernel + ComputeRouter (4-tier adaptive)
 ├── aggregation/     # StreamingAggregator (O(ΔN) incremental GEX/Vanna)
@@ -22,7 +22,7 @@ l1_refactor/
 ## 快速开始
 
 ```python
-from l1_refactor.reactor import L1ComputeReactor
+from l1_compute.reactor import L1ComputeReactor
 
 reactor = L1ComputeReactor(r=0.05, q=0.0, sabr_enabled=True)
 
@@ -52,11 +52,11 @@ legacy = snapshot.to_legacy_dict()  # 向后兼容 dict
 
 ```python
 # 旧 (option_chain_builder.py)
-from app.services.analysis.greeks_engine import GreeksEngine
+from l1_compute.analysis.greeks_engine import GreeksEngine
 agg = await self._greeks_engine.enrich(chain_snapshot, spot)
 
 # 新
-from l1_refactor.reactor import L1ComputeReactor
+from l1_compute.reactor import L1ComputeReactor
 snapshot = await self._l1_reactor.compute(chain_snapshot, spot, l0_version)
 agg = snapshot.to_legacy_dict()
 ```
@@ -65,11 +65,11 @@ agg = snapshot.to_legacy_dict()
 
 ```python
 # 旧
-from app.services.analysis.bsm import get_trading_time_to_maturity
+from l1_compute.analysis.bsm import get_trading_time_to_maturity
 t = get_trading_time_to_maturity(now)
 
 # 新
-from l1_refactor.time.ttm_v2 import get_trading_ttm_v2_scalar
+from l1_compute.time.ttm_v2 import get_trading_ttm_v2_scalar
 t = get_trading_ttm_v2_scalar(now)  # same signature
 ```
 
@@ -77,13 +77,13 @@ t = get_trading_ttm_v2_scalar(now)  # same signature
 
 ```bash
 cd e:\US.market\Option_v3
-python -m pytest l1_refactor/tests/ -v --tb=short
+python -m pytest l1_compute/tests/ -v --tb=short
 
 # 数值回归：GPU vs 参考 bsm.py
-python -m pytest l1_refactor/tests/test_compute.py -v -k "correctness"
+python -m pytest l1_compute/tests/test_compute.py -v -k "correctness"
 
 # 包含异步测试（需要 pytest-asyncio）
-python -m pytest l1_refactor/tests/test_reactor.py -v
+python -m pytest l1_compute/tests/test_reactor.py -v
 ```
 
 ## 关键组件说明

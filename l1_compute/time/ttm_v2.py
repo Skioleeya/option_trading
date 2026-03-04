@@ -242,3 +242,35 @@ def _get_trading_days(start: date, end: date) -> list[date]:
             days.append(current)
         current += timedelta(days=1)
     return days
+
+
+# Institutional visibility: log today's session status at module load
+def _log_session_status():
+    try:
+        from datetime import datetime
+        import pandas as pd
+        now_ny = datetime.now(_ET)
+        today = now_ny.date()
+        
+        is_trading = _is_trading_day(today)
+        status = "OPEN" if is_trading else "CLOSED (Weekend/Holiday)"
+        
+        close_time = "16:00 ET"
+        if _NYSE and is_trading:
+            # Check for early close via schedule
+            try:
+                schedule = _NYSE.schedule(start_date=today, end_date=today)
+                if not schedule.empty:
+                    close_dt = schedule.iloc[0]['market_close'].tz_convert("US/Eastern")
+                    close_time = close_dt.strftime("%H:%M ET")
+            except Exception:
+                pass
+        
+        msg = f"[TTMv2] Current Session: {today} | Status: {status} | Expected Close: {close_time}"
+        logger.info(msg)
+        # We don't print here to avoid cluttering clean imports in production,
+        # but the INFO log will now be visible in any standard logging config.
+    except Exception as e:
+        logger.warning(f"[TTMv2] Could not log session status: {e}")
+
+_log_session_status()

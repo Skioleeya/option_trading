@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 # ── Numba availability probe ───────────────────────────────────────────────────
 try:
-    from app.services.analysis.bsm_fast import compute_greeks_batch as _numba_batch  # type: ignore
+    from l1_compute.analysis.bsm_fast import compute_greeks_batch as _numba_batch  # type: ignore
     _NUMBA_AVAILABLE = True
     logger.info("[ComputeRouter] Numba JIT tier available via bsm_fast.compute_greeks_batch.")
 except ImportError:

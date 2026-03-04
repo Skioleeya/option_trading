@@ -185,7 +185,7 @@ class L3AssemblyReactor:
     ) -> None:
         """Compare L3 output with legacy SnapshotBuilder (shadow mode)."""
         try:
-            from app.services.system.snapshot_builder import SnapshotBuilder
+            from shared.system.snapshot_builder import SnapshotBuilder
             legacy = SnapshotBuilder.build(snapshot, decision, None)
             l3_spot = l3_payload.spot
             legacy_spot = legacy.get("spot", 0.0)

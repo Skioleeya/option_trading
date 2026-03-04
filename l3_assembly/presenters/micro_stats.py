@@ -59,7 +59,7 @@ class MicroStatsPresenterV2:
     ) -> MicroStatsState:
         """Build typed MicroStatsState by calling the legacy presenter."""
         try:
-            from app.ui.micro_stats.presenter import MicroStatsPresenter
+            from l3_assembly.presenters.ui.micro_stats.presenter import MicroStatsPresenter
             raw = MicroStatsPresenter.build(
                 gex_regime=gex_regime,
                 wall_dyn=wall_dyn,

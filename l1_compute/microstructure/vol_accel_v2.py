@@ -4,7 +4,7 @@ Improvements over VolumeImbalanceEngine (v1):
     1. Session-phase-adaptive baseline window (open/mid/close)
     2. Dynamic threshold from daily percentile rank (vs fixed 3.0)
     3. Volume Entropy: measures trade dispersion (detects wash trading)
-    4. ndm_rust bridge interface reserved for Phase 2
+    4. rust_kernel bridge interface reserved for Phase 2
 
 Session phases:
     OPEN  (9:30-10:00 ET): narrow window (10-tick EMA), higher alert sensitivity

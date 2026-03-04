@@ -13,7 +13,7 @@ class MTFFlowPresenterV2:
     @classmethod
     def build(cls, mtf_consensus: dict[str, Any]) -> MTFFlowState:
         try:
-            from app.ui.mtf_flow.presenter import MTFFlowPresenter
+            from l3_assembly.presenters.ui.mtf_flow.presenter import MTFFlowPresenter
             raw = MTFFlowPresenter.build(mtf_consensus=mtf_consensus)
         except ImportError:
             raw = {}

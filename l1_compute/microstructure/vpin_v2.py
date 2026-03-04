@@ -5,7 +5,7 @@ Enhancements over DepthEngine (v1):
     2. Three output frequencies: 1min / 5min / 15min
     3. Regime classification: NORMAL / ELEVATED / TOXIC
     4. Confidence score per frequency
-    5. ndm_rust bridge interface reserved (Python implementation active)
+    5. rust_kernel bridge interface reserved (Python implementation active)
 
 Architecture:
     Each trade tick is classified (buy/sell/neutral) and accumulated
@@ -111,9 +111,9 @@ class VPINv2:
         bucket_size = adv_daily * adv_percentile_fraction
         (defaults to 500 until ADV history is populated)
 
-    ndm_rust Bridge (Phase 2):
+    rust_kernel Bridge (Phase 2):
         When _RUST_AVAILABLE, update() will delegate the inner bucket
-        loop to ndm_rust.update_vpin_v2() for AVX-512 SIMD acceleration.
+        loop to rust_kernel.update_vpin_v2() for AVX-512 SIMD acceleration.
 
     Usage::
 

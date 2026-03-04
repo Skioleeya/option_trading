@@ -1,11 +1,11 @@
-# l0_refactor — L0 数据摄入层重构包
+# l0_ingest — L0 数据摄入层重构包
 
 > **Strangler Fig 模式** — 与 `backend/app/services/feeds/` 并存，验证通过后逐步替换。
 
 ## 架构总览
 
 ```
-l0_refactor/
+l0_ingest/
 ├── events/          # 强类型事件 (CleanQuoteEvent v2, CleanDepthEvent v2…)
 ├── sanitize/        # SanitizePipelineV2 + StatisticalBreaker
 ├── store/           # MVCCChainStateStore (版本化快照隔离)
@@ -19,8 +19,8 @@ l0_refactor/
 ## 快速开始
 
 ```python
-from l0_refactor.sanitize import SanitizePipelineV2
-from l0_refactor.store import MVCCChainStateStore
+from l0_ingest.sanitize import SanitizePipelineV2
+from l0_ingest.store import MVCCChainStateStore
 
 pipeline = SanitizePipelineV2(enable_statistical_check=True)
 store = MVCCChainStateStore()
@@ -50,17 +50,17 @@ pipeline.parse_trade(raw)   # → CleanTradeEvent | None
 
 ```python
 # 旧
-from app.services.feeds.sanitization import SanitizationPipeline
+from l0_ingest.feeds.sanitization import SanitizationPipeline
 
 # 新
-from l0_refactor.sanitize import SanitizePipelineV2 as SanitizationPipeline
+from l0_ingest.sanitize import SanitizePipelineV2 as SanitizationPipeline
 ```
 
 ## 运行测试
 
 ```bash
 cd e:\US.market\Option_v3
-python -m pytest l0_refactor/tests/ -v --tb=short
+python -m pytest l0_ingest/tests/ -v --tb=short
 ```
 
 ## 关键组件说明

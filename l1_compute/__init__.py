@@ -17,7 +17,7 @@ Architecture:
 
 Phase Roadmap:
     Phase 1 (Current)  — Python layer: all components
-    Phase 2            — Rust ndm_rust micro-structure SIMD kernels
+    Phase 2            — Rust rust_kernel micro-structure SIMD kernels
     Phase 3            — Arrow RecordBatch zero-copy L0→L1 handoff
 """
 

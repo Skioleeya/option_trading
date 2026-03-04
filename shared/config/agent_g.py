@@ -9,6 +9,9 @@ class AgentGConfig(BaseConfig):
     agent_g_mtf_weight: float = Field(default=0.20)
     agent_g_vib_weight: float = Field(default=0.20)
     agent_g_micro_flow_weight: float = Field(default=0.10)
+    agent_g_wall_magnet_pct: float = Field(default=0.01)
+    agent_g_wall_breakout_pct: float = Field(default=0.005)
+    fusion_confidence_threshold: float = Field(default=0.5)
 
     # GEX Thresholds
     gex_neutral_threshold: float = Field(default=200.0)
@@ -16,6 +19,7 @@ class AgentGConfig(BaseConfig):
     gex_strong_positive: float = Field(default=500.0)
     gex_strong_negative: float = Field(default=-500.0)
     gex_moderate_threshold: float = Field(default=300.0)
+    gex_accel_threshold: float = Field(default=100.0)
 
     # VRP Thresholds
     vrp_baseline_hv: float = Field(default=0.15)
@@ -35,3 +39,8 @@ class AgentGConfig(BaseConfig):
     
     # Agent Sync
     agent_b_gamma_tick_interval: float = Field(default=1.0)
+
+    # MTF Windows (Missing from reconstruction)
+    mtf_window_seconds_1min: int = Field(default=60)
+    mtf_window_seconds_5min: int = Field(default=300)
+    mtf_window_seconds_15min: int = Field(default=900)

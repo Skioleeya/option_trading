@@ -45,7 +45,7 @@ EnrichedSnapshot (L1 output)
 ## Quick Start
 
 ```python
-from l2_refactor.reactor import L2DecisionReactor
+from l2_decision.reactor import L2DecisionReactor
 
 reactor = L2DecisionReactor()
 output = await reactor.decide(enriched_snapshot)
@@ -71,7 +71,7 @@ print(reactor.shadow_stats)  # {"mismatch_rate": 0.023, ...}
 ## File Structure
 
 ```
-l2_refactor/
+l2_decision/
 ├── events/
 │   └── decision_events.py     # Frozen dataclass contracts
 ├── feature_store/
@@ -116,12 +116,12 @@ l2_refactor/
 ```bash
 # Run full suite
 cd e:\US.market\Option_v3
-python -m pytest l2_refactor/tests/ -v
+python -m pytest l2_decision/tests/ -v
 
 # Run specific phase
-pytest l2_refactor/tests/test_feature_store.py -v
-pytest l2_refactor/tests/test_signals.py -v
-pytest l2_refactor/tests/test_reactor_and_guards.py -v
+pytest l2_decision/tests/test_feature_store.py -v
+pytest l2_decision/tests/test_signals.py -v
+pytest l2_decision/tests/test_reactor_and_guards.py -v
 ```
 
 **Result: 126 passed in 0.86s (Python 3.12)**

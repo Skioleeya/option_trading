@@ -1,4 +1,4 @@
-# l3_refactor — L3 Output Assembly Layer
+# l3_assembly — L3 Output Assembly Layer
 
 > **Strangler Fig 模式** — 与 `backend/app/services/system/` 并存，验证通过后逐步替换。
 
@@ -31,7 +31,7 @@ DecisionOutput (L2) + EnrichedSnapshot (L1) + AtmDecay
 ## 快速开始
 
 ```python
-from l3_refactor.reactor import L3AssemblyReactor
+from l3_assembly.reactor import L3AssemblyReactor
 
 reactor = L3AssemblyReactor()
 
@@ -61,7 +61,7 @@ print(report.broadcast_latency_ms)  # target < 3ms
 ## 文件结构
 
 ```
-l3_refactor/
+l3_assembly/
 ├── events/
 │   ├── payload_events.py    # FrozenPayload, UIState, MetricCard (all frozen)
 │   └── delta_events.py      # DeltaPayload, DeltaType
@@ -96,12 +96,12 @@ l3_refactor/
 
 ```python
 # 旧 (保留)
-from app.services.system.snapshot_builder import SnapshotBuilder
+from shared.system.snapshot_builder import SnapshotBuilder
 new_payload = SnapshotBuilder.build(snapshot, result, atm_decay_payload)
 self._last_payload = new_payload
 
 # 新 (L3 refactor)
-from l3_refactor.reactor import L3AssemblyReactor
+from l3_assembly.reactor import L3AssemblyReactor
 # (在 __init__ 中初始化: self._l3_reactor = L3AssemblyReactor(redis=redis_client))
 frozen = await self._l3_reactor.tick(result, snapshot, atm_decay_payload, active_opts)
 self._last_payload = frozen.to_dict()   # ← 同 schema，前端无感
@@ -111,7 +111,7 @@ self._last_payload = frozen.to_dict()   # ← 同 schema，前端无感
 
 ```bash
 cd e:\US.market\Option_v3
-python -m pytest l3_refactor/tests/ -v --tb=short
+python -m pytest l3_assembly/tests/ -v --tb=short
 ```
 
 **结果: 96 passed in 0.69s (Python 3.12)**

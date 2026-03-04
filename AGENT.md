@@ -10,7 +10,7 @@ Welcome to the SPY 0DTE Options Dashboard project. As an autonomous AI agent wor
 
 ### 1.1 Rust-First Performance
 Our system operates in a microsecond regime. Python is for orchestration and state management; **Rust is for math**.
-*   **Rule**: Any new indicator involving high-frequency data loops (e.g., tick-level processing, Greeks matrices, complex EWMA states) MUST be implemented in `backend/ndm_rust` via PyO3, or at minimum, JIT-compiled via Numba (`bsm_fast.py`).
+*   **Rule**: Any new indicator involving high-frequency data loops (e.g., tick-level processing, Greeks matrices, complex EWMA states) MUST be implemented in `backend/rust_kernel` via PyO3, or at minimum, JIT-compiled via Numba (`bsm_fast.py`).
 *   **Forbid**: Do not write pure Python `for` loops iterating over thousands of data points per tick.
 
 ### 1.2 The "No-Ping-Pong" Doctrine

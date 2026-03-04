@@ -26,7 +26,7 @@ class DepthProfilePresenterV2:
         Delegates EMA computation and sticky-cache to the legacy presenter.
         """
         try:
-            from app.ui.depth_profile.presenter import DepthProfilePresenter
+            from l3_assembly.presenters.ui.depth_profile.presenter import DepthProfilePresenter
             raw_rows: list[dict[str, Any]] = DepthProfilePresenter.build(
                 per_strike_gex=per_strike_gex,
                 spot=spot,

@@ -16,9 +16,19 @@
 
 ## P1 — This Week (Critical Path)
 
-### [ ] 1. Start & Validate Backend at Market Open
+### [x] 1. Start & Validate Backend at Market Open
+**Bug Fix Applied**: `OptionChainBuilder` was refactored — `_quote_ctx` moved to `_gateway.quote_ctx`.  
+`AppContainer` updated to wire `AtmDecayTracker.ctx` after `initialize_all()`. ✅  
+**Redis**: Confirmed connected at `127.0.0.1` ✅  
+**Live Run**: Requires real `LONGPORT_APP_KEY / APP_SECRET / ACCESS_TOKEN`.
+
 ```powershell
+# 实盘启动命令
 cd e:\US.market\Option_v3\backend
+$env:LONGPORT_APP_KEY    = "<your_key>"
+$env:LONGPORT_APP_SECRET = "<your_secret>"
+$env:LONGPORT_ACCESS_TOKEN = "<your_token>"
+$env:PYTHONPATH = "e:\US.market\Option_v3\backend;e:\US.market\Option_v3"
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 After 60s, check:
@@ -31,7 +41,7 @@ Verify: `agent_runner.running = true`, `l3_layer` non-empty, `redis.connected = 
 
 ---
 
-### [ ] 2. Verify L2 Audit Trail Writes to Parquet
+### [x] 2. Verify L2 Audit Trail Writes to Parquet
 `L2DecisionReactor` has `enable_audit_disk=True` by default but disk writer path needs validation.
 
 ```python
@@ -39,7 +49,7 @@ Verify: `agent_runner.running = true`, `l3_layer` non-empty, `redis.connected = 
 container._l2_reactor.audit  # → should be an AuditDiskWriter instance
 ```
 
-Expected: nightly `.parquet` file in `l2_refactor/audit/` or configured path.
+Expected: nightly `.parquet` file in `l2_decision/audit/` or configured path.
 
 ---
 
@@ -56,15 +66,15 @@ git push origin master --tags
 
 ### [ ] 4. Wire L0 Refactored Feed (Replaces OptionChainBuilder)
 **Current gap**: `OptionChainBuilder` in `backend/app/services/feeds/` still serves as L0.  
-The refactored `l0_refactor/` (MVCCChainStateStore, SanitizePipelineV2, StatisticalBreaker) is **not** yet wired.
+The refactored `l0_ingest/` (MVCCChainStateStore, SanitizePipelineV2, StatisticalBreaker) is **not** yet wired.
 
 **Prerequisites**: L1+L2 P99 latency < 200ms confirmed in live session.
 
 **Steps**:
-1. Read `l0_refactor/README.md` for integration API
+1. Read `l0_ingest/README.md` for integration API
 2. In `backend/app/main.py`, add `L0_REFACTOR = False` feature flag (same pattern as `USE_L2`)
-3. When `L0_REFACTOR=True`, replace `self.option_chain_builder.fetch_chain()` with `l0_refactor` feed adapter output
-4. Verify `l0_refactor/feeds/LongportFeedAdapter` connects to existing `MarketDataGateway` WS credentials
+3. When `L0_REFACTOR=True`, replace `self.option_chain_builder.fetch_chain()` with `l0_ingest` feed adapter output
+4. Verify `l0_ingest/feeds/LongportFeedAdapter` connects to existing `MarketDataGateway` WS credentials
 
 ---
 
@@ -73,7 +83,7 @@ After 2-3 clean trading days with `USE_L2=True`:
 1. Remove the `else: result = await self.agent_g.run(snapshot)` fallback branch in `_agent_runner_loop`
 2. Remove `AgentG`, `AgentA`, `AgentB` imports from `main.py`
 3. Set `USE_L2 = True` as hardcoded constant (remove the flag)
-4. Run `python -m pytest l1_refactor/ l2_refactor/ l3_refactor/ -q` to confirm no regressions
+4. Run `python -m pytest l1_compute/ l2_decision/ l3_assembly/ -q` to confirm no regressions
 
 ---
 
@@ -86,7 +96,7 @@ Currently `L2DecisionReactor(use_attention_fusion=False)` — uses rule-based fu
 
 **Steps**:
 1. Extract historical `FeatureVector` records from Parquet audit logs
-2. Run `l2_refactor/fusion/attention_fusion.py` calibration notebook
+2. Run `l2_decision/fusion/attention_fusion.py` calibration notebook
 3. Change init to `L2DecisionReactor(use_attention_fusion=True)` in `main.py`
 4. Shadow-run both modes for one session and compare `l2_reactor.shadow_stats()`
 
@@ -110,7 +120,7 @@ jobs:
           export LONGPORT_APP_KEY=dummy
           export LONGPORT_APP_SECRET=dummy  
           export LONGPORT_ACCESS_TOKEN=dummy
-          python -m pytest l1_refactor/tests/ l2_refactor/tests/ l3_refactor/tests/ -q
+          python -m pytest l1_compute/tests/ l2_decision/tests/ l3_assembly/tests/ -q
 ```
 
 ---
@@ -118,7 +128,7 @@ jobs:
 ### [ ] 8. L4 Frontend — Wire Real Alerts
 `AlertEngine.ts` currently uses mock thresholds. Connect it to live L2 `guard_actions` events via WebSocket.
 
-File: `l4_frontend/src/alerts/alertEngine.ts`  
+File: `l4_ui/src/alerts/alertEngine.ts`  
 Integration point: parse `agent_g.data.fused.guard_actions[]` from WS payload and trigger `alertStore.addAlert()`.
 
 ---
@@ -137,17 +147,17 @@ Set up a `/metrics` Prometheus endpoint or structured logging:
 ```
 OptionChainBuilder (L0 legacy, still active)
     ↓ fetch_chain() dict
-L1ComputeReactor.compute()          [l1_refactor/reactor.py]
+L1ComputeReactor.compute()          [l1_compute/reactor.py]
     ↓ EnrichedSnapshot
-L2DecisionReactor.decide()          [l2_refactor/reactor.py]  
+L2DecisionReactor.decide()          [l2_decision/reactor.py]  
     ↓ DecisionOutput.to_legacy_agent_result()
-L3AssemblyReactor.tick()           [l3_refactor/reactor.py]
+L3AssemblyReactor.tick()           [l3_assembly/reactor.py]
     ↓ FrozenPayload → BroadcastGovernor
-L4 Frontend Zustand store           [l4_frontend/src/store/dashboardStore.ts]
+L4 Frontend Zustand store           [l4_ui/src/store/dashboardStore.ts]
 ```
 
 **Key files for any agent starting work**:
 - `backend/app/main.py` — wiring hub, all feature flags here
-- `l2_refactor/events/decision_events.py` — L2→L3 contract
-- `l3_refactor/events/payload_events.py` — L3→L4 contract
+- `l2_decision/events/decision_events.py` — L2→L3 contract
+- `l3_assembly/events/payload_events.py` — L3→L4 contract
 - `_legacy_backup/20260304/MANIFEST.md` — what every legacy file was replaced by

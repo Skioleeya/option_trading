@@ -29,12 +29,12 @@ from l3_assembly.events.payload_events import (
     TacticalTriadState,
     MTFFlowState,
 )
-from l3_assembly.presenters.ui.micro_stats import MicroStatsPresenterV2
-from l3_assembly.presenters.ui.tactical_triad import TacticalTriadPresenterV2
-from l3_assembly.presenters.ui.wall_migration import WallMigrationPresenterV2
-from l3_assembly.presenters.ui.depth_profile import DepthProfilePresenterV2
-from l3_assembly.presenters.ui.mtf_flow import MTFFlowPresenterV2
-from l3_assembly.presenters.ui.skew_dynamics import SkewDynamicsPresenterV2
+from l3_assembly.presenters.micro_stats import MicroStatsPresenterV2
+from l3_assembly.presenters.tactical_triad import TacticalTriadPresenterV2
+from l3_assembly.presenters.wall_migration import WallMigrationPresenterV2
+from l3_assembly.presenters.depth_profile import DepthProfilePresenterV2
+from l3_assembly.presenters.mtf_flow import MTFFlowPresenterV2
+from l3_assembly.presenters.skew_dynamics import SkewDynamicsPresenterV2
 
 logger = logging.getLogger(__name__)
 

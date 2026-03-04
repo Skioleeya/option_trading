@@ -27,7 +27,7 @@ from l1_compute.compute.compute_router import ComputeRouter, ComputeTier
 
 def _reference_greeks(spot, strike, iv, t, opt_type, r=0.05, q=0.0):
     """Reference implementation from bsm.compute_greeks."""
-    from app.services.analysis.bsm import compute_greeks
+    from l1_compute.analysis.bsm import compute_greeks
     return compute_greeks(spot, strike, iv, t, opt_type, r=r, q=q)
 
 
