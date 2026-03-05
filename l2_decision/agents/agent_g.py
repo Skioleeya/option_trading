@@ -9,11 +9,7 @@ from l2_decision.agents.base import AgentResult
 from shared.config import settings
 from shared.models.agent_output import AgentB1Output
 from l2_decision.signals.fusion.dynamic_weight_engine import DynamicWeightEngine
-from l3_assembly.presenters.ui.micro_stats.presenter import MicroStatsPresenter
-from l3_assembly.presenters.ui.tactical_triad.presenter import TacticalTriadPresenter
-from l3_assembly.presenters.ui.skew_dynamics.presenter import SkewDynamicsPresenter
 from l3_assembly.presenters.ui.active_options.presenter import ActiveOptionsPresenter
-from l3_assembly.presenters.ui.mtf_flow.presenter import MTFFlowPresenter
 
 
 logger = logging.getLogger(__name__)
@@ -103,12 +99,20 @@ class AgentG:
         else:
             return "NEUTRAL"
 
-    async def run(self, snapshot: dict[str, Any]) -> AgentResult:
+    async def run(self, snapshot: dict[str, Any] | Any) -> AgentResult:
+        # PP-L2 Robust: snapshot can be EnrichedSnapshot or legacy dict
         # 1. Run B1 first to get dynamic thresholds from Vanna
         b = self._agent_b.run(snapshot)
         
         # 2. Extract momentum multiplier for A
-        vanna_res = b.data.get("micro_structure", {}).get("micro_structure_state", {}).get("vanna_flow_result", {})
+        # Use safe extraction
+        def _get_val(obj, key, default=None):
+            if hasattr(obj, key): return getattr(obj, key, default)
+            if isinstance(obj, dict): return obj.get(key, default)
+            return default
+            
+        m_state = (b.data.get("micro_structure") or {}).get("micro_structure_state") or {}
+        vanna_res = m_state.get("vanna_flow_result") or m_state.get("vanna_flow", {}) if isinstance(m_state, dict) else {}
         mom_mult = vanna_res.get("momentum_slope_multiplier", 1.0) if vanna_res else 1.0
         
         # 3. Run A with dynamic scaling
@@ -212,11 +216,15 @@ class AgentG:
         # Update weight engine
         self._weight_engine.update_market_state(spy_atm_iv, net_gex_f)
 
-        # Tactical Triad Metrics Computation
-        # PP-1 FIX: Use configurable baseline HV (was hardcoded 13.5).
-        # Override via VRP_BASELINE_HV env var or .env file.
-        baseline_hv = settings.vrp_baseline_hv
-        vrp = (spy_atm_iv - baseline_hv) if spy_atm_iv is not None else None
+        # Tactical Triad Metrics Computation (Refactor: Sourced from AgentB)
+        b_hv = b_output.hv_analysis or {}
+        vrp = b_hv.get("vrp")
+        premium_state = b_hv.get("premium_state", "FAIR")
+
+        # Fallback for direct calculation (Fix: decimal * 100 for PCT conversion)
+        if vrp is None and spy_atm_iv is not None:
+             baseline_hv = settings.vrp_baseline_hv
+             vrp = (spy_atm_iv * 100.0 - baseline_hv)
         
         premium_state = "FAIR"
         if vrp is not None:
@@ -229,15 +237,22 @@ class AgentG:
             elif vrp < settings.vrp_cheap_threshold:
                 premium_state = "CHEAP"
 
-        # ── Phase 3: L2 Micro Flow Signal (ATM Toxicity + BBO Imbalance) ─────
-        # Academic references: OFI Papers 2022-2026 (MicroFlow_Research_2022_2026.md)
-        # Paper 1: ATM pooled OFI has strongest predictive power for same-day option returns
-        # Paper 3: GEX-adaptive BBO weight — negative GEX means market makers are aggressively
-        #          delta-hedging, increasing BBO signal quality; positive GEX → BBO suppressed
-        # Paper 4: 2022+ equal-weight (50:50) more robust; bias to BBO only in neg GEX
-        # Paper 5: |micro_score| < 0.2 is noise; use 0.25 threshold for buffer
-        per_strike = snapshot.get("per_strike_gex") or []
+        # Helper for L1 Object/Dict parity
+        def _get_val(obj, key, default=None):
+            if hasattr(obj, key): return getattr(obj, key, default)
+            if isinstance(obj, dict): return obj.get(key, default)
+            return default
+
+        per_strike = _get_val(snapshot, "per_strike_gex") or []
         _spot = agent_a.data.get("spot") or 0.0
+
+        # Optimization: Use pyarrow pylist if snapshot is EnrichedSnapshot and chain is Pa Batch
+        if hasattr(snapshot, "chain"):
+             try:
+                 import pyarrow as pa
+                 if isinstance(snapshot.chain, pa.RecordBatch):
+                     per_strike = snapshot.chain.to_pylist()
+             except: pass
 
         atm_tox_vals: list[float] = []
         atm_bbo_vals: list[float] = []
@@ -254,7 +269,7 @@ class AgentG:
         avg_tox = sum(atm_tox_vals) / len(atm_tox_vals) if atm_tox_vals else 0.0
         avg_bbo = sum(atm_bbo_vals) / len(atm_bbo_vals) if atm_bbo_vals else 0.0
         if avg_bbo == 0.0:
-            avg_bbo = snapshot.get("bbo_imbalance", 0.0)
+            avg_bbo = _get_val(snapshot, "bbo_imbalance", 0.0)
 
         # Paper 3: GEX-adaptive blend — neg GEX favors BBO (MM hedging signal quality rises)
         _bbo_w = 0.60 if (net_gex_f is not None and net_gex_f < 0) else 0.40
@@ -520,39 +535,6 @@ class AgentG:
             signal=signal,
             as_of=agent_a.as_of,
             data={
-                "agent_a": agent_a.model_dump(),
-                "agent_b": agent_b.model_dump(),
-                "net_gex": net_gex_f,
-                "gex_regime": _vanna_dict.get("gex_regime", "NEUTRAL"),
-                "gamma_walls": gamma_walls,
-                "gamma_flip_level": b_output.gamma_flip_level,
-                "spy_atm_iv": b_output.spy_atm_iv,
-                "trap_state": b_signal,
-                "ui_state": {
-                    "micro_stats": MicroStatsPresenter.build(
-                        gex_regime=_vanna_dict.get("gex_regime", "NEUTRAL"),
-                        wall_dyn=wall_data.model_dump() if wall_data else {},
-                        vanna=vanna_data.state if vanna_data else "NORMAL",
-                        momentum=agent_a.signal,
-                    ),
-                    "tactical_triad": TacticalTriadPresenter.build(
-                        vrp=b_output.hv_analysis.get("vrp") if b_output.hv_analysis else None,
-                        vrp_state=b_output.hv_analysis.get("premium_state", "FAIR") if b_output.hv_analysis else "FAIR",
-                        net_charm=b_output.charm_analysis.get("net_charm") if b_output.charm_analysis else None,
-                        svol_corr=vanna_data.correlation if vanna_data else None,
-                        svol_state=vanna_data.state if vanna_data else "NORMAL",
-                        fused_signal_direction=fused_signal.direction
-                    ),
-                    "skew_dynamics": SkewDynamicsPresenter.build(
-                        skew_val=b_output.skew_analysis.get("skew_value", 0.0) if b_output.skew_analysis else 0.0,
-                        state=b_output.skew_analysis.get("skew_state", "NEUTRAL") if b_output.skew_analysis else "NEUTRAL"
-                    ),
-                    "active_options": self._active_options_presenter.get_latest(),
-                    "mtf_flow": MTFFlowPresenter.build(
-                        mtf_consensus=mtf_consensus
-                    ),
-                    "iv_velocity": iv_data.model_dump() if iv_data else None,
-                },
                 "fused_signal": {
                     "direction": fused_signal.direction,
                     "confidence": fused_signal.confidence,

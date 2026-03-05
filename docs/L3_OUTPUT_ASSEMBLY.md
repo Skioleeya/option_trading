@@ -15,14 +15,18 @@
               │     L3AssemblyReactor       │
               │                             │
               │  ┌───────────────────────┐  │
-              │  │  PayloadAssemblerV2   │  │ ← COW 组装器，双源兼容
+              │  │  PayloadAssemblerV2   │  │ ← COW 组装器，数据源聚合
               │  │  (Frozen Dataclass)   │  │
+              │  └──────────┬────────────┘  │
+              │             │               │
+              │  ┌──────────▼────────────┐  │ ← UI State Engine (单源提取)
+              │  │    UIStateTracker     │  │   [Consolidates Microstructure]
               │  └──────────┬────────────┘  │
               │             │               │
               │  ┌──────────▼────────────┐  │ ← UI State Presenters 子集
               │  │ TacticalTriadPresenter│  │   MicroStats / ActiveOptions
               │  │ WallMigrationPresenter│  │   MTFFlow / SkewDynamics
-              │  │ DepthProfilePresenter │  │   [使用 Numba/GPU 路由处理海量数据]
+              │  │ DepthProfilePresenter │  │   [使用 Numba/GPU 路由处理数据]
               │  └──────────┬────────────┘  │
               │             │               │
               │  ┌──────────▼────────────┐  │
@@ -42,7 +46,8 @@
 ## 2. 写时复制组装 (PayloadAssembler & Target COW)
 
 - **废除 Deepcopy**：新的 `FrozenPayload` 对全链路不可变 (Immutable)。各模块状态组装利用引用传递（尤其是 `active_options` 这种超大会话结构）；一旦生成不可篡改。
-- **兼容模式接回**：提供 `to_dict()` 完美对齐老版本 `agent_g.data.*` 的扁平化 JSON Schema，保证 L4 终端无痛切换。同时实现了深层解包逻辑，针对性地提取 `AgentResult.data["fused_signal"]` 旁路传导到前端，避开了以往对字典嵌套丢字段的问题。
+- **兼容模式与微结构聚合**：提供 `to_dict()` 完美对齐老版本 `agent_g.data.*` 的扁平化 JSON Schema，保证 L4 终端无痛切换。
+- **微结构单源化 (v3.1 Refine)**：已废除从 L2 `AgentResult` 提取微观结构指标的不可靠路径。现由 `UIStateTracker` 直接从 L1 `EnrichedSnapshot` 深度提取并聚合所有微观信号（IV Velocity, Wall Migration, Vanna Flow 等），确保了 L3 广播负载的 100% 数据完整性。
 - **异常短路/清零机制**：内部包裹了健壮的 Error Path，一旦某微结构遭遇 NaN 生成错误，返回 `neutral/zero-state` 而非把错误数据推到前台。
 
 ## 3. 分化重构：Presenters V2
@@ -55,6 +60,7 @@
 
 为了避免 1 Hz 高频广播对 WebSocket 带宽的摧残引发堵塞（尤其是客户端背压引起后端 OOM）：
 - 只要上游 Snapshot 发生计算循环，`BroadcastGovernor` 会使用 `FieldDeltaEncoder` 同 `_last_payload` 比对。
+- **1Hz 实时同步与 `agent_g_data` 嵌套**：针对全量/增量负载不匹配问题，已将 `net_gex`, `gamma_walls`, `gamma_flip_level`, `atm_iv` 聚合在 `agent_g_data` 容器下。`FieldDeltaEncoder` 现在能正确识别并下发这些顶层字段的差异。
 - 如果数据没有突变（例如周末停盘、夜盘断流），生成并推送轻量级 Keepalive / Delta Payload。
 - 设计上附带 30s 的强制全量快照 (Full Flush) 防错纠偏机制。
 

@@ -27,6 +27,7 @@
                     │  │  - VannaFlowAnalyzer │  │
                     │  │  - WallMigration     │  │
                     │  │  - IVVelocityTracker │  │
+                    │  │  - JumpDetector      │  │
                     │  │  - DynamicThresholds │  │
                     │  └──────────┬───────────┘  │
                     │             │              │
@@ -49,11 +50,13 @@
 - **CPU Numba / NumPy 路径**：退避处理方案机制。
 
 ### 2.2 有状态深度追踪器 (Trackers)
-V3.1 引入全新 `trackers/` 信号模块，避免全表重复排序消耗，提供流体动力分析：
-- **VannaFlowAnalyzer**：将期权做市商 (Dealer) 由于隐含波动率 (IV) 变化所产生的对冲流转化为确定的指标。通过跟踪 Delta 敞口与 IV 微分相乘（流追踪）。
-- **WallMigrationTracker**：跟踪 Gamma Call/Put 墙面（以及 Flip Level）在不同 Strike 上的移动。判断是价格 Pinning 吸附还是冲顶突破 (Wall Flip)。
-- **IVVelocityTracker**：计算 IV 在指定前溯窗口期内的变化率（加速度）。
-- **DynamicThresholds**：取代硬编码网格门限，应用分位数自动匹配 GEX 规模的阈值。
+V3.1 已完成从 L2 (Agent B) 向 L1 的逻辑下沉。这些追踪器驻留在 `l1_compute/trackers/` 和 `l1_compute/analysis/`，提供流体动力分析：
+- **VannaFlowAnalyzer**：跟踪 Delta 敞口与 IV 微分相乘的流追踪。已增强多线程下通过 `loop.call_soon_threadsafe` 实现异步 Redis 状态持久化。
+- **WallMigrationTracker**：跟踪 Gamma Call/Put 墙面（以及 Flip Level）在不同 Strike 上的移动。判断价格 Pinning 吸附或 Wall Flip。
+- **IVVelocityTracker**：计算 ATM IV 变化率（加速度），分类微观结构状态。
+- **JumpDetector**：基于 Z-Score (log returns) 识别市场瞬间剧变 (|Z| > 3.0)，提供短路护栏基础信号。
+- **DynamicThresholds**：应用分位数自动匹配 GEX 规模的阈值，取代硬编码门限。
+- **GEX Notional Validation**：经 2026 实证审计，系统对 SPY 基准的 GEX 名义值计算（Millions 转 Billions）与机构级基准 (VolLand/SpotGamma) 误差 < 1%，支持绝对规模验证。
 
 ### 2.3 Rust SIMD 微结构信号 (l1_rust)
 通过 PyO3 原生扩展调用 Rust `l1_rust` 组件：

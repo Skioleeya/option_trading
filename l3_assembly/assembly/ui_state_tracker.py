@@ -154,6 +154,31 @@ class UIStateTracker:
         except AttributeError:
             pass
 
+        # 5. Consolidated Microstructure (For L3 Payload)
+        # Pull from EnrichedSnapshot.microstructure if available, 
+        # otherwise fallback to decision data or empty.
+        ms_out = {}
+        if hasattr(snapshot, "microstructure") and snapshot.microstructure:
+            ms = snapshot.microstructure
+            ms_out = {
+                "iv_velocity": getattr(ms, "iv_velocity", None),
+                "wall_migration": getattr(ms, "wall_migration", None),
+                "vanna_flow_result": getattr(ms, "vanna_flow_result", None),
+                "mtf_consensus": getattr(ms, "mtf_consensus", None),
+                "volume_imbalance": getattr(ms, "volume_imbalance", None),
+                "jump_detection": getattr(ms, "jump_detection", None),
+                "dealer_squeeze_alert": getattr(ms, "dealer_squeeze_alert", False),
+                "iv_confidence": getattr(ms, "iv_confidence", 0.0),
+                "wall_confidence": getattr(ms, "wall_confidence", 0.0),
+                "vanna_confidence": getattr(ms, "vanna_confidence", 0.0),
+            }
+        else:
+            # Fallback for legacy dict snapshots
+            ms_raw = snapshot.get("micro_structure", {}).get("micro_structure_state") or \
+                     snapshot.get("microstructure", {})
+            if isinstance(ms_raw, dict):
+                ms_out = ms_raw
+
         return {
             "wall_migration_data": wall_result.model_dump() if wall_result else {},
             "mtf_consensus": mtf_consensus,
@@ -165,5 +190,6 @@ class UIStateTracker:
             "skew_dynamics": skew_dynamics,
             "momentum": momentum_direction,
             "svol_corr": (vanna_result.correlation if vanna_result and vanna_result.correlation is not None else 0.0),
-            "svol_state": "DANGER_ZONE" if vanna_state_str == "DANGER_ZONE" else "NORMAL"
+            "svol_state": "DANGER_ZONE" if vanna_state_str == "DANGER_ZONE" else "NORMAL",
+            "micro_structure": {"micro_structure_state": ms_out}
         }

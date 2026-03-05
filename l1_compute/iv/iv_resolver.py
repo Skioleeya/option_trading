@@ -128,6 +128,7 @@ class IVResolver:
         spot: float,
         iv_cache: dict[str, float],
         spot_at_sync: dict[str, float],
+        ttm_years: Optional[float] = None,
     ) -> dict[str, ResolvedIV]:
         """Resolve IV for all chain entries in one pass.
 
@@ -187,6 +188,7 @@ class IVResolver:
                 spot_ref=spot_ref,
                 opt_type=opt_type,
                 strike=strike,
+                ttm_years=ttm_years,
             )
 
         return result

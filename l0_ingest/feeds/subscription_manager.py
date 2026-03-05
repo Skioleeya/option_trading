@@ -98,8 +98,8 @@ class SubscriptionManager:
 
             if chain_info and len(chain_info) > 0:
                 valid_dates.append((check_date, chain_info))
-                # Phase 4 real-money test: Only 0DTE (1 expiry)
-                if len(valid_dates) >= 1:
+                # Expanded to 3 expiries (0DTE, 1DTE, Weekly) under 500 sub limit
+                if len(valid_dates) >= 3:
                     break
 
         target_symbols = set()

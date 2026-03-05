@@ -45,13 +45,19 @@ class AgentA:
         self._cumulative_volume: float = 0.0
         self._cumulative_pv: float = 0.0  # Price × Volume sum
 
-    def run(self, snapshot: dict[str, Any], slope_multiplier: float = 1.0) -> AgentResult:
+    def run(self, snapshot: dict[str, Any] | Any, slope_multiplier: float = 1.0) -> AgentResult:
         """Process market snapshot and return directional signal."""
         now = datetime.now(ZoneInfo("US/Eastern"))
         now_mono = time.monotonic()
 
-        spot = snapshot.get("spot")
-        volume = snapshot.get("volume", 1.0) or 1.0
+        # Helper for L1 Object/Dict parity
+        def _get_val(obj, key, default=None):
+            if hasattr(obj, key): return getattr(obj, key, default)
+            if isinstance(obj, dict): return obj.get(key, default)
+            return default
+
+        spot = _get_val(snapshot, "spot")
+        volume = _get_val(snapshot, "volume", 1.0) or 1.0
 
         if spot is None or spot <= 0:
             return AgentResult(

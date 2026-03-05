@@ -53,6 +53,7 @@
 
 ### 2.2 协议管道解耦 (Protocol / Delta decoupling)
 - 通信层：由于引入 `FieldDeltaEncoder`，前端专门提取了 `DeltaDecoder`，基于开源 `fast-json-patch` 进行变更树合并。
+- **agent_g_data 适配**： decoder 现已支持将增量 `agent_g_data` 映射回主 `agent_g.data` 树，确保 GEX 相关顶层变量在 1Hz 高频下无卡顿同步。
 - 只有触发 `patch` 才执行状态树写操作。
 
 ## 3. UI 微组件及面板

@@ -39,8 +39,7 @@ async def run_compute_loop(ctr: 'AppContainer', state: SharedLoopState) -> None:
             agent_start = time.monotonic()
             decision = None
             l1_snap = None
-
-            if ctr.l1_reactor and ctr.l2_reactor:
+            if ctr.l1_reactor:
                 iv_cache = getattr(iv_sync_obj, "iv_cache", {}) if iv_sync_obj else {}
                 spot_sync = getattr(iv_sync_obj, "spot_at_sync", {}) if iv_sync_obj else {}
 
@@ -51,6 +50,8 @@ async def run_compute_loop(ctr: 'AppContainer', state: SharedLoopState) -> None:
                     iv_cache=iv_cache,
                     spot_at_sync=spot_sync,
                 )
+
+            if l1_snap and ctr.l2_reactor:
                 decision = await ctr.l2_reactor.decide(l1_snap)
                 result = decision.to_legacy_agent_result()
                 
@@ -60,7 +61,9 @@ async def run_compute_loop(ctr: 'AppContainer', state: SharedLoopState) -> None:
                     f"lat={decision.latency_ms:.1f}ms"
                 )
             else:
-                result = await ctr.agent_g.run(snapshot)
+                # If no L1, pass raw snapshot. If L1 exists, pass legacy dict shim.
+                target_snapshot = l1_snap.to_legacy_dict() if l1_snap else snapshot
+                result = await ctr.agent_g.run(target_snapshot)
                 decision = result
 
             # 2.5 Calculate ATM Decay via Tracker

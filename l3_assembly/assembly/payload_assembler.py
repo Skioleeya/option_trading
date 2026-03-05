@@ -89,16 +89,25 @@ class PayloadAssemblerV2:
         # ── 4. Build UIState via Presenter V2 calls ────────────────────────
         ui_state = self._build_ui_state(snap_data, active_options or ())
 
-        # ── 5. Extract fused_signal from L2 AgentG AgentResult.data ──────────
+        # ── 5. Extract fused_signal & micro_structure from L2/UI sources ──────────
         # AgentG._decide_impl writes fused_signal under AgentResult.data["fused_signal"]
-        # This is never extracted by SignalData which only reads top-level attributes.
+        # and micro_structure under AgentResult.data["micro_structure"].
+        # DecisionOutput shim provides 'fused_signal' under decision.data property.
+        # Microstructure is now primarily provided via ui_metrics from UIStateTracker.
         fused_signal_dict: dict | None = None
+        micro_structure_dict: dict | None = None
         try:
             if decision is not None:
                 raw_data = getattr(decision, "data", None) or {}
                 fused_signal_dict = raw_data.get("fused_signal")
+                # Fallback to decision data, but UI metrics take priority
+                micro_structure_dict = raw_data.get("micro_structure")
+                
+            if ui_metrics and "micro_structure" in ui_metrics:
+                micro_structure_dict = ui_metrics["micro_structure"]
+
         except Exception as exc:
-            logger.warning(f"[L3 Assembler] fused_signal extraction failed: {exc}")
+            logger.warning(f"[L3 Assembler] data extraction failed: {exc}")
 
         # ── 6. Timestamps ─────────────────────────────────────────────────────
         now_iso = datetime.now(timezone.utc).isoformat()
@@ -118,6 +127,7 @@ class PayloadAssemblerV2:
             gamma_walls={"call_wall": snap_data.call_wall, "put_wall": snap_data.put_wall},
             gamma_flip_level=snap_data.flip_level,
             fused_signal=fused_signal_dict,
+            micro_structure=micro_structure_dict,
         )
 
         logger.debug(
@@ -138,17 +148,8 @@ class PayloadAssemblerV2:
             data.atm_iv = float(snapshot.aggregates.atm_iv or 0.0)
             data.flip_level = float(snapshot.aggregates.flip_level or 0.0)
             data.snapshot_time = getattr(snapshot, "computed_at", None)
-            # Chain → per_strike_gex (legacy presenters expect list[dict])
-            chain = getattr(snapshot, "chain", None)
-            if chain is not None:
-                try:
-                    import pyarrow as pa
-                    if isinstance(chain, pa.RecordBatch):
-                        data.per_strike_gex = chain.to_pylist()
-                    else:
-                        data.per_strike_gex = list(chain)
-                except Exception:
-                    data.per_strike_gex = []
+            # Aggregated GEX per strike (legacy presenters expect list[dict])
+            data.per_strike_gex = getattr(snapshot.aggregates, "per_strike_gex", [])
             
             data.net_gex = float(snapshot.aggregates.net_gex or 0.0)
             data.call_wall = float(snapshot.aggregates.call_wall or 0.0)

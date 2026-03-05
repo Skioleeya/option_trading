@@ -36,7 +36,7 @@ class AggregateGreeks:
 
 @dataclass(frozen=True)
 class MicroSignals:
-    """Microstructure signals: VPIN, BBO, Volume Acceleration."""
+    """Microstructure signals: VPIN, BBO, Volume Acceleration, and Flow Trackers."""
     # VPIN
     vpin_1m: float = 0.0
     vpin_5m: float = 0.0
@@ -56,6 +56,29 @@ class MicroSignals:
     vol_accel_elevated: bool = False
     vol_entropy: float = 0.0
     session_phase: str = "mid"
+    
+    # IV Velocity & MTF
+    iv_velocity: Optional[dict[str, Any]] = None
+    mtf_consensus: Optional[dict[str, Any]] = None
+    iv_confidence: float = 0.0
+    
+    # Wall Migration
+    wall_migration: Optional[dict[str, Any]] = None
+    wall_confidence: float = 0.0
+    
+    # Vanna Flow
+    vanna_flow_result: Optional[dict[str, Any]] = None
+    vanna_confidence: float = 0.0
+    
+    # Volume Imbalance (Phase 24)
+    volume_imbalance: Optional[dict[str, Any]] = None
+    
+    # Jump Detection (Phase 27)
+    jump_detection: Optional[dict[str, Any]] = None
+    
+    # Squeeze Alerts
+    dealer_squeeze_alert: bool = False
+    avg_atm_vpin_score: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -158,4 +181,7 @@ class EnrichedSnapshot:
             "computed_at":    self.computed_at.isoformat(),
             "chain_elements": chain_elements,
             "per_strike_gex": chain_elements,  # Map full chain as strike info
+            "spot":           self.spot,
+            # Refactor: Phase 1 microstructure outputs
+            "microstructure": self.microstructure,
         }

@@ -56,8 +56,15 @@ class SnapshotBuilder:
     }
 
     @staticmethod
+    def _get(obj, key, default=None):
+        """Unified helper for dict/object access."""
+        if hasattr(obj, key): return getattr(obj, key, default)
+        if isinstance(obj, dict): return obj.get(key, default)
+        return default
+
+    @staticmethod
     def build(
-        snapshot: dict[str, Any],
+        snapshot: dict[str, Any] | Any,
         agent_result: Any,
         atm_decay_payload: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
@@ -68,7 +75,8 @@ class SnapshotBuilder:
         returns their own zero-state rather than omitting the field.
         """
         now = datetime.now(ZoneInfo("US/Eastern"))
-        spot = snapshot.get("spot")
+        _get = SnapshotBuilder._get
+        spot = _get(snapshot, "spot")
 
         # Safely extract agent data — never short-circuit before building ui_state
         # PP-L3G FIX: Use mode='json' to ensure datetime objects are stringified.
@@ -97,7 +105,7 @@ class SnapshotBuilder:
                 spot=spot,
                 flip_level=flip_level,
             ),
-            "macro_volume_map": snapshot.get("volume_map") or {},
+            "macro_volume_map": _get(snapshot, "volume_map") or {},
             "atm": atm_decay_payload,
         }
 

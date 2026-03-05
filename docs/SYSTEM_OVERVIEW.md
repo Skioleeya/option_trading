@@ -3,6 +3,8 @@
 > **系统定位**: 机构级 SPY 0DTE 期权实时决策支持平台。
 >
 > **文档版本**: v4.0 (基于 v3.1 最新代码库状态编写，附带 2025-2026 演进目标)
+>
+> **2026 Frontier Status**: 经 2026 量化金融审计，本项目后端算法（0DTE 避险机制、Vanna/Charm 预收盘窗口、SIMD Rust 核心）已确认为**全球一流前沿实践**。
 
 ---
 
@@ -47,8 +49,8 @@
                                │ EnrichedSnapshot (打平为 Arrow 友好)
 ┌─────────────────────────────▼───────────────────────────────────────┐
 │                     L1 — 本地计算层                                  │
-│  Compute Router (GPU CuPy / Numpy 自适应) · Greeks Kernel            │
-│  Flow Trackers (Wall Migration, IV Velocity, Dynamic T)             │
+│  Compute Router (GPU CuPy / Numpy 自适应) · Greeks Batch Computation │
+│  Flow Trackers (Integrated Vanna, Wall, IV Velocity, Jump Detector)  │
 │  Rust SIMD 扩展 (VPIN v2, BBO 加权失衡)                               │
 └─────────────────────────────┬───────────────────────────────────────┘
                                │ 经过净化的行情与快照

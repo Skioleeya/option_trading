@@ -102,10 +102,13 @@ class VannaFlowAnalyzer:
 
         # Persistence (v2.1)
         self._redis = None
+        self._loop = None
 
     async def set_redis_client(self, client: Any) -> None:
         """Inject shared Redis client."""
+        import asyncio
         self._redis = client
+        self._loop = asyncio.get_running_loop()
         await self._load_state()
 
     async def _save_state(self) -> None:
@@ -242,9 +245,15 @@ class VannaFlowAnalyzer:
 
         self._last_result = result
 
-        # Persist state
-        import asyncio
-        asyncio.create_task(self._save_state())
+        # Persist state (Thread-safe)
+        if self._redis and self._loop:
+            import asyncio
+            try:
+                self._loop.call_soon_threadsafe(
+                    lambda: asyncio.create_task(self._save_state())
+                )
+            except Exception:
+                pass
 
         return result
 

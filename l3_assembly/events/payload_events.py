@@ -160,7 +160,7 @@ class DepthProfileRow:
     strike: float
     call_pct: float
     put_pct: float
-    is_atm: bool
+    is_spot: bool
     is_flip: bool
     is_dominant_put: bool
     is_dominant_call: bool
@@ -176,8 +176,7 @@ class DepthProfileRow:
             "strike":           self.strike,
             "call_pct":         self.call_pct,
             "put_pct":          self.put_pct,
-            "is_atm":           self.is_atm,
-            "is_spot":          self.is_atm, 
+            "is_spot":          self.is_spot,
             "is_flip":          self.is_flip,
             "is_dominant_put":  self.is_dominant_put,
             "is_dominant_call": self.is_dominant_call,
@@ -438,6 +437,9 @@ class FrozenPayload:
 
     # Decision Engine: full fused_signal dict from AgentG (Phase 4: DecisionEngine sync)
     fused_signal: dict[str, Any] | None = None
+    
+    # Microstructure: Consolidated state from AgentB via AgentG (Phase 1 Refactor compatibility)
+    micro_structure: dict[str, Any] | None = None
 
     # Broadcast-layer fields (set by BroadcastGovernor, not PayloadAssembler)
     heartbeat_timestamp: str = ""
@@ -477,6 +479,8 @@ class FrozenPayload:
                     "gamma_flip_level": self.gamma_flip_level,
                     # DecisionEngine: fused_signal from AgentG.data (Phase 4)
                     "fused_signal":     self.fused_signal,
+                    # Microstructure: Phase 1 Refactor support
+                    "micro_structure":  self.micro_structure,
                 }
             },
         }

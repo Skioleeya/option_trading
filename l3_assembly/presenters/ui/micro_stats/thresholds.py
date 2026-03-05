@@ -13,10 +13,10 @@
 # - 正 GEX 越大 → 做市商越需要卖涨买跌 → 价格被"钉住"
 # - 负 GEX      → 做市商需要追涨杀跌 → 价格加速
 #
-# 单位: Million USD (百万美元)
-GEX_SUPER_PIN_THRESHOLD_M   = 1000  # >= 1000M → 市场像被磁铁锁住，极低波动
-GEX_DAMPING_THRESHOLD_M     = 200   # >= 200M  → 温和阻尼，做市商小幅吸收波动
-GEX_DEEP_NEGATIVE_THRESHOLD = -500  # <= -500M → 深度负 Gamma，极度加速
+# 单位: Million USD (百万美元), matching 2024-2026 Institutional SPY scale
+GEX_SUPER_PIN_THRESHOLD_M   = 100000  # >= 100B → 市场像被磁铁锁住，极低波动
+GEX_DAMPING_THRESHOLD_M     = 20000   # >= 20B  → 温和阻尼，做市商小幅吸收波动
+GEX_DEEP_NEGATIVE_THRESHOLD = -50000  # <= -50B → 深度负 Gamma，极度加速
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. WALL DYN  (Gamma Wall Dynamics — 墙体动态)

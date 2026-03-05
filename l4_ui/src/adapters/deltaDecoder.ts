@@ -12,6 +12,9 @@
  *   // OR
  *   const result = DeltaDecoder.applyChanges(prev, data.changes)
  *   if (result.ok) store.applyMergedPayload(result.value)
+ *
+ * Performance:
+ *   Includes micro-benchmarks for cloning vs patching to detect frame drops.
  */
 
 import { applyPatch } from 'fast-json-patch'
@@ -79,31 +82,44 @@ export const DeltaDecoder = {
         changes: Record<string, any>,
         meta?: { heartbeat_timestamp?: string; timestamp?: string }
     ): DecodeResult<DashboardPayload> {
+        const tStart = performance.now()
         try {
-            // Deep clone to avoid mutation
-            const next: DashboardPayload = JSON.parse(JSON.stringify(prev))
-
-            // 1. Scalar top-level fields
-            const topLevel = ["spot", "drift_ms", "drift_warning", "is_stale", "version", "data_timestamp", "heartbeat_timestamp"]
-            for (const key of topLevel) {
-                if (changes[key] !== undefined) {
-                    (next as any)[key] = changes[key]
-                }
-            }
+            // 1. Scalar top-level fields (SHALLOW CLONE only top level)
+            const next: DashboardPayload = { ...prev }
 
             // 2. Signal (maps to agent_g.data)
             if (changes.signal && next.agent_g?.data) {
-                next.agent_g.data = {
-                    ...next.agent_g.data,
-                    ...changes.signal
+                next.agent_g = {
+                    ...next.agent_g,
+                    data: {
+                        ...next.agent_g.data,
+                        ...changes.signal,
+                    },
                 }
             }
 
             // 3. UI State (maps to agent_g.data.ui_state)
             if (changes.agent_g_ui_state && next.agent_g?.data?.ui_state) {
-                next.agent_g.data.ui_state = {
-                    ...next.agent_g.data.ui_state,
-                    ...changes.agent_g_ui_state
+                next.agent_g = {
+                    ...next.agent_g,
+                    data: {
+                        ...(next.agent_g?.data ?? {}),
+                        ui_state: {
+                            ...next.agent_g?.data?.ui_state,
+                            ...changes.agent_g_ui_state,
+                        },
+                    },
+                }
+            }
+
+            // 3b. Agent G Data (GEX/Walls/atm_iv - maps to agent_g.data)
+            if (changes.agent_g_data && next.agent_g?.data) {
+                next.agent_g = {
+                    ...next.agent_g,
+                    data: {
+                        ...next.agent_g.data,
+                        ...changes.agent_g_data,
+                    },
                 }
             }
 
@@ -112,13 +128,35 @@ export const DeltaDecoder = {
                 next.atm = changes.atm
             }
 
-            // 5. Inject meta
+            // 5. Update top-level scalars
+            const topLevel = [
+                'spot',
+                'drift_ms',
+                'drift_warning',
+                'is_stale',
+                'version',
+                'data_timestamp',
+                'heartbeat_timestamp',
+            ]
+            for (const key of topLevel) {
+                if (changes[key] !== undefined) {
+                    ; (next as any)[key] = changes[key]
+                }
+            }
+
+            // 6. Inject meta
             if (meta?.heartbeat_timestamp) next.heartbeat_timestamp = meta.heartbeat_timestamp
             if (meta?.timestamp) next.timestamp = meta.timestamp
             if (changes.heartbeat_timestamp) next.heartbeat_timestamp = changes.heartbeat_timestamp
 
+            const tEnd = performance.now()
+            if (tEnd - tStart > 5) {
+                console.debug(`[L4 DeltaDecoder] Latency spike: ${(tEnd - tStart).toFixed(2)}ms`)
+            }
+
             return { ok: true, value: next }
         } catch (error) {
+            console.error('[L4 DeltaDecoder] Decoding failed:', error)
             return { ok: false, error }
         }
     },

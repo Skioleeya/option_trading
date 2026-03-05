@@ -123,9 +123,28 @@ async def test_l0_l4_pipeline():
             print(f"Depth Profile Size: {len(depth)}")
             if (len(depth) > 0):
                 print(f"First profile row: {depth[0]}")
-            iv_val = data.get("spy_atm_iv", "NOT_FOUND")
+            iv_val = agent_data.get("spy_atm_iv", "NOT_FOUND")
             print(f"spy_atm_iv from agent_g data: {iv_val}")
-            print(f"spy_atm_iv from agent_g data: {agent_data.get('spy_atm_iv', 'NOT_FOUND')}")
+            
+            # Phase 5: Verify Microstructure Consolidation (Phase 1 Refactor)
+            print(f"\n{Fore.CYAN}--- Microstructure Consolidation (L1 -> L2) Verification ---{Style.RESET_ALL}")
+            
+            # Diagnostic prints
+            print(f"[DEBUG] agent_data keys: {list(agent_data.keys())}")
+            ms_raw = agent_data.get("micro_structure")
+            print(f"[DEBUG] agent_data['micro_structure'] type: {type(ms_raw)}")
+            if isinstance(ms_raw, dict):
+                 print(f"[DEBUG] agent_data['micro_structure'] keys: {list(ms_raw.keys())}")
+            
+            micro_data = agent_data.get("micro_structure", {}).get("micro_structure_state", {})
+            if micro_data:
+                print(f"✅ Microstructure State: Found")
+                print(f"   - IV Velocity   : {'OK' if micro_data.get('iv_velocity') else 'MISSING'}")
+                print(f"   - Wall Migration: {'OK' if micro_data.get('wall_migration') else 'MISSING'}")
+                print(f"   - Vanna Flow    : {'OK' if micro_data.get('vanna_flow_result') or micro_data.get('vanna_flow') else 'MISSING'}")
+                print(f"   - Jump Detector : {'OK' if micro_data.get('jump_detection') else 'MISSING'}")
+            else:
+                print(f"❌ Missing Consolidated Microstructure Data")
 
             print(f"\n{Fore.GREEN}[*] Analysis Complete! Terminating connection.{Style.RESET_ALL}")
 

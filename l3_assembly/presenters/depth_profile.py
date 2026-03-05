@@ -64,7 +64,7 @@ class DepthProfilePresenterV2:
             strike=float(d.get("strike", 0.0) or 0.0),
             call_pct=call_pct,
             put_pct=put_pct,
-            is_atm=bool(d.get("is_spot", False)), # Map legacy `is_spot` to `is_atm`
+            is_spot=bool(d.get("is_spot", False)), 
             is_flip=bool(d.get("is_flip", False)),
             is_dominant_put=bool(d.get("is_dominant_put", False)),
             is_dominant_call=bool(d.get("is_dominant_call", False)),

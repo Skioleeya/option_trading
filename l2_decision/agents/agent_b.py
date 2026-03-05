@@ -17,14 +17,8 @@ from typing import Any, NamedTuple
 from zoneinfo import ZoneInfo
 
 from l2_decision.agents.base import AgentResult
-from l2_decision.agents.services.greeks_extractor import GreeksExtractor
+from l2_decision.agents.base import AgentResult
 from shared.config import settings
-from l1_compute.analysis.mtf_iv_engine import MTFIVEngine
-from l1_compute.analysis.volume_imbalance_engine import VolumeImbalanceEngine
-from l1_compute.analysis.jump_detector import JumpDetector
-from l1_compute.trackers.iv_velocity_tracker import IVVelocityTracker
-from l1_compute.trackers.vanna_flow_analyzer import VannaFlowAnalyzer
-from l1_compute.trackers.wall_migration_tracker import WallMigrationTracker
 
 
 logger = logging.getLogger(__name__)
@@ -72,39 +66,12 @@ class AgentB1:
         self._trap_updated_at: float = 0.0   # monotonic time of last full trap recompute
         self._micro_updated_at: float = 0.0  # monotonic time of last micro update
 
-        # Greeks extractor
-        self._greeks_extractor = GreeksExtractor()
-
-        # Microstructure trackers (v2.0)
-        self._iv_tracker = IVVelocityTracker()
-        self._wall_tracker = WallMigrationTracker()
-        self._vanna_analyzer = VannaFlowAnalyzer()
-
-        # MTF trackers (Multi-Timeframe) — legacy IVVelocity (kept for backward compat)
-        self._iv_tracker_1m = IVVelocityTracker(window_seconds=settings.mtf_window_seconds_1min)
-        self._iv_tracker_5m = IVVelocityTracker(window_seconds=settings.mtf_window_seconds_5min)
-        self._iv_tracker_15m = IVVelocityTracker(window_seconds=settings.mtf_window_seconds_15min)
-
-        # MTF IV Z-Score Engine (Phase 23 — VSRSD Method C)
-        self._mtf_iv_engine = MTFIVEngine()
-
-        # FIX E: Per-timeframe sampling buffers so each TF accumulates its own
-        # mean-bar before pushing to MTFIVEngine (prevents all-three-identical input).
-        # Keys match MTFIVEngine timeframe names exactly.
-        self._MTF_INTERVALS: dict[str, float] = {"1m": 60.0, "5m": 300.0, "15m": 900.0}
-        self._mtf_buf: dict[str, list[float]] = {"1m": [], "5m": [], "15m": []}
-        self._mtf_last_push: dict[str, float] = {"1m": 0.0, "5m": 0.0, "15m": 0.0}
-
-        # Volume Imbalance Engine (Phase 24 — C/P Volume Imbalance)
-        self._vib_engine = VolumeImbalanceEngine()
-
-        # Jump Detector (Phase 27 — Paper 5 Safety Valve)
-        self._jump_detector = JumpDetector()
+        # Greeks extractor (Legacy - state moving to L1)
+        pass
 
     async def set_redis_client(self, client: Any) -> None:
-        """Inject shared Redis client into sub-trackers."""
-        await self._vanna_analyzer.set_redis_client(client)
-        self._wall_tracker.set_redis_client(client)
+        """Shared Redis client (Legacy - state moving to L1)."""
+        pass
 
     def run(self, snapshot: dict[str, Any]) -> AgentResult:
         """Process market snapshot and detect traps.
@@ -121,54 +88,63 @@ class AgentB1:
         put_mark = snapshot.get("put_mark", 0) or 0
         chain = snapshot.get("chain", [])
 
-        if not spot or spot <= 0:
-            return self._idle_result(now, snapshot)
+        # 1. Unified Extraction (Handles EnrichedSnapshot object or legacy dict)
+        def _get_val(obj, key, default=None):
+            if hasattr(obj, key): return getattr(obj, key, default)
+            if isinstance(obj, dict): return obj.get(key, default)
+            return default
 
-        # 1. Greeks computation (Always run - lightweight with aggregate_greeks)
-        greeks = self._greeks_extractor.compute(
-            chain, 
-            spot, 
-            as_of=now,
-            aggregate_greeks=snapshot.get("aggregate_greeks")
-        )
+        def _get_agg(obj, key, default=None):
+            # Aggregates are nested in EnrichedSnapshot but flat in legacy dict
+            if hasattr(obj, "aggregates"):
+                return getattr(obj.aggregates, key, default)
+            if isinstance(obj, dict):
+                return obj.get(key, default)
+            return default
 
-        # 2. Microstructure analysis (FIX D: ALWAYS run to prevent blind zones)
-        micro = self._run_microstructure(
-            chain=chain,
-            spot=spot,
-            atm_iv=greeks.get("atm_iv"),
-            net_gex=greeks.get("net_gex"),
-            call_wall=greeks.get("gamma_walls", {}).get("call_wall"),
-            put_wall=greeks.get("gamma_walls", {}).get("put_wall"),
-            call_wall_volume=0,
-            put_wall_volume=0,
-            otm_call_vol=greeks.get("otm_call_vol", 0),
-            otm_put_vol=greeks.get("otm_put_vol", 0),
-            total_chain_vol=greeks.get("total_chain_vol", 0),
-            sim_clock_mono=now_mono,
-        )
+        net_gex = _get_agg(snapshot, "net_gex", 0.0)
+        atm_iv = _get_agg(snapshot, "atm_iv", 0.0)
+        call_wall = _get_agg(snapshot, "call_wall", 0.0)
+        put_wall = _get_agg(snapshot, "put_wall", 0.0)
+        flip_level = _get_agg(snapshot, "flip_level", 0.0)
+        net_vanna = _get_agg(snapshot, "net_vanna", 0.0)
+        net_charm = _get_agg(snapshot, "net_charm", 0.0)
+        spot = _get_val(snapshot, "spot", 0.0)
 
-        # Throttle Logic (Only for heavy Trap Detection & Z-Score history)
+        # 2. Microstructure (Refactor: Pulling from L1 Snapshot)
+        micro = _get_val(snapshot, "microstructure")
+        if not micro:
+             micro = snapshot.get("micro_structure", {}).get("micro_structure_state", {}) if isinstance(snapshot, dict) else {}
+
+        # Map microstructure fields for AgentG compatibility
+        m_dict = micro if isinstance(micro, dict) else {}
+        if hasattr(micro, "iv_velocity"):
+            m_dict = {
+                "iv_velocity": micro.iv_velocity,
+                "wall_migration": micro.wall_migration,
+                "vanna_flow_result": micro.vanna_flow_result,
+                "mtf_consensus": micro.mtf_consensus,
+                "volume_imbalance": micro.volume_imbalance,
+                "jump_detection": micro.jump_detection,
+                "dealer_squeeze_alert": micro.dealer_squeeze_alert,
+                "iv_confidence": micro.iv_confidence,
+                "wall_confidence": micro.wall_confidence,
+                "vanna_confidence": micro.vanna_confidence,
+            }
+
+        # Throttle Logic (Only for heavy Trap Detection)
         elapsed = now_mono - self._last_run_time
         if elapsed < settings.agent_b_gamma_tick_interval and self._last_result:
-            # FIX D: Update cached result with FRESH microstructure data.
-            # This ensures Agent G always sees the latest Vanna multiplier/Jump status.
-            # PP-5 FIX: Also inject dual-rate sync timestamps so AgentG can observe
-            # the gap between stale trap state and fresh micro state.
             self._micro_updated_at = now_mono
-            sync_gap = now_mono - self._trap_updated_at  # seconds trap is behind micro
+            sync_gap = now_mono - self._trap_updated_at
             updated_data = dict(self._last_result.data)
+            
             updated_data.update({
-                "micro_structure": {"micro_structure_state": micro},
-                "iv_confidence": micro.get("iv_confidence", 0),
-                "wall_confidence": micro.get("wall_confidence", 0),
-                "vanna_confidence": micro.get("vanna_confidence", 0),
-                "mtf_consensus": micro.get("mtf_consensus", {}),
-                # PP-6 FIX: Preserve Analysis fields during throttled runs
-                "hv_analysis": updated_data.get("hv_analysis"),
-                "charm_analysis": updated_data.get("charm_analysis"),
-                "skew_analysis": updated_data.get("skew_analysis"),
-                # PP-5 FIX: Dual-rate sync diagnostics
+                "micro_structure": {"micro_structure_state": m_dict},
+                "iv_confidence": m_dict.get("iv_confidence", 0),
+                "wall_confidence": m_dict.get("wall_confidence", 0),
+                "vanna_confidence": m_dict.get("vanna_confidence", 0),
+                "mtf_consensus": m_dict.get("mtf_consensus", {}),
                 "trap_computed_at": self._trap_updated_at,
                 "micro_computed_at": self._micro_updated_at,
                 "trap_micro_sync_gap": round(sync_gap, 3),
@@ -202,53 +178,6 @@ class AgentB1:
             elif signal == DivergenceState.ACTIVE_BEAR_TRAP:
                 summary_parts.append(f"Bear Trap: Spot{spot_roc:+.2f}% but Put{put_roc:+.1f}%")
 
-        # Tactical Triad Metrics Computation
-        atm_iv = greeks.get("atm_iv", 0) or 0.0
-        # PP-1 FIX: Use configurable baseline HV (was hardcoded 13.5).
-        # Override via VRP_BASELINE_HV env var or .env file.
-        # Ensure atm_iv is converted from decimal to percentage before comparison.
-        atm_iv_pct = atm_iv * 100.0
-        baseline_hv = settings.vrp_baseline_hv
-        vrp = atm_iv_pct - baseline_hv
-        
-        premium_state = "FAIR"
-        if vrp > settings.vrp_trap_threshold:
-            premium_state = "TRAP"
-        elif vrp > settings.vrp_expensive_threshold:
-            premium_state = "EXPENSIVE"
-        elif vrp < (settings.vrp_cheap_threshold * 3):
-            premium_state = "BARGAIN"
-        elif vrp < settings.vrp_cheap_threshold:
-            premium_state = "CHEAP"
-
-        hv_analysis = {
-            "vrp": vrp,
-            "premium_state": premium_state,
-        }
-
-        charm_analysis = {
-            "net_charm": greeks.get("charm_exposure", 0.0)
-        }
-
-        # Skew Dynamics Computation
-        skew_ivs = greeks.get("skew_25d", {})
-        put_25d_iv = skew_ivs.get("put_25d_iv")
-        call_25d_iv = skew_ivs.get("call_25d_iv")
-        
-        skew_val = 0.0
-        skew_state = "NEUTRAL"
-        if put_25d_iv and call_25d_iv and atm_iv > 0:
-            skew_val = (put_25d_iv - call_25d_iv) / atm_iv
-            if skew_val < settings.skew_speculative_max:
-                skew_state = "SPECULATIVE"
-            elif skew_val > settings.skew_defensive_min:
-                skew_state = "DEFENSIVE"
-        
-        skew_analysis = {
-            "skew_value": skew_val,
-            "skew_state": skew_state,
-        }
-
         # PP-5 FIX: Record that a full trap recompute just ran (both rates in sync now).
         self._trap_updated_at = now_mono
         self._micro_updated_at = now_mono
@@ -259,24 +188,19 @@ class AgentB1:
             signal=signal.value if isinstance(signal, DivergenceState) else str(signal),
             as_of=now,
             data={
-                "net_gex": greeks.get("net_gex"),
-                "spy_atm_iv": greeks.get("spy_atm_iv"),
-                "gamma_walls": greeks.get("gamma_walls", {}),
-                "gamma_flip": greeks.get("gamma_flip", False),
-                "gamma_flip_level": greeks.get("gamma_flip_level"),
+                "net_gex": net_gex,
+                "spy_atm_iv": atm_iv,
+                "gamma_walls": {"call_wall": call_wall, "put_wall": put_wall},
+                "gamma_flip_level": flip_level,
                 "micro_structure": {
-                    "micro_structure_state": micro,
+                    "micro_structure_state": m_dict,
                 },
-                "iv_confidence": micro.get("iv_confidence", 0),
-                "wall_confidence": micro.get("wall_confidence", 0),
-                "vanna_confidence": micro.get("vanna_confidence", 0),
-                "mtf_consensus": micro.get("mtf_consensus", {}),
-                "gamma_profile": greeks.get("gamma_profile", []),
-                "per_strike_gex": greeks.get("per_strike_gex", []),
-                "top_active_options": chain, # Pass through for presenter
-                "hv_analysis": hv_analysis,
-                "charm_analysis": charm_analysis,
-                "skew_analysis": skew_analysis,
+                "iv_confidence": m_dict.get("iv_confidence", 0),
+                "wall_confidence": m_dict.get("wall_confidence", 0),
+                "vanna_confidence": m_dict.get("vanna_confidence", 0),
+                "gamma_profile": snapshot.get("gamma_profile", []),
+                "per_strike_gex": snapshot.get("per_strike_gex", []),
+                "top_active_options": chain,
                 # PP-5 FIX: Dual-rate sync diagnostics (gap = 0 on full recompute)
                 "trap_computed_at": self._trap_updated_at,
                 "micro_computed_at": self._micro_updated_at,
@@ -287,156 +211,6 @@ class AgentB1:
         
         self._last_result = result
         return result
-
-    def _run_microstructure(
-        self,
-        *,
-        chain: list[dict[str, Any]],
-        spot: float,
-        atm_iv: float | None,
-        net_gex: float | None,
-        call_wall: float | None,
-        put_wall: float | None,
-        call_wall_volume: int,
-        put_wall_volume: int,
-        otm_call_vol: int = 0,
-        otm_put_vol: int = 0,
-        total_chain_vol: int = 0,
-        sim_clock_mono: float | None = None,
-    ) -> dict[str, Any]:
-        """Run all microstructure trackers."""
-        if not settings.agent_b1_v2_enabled:
-            return {}
-
-        # 1. Vanna Flow (Dynamic Engine)
-        vanna_result = self._vanna_analyzer.update(
-            spot=spot,
-            atm_iv=atm_iv,
-            net_gex=net_gex,
-            spy_atm_iv=atm_iv,
-            sim_clock_mono=sim_clock_mono,
-        )
-        
-        # Extract dynamic multipliers
-        wall_mult = vanna_result.wall_displacement_multiplier if vanna_result else 1.0
-
-        # 2. Wall Migration (Adaptive Sensitivity)
-        wall_result = self._wall_tracker.update(
-            call_wall=call_wall,
-            put_wall=put_wall,
-            spot=spot,
-            call_wall_volume=call_wall_volume,
-            put_wall_volume=put_wall_volume,
-            sim_clock_mono=sim_clock_mono,
-            displacement_multiplier=wall_mult,
-        )
-
-        # 3. IV Velocity
-        iv_result = self._iv_tracker.update(
-            spot=spot, atm_iv=atm_iv, sim_clock_mono=sim_clock_mono
-        )
-
-        # MTF VSRSD: accumulate into per-TF buffers; push bar-mean at each interval
-        if atm_iv and atm_iv > 0:
-            for tf, interval in self._MTF_INTERVALS.items():
-                self._mtf_buf[tf].append(atm_iv)
-                if (sim_clock_mono - self._mtf_last_push[tf]) >= interval:
-                    bar_mean = sum(self._mtf_buf[tf]) / len(self._mtf_buf[tf])
-                    self._mtf_iv_engine.update(tf, bar_mean)
-                    self._mtf_buf[tf].clear()
-                    self._mtf_last_push[tf] = sim_clock_mono
-
-        # Also run legacy IVVelocityTrackers for backward compat (MTF UI fallback)
-        iv_1m  = self._iv_tracker_1m.update(spot=spot,  atm_iv=atm_iv, sim_clock_mono=sim_clock_mono)
-        iv_5m  = self._iv_tracker_5m.update(spot=spot,  atm_iv=atm_iv, sim_clock_mono=sim_clock_mono)
-        iv_15m = self._iv_tracker_15m.update(spot=spot, atm_iv=atm_iv, sim_clock_mono=sim_clock_mono)
-
-        # Compute VSRSD consensus (new primary path)
-        mtf_vsrsd = self._mtf_iv_engine.compute({
-            "1m":  atm_iv or 0.0,
-            "5m":  atm_iv or 0.0,
-            "15m": atm_iv or 0.0,
-        })
-        mtf_consensus = mtf_vsrsd   # Replaces legacy _compute_mtf_consensus
-
-        # 6. Volume Imbalance (Phase 24)
-        vib_result = self._vib_engine.update(
-            chain, 
-            spot,
-            otm_call_vol=otm_call_vol,
-            otm_put_vol=otm_put_vol,
-            current_cumulative_total_chain_vol=total_chain_vol,
-        )
-
-        # 7. Jump Detection (Phase 27)
-        jump_result = self._jump_detector.update(spot)
-
-        # 8. Practice 3: Dealer Squeeze Alert
-        # Triggered when 1s volume burst is ≥ vol_accel_squeeze_threshold × 60s average
-        # AND the GEX regime is negative (dealer delta-hedge exhaustion risk).
-        vol_accel = vib_result.vol_accel_ratio if vib_result else 1.0
-        dealer_squeeze_alert = (
-            vol_accel >= settings.vol_accel_squeeze_threshold
-            and net_gex is not None
-            and net_gex < 0
-        )
-
-        # 9. Practice 2: Propagate average ATM VPIN score
-        # The per-strike flow snapshot is not available here (it's held by OptionChainBuilder).
-        # We pass a placeholder 0.0; the actual propagation happens in agent_g.py
-        # which has access to per_strike_gex with vpin_score fields.
-        avg_atm_vpin_score = 0.0
-
-        return {
-            "iv_velocity": iv_result.model_dump() if iv_result else None,
-            "wall_migration": wall_result.model_dump() if wall_result else None,
-            "vanna_flow_result": vanna_result.model_dump() if vanna_result else None,
-            "mtf_consensus": mtf_consensus,
-            "volume_imbalance": vib_result.model_dump() if vib_result else None,
-            "jump_detection": jump_result.model_dump() if jump_result else None,
-            "dealer_squeeze_alert": dealer_squeeze_alert,
-            "avg_atm_vpin_score": avg_atm_vpin_score,
-            "iv_confidence": self._iv_tracker.get_confidence(),
-            "wall_confidence": self._wall_tracker.get_confidence(),
-            "vanna_confidence": self._vanna_analyzer.get_confidence(),
-        }
-
-    def _compute_mtf_consensus(self, iv_1m, iv_5m, iv_15m) -> dict[str, Any]:
-        """Compute multi-timeframe consensus from IV velocity across timeframes."""
-        directions = {
-            "1m": iv_1m.state.value if iv_1m else "UNAVAILABLE",
-            "5m": iv_5m.state.value if iv_5m else "UNAVAILABLE",
-            "15m": iv_15m.state.value if iv_15m else "UNAVAILABLE",
-        }
-
-        # Simple weighted consensus
-        bullish_states = {"PAID_MOVE", "ORGANIC_GRIND", "HOLLOW_RISE", "HOLLOW_DROP", "VOL_EXPANSION"}
-        bearish_states = {"PAID_DROP"}
-
-        score = 0.0
-        w1 = settings.mtf_weight_1min
-        w5 = settings.mtf_weight_5min
-        w15 = settings.mtf_weight_15min
-
-        for tf, weight in [("1m", w1), ("5m", w5), ("15m", w15)]:
-            state = directions[tf]
-            if state in bullish_states:
-                score += weight
-            elif state in bearish_states:
-                score -= weight
-
-        if score > 0.3:
-            consensus = "BULLISH"
-        elif score < -0.3:
-            consensus = "BEARISH"
-        else:
-            consensus = "NEUTRAL"
-
-        return {
-            "consensus": consensus,
-            "strength": abs(score),
-            "timeframes": directions,
-        }
 
     def _find_t2_point(self, now_mono: float) -> _RocPoint | None:
         """Find the T-2 reference point within the valid window."""
@@ -554,11 +328,8 @@ class AgentB1:
     _last_result: AgentResult | None = None
 
     def reset(self) -> None:
-        """Reset agent state."""
+        """Reset agent state (Legacy - partial reset as trackers moved)."""
         self._history.clear()
         self._state = DivergenceState.IDLE
         self._entry_count = 0
         self._exit_count = 0
-        self._iv_tracker.reset()
-        self._wall_tracker.reset()
-        self._vanna_analyzer.reset()

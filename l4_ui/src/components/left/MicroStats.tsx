@@ -47,19 +47,17 @@ const StatCard: React.FC<{
     badge?: React.ReactNode
     value?: string
 }> = ({ title, icon, badge, value }) => (
-    <div className="rounded p-1.5 space-y-1.5"
-        style={{ border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.02)' }}>
-        <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-                <span className="section-header text-white/90">{title}</span>
-                {icon && <span className="opacity-100 drop-shadow-md">{icon}</span>}
-            </div>
-            {value && <span className="mono text-xs font-bold text-text-primary">{value}</span>}
+    <div className="flex flex-col justify-between p-1.5 bg-[#111318] border border-[#1e2025] hover:bg-[#15181e] transition-colors relative overflow-hidden group">
+        <div className="flex items-center gap-1.5 opacity-80 mb-1">
+            {icon && <span className="opacity-90">{icon}</span>}
+            <span className="text-[9px] font-bold text-[#8f939c] uppercase tracking-wider">{title}</span>
         </div>
-        <div className="flex items-center">
+        <div className="flex items-center justify-end w-full">
             {badge}
-            {value && <span className="mono text-xs font-bold text-text-primary">{value}</span>}
+            {value && <span className="mono text-[10px] font-bold text-white ml-1">{value}</span>}
         </div>
+        {/* Asian-style left edge highlight line */}
+        <div className="absolute top-0 left-0 w-[2px] h-full bg-white/5 group-hover:bg-white/20 transition-colors" />
     </div>
 )
 
@@ -89,33 +87,33 @@ export const MicroStats: React.FC<Props> = memo(({ uiState: propUiState }) => {
             </div>
 
             {/* 2×2 grid */}
-            <div className="grid grid-cols-2 gap-1 px-1">
+            <div className="grid grid-cols-2 gap-[2px] px-1">
 
                 {/* NET GEX */}
                 <StatCard
                     title="NET GEX"
-                    icon={<Activity size={9} className="text-[#a855f7]" />}
+                    icon={<Activity size={10} className="text-[#a855f7]" />}
                     badge={<span className={`badge ${safe.net_gex.badge}`}>{safe.net_gex.label}</span>}
                 />
 
                 {/* WALL DYN */}
                 <StatCard
                     title="WALL DYN"
-                    icon={<Anchor size={9} className="text-accent-amber" />}
+                    icon={<Anchor size={10} className="text-accent-amber" />}
                     badge={<span className={`badge ${safe.wall_dyn.badge}`}>{safe.wall_dyn.label}</span>}
                 />
 
                 {/* MOMENTUM */}
                 <StatCard
                     title="MOMENTUM"
-                    icon={<Minus size={14} className="text-white/60" />}
+                    icon={<Minus size={10} className="text-white/60" />}
                     badge={<span className={`badge ${safe.momentum.badge}`}>{safe.momentum.label}</span>}
                 />
 
                 {/* VANNA */}
                 <StatCard
                     title="VANNA"
-                    icon={<Zap size={9} className="text-accent-cyan" />}
+                    icon={<Zap size={10} className="text-accent-cyan" />}
                     badge={<span className={`badge ${safe.vanna.badge}`}>{safe.vanna.label}</span>}
                 />
             </div>

@@ -143,6 +143,21 @@ class FieldDeltaEncoder:
             if c_val != p_val:
                 changes[fname] = c_val
 
+        # agent_g.data fields — Grouped for frontend DeltaDecoder
+        agent_g_data_changes = {}
+        for fname in ("net_gex", "gamma_flip_level", "gamma_walls", "fused_signal", "micro_structure"):
+            c_val = getattr(curr, fname, None)
+            p_val = getattr(prev, fname, None)
+            if c_val != p_val:
+                agent_g_data_changes[fname] = c_val
+        
+        # Handle explicitly renamed atm_iv -> spy_atm_iv
+        if curr.atm_iv != prev.atm_iv:
+            agent_g_data_changes["spy_atm_iv"] = curr.atm_iv
+
+        if agent_g_data_changes:
+            changes["agent_g_data"] = agent_g_data_changes
+
         # Signal (always check — changes every tick if not halted)
         c_sig = curr.signal.to_dict()
         p_sig = prev.signal.to_dict()

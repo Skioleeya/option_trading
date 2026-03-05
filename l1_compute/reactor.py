@@ -55,6 +55,15 @@ from l1_compute.output.enriched_snapshot import (
 )
 from l1_compute.time.ttm_v2 import SettlementType, get_trading_ttm_v2_scalar
 
+# Refactor: Moving Agent B trackers to L1
+from l1_compute.analysis.mtf_iv_engine import MTFIVEngine
+from l1_compute.analysis.volume_imbalance_engine import VolumeImbalanceEngine
+from l1_compute.analysis.jump_detector import JumpDetector
+from l1_compute.trackers.iv_velocity_tracker import IVVelocityTracker
+from l1_compute.trackers.vanna_flow_analyzer import VannaFlowAnalyzer
+from l1_compute.trackers.wall_migration_tracker import WallMigrationTracker
+from shared.config import settings
+
 logger = logging.getLogger(__name__)
 
 _ET = ZoneInfo("US/Eastern")
@@ -95,6 +104,19 @@ class L1ComputeReactor:
         self._vpin_map:  dict[str, VPINv2] = {}
         self._bbo        = BBOv2()
         self._vol_accel  = VolAccelV2()
+
+        # Integrated Trackers (Phase 1 Refactor)
+        self._iv_tracker = IVVelocityTracker()
+        self._wall_tracker = WallMigrationTracker()
+        self._vanna_analyzer = VannaFlowAnalyzer()
+        self._mtf_iv_engine = MTFIVEngine()
+        self._vib_engine = VolumeImbalanceEngine()
+        self._jump_detector = JumpDetector()
+
+        # MTF intervals and buffers for VSRSD
+        self._MTF_INTERVALS: dict[str, float] = {"1m": 60.0, "5m": 300.0, "15m": 900.0}
+        self._mtf_buf: dict[str, list[float]] = {"1m": [], "5m": [], "15m": []}
+        self._mtf_last_push: dict[str, float] = {"1m": 0.0, "5m": 0.0, "15m": 0.0}
 
         # SABR state
         self._last_sabr_at: float = 0.0
@@ -192,20 +214,20 @@ class L1ComputeReactor:
             return self._empty_snapshot(l0_version)
 
         # ── Step 1: IV Resolution ──────────────────────────────────────────────
+        ttm_years = get_trading_ttm_v2_scalar(now)
         t_iv = time.monotonic()
         with self._inst.span_iv_resolution():
             resolved_ivs = self._iv_resolver.batch_resolve(
-                chain_snapshot, spot, iv_cache, spot_at_sync
+                chain_snapshot, spot, iv_cache, spot_at_sync, ttm_years=ttm_years
             )
 
         # ── Step 2: Conditionally recalibrate SABR ────────────────────────────
         if (self._sabr is not None and
                 (time.monotonic() - self._last_sabr_at) >= _SABR_RECALIBRATE_INTERVAL):
-            ttm_approx = get_trading_ttm_v2_scalar(now)
             try:
                 # We can fallback to dictionaries for SABR easily here as it uses fewer columns
                 dicts_for_sabr = chain_snapshot if isinstance(chain_snapshot, list) else rb.to_pylist()
-                self._sabr.calibrate_from_chain(dicts_for_sabr, forward=spot, ttm=ttm_approx)
+                self._sabr.calibrate_from_chain(dicts_for_sabr, forward=spot, ttm=ttm_years)
                 self._last_sabr_at = time.monotonic()
             except Exception as exc:
                 logger.debug("[L1ComputeReactor] SABR calibration skipped: %s", exc)
@@ -242,7 +264,6 @@ class L1ComputeReactor:
             return self._empty_snapshot(l0_version)
 
         # ── Step 4: Greeks batch compute ──────────────────────────────────────
-        ttm_years = get_trading_ttm_v2_scalar(now)
         t_greeks = time.monotonic()
 
         with self._inst.span_greeks_kernel():
@@ -279,7 +300,15 @@ class L1ComputeReactor:
 
         # ── Step 6: Microstructure composite ──────────────────────────────────
         with self._inst.span_microstructure():
-            micro_sig = self._build_micro_signals(chain_snapshot, spot, now)
+            micro_sig = self._build_micro_signals(
+                chain_snapshot=chain_snapshot, 
+                spot=spot, 
+                now=now,
+                atm_iv=atm_iv,
+                net_gex=agg.net_gex,
+                call_wall=agg.call_wall,
+                put_wall=agg.put_wall
+            )
 
         # ── Step 7: Quality report ─────────────────────────────────────────────
         nan_count = int(np.sum(~np.isfinite(matrix.delta)))
@@ -349,9 +378,15 @@ class L1ComputeReactor:
         chain_snapshot: Union[list[dict], pa.RecordBatch],
         spot: float,
         now: datetime,
+        atm_iv: float,
+        net_gex: float,
+        call_wall: float,
+        put_wall: float,
     ) -> MicroSignals:
-        """Assemble microstructure signals from VPIN, BBO, VolAccel."""
-        # Aggregate VPIN across all tracked symbols
+        """Assemble microstructure signals from VPIN, BBO, VolAccel, and trackers."""
+        sim_clock_mono = time.monotonic()
+        
+        # 1. Base Signals (VPIN, BBO, VolAccel)
         all_vpin_scores = []
         for sym, vpin in self._vpin_map.items():
             sig = vpin.get_signal()
@@ -360,10 +395,8 @@ class L1ComputeReactor:
         composite_vpin = (sum(all_vpin_scores) / len(all_vpin_scores)
                           if all_vpin_scores else 0.0)
 
-        # Per-symbol first VPIN (ATM proxy)
         first_vpin = list(self._vpin_map.values())[0].get_signal() if self._vpin_map else None
 
-        # BBO: aggregate across all tracked symbols
         bbo_snap = self._bbo.get_all_snapshot()
         if bbo_snap:
             avg_imbalance = sum(s.raw_imbalance for s in bbo_snap.values()) / len(bbo_snap)
@@ -373,17 +406,72 @@ class L1ComputeReactor:
         else:
             avg_imbalance = avg_ewma_fast = avg_ewma_slow = avg_persist = 0.0
 
-        # VolAccel
         phase = self._vol_accel.classify_phase(now.hour, now.minute)
-        
         if isinstance(chain_snapshot, pa.RecordBatch):
             total_vol = float(np.sum(chain_snapshot.column("volume").to_numpy()))
+            entries = chain_snapshot.to_pylist()
         else:
             total_vol = sum(float(e.get("volume", 0)) for e in chain_snapshot)
+            entries = chain_snapshot
             
         va_sig = self._vol_accel.update_from_cumulative(total_vol, phase)
-
         regime = (first_vpin.tf_1m.regime if first_vpin else VPINRegime.NORMAL)
+
+        # 2. Advanced Trackers (Phased Migration from Agent B)
+        # 2a. Vanna Flow
+        vanna_result = self._vanna_analyzer.update(
+            spot=spot,
+            atm_iv=atm_iv,
+            net_gex=net_gex,
+            spy_atm_iv=atm_iv,
+            sim_clock_mono=sim_clock_mono,
+        )
+        wall_mult = vanna_result.wall_displacement_multiplier if vanna_result else 1.0
+
+        # 2b. Wall Migration
+        wall_result = self._wall_tracker.update(
+            call_wall=call_wall,
+            put_wall=put_wall,
+            spot=spot,
+            call_wall_volume=0, # Placeholder for now as it needs strike-specific volume
+            put_wall_volume=0,
+            sim_clock_mono=sim_clock_mono,
+            displacement_multiplier=wall_mult,
+        )
+
+        # 2c. IV Velocity & MTF Engine
+        iv_result = self._iv_tracker.update(
+            spot=spot, atm_iv=atm_iv, sim_clock_mono=sim_clock_mono
+        )
+        if atm_iv > 0:
+            for tf, interval in self._MTF_INTERVALS.items():
+                self._mtf_buf[tf].append(atm_iv)
+                if (sim_clock_mono - self._mtf_last_push[tf]) >= interval:
+                    bar_mean = sum(self._mtf_buf[tf]) / len(self._mtf_buf[tf])
+                    self._mtf_iv_engine.update(tf, bar_mean)
+                    self._mtf_buf[tf].clear()
+                    self._mtf_last_push[tf] = sim_clock_mono
+
+        mtf_consensus = self._mtf_iv_engine.compute({
+            "1m":  atm_iv, "5m":  atm_iv, "15m": atm_iv,
+        })
+
+        # 2d. Volume Imbalance & Jump Detection
+        vib_result = self._vib_engine.update(
+            entries, 
+            spot,
+            otm_call_vol=0, # These would ideally be pre-calculated in aggregation
+            otm_put_vol=0,
+            current_cumulative_total_chain_vol=int(total_vol),
+        )
+        jump_result = self._jump_detector.update(spot)
+
+        # 2e. Squeeze Logic
+        vol_accel_val = vib_result.vol_accel_ratio if vib_result else 1.0
+        dealer_squeeze_alert = (
+            vol_accel_val >= settings.vol_accel_squeeze_threshold
+            and net_gex < 0
+        )
 
         return MicroSignals(
             vpin_1m=first_vpin.tf_1m.score if first_vpin else 0.0,
@@ -400,6 +488,18 @@ class L1ComputeReactor:
             vol_accel_elevated=va_sig.is_elevated,
             vol_entropy=va_sig.entropy,
             session_phase=phase.value,
+            # Tracker Results
+            iv_velocity=iv_result.model_dump() if iv_result else None,
+            mtf_consensus=mtf_consensus,
+            iv_confidence=self._iv_tracker.get_confidence(),
+            wall_migration=wall_result.model_dump() if wall_result else None,
+            wall_confidence=self._wall_tracker.get_confidence(),
+            vanna_flow_result=vanna_result.model_dump() if vanna_result else None,
+            vanna_confidence=self._vanna_analyzer.get_confidence(),
+            volume_imbalance=vib_result.model_dump() if vib_result else None,
+            jump_detection=jump_result.model_dump() if jump_result else None,
+            dealer_squeeze_alert=dealer_squeeze_alert,
+            avg_atm_vpin_score=0.0,
         )
 
     @staticmethod

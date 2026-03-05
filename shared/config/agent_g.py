@@ -13,13 +13,13 @@ class AgentGConfig(BaseConfig):
     agent_g_wall_breakout_pct: float = Field(default=0.005)
     fusion_confidence_threshold: float = Field(default=0.5)
 
-    # GEX Thresholds
-    gex_neutral_threshold: float = Field(default=200.0)
-    gex_super_pin_threshold: float = Field(default=1000.0)
-    gex_strong_positive: float = Field(default=500.0)
-    gex_strong_negative: float = Field(default=-500.0)
-    gex_moderate_threshold: float = Field(default=300.0)
-    gex_accel_threshold: float = Field(default=100.0)
+    # GEX Thresholds (In Millions, matching 2026 100B+ normative scale)
+    gex_neutral_threshold: float = Field(default=20000.0)      # 20B
+    gex_super_pin_threshold: float = Field(default=100000.0)   # 100B
+    gex_strong_positive: float = Field(default=50000.0)        # 50B
+    gex_strong_negative: float = Field(default=-50000.0)       # -50B
+    gex_moderate_threshold: float = Field(default=30000.0)     # 30B
+    gex_accel_threshold: float = Field(default=10000.0)        # 10B
 
     # VRP Thresholds
     vrp_baseline_hv: float = Field(default=0.15)

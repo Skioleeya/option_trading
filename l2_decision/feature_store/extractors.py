@@ -27,30 +27,59 @@ from l2_decision.feature_store.store import FeatureSpec
 logger = logging.getLogger(__name__)
 
 
+# ── Parity Helpers ──
+
+def _get_val(obj, key, default=None):
+    """Get value from EnrichedSnapshot object (attribute) or dict (key)."""
+    if hasattr(obj, key): return getattr(obj, key, default)
+    if isinstance(obj, dict): return obj.get(key, default)
+    return default
+
+def _get_agg(obj, key, default=None):
+    """Get aggregate field from EnrichedSnapshot.aggregates or flat dict."""
+    # EnrichedSnapshot: aggregates is a nested dataclass
+    if hasattr(obj, "aggregates"):
+        return getattr(obj.aggregates, key, default)
+    # Legacy dict: aggregates are often flat at top-level
+    if isinstance(obj, dict):
+        return obj.get(key, default)
+    return default
+
+def _get_ms(obj, key, default=None):
+    """Get microstructure field from EnrichedSnapshot.microstructure or nested dict."""
+    if hasattr(obj, "microstructure") and obj.microstructure is not None:
+        return getattr(obj.microstructure, key, default)
+    if isinstance(obj, dict):
+        # Handle both flat and nested legacy microstructure dicts
+        ms = obj.get("microstructure") or obj.get("micro_structure", {})
+        if isinstance(ms, dict):
+            # Check nested state
+            state = ms.get("micro_structure_state")
+            if isinstance(state, dict):
+                return state.get(key, default)
+            return ms.get(key, default)
+    return default
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Stateful extractor helpers (carry deque state for ROC / velocity features)
 # ─────────────────────────────────────────────────────────────────────────────
 
 class _SpotRoCExtractor:
-    """1-minute spot rate-of-change tracker.
-
-    Maintains a sliding window deque of (timestamp, price) pairs.
-    Computes ROC = (latest - oldest) / oldest over the window.
-    """
+    """1-minute spot rate-of-change tracker."""
 
     def __init__(self, window_seconds: float = 60.0) -> None:
         self._window = window_seconds
         self._history: deque[tuple[float, float]] = deque(maxlen=3600)
 
     def __call__(self, snapshot: Any) -> float:
-        spot = getattr(snapshot, "spot", None)
+        spot = _get_val(snapshot, "spot")
         if spot is None or not math.isfinite(spot) or spot <= 0:
             return 0.0
 
         now_mono = time.monotonic()
         self._history.append((now_mono, spot))
 
-        # Prune entries older than window
         cutoff = now_mono - self._window
         while self._history and self._history[0][0] < cutoff:
             self._history.popleft()
@@ -59,34 +88,23 @@ class _SpotRoCExtractor:
             return 0.0
 
         oldest_price = self._history[0][1]
-        if oldest_price <= 0:
-            return 0.0
-
-        return (spot - oldest_price) / oldest_price  # fractional ROC
+        if oldest_price <= 0: return 0.0
+        return (spot - oldest_price) / oldest_price
 
     def reset(self) -> None:
         self._history.clear()
 
 
 class _IVVelocityExtractor:
-    """1-minute IV velocity (rate of change of ATM IV).
-
-    Tracks how fast implied volatility is changing, scaled to [-1, +1]
-    via soft clamp using a 200bps/min reference velocity.
-    """
-
-    _REF_VELOCITY: float = 0.02   # 200bps/min in annualized IV units
+    """1-minute IV velocity (rate of change of ATM IV)."""
+    _REF_VELOCITY: float = 0.02
 
     def __init__(self, window_seconds: float = 60.0) -> None:
         self._window = window_seconds
         self._history: deque[tuple[float, float]] = deque(maxlen=3600)
 
     def __call__(self, snapshot: Any) -> float:
-        try:
-            iv = snapshot.aggregates.atm_iv
-        except AttributeError:
-            return 0.0
-
+        iv = _get_agg(snapshot, "atm_iv")
         if iv is None or not math.isfinite(iv) or iv <= 0:
             return 0.0
 
@@ -101,9 +119,7 @@ class _IVVelocityExtractor:
             return 0.0
 
         oldest_iv = self._history[0][1]
-        velocity = (iv - oldest_iv) / self._window  # IV units per second
-
-        # Scale to per-minute and soft-clamp to [-1, +1]
+        velocity = (iv - oldest_iv) / self._window
         velocity_per_min = velocity * 60.0
         clamped = velocity_per_min / self._REF_VELOCITY
         return max(-1.0, min(1.0, clamped))
@@ -113,11 +129,7 @@ class _IVVelocityExtractor:
 
 
 class _WallMigrationSpeedExtractor:
-    """5-second call/put wall migration speed feature.
-
-    Measures how fast the gamma wall (call or put) is shifting,
-    normalized by the spot price.
-    """
+    """5-second call/put wall migration speed feature."""
 
     def __init__(self, window_seconds: float = 30.0) -> None:
         self._window = window_seconds
@@ -125,12 +137,9 @@ class _WallMigrationSpeedExtractor:
         self._put_history: deque[tuple[float, float]] = deque(maxlen=600)
 
     def __call__(self, snapshot: Any) -> float:
-        try:
-            call_wall = snapshot.aggregates.call_wall
-            put_wall = snapshot.aggregates.put_wall
-            spot = snapshot.spot
-        except AttributeError:
-            return 0.0
+        call_wall = _get_agg(snapshot, "call_wall", 0.0)
+        put_wall = _get_agg(snapshot, "put_wall", 0.0)
+        spot = _get_val(snapshot, "spot", 0.0)
 
         if not all(math.isfinite(v) and v > 0 for v in (call_wall, put_wall, spot)):
             return 0.0
@@ -141,21 +150,16 @@ class _WallMigrationSpeedExtractor:
 
         cutoff = now_mono - self._window
         for h in (self._call_history, self._put_history):
-            while h and h[0][0] < cutoff:
-                h.popleft()
+            while h and h[0][0] < cutoff: h.popleft()
 
         def _speed(hist: deque) -> float:
-            if len(hist) < 2:
-                return 0.0
-            old_val = hist[0][1]
-            new_val = hist[-1][1]
+            if len(hist) < 2: return 0.0
+            old_val, new_val = hist[0][1], hist[-1][1]
             elapsed = hist[-1][0] - hist[0][0]
-            if elapsed < 0.1 or old_val <= 0:
-                return 0.0
-            return abs((new_val - old_val) / old_val / elapsed)  # fractional speed per sec
+            if elapsed < 0.1 or old_val <= 0: return 0.0
+            return abs((new_val - old_val) / old_val / elapsed)
 
         speed = _speed(self._call_history) + _speed(self._put_history)
-        # Normalize: 0.001/s (0.1%/s) maps to 1.0
         return min(1.0, speed / 0.001)
 
     def reset(self) -> None:
@@ -164,50 +168,35 @@ class _WallMigrationSpeedExtractor:
 
 
 class _SVolCorrelationExtractor:
-    """15-minute spot-vol correlation feature.
-
-    Estimates Pearson r between spot moves and IV changes over 15min window.
-    Negative correlation (normal regime) → -1; Positive (DANGER_ZONE) → +1.
-    """
+    """15-minute spot-vol correlation feature."""
 
     def __init__(self, window_seconds: float = 900.0) -> None:
         self._window = window_seconds
-        self._history: deque[tuple[float, float, float]] = deque(maxlen=10000)  # (ts, spot, iv)
+        self._history: deque[tuple[float, float, float]] = deque(maxlen=10000)
 
     def __call__(self, snapshot: Any) -> float:
-        try:
-            spot = snapshot.spot
-            iv = snapshot.aggregates.atm_iv
-        except AttributeError:
-            return 0.0
+        spot = _get_val(snapshot, "spot")
+        iv = _get_agg(snapshot, "atm_iv")
 
-        if not (math.isfinite(spot) and spot > 0 and math.isfinite(iv) and iv > 0):
+        if not (math.isfinite(spot or 0.0) and (spot or 0) > 0 and math.isfinite(iv or 0.0) and (iv or 0) > 0):
             return 0.0
 
         now_mono = time.monotonic()
         self._history.append((now_mono, spot, iv))
 
         cutoff = now_mono - self._window
-        while self._history and self._history[0][0] < cutoff:
-            self._history.popleft()
+        while self._history and self._history[0][0] < cutoff: self._history.popleft()
 
-        if len(self._history) < 30:
-            return 0.0
+        if len(self._history) < 30: return 0.0
 
-        spots = [x[1] for x in self._history]
-        ivs = [x[2] for x in self._history]
-
-        # Pearson correlation
+        spots, ivs = [x[1] for x in self._history], [x[2] for x in self._history]
         n = len(spots)
-        mean_s = sum(spots) / n
-        mean_iv = sum(ivs) / n
-        num = sum((s - mean_s) * (iv - mean_iv) for s, iv in zip(spots, ivs))
-        std_s = math.sqrt(sum((s - mean_s) ** 2 for s in spots) / n)
-        std_iv = math.sqrt(sum((iv - mean_iv) ** 2 for iv in ivs) / n)
+        mean_s, mean_iv = sum(spots)/n, sum(ivs)/n
+        num = sum((s - mean_s) * (v - mean_iv) for s, v in zip(spots, ivs))
+        std_s = math.sqrt(sum((s - mean_s)**2 for s in spots)/n)
+        std_iv = math.sqrt(sum((v - mean_iv)**2 for v in ivs)/n)
 
-        if std_s < 1e-9 or std_iv < 1e-9:
-            return 0.0
-
+        if std_s < 1e-9 or std_iv < 1e-9: return 0.0
         return max(-1.0, min(1.0, num / (n * std_s * std_iv)))
 
     def reset(self) -> None:
@@ -215,11 +204,7 @@ class _SVolCorrelationExtractor:
 
 
 class _MTFConsensusExtractor:
-    """Multi-timeframe IV consensus score [-1, +1].
-
-    Combines 3 IV velocity timeframes (1m/5m/15m) into a consensus:
-    All three agree → ±1.0; All neutral → 0.0.
-    """
+    """Multi-timeframe IV consensus score [-1, +1]."""
 
     def __init__(self) -> None:
         self._iv1m = _IVVelocityExtractor(window_seconds=60.0)
@@ -227,81 +212,49 @@ class _MTFConsensusExtractor:
         self._iv15m = _IVVelocityExtractor(window_seconds=900.0)
 
     def __call__(self, snapshot: Any) -> float:
-        v1 = self._iv1m(snapshot)
-        v5 = self._iv5m(snapshot)
-        v15 = self._iv15m(snapshot)
-        # Weighted average: shorter timeframes get higher weight for 0DTE
+        v1, v5, v15 = self._iv1m(snapshot), self._iv5m(snapshot), self._iv15m(snapshot)
         consensus = 0.5 * v1 + 0.3 * v5 + 0.2 * v15
         return max(-1.0, min(1.0, consensus))
 
     def reset(self) -> None:
-        self._iv1m.reset()
-        self._iv5m.reset()
-        self._iv15m.reset()
+        self._iv1m.reset(); self._iv5m.reset(); self._iv15m.reset()
 
 
 class _Skew25dExtractor:
-    """25-delta normalized skew: (put_IV_25d - call_IV_25d) / atm_IV.
-
-    Uses the full option chain from the snapshot to find approx 25-delta strikes.
-    Falls back to 0.0 if chain is not available.
-    """
+    """25-delta normalized skew: (put_IV_25d - call_IV_25d) / atm_IV."""
 
     def __call__(self, snapshot: Any) -> float:
-        try:
-            chain = snapshot.chain
-            spot = snapshot.spot
-            atm_iv = snapshot.aggregates.atm_iv
-        except AttributeError:
+        chain = _get_val(snapshot, "chain")
+        spot = _get_val(snapshot, "spot")
+        atm_iv = _get_agg(snapshot, "atm_iv")
+
+        if not (chain is not None and spot and spot > 0 and atm_iv and atm_iv > 0):
             return 0.0
 
-        if not (chain is not None and math.isfinite(spot) and spot > 0
-                and math.isfinite(atm_iv) and atm_iv > 0):
-            return 0.0
-
-        # Try to get chain as list of dicts
         try:
             import pyarrow as pa
-            if isinstance(chain, pa.RecordBatch):
-                chain_list = chain.to_pylist()
-            else:
-                chain_list = list(chain)
-        except (ImportError, Exception):
-            return 0.0
+            chain_list = chain.to_pylist() if isinstance(chain, pa.RecordBatch) else list(chain)
+        except: return 0.0
 
-        if not chain_list:
-            return 0.0
+        if not chain_list: return 0.0
 
-        # Find OTM call and put nearest to 25-delta by moneyness proxy
-        # Approx: 25Δ call at ~2.5% OTM, 25Δ put at ~2.5% OTM
         target_moneyness = 0.025
-        call_ivs = []
-        put_ivs = []
+        call_ivs, put_ivs = [], []
 
         for row in chain_list:
             try:
                 strike = float(row.get("strike", 0.0))
                 iv = float(row.get("implied_volatility", 0.0))
                 otype = str(row.get("type", "")).upper()
-                if not (math.isfinite(strike) and strike > 0
-                        and math.isfinite(iv) and iv > 0):
-                    continue
+                if not (strike > 0 and iv > 0): continue
                 m = abs(strike - spot) / spot
                 if abs(m - target_moneyness) < 0.01:
-                    if "CALL" in otype:
-                        call_ivs.append(iv)
-                    elif "PUT" in otype:
-                        put_ivs.append(iv)
-            except (TypeError, ValueError):
-                continue
+                    if "CALL" in otype: call_ivs.append(iv)
+                    elif "PUT" in otype: put_ivs.append(iv)
+            except: continue
 
-        if not call_ivs or not put_ivs:
-            return 0.0
-
-        put_iv_25d = sum(put_ivs) / len(put_ivs)
-        call_iv_25d = sum(call_ivs) / len(call_ivs)
-        skew = (put_iv_25d - call_iv_25d) / atm_iv
-        return max(-1.0, min(1.0, skew))
+        if not call_ivs or not put_ivs: return 0.0
+        return max(-1.0, min(1.0, (sum(put_ivs)/len(put_ivs) - sum(call_ivs)/len(call_ivs)) / atm_iv))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -309,15 +262,7 @@ class _Skew25dExtractor:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def build_default_extractors() -> list[FeatureSpec]:
-    """Build the 12 pre-defined feature specs for L2.
-
-    Stateful extractors (ROC, velocity, correlation) carry their own deque
-    state. These objects must persist across ticks — do not re-instantiate.
-
-    Returns:
-        List of FeatureSpec ready for FeatureStore.register_bulk().
-    """
-    # Instantiate stateful extractors once
+    """Build the 12 pre-defined feature specs for L2."""
     spot_roc = _SpotRoCExtractor(window_seconds=60.0)
     iv_vel = _IVVelocityExtractor(window_seconds=60.0)
     wall_speed = _WallMigrationSpeedExtractor(window_seconds=30.0)
@@ -325,8 +270,9 @@ def build_default_extractors() -> list[FeatureSpec]:
     mtf_consensus = _MTFConsensusExtractor()
     skew_25d = _Skew25dExtractor()
 
+    from shared.config import settings
+
     specs = [
-        # 1. Spot momentum: 1-min ROC (fractional)
         FeatureSpec(
             name="spot_roc_1m",
             extractor=spot_roc,
@@ -334,50 +280,44 @@ def build_default_extractors() -> list[FeatureSpec]:
             description="1-minute spot price rate-of-change (fractional)",
             tags=["momentum", "spot"],
         ),
-        # 2. ATM implied volatility (raw)
         FeatureSpec(
             name="atm_iv",
-            extractor=lambda s: _safe(lambda: s.aggregates.atm_iv),
+            extractor=lambda s: _get_agg(s, "atm_iv", 0.0),
             ttl_seconds=1.0,
             description="ATM implied volatility (annualized)",
             tags=["iv", "regime"],
         ),
-        # 3. Net GEX normalized to [-1, +1] via $1B reference
         FeatureSpec(
             name="net_gex_normalized",
-            extractor=lambda s: _safe(lambda: max(-1.0, min(1.0, s.aggregates.net_gex / 1e9))),
+            extractor=lambda s: _safe(lambda: max(-1.0, min(1.0, _get_agg(s, "net_gex", 0.0) / 1e9))),
             ttl_seconds=1.0,
             description="Net GEX normalized by $1B reference",
             tags=["gex", "regime"],
         ),
-        # 4. VPIN composite toxicity score
         FeatureSpec(
             name="vpin_composite",
-            extractor=lambda s: _safe(lambda: s.microstructure.vpin_composite),
+            extractor=lambda s: _get_ms(s, "vpin_composite", 0.0),
             ttl_seconds=1.0,
             description="Composite VPIN toxicity score [0, 1]",
             tags=["microstructure", "flow"],
         ),
-        # 5. BBO imbalance EWMA (fast)
         FeatureSpec(
             name="bbo_imbalance_ewma",
-            extractor=lambda s: _safe(lambda: max(-1.0, min(1.0, s.microstructure.bbo_ewma_fast))),
+            extractor=lambda s: _safe(lambda: max(-1.0, min(1.0, _get_ms(s, "bbo_ewma_fast", 0.0)))),
             ttl_seconds=1.0,
             description="BBO imbalance fast EWMA, clamped to [-1, 1]",
             tags=["microstructure", "orderbook"],
         ),
-        # 6. Call wall distance (fractional, positive = wall above spot)
         FeatureSpec(
             name="call_wall_distance",
             extractor=lambda s: _safe(
-                lambda: (s.aggregates.call_wall - s.spot) / s.spot
-                if s.spot > 0 else 0.0
+                lambda: (_get_agg(s, "call_wall", 0.0) - _get_val(s, "spot", 0.0)) / _get_val(s, "spot", 1.0)
+                if _get_val(s, "spot", 0.0) > 0 else 0.0
             ),
             ttl_seconds=1.0,
             description="(call_wall - spot) / spot — distance to resistance",
             tags=["gex", "structure"],
         ),
-        # 7. IV velocity 1-minute
         FeatureSpec(
             name="iv_velocity_1m",
             extractor=iv_vel,
@@ -385,7 +325,6 @@ def build_default_extractors() -> list[FeatureSpec]:
             description="1-min IV velocity, scaled to [-1, +1]",
             tags=["iv", "momentum"],
         ),
-        # 8. Wall migration speed (combined call+put wall drift)
         FeatureSpec(
             name="wall_migration_speed",
             extractor=wall_speed,
@@ -393,7 +332,6 @@ def build_default_extractors() -> list[FeatureSpec]:
             description="Call+put wall migration speed, normalized [0, 1]",
             tags=["gex", "structure", "momentum"],
         ),
-        # 9. Spot-Vol 15-min Pearson correlation
         FeatureSpec(
             name="svol_correlation_15m",
             extractor=svol_corr,
@@ -401,17 +339,15 @@ def build_default_extractors() -> list[FeatureSpec]:
             description="15-min Pearson correlation (spot, IV). Negative=normal.",
             tags=["vanna", "regime"],
         ),
-        # 10. Volume acceleration ratio
         FeatureSpec(
             name="vol_accel_ratio",
             extractor=lambda s: _safe(
-                lambda: max(-1.0, min(1.0, (s.microstructure.vol_accel_ratio - 1.0)))
+                lambda: max(-1.0, min(1.0, (_get_ms(s, "vol_accel_ratio", 1.0) - 1.0)))
             ),
             ttl_seconds=1.0,
             description="Vol accel ratio minus 1.0, clamped to [-1,+1]",
             tags=["microstructure", "momentum"],
         ),
-        # 11. 25-delta skew (normalized by ATM IV)
         FeatureSpec(
             name="skew_25d_normalized",
             extractor=skew_25d,
@@ -419,13 +355,35 @@ def build_default_extractors() -> list[FeatureSpec]:
             description="Normalized 25-delta skew: (put25d - call25d) / atm_iv",
             tags=["skew", "regime"],
         ),
-        # 12. MTF IV consensus
         FeatureSpec(
             name="mtf_consensus_score",
             extractor=mtf_consensus,
             ttl_seconds=5.0,
             description="Multi-timeframe IV velocity consensus [-1, +1]",
             tags=["iv", "mtf", "regime"],
+        ),
+        FeatureSpec(
+            name="net_charm",
+            extractor=lambda s: _get_agg(s, "net_charm", 0.0),
+            ttl_seconds=1.0,
+            description="Aggregated net charm exposure across the chain",
+            tags=["gex", "charm", "sensitivity"],
+        ),
+        FeatureSpec(
+            name="net_vanna",
+            extractor=lambda s: _get_agg(s, "net_vanna", 0.0),
+            ttl_seconds=1.0,
+            description="Aggregated net vanna exposure across the chain",
+            tags=["gex", "vanna", "sensitivity"],
+        ),
+        FeatureSpec(
+            name="vol_risk_premium",
+            extractor=lambda s: _safe(
+                lambda: (_get_agg(s, "atm_iv", 0.0) * 100.0) - settings.vrp_baseline_hv
+            ),
+            ttl_seconds=1.0,
+            description="ATM IV (%) minus baseline HV (%)",
+            tags=["iv", "regime", "vrp"],
         ),
     ]
     return specs

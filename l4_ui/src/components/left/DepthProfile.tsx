@@ -37,20 +37,32 @@ export const DepthProfile: React.FC<Props> = memo(({ rows: propRows, macroVolume
 
     const safeRows = rows ?? []
     const spotRef = useRef<HTMLDivElement>(null)
-    const currentSpot = safeRows.find(r => r.is_spot)?.strike
+    const currentSpot = React.useMemo(() => safeRows.find(r => r.is_spot)?.strike, [safeRows])
 
     useEffect(() => {
         if (spotRef.current) {
-            spotRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            // Speed up scroll behavior to prevent 'fighting' with 1Hz updates
+            spotRef.current.scrollIntoView({ behavior: 'auto', block: 'center' })
         }
     }, [currentSpot])
 
     const hasMinimap = Object.keys(macroVolumeMap).length > 0
-    const maxVol = hasMinimap ? Math.max(...Object.values(macroVolumeMap), 1) : 1
-    const sortedStrikes = hasMinimap ? Object.keys(macroVolumeMap).map(Number).sort((a, b) => b - a) : []
+    const { maxVol, sortedStrikes } = React.useMemo(() => {
+        if (!hasMinimap) return { maxVol: 1, sortedStrikes: [] }
+        const values = Object.values(macroVolumeMap)
+        return {
+            maxVol: Math.max(...values, 1),
+            sortedStrikes: Object.keys(macroVolumeMap).map(Number).sort((a, b) => b - a)
+        }
+    }, [macroVolumeMap, hasMinimap])
 
-    const maxPutPct = safeRows.length > 0 ? Math.max(...safeRows.map(r => r.put_pct), 0) : 0
-    const maxCallPct = safeRows.length > 0 ? Math.max(...safeRows.map(r => r.call_pct), 0) : 0
+    const { maxPutPct, maxCallPct } = React.useMemo(() => {
+        if (safeRows.length === 0) return { maxPutPct: 0, maxCallPct: 0 }
+        return {
+            maxPutPct: Math.max(...safeRows.map(r => r.put_pct), 0),
+            maxCallPct: Math.max(...safeRows.map(r => r.call_pct), 0)
+        }
+    }, [safeRows])
 
     if (safeRows.length === 0) {
         return <div className="flex flex-1 min-h-0 w-full bg-[#060606] items-center justify-center"><span className="text-[#52525b] text-[10px]">—</span></div>
