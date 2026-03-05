@@ -19,14 +19,14 @@ The current L2/L3 pipeline processes individual strikes independently using a Z-
 ## Decisions
 
 ### 1. Unified Impact Metric (OFII)
-Implement a composite score in `L2 (Decision)` and `L3 (Assembly)` to unify diverse flow signals:
-- **Algorithm**: $OFII = \frac{|Flow_{USD}| \times |\Gamma| \times e^{-\tau}}{MarketDepth}$
-- **Rationale**: USD Flow measures raw power; Gamma measures price sensitivity; $e^{-\tau}$ ($t$=time to close) provides a nonlinear boost to 0DTE threats at the end of the session.
+Implement a composite score in `L2 (Decision)` (via `DEGComposer`) to unify diverse flow signals:
+- **Algorithm**: $OFII = \frac{(|Flow_D| + |Flow_E| + |Flow_G|) \times |\Gamma| \times e^{-\tau}}{MarketDepth}$
+- **Rationale**: $Flow_{USD}$ is the aggregate of all active engines; Gamma measures price sensitivity; $e^{-\tau}$ provides a boost to 0DTE threats.
 
 ### 2. Strike Clustering (Sweep Recognition)
 In `DEGComposer`, implement a spatial reinforcement pass:
-- **Logic**: If an active strike $S_i$ has two neighbors within $\pm 2$ strikes that also exhibit high activity (Z-Score $> 1.5$), apply a **$1.25x$ Reinforcement Multiplier** to the entire cluster.
-- **Rationale**: Institutional sweeps target liquid bands; reinforcing the cluster prevents "signal fragmentation" in the UI.
+- **Logic**: If an active strike $S_i$ has two neighbors within $\pm 2$ strikes that also exhibit high activity ($|z| > 1.5$), set `is_sweep = True` and apply a **$1.25x$ Multiplier** to its final `flow_deg`.
+- **Rationale**: Institutional sweeps target liquid bands; reinforcing the cluster prevents signal fragmentation.
 
 ### 3. Schema Expansion
 Modify `FlowEngineOutput` to include `impact_index: float`.

@@ -75,6 +75,8 @@ export interface ActiveOption {
     volume: number
     turnover: number
     flow: number
+    impact_index?: number
+    is_sweep?: boolean
     // DEG-specific extended fields
     flow_deg_formatted?: string
     flow_volume_label?: string

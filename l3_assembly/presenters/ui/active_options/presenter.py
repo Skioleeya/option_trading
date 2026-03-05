@@ -84,17 +84,20 @@ class ActiveOptionsPresenter:
         spot: float,
         atm_iv: float,
         gex_regime: str = "NEUTRAL",
+        ttm_seconds: float | None = None,
         redis: Any | None = None,
         limit: int = 5,
     ) -> None:
         """Run the full D+E+G pipeline and update the background cache.
+        
+        Refactored to prioritize institutional impact (OFII) over raw Z-Score.
 
         Args:
             chain:      Raw option chain (from OptionChainBuilder).
             spot:       SPY spot price.
             atm_iv:     ATM implied volatility (from GreeksExtractor).
             gex_regime: Current GEX regime string for adaptive weighting.
-            redis:      Async Redis client (None → G engine degrades gracefully).
+            redis:      Async Redis client (None -> G engine degrades gracefully).
             limit:      Number of rows to return (default 5).
         """
         # 1. Filter by minimum volume
@@ -137,10 +140,11 @@ class ActiveOptionsPresenter:
             inputs_by_symbol=inputs_by_symbol,
             is_charm_surge=charm_surge,
             gex_regime=gex_regime,
+            ttm_seconds=ttm_seconds,
         )
 
-        # 6. Sort by |flow_deg| descending and slice to limit
-        top = sorted(outputs, key=lambda o: abs(o.flow_deg), reverse=True)[:limit]
+        # 6. Sort by OFII impact descending and slice to limit
+        top = sorted(outputs, key=lambda o: o.impact_index, reverse=True)[:limit]
 
         # 7. Format for frontend and store
         self._latest_payload = [self._format_row(o) for o in top]
@@ -158,13 +162,15 @@ class ActiveOptionsPresenter:
             "implied_volatility": o.implied_volatility,
             "volume": o.volume,
             "turnover": o.turnover,
-            "flow": o.flow_deg,                        # Composite Z-Score for colour logic
+            "flow": o.flow_deg,
+            "impact_index": o.impact_index,            # NEW: Absolute threat metric
+            "is_sweep": o.is_sweep,                    # NEW: Strike clustering flag
 
             # DEG-specific extended fields
-            "flow_deg_formatted": _format_flow(o.flow_d + o.flow_e + o.flow_g),  # heuristic $ label
+            "flow_deg_formatted": _format_flow(o.flow_d + o.flow_e + o.flow_g),
             "flow_volume_label": _format_volume(o.volume),
             "flow_color": flow_color,
-            "flow_glow": glow,
+            "flow_glow": glow if not o.is_sweep else "shadow-[0_0_15px_rgba(255,255,255,0.7)] animate-pulse",
             "flow_intensity": o.flow_intensity,
             "flow_direction": o.flow_direction,
 

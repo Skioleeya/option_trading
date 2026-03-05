@@ -210,4 +210,6 @@ class GreeksEngine:
         for symbol, greeks in results:
             self._store.apply_greeks(symbol, greeks)
 
+        # Include precise TTM for downstream L2/L3 institutional calculations
+        agg["ttm_seconds"] = t_years * (252 * 23400)  # Convert back to trading seconds
         return agg

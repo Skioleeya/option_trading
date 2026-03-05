@@ -164,6 +164,7 @@ class DecisionOutput:
     latency_ms: float
     version: int                            # L0 MVCC version propagated from L1
     computed_at: datetime
+    max_impact: float = 0.0                 # Peak OFII across the entire chain
     raw_telemetry: dict[str, float] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -177,6 +178,7 @@ class DecisionOutput:
             "latency_ms": round(self.latency_ms, 2),
             "version": self.version,
             "computed_at": self.computed_at.isoformat(),
+            "max_impact": round(self.max_impact, 4),
         }
 
     @property
@@ -273,6 +275,7 @@ class DecisionAuditEntry:
     shap_top5: list[tuple[str, float]]          # [(feature_name, shap_value), ...]
     latency_ms: float
     l0_version: int
+    max_impact: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -288,4 +291,5 @@ class DecisionAuditEntry:
             "shap_top5": list(self.shap_top5),
             "latency_ms": self.latency_ms,
             "l0_version": self.l0_version,
+            "max_impact": self.max_impact,
         }

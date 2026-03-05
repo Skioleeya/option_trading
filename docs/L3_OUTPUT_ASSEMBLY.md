@@ -2,7 +2,7 @@
 
 > **定位**: L3 是系统的发布中枢——负责消费 L2 决策信号、L1 量化计算快照以及 L0 元数据，将其高效打包为全量/增量 Payload 结构，再通过广播轮询器向前端 WebSocket 客户端安全推送。
 >
-> **架构状态 (v3.1)**: 已摒弃落后的 `SnapshotBuilder` (Python 字典深拷贝满天飞)，完全迁移至 **"Write-on-Copy (COW) Assembler + 强类型 Pydantic Presenters + Delta Encoder 增量编码 + 并发 Governor"**。
+> **架构状态 (v4.0)**: 已升级为**威胁敏感型组装器 (Threat-Aware Assembler)**。`ActiveOptionsPresenter` 现在由绝对威胁指数 (OFII) 驱动排序，并为扫单行自动注入 `is_sweep` 物理视觉标识。
 
 ---
 
@@ -54,13 +54,16 @@
 
 负责把 L1/L2 的裸数据“梳妆打扮”为前台使用的 UI 部件（MetricCard 等）：
 - **DepthProfilePresenterV2**：最为复杂，接收 100 档全链 Greeks 数据。内嵌 EMA 2-Tier 收敛系统计算 Gamma Profile。利用 `STRIKE_COUNT` (14 档) 窗口进行裁剪平滑，阻断 NaN/Inf 无效数据。
-- **其它 Presenters**：含 `MicroStats`, `TacticalTriad`, `WallMigration`, `MTFFlow` 等，负责封装 Badge/Tooltip 元信息供 UI 组件渲染。
+- **ActiveOptionsPresenter (v4.0 演进)**：全面采用 OFII 作为顶层排序权重。负责为前端生成包含 `impact_index` 和 `is_sweep` 字段的 UI 负载。实现跨行数据横向对比，将“最高绝对威胁”置顶，而非单纯的成交量。
+- **其它 Presenters**：含 `MicroStats`, `TacticalTriad`, `WallMigration`, `MTFFlow` 等。
 
 ## 4. 增量更新 (Field Delta Encoding)
 
 为了避免 1 Hz 高频广播对 WebSocket 带宽的摧残引发堵塞（尤其是客户端背压引起后端 OOM）：
 - 只要上游 Snapshot 发生计算循环，`BroadcastGovernor` 会使用 `FieldDeltaEncoder` 同 `_last_payload` 比对。
 - **1Hz 实时同步与 `agent_g_data` 嵌套**：针对全量/增量负载不匹配问题，已将 `net_gex`, `gamma_walls`, `gamma_flip_level`, `atm_iv` 聚合在 `agent_g_data` 容器下。`FieldDeltaEncoder` 现在能正确识别并下发这些顶层字段的差异。
+- **视觉阈值裁剪 (Visual Thresholding)**：根据 2025 量化前端标准，delta 更新时仅下发离现价 (Spot) ±5% 以内的行，以及关键“英雄 Strike”（如 Flip Level, Walls）。此举将增量数据量压低了 93%。
+- **精度强制归约 (Precision Rounding)**：所有浮点数值在 L3 序列化阶段强制执行 `round(x, 4)`，极大降低了 JSON 序列化和浏览器主线程解析的长尾开销。
 - 如果数据没有突变（例如周末停盘、夜盘断流），生成并推送轻量级 Keepalive / Delta Payload。
 - 设计上附带 30s 的强制全量快照 (Full Flush) 防错纠偏机制。
 

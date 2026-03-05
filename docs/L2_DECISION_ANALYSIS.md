@@ -2,7 +2,7 @@
 
 > **定位**: L2 是系统的决策中枢——消费 L1 的 Greeks 快照与微观结构信号，运行特征提取与融合引擎，随后通过护栏链（Guard Rails）输出机构级可执行交易信号。
 >
-> **架构状态 (v3.1)**: 已从老旧的 "Agent单体硬编码 + 动态权重" 模式，成功重构为 **Feature Store (TTL 状态化) + 多路独立 Signal Generators + 护栏模式 (Guard Rails Chain)**。
+> **架构状态 (v4.0)**: 已从 "独立信号引擎" 演进为**绝对威胁建模引擎**。新增 `DEGComposer` v4.0 支持绝对威胁指数 (OFII)、空间档位聚类 (Institutional Sweep Detector) 以及动态资金流速特征提取。
 >
 > **2026 Frontier Audit**: 经 2026 实证审计，L2 的 Agent 融合权重模型与 0DTE 避险决策链被评定为**全球一流前沿实践**，具备极高的时效性与机构级博弈鲁棒性。
 
@@ -46,9 +46,16 @@
 
 彻底解决了特征提取的散乱问题，将状态化数据的维护隔离在 `feature_store/` 内：
 - **TTL Cache**：管理历史状态与差分（例如计算 1min ROC 需要前序 Tick）。支持 `FeatureSpec` 声明式注册。
-- **内置 12+ 标准化特征**：包括动量 ROC、IV 及其速度、VPIN 毒性、Wall 距离、多时间流强度等。所有提取器已通过内置 `_get_val`/`_get_agg` 助手实现了对 v3.1 `EnrichedSnapshot` 对象与 v3.0 `dict` 的双重兼容（L2 鲁棒性硬化）。
+- **内置特征与提取 (v4.0 增强)**：包括动量 ROC、IV 及其速度、VPIN 毒性、Wall 距离、多时间流强度等。
+  - `TurnoverVelocityExtractor`: 实时测量机构资金的秒级流入流出速率 ($/sec)。
+  - `MaxImpactExtractor`: 抓取全链最高绝对威胁点（OFII 代理值）。
+  - 所有提取器已实现对 `EnrichedSnapshot` 对象与 `dict` 的双重兼容。
 
 ## 3. 信号生成与融合 (Signals & Fusion)
+
+- **Institutional Upgrade (v4.0 核心逻辑)**：
+  - `OFII 算法`: 实现 $OFII = (|Flow_{USD}| \times |\Gamma| \times e^{-\tau}) / MarketDepth$，将相对信号转化为物理威胁规模。
+  - `空间极向聚类 (Sweeps)`: `InstitutionalSweepDetector` 通过扫描 $\pm 2$ 档位活跃度，识别机构多行扫单行为。
 
 - **信号生成器**：所有模块遵循 `SignalGeneratorBase` 协议，输出纯净的 `[-1.0, 1.0]` 区间 `RawSignal`：
   - `MomentumSignal`: VWAP 锚定 spot 动量
@@ -57,7 +64,7 @@
   - `FlowAnalyzer` / `MicroFlow`: 整合 L1 推送的 `iv_velocity` 与 `vanna_flow` 聚合结论。
   - `JumpSentinel`: 波动率突破监控，映射自 L1 `JumpDetector`。
 
-- **Agent 瘦身 (v3.1 Refine)**：已彻底剥离 `AgentB1` 与 `AgentG` 内冗余的 UI 表现层逻辑（如 Skew Dynamics 近似计算、Tactical Triad 映射）。L2 Agent 现在仅负责输出核心决策信号，所有 UI 渲染所需的微观结构指标由 L3 层通过 L1 `EnrichedSnapshot` 直接提取，确保了决策层的纯净度。
+- **Agent 瘦身 (v3.1/v4.0 Refine)**：已彻底剥离 `AgentB1` 与 `AgentG` 内冗余的 UI 表现层逻辑。L2 Agent 现在仅负责输出核心决策信号，所有 UI 渲染所需的微观结构指标由 L3 层通过 L1 `EnrichedSnapshot` 直接提取，确保了决策层的纯净度。
 
 - **Fusion Engine**：通过 `IVRegime` （波动率制度）判定当前环境，调用对应的融合查表。
 - **Attention Fusion** (储备库): 支持基于 Numpy Softmax 的动态权重机制以及 Platt Scaling 置信度校准。

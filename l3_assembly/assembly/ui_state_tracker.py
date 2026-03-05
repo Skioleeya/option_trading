@@ -150,7 +150,11 @@ class UIStateTracker:
         momentum_direction = "NEUTRAL"
         try:
             if decision and hasattr(decision, "signal_summary"):
-                momentum_direction = decision.signal_summary.get("momentum_signal", "NEUTRAL")
+                mom_sig = decision.signal_summary.get("momentum_signal", "NEUTRAL")
+                if isinstance(mom_sig, dict):
+                    momentum_direction = mom_sig.get("direction", "NEUTRAL")
+                else:
+                    momentum_direction = str(mom_sig)
         except AttributeError:
             pass
 
@@ -174,8 +178,11 @@ class UIStateTracker:
             }
         else:
             # Fallback for legacy dict snapshots
-            ms_raw = snapshot.get("micro_structure", {}).get("micro_structure_state") or \
-                     snapshot.get("microstructure", {})
+            if isinstance(snapshot, dict):
+                ms_raw = snapshot.get("micro_structure", {}).get("micro_structure_state") or \
+                         snapshot.get("microstructure", {})
+            else:
+                ms_raw = {}
             if isinstance(ms_raw, dict):
                 ms_out = ms_raw
 

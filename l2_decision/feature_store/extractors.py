@@ -167,6 +167,79 @@ class _WallMigrationSpeedExtractor:
         self._put_history.clear()
 
 
+class _TurnoverVelocityExtractor:
+    """Measures the speed of turnover accumulation (institutional pressure)."""
+
+    def __init__(self, window_seconds: float = 60.0) -> None:
+        self._window = window_seconds
+        self._history: deque[tuple[float, float]] = deque(maxlen=3600)
+
+    def __call__(self, snapshot: Any) -> float:
+        # Aggregate turnover across the entire chain
+        chain = _get_val(snapshot, "chain")
+        if chain is None:
+            return 0.0
+
+        try:
+            import pyarrow as pa
+            if isinstance(chain, pa.RecordBatch):
+                # Use pyarrow optimized sum if possible
+                turnover = float(pa.compute.sum(chain.column("turnover")).as_py())
+            else:
+                turnover = sum(float(row.get("turnover", 0.0)) for row in chain)
+        except Exception:
+            return 0.0
+
+        now_mono = time.monotonic()
+        self._history.append((now_mono, turnover))
+
+        cutoff = now_mono - self._window
+        while self._history and self._history[0][0] < cutoff:
+            self._history.popleft()
+
+        if len(self._history) < 2:
+            return 0.0
+
+        delta_t = self._history[-1][0] - self._history[0][0]
+        delta_v = self._history[-1][1] - self._history[0][1]
+
+        if delta_t < 0.1:
+            return 0.0
+
+        # Returns USD per second of institutional turnover
+        return delta_v / delta_t
+
+    def reset(self) -> None:
+        self._history.clear()
+
+
+class _MaxImpactExtractor:
+    """Heuristic for peak institutional impact (OFII proxy) at aggregate level."""
+
+    def __call__(self, snapshot: Any) -> float:
+        chain = _get_val(snapshot, "chain")
+        if not chain:
+            return 0.0
+
+        # Heuristic OFII proxy: peak (|Flow| * |Gamma|) 
+        max_imp = 0.0
+        try:
+            for row in chain:
+                # Use turnover/volume * gamma as impact proxy for the aggregate signal
+                flow_proxy = abs(float(row.get("turnover", 0.0) or row.get("volume", 0.0)))
+                gamma = abs(float(row.get("gamma", 0.0) or 0.0))
+                imp = flow_proxy * gamma
+                if imp > max_imp:
+                    max_imp = imp
+        except Exception:
+            pass
+
+        return max_imp
+
+    def reset(self) -> None:
+        pass
+
+
 class _SVolCorrelationExtractor:
     """15-minute spot-vol correlation feature."""
 
@@ -269,6 +342,8 @@ def build_default_extractors() -> list[FeatureSpec]:
     svol_corr = _SVolCorrelationExtractor(window_seconds=900.0)
     mtf_consensus = _MTFConsensusExtractor()
     skew_25d = _Skew25dExtractor()
+    turnover_vel = _TurnoverVelocityExtractor()
+    max_impact = _MaxImpactExtractor()
 
     from shared.config import settings
 
@@ -279,6 +354,13 @@ def build_default_extractors() -> list[FeatureSpec]:
             ttl_seconds=1.0,
             description="1-minute spot price rate-of-change (fractional)",
             tags=["momentum", "spot"],
+        ),
+        FeatureSpec(
+            name="turnover_velocity",
+            extractor=turnover_vel,
+            ttl_seconds=1.0,
+            description="Institutional turnover speed (USD/sec)",
+            tags=["microstructure", "flow", "institutional"],
         ),
         FeatureSpec(
             name="atm_iv",
@@ -384,6 +466,13 @@ def build_default_extractors() -> list[FeatureSpec]:
             ttl_seconds=1.0,
             description="ATM IV (%) minus baseline HV (%)",
             tags=["iv", "regime", "vrp"],
+        ),
+        FeatureSpec(
+            name="peak_impact",
+            extractor=max_impact,
+            ttl_seconds=1.0,
+            description="Peak institutional impact index proxy (max flow * gamma)",
+            tags=["institutional", "threat"],
         ),
     ]
     return specs

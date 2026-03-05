@@ -2,7 +2,7 @@
 
 > **定位**: L1 是系统的量化内核——将 L0 提供的原始报单和期权链转为完整的 Greeks 矩阵、聚合风险流数据和高频微观结构信号。
 >
-> **架构状态 (v3.1)**: 已从全量单线程遍历迁移至 **"GPU/CPU 自适应并行 (ComputeRouter) + PyArrow 内存交互 + Rust SIMD 扩展 (l1_rust)"** 以及 **增量有状态追踪器 (Trackers)**。
+> **架构状态 (v4.0)**: 已从单线程迁移至 GPU/CPU 异构路由，并在此基础上增加了**高精度时间衰减计算**。`GreeksEngine` 现在能够实时产出精确到秒的 `ttm_seconds`，为 L2 层的机构威胁模型 (OFII) 提供物理驱动引擎。
 
 ---
 
@@ -46,8 +46,10 @@
 
 ### 2.1 自适应路由与 GPU 向量化计算 (Compute Router / GPUGreeks)
 放弃传统的按行 `apply`，按照 `chain_size` 进行路由动态分发：
-- **CuPy GPU 路径**：期权链长度 `>= 100` 时，利用 CUDA 的 `GPUGreeksKernel` 实现一键式的批量 Black-Scholes-Merton 计算，从 CPU 计算解耦，全链性能压至 1 毫秒级。
+- **CuPy GPU 路径**：期权链长度 `>= 20` (可配置) 时，利用 CUDA 的 `GPUGreeksKernel` 实现一键式的批量 Black-Scholes-Merton 计算，从 CPU 计算解耦，全链性能压至 1 毫秒级。
 - **CPU Numba / NumPy 路径**：退避处理方案机制。
+- **确定性执行 (Core Pinning)**：通过 `scripts/infra/pin_processes.ps1` 将 L1 计算主进程硬绑定至物理核心 (0-3)，消除由于 Chrome 渲染抢占 CPU 导致的 OS 上下文切换抖动。
+- **并行线程限制**：在 `.env` 中通过 `OMP_NUM_THREADS=4` 和 `MKL_NUM_THREADS=4` 严格控制 OpenMP/MKL 线程池，防止多核过度竞争。
 
 ### 2.2 有状态深度追踪器 (Trackers)
 V3.1 已完成从 L2 (Agent B) 向 L1 的逻辑下沉。这些追踪器驻留在 `l1_compute/trackers/` 和 `l1_compute/analysis/`，提供流体动力分析：

@@ -68,7 +68,11 @@ class AgentG:
 
     def _map_wall_to_direction(self, call_state: str | None, put_state: str | None) -> str:
         """Map wall migration states to direction."""
-        if call_state == "RETREATING_RESISTANCE":
+        if call_state == "BREACHED":
+            return "BULLISH"
+        elif put_state == "BREACHED":
+            return "BEARISH"
+        elif call_state == "RETREATING_RESISTANCE":
             return "BULLISH"
         elif call_state == "REINFORCED_WALL":
             return "BEARISH"
@@ -490,33 +494,8 @@ class AgentG:
             else:
                 summary.append(f"No signal. A={agent_a.signal}, GEX={net_gex_f}")
 
-        # 4. Gamma Wall Interaction
-        gamma_walls = b_output.gamma_walls
-        call_wall = gamma_walls.get("call_wall")
-        put_wall = gamma_walls.get("put_wall")
-        spot = agent_a.data.get("spot")
-
-        WALL_MAGNET_PCT = settings.agent_g_wall_magnet_pct
-        WALL_BREAKOUT_PCT = settings.agent_g_wall_breakout_pct
-
-        if spot:
-            if call_wall:
-                dist_pct = (call_wall - spot) / spot * 100.0
-                if 0 < dist_pct < WALL_MAGNET_PCT and agent_a.signal == "BULLISH":
-                    summary.append(f"Approaching Call Wall {call_wall}: Expect Resistance/Magnet.")
-                    if signal == "Option Structure: LONG_CALL (Neg Gamma Accel)":
-                        summary.append("CAUTION: Call Wall ahead.")
-                elif dist_pct < -WALL_BREAKOUT_PCT:
-                    summary.append(f"Call Wall {call_wall} BREACHED! Gamma Squeeze potential.")
-
-            if put_wall:
-                dist_pct = (spot - put_wall) / spot * 100.0
-                if 0 < dist_pct < WALL_MAGNET_PCT and agent_a.signal == "BEARISH":
-                    summary.append(f"Approaching Put Wall {put_wall}: Expect Support/Magnet.")
-                    if signal == "Option Structure: LONG_PUT (Neg Gamma Accel)":
-                        summary.append("CAUTION: Put Wall ahead.")
-                elif dist_pct < -WALL_BREAKOUT_PCT:
-                    summary.append(f"Put Wall {put_wall} BREACHED! Gamma Slide potential.")
+        # 4. Gamma Wall Logic consolidated in L1 WallMigrationTracker
+        # Manual proximity checks removed to prevent threshold desynchronization.
 
         # 5. Gamma Flip Note
         if b_output.gamma_flip:

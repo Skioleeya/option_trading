@@ -115,6 +115,10 @@ class FlowEngineOutput(BaseModel):
     # Composite DEG score (weighted sum of z-scores)
     flow_deg: float = 0.0
 
+    # Institutional Metrics (v4.0)
+    impact_index: float = 0.0  # Option Flow Impact Index (OFII)
+    is_sweep: bool = False     # Multi-strike sweep recognition flag
+
     # Qualitative labels derived from flow_deg
     flow_direction: Literal["BULLISH", "BEARISH", "NEUTRAL"] = "NEUTRAL"
     flow_intensity: Literal["EXTREME", "HIGH", "MODERATE", "LOW"] = "LOW"

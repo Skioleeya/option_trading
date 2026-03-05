@@ -23,3 +23,8 @@ class FlowEngineConfig(BaseConfig):
     # Intensity Thresholds
     flow_zscore_extreme_threshold: float = Field(default=2.5)
     flow_intensity_high_threshold: float = Field(default=1.5)
+
+    # Institutional Upgrade (v4.0)
+    flow_sweep_multiplier: float = Field(default=1.25)
+    flow_sweep_z_threshold: float = Field(default=1.5)
+    flow_market_depth_baseline: float = Field(default=1000.0)  # Reference USD depth

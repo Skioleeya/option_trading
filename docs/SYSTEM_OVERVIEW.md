@@ -14,14 +14,13 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│  v3 (早期)                    →  v3.1 (当下)                         │
+│  v3 (早期)                    →  v4.0 (机构级)                       │
 │                                                                      │
 │  main.py (AppContainer God类) →  app/ (lifespan + routes + loops)    │
-│  L0 RateLimit 全局阻塞         →  双轨 TokenBucket + 极速 Cooldown    │
-│  L1 IV 同步写死 REST         →  IV 弹性瀑布降级护栏                     │
-│  L2 混杂于各种 Agent 中        →  Feature Store + 规范 Signal 生成      │
+│  L1 IV 同步写死 REST         →  IV 弹性瀑布 + 高精度 TTM 秒级同步      │
+│  L2 混杂信号                  →  绝对威胁建模 (OFII) + 扫单聚类检测     │
 │  L3 deepcopy() 开销极大       →  Write-on-Copy (COW) 零拷贝组装       │
-│  L4 庞大重重的 React 树刷新   →  Zustand 精确 Selector 阻截 + 增量聚合 │
+│  L4 静态列表渲染              →  Zustand 渲染阻截 + 机构级 Sweep 视觉  │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -30,35 +29,32 @@
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                     L4 — 前端展示层 (l4_ui/)                         │
-│  Zustand Store (Selector精准渲染) · JSON-Patch 差分解码                │
-│  Connection Monitor (5态连接机) · L4 RUM (性能遥测)                    │
-│  React.memo 视图组件 · Alert Engine (状态机规则)                     │
+│  Zustand Store (Selector精准渲染) · Institutional Sweep Visuals      │
+│  ActiveOptions (Impact Index 排序) · 0DTE 高频呼吸动画                │
 └─────────────────────────────┬───────────────────────────────────────┘
                                │ WebSocket (全量/Delta / 1Hz Push)
 ┌─────────────────────────────▼───────────────────────────────────────┐
 │                     L3 — 输出组装层                                  │
-│  PayloadAssemblerV2 (COW引用) · FieldDeltaEncoder (字段级差异萃取)   │
-│  Time-Series Deque (内存 Hot Cache) · Presenters V2 (强类型化转换)    │
+│  Threat-Aware Assembler (OFII 驱动排序) · UIStateTracker              │
+│  FieldDeltaEncoder (增量差异提取) · Presenters V2 (强类型转换)        │
 └─────────────────────────────┬───────────────────────────────────────┘
-                               │ DecisionOutput + Snapshot
+                               │ DecisionOutput + EnrichedSnapshot
 ┌─────────────────────────────▼───────────────────────────────────────┐
 │                     L2 — 决策分析层                                  │
-│  Feature Store (TTL 特征库) · 6路独立 Signal Generators               │
-│  Attention Fusion (环境感知融合) · Priority Guard Rails (安全护栏网)  │
+│  Institutional Grade Core (OFII Math) · Sweep Cluster Detector       │
+│  Feature Store (Turnover Velocity) · Priority Guard Rails            │
 └─────────────────────────────┬───────────────────────────────────────┘
-                               │ EnrichedSnapshot (打平为 Arrow 友好)
+                               │ EnrichedSnapshot (含 TTM / Flow Index)
 ┌─────────────────────────────▼───────────────────────────────────────┐
 │                     L1 — 本地计算层                                  │
-│  Compute Router (GPU CuPy / Numpy 自适应) · Greeks Batch Computation │
-│  Flow Trackers (Integrated Vanna, Wall, IV Velocity, Jump Detector)  │
-│  Rust SIMD 扩展 (VPIN v2, BBO 加权失衡)                               │
+│  Compute Router (GPU / CPU) · High-Precision TTM Generator           │
+│  Flow Trackers (Integrated Vanna, Wall, IV Velocity)                 │
 └─────────────────────────────┬───────────────────────────────────────┘
                                │ 经过净化的行情与快照
 ┌─────────────────────────────▼───────────────────────────────────────┐
 │                     L0 — 数据摄取层                                  │
-│  SanitizePipeline v2 (多维统计断路器)                                  │
-│  MVCC ChainStateStore (无锁快照保护 + REST/WS 交叉读写隔离)            │
-│  Adaptive Rate Governor (双轨并发限制)                                │
+│  Institutional Data Contract (impact_index / is_sweep)               │
+│  MVCC ChainStateStore · Adaptive Rate Governor                       │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 

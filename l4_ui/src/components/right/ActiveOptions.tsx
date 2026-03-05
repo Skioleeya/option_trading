@@ -15,13 +15,16 @@ interface Props { options?: ActiveOption[] }
 export const ActiveOptions: React.FC<Props> = memo(({ options: propOptions }) => {
     const storeOptions = useDashboardStore(selectActiveOptions)
     const options: ActiveOption[] = storeOptions ?? propOptions ?? []
-    const sorted = [...options].sort((a, b) => b.volume - a.volume).slice(0, 5)
+
+    // THE BACKEND ALREADY SORTS BY IMPACT_INDEX. 
+    // We preserve the order provided by the L3 Presenter.
+    const sorted = options.slice(0, 5)
 
     return (
         <div className="p-2">
             <div className="flex items-center justify-between mb-1.5 px-0.5">
-                <span className="text-[10px] font-bold tracking-wider text-text-primary">ACTIVE OPTIONS</span>
-                <span className="text-[9px] font-medium text-white">TOP BY VOLUME</span>
+                <span className="text-[10px] font-bold tracking-wider text-text-primary uppercase">Active Options</span>
+                <span className="text-[9px] font-medium text-[#ff9800]">TOP BY IMPACT (OFII)</span>
             </div>
 
             <table className="w-full text-2xs mono">
@@ -31,7 +34,7 @@ export const ActiveOptions: React.FC<Props> = memo(({ options: propOptions }) =>
                         <th className="text-left py-1">SYM</th>
                         <th className="text-center py-1 w-4">T</th>
                         <th className="text-right py-1">STRIKE</th>
-                        <th className="text-right py-1">IV</th>
+                        <th className="text-right py-1">IMP</th>
                         <th className="text-right py-1">VOL</th>
                         <th className="text-right py-1 pr-1">FLOW</th>
                     </tr>
@@ -43,9 +46,12 @@ export const ActiveOptions: React.FC<Props> = memo(({ options: propOptions }) =>
                     {sorted.map((opt, i) => {
                         const isCall = opt.option_type === 'CALL'
                         const flowNeg = opt.flow < 0
+                        // Use the sweep glow if provided by backend
+                        const rowGlow = opt.flow_glow || ''
+
                         return (
                             <tr key={`${opt.symbol}-${opt.strike}-${opt.option_type}-${i}`}
-                                className="border-b border-bg-border/50 hover:bg-bg-card transition-colors">
+                                className={`border-b border-bg-border/50 hover:bg-bg-card transition-colors ${rowGlow}`}>
                                 <td className="py-1 relative">
                                     <div className={`absolute left-0 top-[20%] bottom-[20%] w-[4px] rounded-r-sm ${isCall ? 'bg-accent-red' : 'bg-accent-green'}`} />
                                     <div className="text-center font-bold text-text-primary ml-1">{i + 1}</div>
@@ -55,15 +61,15 @@ export const ActiveOptions: React.FC<Props> = memo(({ options: propOptions }) =>
                                     {isCall ? 'C' : 'P'}
                                 </td>
                                 <td className="py-1 text-right text-text-primary font-bold">{opt.strike.toFixed(2)}</td>
-                                <td className="py-1 text-right text-[#40c4ff]">
-                                    {opt.implied_volatility ? `${(opt.implied_volatility * 100).toFixed(1)}%` : '—'}
+                                <td className="py-1 text-right font-bold text-white/90">
+                                    {opt.impact_index ? opt.impact_index.toFixed(2) : '0.00'}
                                 </td>
                                 <td className="py-1 text-right">
                                     <span className="px-1.5 py-0.5 rounded-[4px] text-[10px] font-bold bg-white/5 border border-white/10">
                                         {(opt as any).flow_volume_label || fmtVolume(opt.volume)}
                                     </span>
                                 </td>
-                                <td className={`py-1 text-right font-bold transition-all duration-500 pr-1 ${(opt as any).flow_color || (flowNeg ? 'text-accent-green' : 'text-accent-red')} ${(opt as any).flow_glow || ''}`}>
+                                <td className={`py-1 text-right font-bold transition-all duration-500 pr-1 ${(opt as any).flow_color || (flowNeg ? 'text-accent-green' : 'text-accent-red')}`}>
                                     {(opt as any).flow_deg_formatted || fmtFlow(opt.flow)}
                                 </td>
                             </tr>

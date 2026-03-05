@@ -5,9 +5,9 @@ The current options flow engine uses a simple Z-Score sorting mechanism which fa
 ## What Changes
 
 This change upgrades the core L2 signal processing and L3 assembly layers. Key modifications include:
-- **L0/L1 Models**: Inclusion of `impact_index` in the `FlowEngineOutput` data structure.
-- **L2 Signal Generation**: Enhancement of `FlowEngineG` with aggressive "Turnover Velocity" boosting and `DEGComposer` with strike clustering reinforcement.
-- **L3 UI Presentation**: Transition of the `ActiveOptions` presenter from Z-Score sorting to a multi-factor $OFII$ sorting algorithm.
+- **L0/L1 Models**: Inclusion of `impact_index` and `is_sweep` in the `FlowEngineOutput` (shared models).
+- **L2 Signal Generation**: Enhancement of `DEGComposer` with the **Unified Impact Index (OFII)** calculate and strike clustering reinforcement logic.
+- **L3 UI Presentation**: Transition of the `ActiveOptionsPresenter` from `flow_deg` Z-Score sorting to the absolute `impact_index` sorting algorithm.
 
 ## Capabilities
 

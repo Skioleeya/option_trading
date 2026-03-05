@@ -2,7 +2,7 @@
 
 > **定位**: L0 是系统的感官神经元——负责以亚毫秒延迟从市场数据源（Longport WS/REST）采集报价流，经过**数据清洗 → 动态限流 → IV 基准提取 → MVCC 版本化存储**四阶段处理后，输出强类型的 `CleanQuoteEvent` / 链快照供 L1 消费。
 >
-> **架构状态 (v3.1)**: 已完成从 "长脚本混杂" 向 **模块化流水线 (Modular Pipeline)** 的重构，全面引入无套利清洗、自适应限流、以及严格的 REST 与 WS 数据覆盖保护。
+> **架构状态 (v4.0)**: 已在 v3.1 基础上完成**机构级升级 (Institutional Upgrade)**。全面支持 0DTE 高精度 $\tau$ (TTM) 传递，并对 `FlowEngineOutput` 契约进行了扩展，支持存储绝对威胁指标 (OFII)。
 
 ---
 
@@ -62,7 +62,8 @@
 
 ## 4. 迁移与升级路线图 (2025-2026 Vision)
 
-- **Phase 1 (v3.1，已完成)**：SanitizePipeline V2 统计断路器 + L0 模块化拆分 + 安全限流。
-- **Phase 2 (2025 H2)**：Rust IngestWorker (tokio WS) 替代 Python 网关；引入 SPSC Ring Buffer + `rkyv` 零拷贝解码。
-- **Phase 3 (2026 Q1)**：Arrow RecordBatch 完全接管字典，L0→L1 内存全透明。
-- **Phase 4 (2026 H2)**：底层针对未来 FPGA/Kernel Bypass 预留协议插槽。
+- [x] **Phase 1 (v3.1)**：SanitizePipeline V2 统计断路器 + L0 模块化拆分 + 安全限流。
+- [x] **Phase 2 (v4.0)**：**机构级数据增强**。高精度 `ttm_seconds` 透传；`FlowEngineOutput` 契约加入 `impact_index` (OFII) 与 `is_sweep` 标识。
+- [ ] **Phase 3 (2025 H2)**：Rust IngestWorker (tokio WS) 替代 Python 网关；引入 SPSC Ring Buffer + `rkyv` 零拷贝解码。
+- [ ] **Phase 4 (2026 Q1)**：Arrow RecordBatch 完全接管字典，L0→L1 内存全透明。
+- [ ] **Phase 5 (2026 H2)**：底层针对未来 FPGA/Kernel Bypass 预留协议插槽。

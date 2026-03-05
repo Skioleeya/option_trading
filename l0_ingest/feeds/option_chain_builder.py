@@ -204,6 +204,7 @@ class OptionChainBuilder:
                 "tier3_chain": self._tier3.cache,
                 "volume_map": self._store.volume_map,
                 "aggregate_greeks": agg,
+                "ttm_seconds": agg.get("ttm_seconds"),
                 "as_of": now,
             }
         except Exception as e:

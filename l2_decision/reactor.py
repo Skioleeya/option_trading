@@ -210,6 +210,8 @@ class L2DecisionReactor:
                 "vol_accel_ratio": getattr(ms, "vol_accel_ratio", 0.0),
             }
 
+        peak_impact = features.get("peak_impact", 0.0)
+
         output = DecisionOutput(
             direction=guarded.direction,
             confidence=guarded.confidence,
@@ -220,6 +222,7 @@ class L2DecisionReactor:
                 n: {"direction": s.direction, "confidence": s.confidence} 
                 for n, s in raw_signals.items()
             },
+            max_impact=peak_impact,  # Populating new institutional field
             latency_ms=total_latency_ms,
             version=version,
             computed_at=datetime.now(_ET),
@@ -240,6 +243,7 @@ class L2DecisionReactor:
             shap_top5=[],   # SHAP deferred to explainability module
             latency_ms=total_latency_ms,
             l0_version=version,
+            max_impact=peak_impact,
         )
         self._audit.append(audit_entry)
 

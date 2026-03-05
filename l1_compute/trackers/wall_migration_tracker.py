@@ -73,16 +73,26 @@ class WallMigrationTracker:
         is_decaying = now_real.hour >= 14
 
         # BREACHED: Spot has pierced through the wall
-        call_breached = (
-            spot is not None
-            and call_wall is not None
-            and spot > call_wall + 0.5
-        )
-        put_breached = (
-            spot is not None
-            and put_wall is not None
-            and spot < put_wall - 0.5
-        )
+        # Calculate dynamic threshold based on settings percentage (e.g. 1% -> $5.00 on SPY 500)
+        breakout_buffer = (spot * (settings.agent_g_wall_breakout_pct / 100.0)) if spot else 0.5
+        hysteresis_buffer = breakout_buffer * 0.8  # Must fall back 80% of the buffer to un-breach
+        
+        was_call_breached = self._last_result and self._last_result.call_wall_state == WallMigrationCallState.BREACHED
+        was_put_breached = self._last_result and self._last_result.put_wall_state == WallMigrationPutState.BREACHED
+
+        call_breached = False
+        if spot is not None and call_wall is not None:
+            if was_call_breached:
+                call_breached = spot > call_wall + (breakout_buffer - hysteresis_buffer)
+            else:
+                call_breached = spot > call_wall + breakout_buffer
+
+        put_breached = False
+        if spot is not None and put_wall is not None:
+            if was_put_breached:
+                put_breached = spot < put_wall - (breakout_buffer - hysteresis_buffer)
+            else:
+                put_breached = spot < put_wall - breakout_buffer
 
         # Only snapshot at configured interval
         elapsed = now_mono - self._last_snapshot_time

@@ -46,6 +46,7 @@ async def run_housekeeping_loop(ctr: 'AppContainer', state: SharedLoopState) -> 
                 spot=spot,
                 atm_iv=atm_iv,
                 gex_regime=gex_regime,
+                ttm_seconds=snapshot.get("ttm_seconds"),
                 redis=redis_client,
                 limit=5
             )

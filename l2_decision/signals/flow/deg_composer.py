@@ -60,18 +60,62 @@ def _intensity(z: float, extreme_th: float, high_th: float) -> Literal["EXTREME"
     return "LOW"
 
 
+class InstitutionalSweepDetector:
+    """Identifies multi-strike orders (sweeps) based on spatial clustering."""
+
+    def detect(self, symbols: list[str], z_scores: list[float]) -> dict[str, bool]:
+        """Identify strikes part of a sweep cluster (±2 strikes).
+        
+        A sweep is defined as a strike with at least 2 neighbors within ±2 strikes 
+        that also have |Z| > 1.5.
+        """
+        is_sweep = {s: False for s in symbols}
+        if len(symbols) < 3:
+            return is_sweep
+
+        # We assume symbols are sorted in strike order (e.g. SPY260305C00500000)
+        # For SPX, symbols usually contain the strike price.
+        # However, it's safer to extract strike from symbols or use the sorted order.
+        # Given DEGComposer already has 'symbols' sorted.
+        
+        n = len(symbols)
+        high_activity = [abs(z) > 1.5 for z in z_scores]
+
+        for i in range(n):
+            if not high_activity[i]:
+                continue
+            
+            # Count active neighbors within ±2 index range
+            # Note: This assumes 'symbols' contains a contiguous or near-contiguous chain.
+            neighbor_indices = [j for j in range(max(0, i - 2), min(n, i + 3)) if i != j]
+            active_neighbors = sum(1 for j in neighbor_indices if high_activity[j])
+            
+            if active_neighbors >= 2:
+                is_sweep[symbols[i]] = True
+                # Propagate to neighbors to ensure the whole cluster is marked
+                for j in neighbor_indices:
+                    if high_activity[j]:
+                        is_sweep[symbols[j]] = True
+
+        return is_sweep
+
+
 class DEGComposer:
     """Compose DEG-FLOW from the three engine component results."""
+
+    def __init__(self) -> None:
+        self._sweep_detector = InstitutionalSweepDetector()
 
     def compose(
         self,
         d_results: list[FlowComponentResult],
         e_results: list[FlowComponentResult],
         g_results: list[FlowComponentResult],
-        inputs_by_symbol: dict[str, object],
+        inputs_by_symbol: dict[str, FlowEngineInput],
         *,
         is_charm_surge: bool = False,
         gex_regime: str = "NEUTRAL",
+        ttm_seconds: float | None = None,
     ) -> list[FlowEngineOutput]:
         """Build final FlowEngineOutput list.
 
@@ -113,27 +157,39 @@ class DEGComposer:
         z_e = _z_score(vals_e)
         z_g = _z_score(vals_g)
 
-        # --- Adaptive weights ---
-        if is_charm_surge:
-            w_d = settings.flow_charm_surge_weight_d
-            w_e = settings.flow_charm_surge_weight_e
-            w_g = settings.flow_charm_surge_weight_g
-        elif gex_regime == "NEUTRAL":
-            w_d = settings.flow_neutral_gex_weight_d
-            w_e = settings.flow_neutral_gex_weight_e
-            w_g = settings.flow_neutral_gex_weight_g
+        # --- Base Weights from Configuration (Adaptive to Regime) ---
+        if gex_regime == "ACCELERATION" or is_charm_surge:
+            # High intensity regime
+            w_d, w_e, w_g = settings.flow_charm_surge_weight_d, settings.flow_charm_surge_weight_e, settings.flow_charm_surge_weight_g
         else:
-            w_d = settings.flow_weight_d
-            w_e = settings.flow_weight_e
-            w_g = settings.flow_weight_g
+            # Defensive/Neutral regime
+            w_d, w_e, w_g = settings.flow_neutral_gex_weight_d, settings.flow_neutral_gex_weight_e, settings.flow_neutral_gex_weight_g
 
-        # If G engine was degraded, redistribute its weight proportionally
+        # Fallback redistribution if G is inactive
         if not g_active:
-            total = w_d + w_e
-            if total > 0:
-                w_d, w_e = w_d / total, w_e / total
+            total_de = w_d + w_e
+            w_d /= total_de
+            w_e /= total_de
             w_g = 0.0
 
+        # --- Initial DEG Score (before boost) ---
+        initial_degs = [
+            w_d * z_d[i] + w_e * z_e[i] + w_g * z_g[i]
+            for i in range(len(symbols))
+        ]
+
+        # --- Sweep Detection ---
+        is_sweep_map = self._sweep_detector.detect(symbols, initial_degs)
+
+        # --- OFII Time Decay Factor (tau) ---
+        # Assume 0DTE logic or use provided TTM. If weekend or closed, tau=1.0 (no decay boost)
+        # design: e^-tau. tau = t_to_close / t_day.
+        DAY_SECONDS = 23400.0  # 6.5h
+        tau = (ttm_seconds / DAY_SECONDS) if ttm_seconds and ttm_seconds > 0 else 1.0
+        time_factor = math.exp(-tau)
+
+        sweep_mult = settings.flow_sweep_multiplier
+        market_depth = settings.flow_market_depth_baseline
         extreme_th = settings.flow_zscore_extreme_threshold
         high_th = settings.flow_intensity_high_threshold
 
@@ -144,7 +200,16 @@ class DEGComposer:
             if inp is None:
                 continue
 
-            deg = w_d * z_d[i] + w_e * z_e[i] + w_g * z_g[i]
+            deg = initial_degs[i]
+            is_sweep = is_sweep_map.get(sym, False)
+
+            # Apply Sweep Boost
+            if is_sweep:
+                deg *= sweep_mult
+
+            # OFII Calculation: (|Flow_D| + |Flow_E| + |Flow_G|) * |Gamma| * e^-tau / Depth
+            abs_flow_total = abs(map_d.get(sym, 0.0)) + abs(map_e.get(sym, 0.0)) + abs(map_g.get(sym, 0.0))
+            ofii = (abs_flow_total * abs(inp.gamma) * time_factor) / market_depth
 
             outputs.append(FlowEngineOutput(
                 symbol=sym,
@@ -160,6 +225,8 @@ class DEGComposer:
                 flow_e_z=z_e[i],
                 flow_g_z=z_g[i],
                 flow_deg=deg,
+                impact_index=ofii,
+                is_sweep=is_sweep,
                 flow_direction=_direction(deg),
                 flow_intensity=_intensity(deg, extreme_th, high_th),
                 engine_d_active=sym in map_d,
