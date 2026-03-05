@@ -1,121 +1,115 @@
-# l1_compute — L1 Local Computation Layer Refactoring Package
+# l1_compute — L1 本地计算层
 
-> **Strangler Fig 模式** — 与 `backend/app/services/analysis/` 并存，验证通过后逐步替换。
+> **职责**：接收 L0 快照，计算 Greeks/IV/微观结构信号，输出结构化的冻结 `EnrichedSnapshot` 传递给 L2 决策层。
 
 ## 架构总览
 
 ```
 l1_compute/
-├── arrow/           # Schema & dicts_to_record_batch Converter (Zero-copy payload)
-├── compute/         # GPUGreeksKernel + ComputeRouter (4-tier adaptive)
-├── aggregation/     # StreamingAggregator (O(ΔN) incremental GEX/Vanna)
-├── iv/              # IVResolver (WS→REST→Chain→SABR) + SABRCalibrator
-├── l1_rust/         # Native fast path extensions (VPINv2 / BBOv2)
-├── microstructure/  # VPINv2 + BBOv2 + VolAccelV2
-├── time/            # TTMv2 (NYSE holiday calendar + PM/AM settlement)
-├── output/          # EnrichedSnapshot (frozen L1→L2 contract)
-├── observability/   # L1Instrumentation (OTel + Prometheus, no-op fallback)
-├── reactor.py       # L1ComputeReactor (main orchestrator)
-└── tests/           # pytest suite (70 tests)
+├── reactor.py               # L1ComputeReactor（主编排器，asyncio.to_thread 异步卸载）
+├── compute/                 # GPUGreeksKernel + ComputeRouter（4 层自适应路由）
+├── aggregation/             # StreamingAggregator（O(ΔN) 增量 GEX/Vanna）
+├── iv/                      # IVResolver（WS→REST→Chain→SABR 瀑布）+ SABRCalibrator
+├── microstructure/          # VPINv2 + BBOv2 + VolAccelV2
+├── trackers/                # 有状态信号追踪器（跨 tick 持久化）
+│   ├── vanna_flow_analyzer.py   # Vanna/Charm 流量追踪（Delta 敞口 × IV 变化）
+│   ├── wall_migration_tracker.py# GEX 墙位移追踪（Strike 级别 Pinning/Flip 检测）
+│   ├── iv_velocity_tracker.py   # IV 速率追踪（IV 变化速度 + 方向动量）
+│   └── dynamic_thresholds.py    # 动态阈值（自适应分位数 GEX 阈值）
+├── arrow/                   # PyArrow Schema + zero-copy RecordBatch 转换
+├── time/                    # TTMv2（NYSE 假日日历 + PM/AM 结算）
+├── output/                  # EnrichedSnapshot（冻结 L1→L2 合约）
+├── l1_rust/                 # Native 快速路径扩展（VPINv2 / BBOv2 SIMD）
+├── analysis/                # 遗留分析组件（GreeksEngine、ATM tracker 等）
+├── observability/           # L1Instrumentation（OTel + Prometheus，no-op fallback）
+└── tests/                   # pytest 套件（含异步测试）
 ```
 
-## 快速开始
+## 快速使用
 
 ```python
 from l1_compute.reactor import L1ComputeReactor
 
 reactor = L1ComputeReactor(r=0.05, q=0.0, sabr_enabled=True)
 
-# 每次 tick 调用 (现在可接受 pa.RecordBatch 实现跨模组 0-copy)
+# 每次 tick 调用
 snapshot = await reactor.compute(
-    chain_snapshot=arrow_record_batch, # previously list[dict]
-
-    spot=560.0,
-    l0_version=mvcc_version,
+    chain_snapshot=chain_list,    # list[dict] from L0
+    spot=685.0,
+    l0_version=0,
     iv_cache=iv_sync.iv_cache,
     spot_at_sync=iv_sync.spot_at_sync,
 )
 
-# 实时深度/成交更新 (从 WS 回调直接调用)
+# 实时深度/成交回调（从 WS 直接钩入）
 reactor.update_microstructure_depth(symbol, bids, asks)
 reactor.update_microstructure_trades(symbol, trades)
 
-# 输出到 L2
-agg = snapshot.aggregates     # AggregateGreeks (frozen)
-micro = snapshot.microstructure  # MicroSignals (frozen)
-legacy = snapshot.to_legacy_dict()  # 向后兼容 dict
+# 输出
+agg   = snapshot.aggregates       # AggregateGreeks（冻结）
+micro = snapshot.microstructure   # MicroSignals（冻结）
+legacy = snapshot.to_legacy_dict() # 向后兼容 dict
 ```
 
-## 切换方式
+## ComputeRouter 路由规则
 
-### 替换 GreeksEngine
+| 条件 | 使用 Tier | 延迟 |
+|------|----------|------|
+| `chain ≥ 100` + CUDA 可用 | GPU（CuPy） | ~1ms |
+| `chain ≥ 100` + Numba 可用 | Numba JIT | ~5ms |
+| `chain < 100` 或无加速库 | NumPy | ~15ms |
 
-```python
-# 旧 (option_chain_builder.py)
-from l1_compute.analysis.greeks_engine import GreeksEngine
-agg = await self._greeks_engine.enrich(chain_snapshot, spot)
+## trackers/ — 跨 tick 有状态信号
 
-# 新
-from l1_compute.reactor import L1ComputeReactor
-snapshot = await self._l1_reactor.compute(chain_snapshot, spot, l0_version)
-agg = snapshot.to_legacy_dict()
+| 追踪器 | 职责 |
+|--------|------|
+| `VannaFlowAnalyzer` | 计算 Vanna/Charm 流量：Delta 敞口 × IV 变化，检测期权做市商再对冲压力 |
+| `WallMigrationTracker` | GEX 墙 Strike 级别位移检测；判断 Gamma Pinning vs Wall Flip 状态 |
+| `IVVelocityTracker` | IV 变化速率 + 方向动量；用于 Vol Acceleration 早期预警 |
+| `DynamicThresholds` | 自适应分位数 GEX 阈值；防止市场整体 Vol 水平变化导致阈值失效 |
+
+## IV 解析瀑布（`iv/`）
+
+```
+WS 实时 IV（TTL 满足）
+  ↓ 过期/缺失
+REST 基线（spot_at_sync 通过）
+  ↓ 基线无效
+链内中位 IV
+  ↓ 无链数据
+SABR 外推（L-BFGS-B 校准，120s 重校间隔）
 ```
 
-### 替换 TTM
+## 关键组件
 
-```python
-# 旧
-from l1_compute.analysis.bsm import get_trading_time_to_maturity
-t = get_trading_time_to_maturity(now)
-
-# 新
-from l1_compute.time.ttm_v2 import get_trading_ttm_v2_scalar
-t = get_trading_ttm_v2_scalar(now)  # same signature
-```
+| 组件 | 说明 |
+|------|------|
+| `GPUGreeksKernel` | CuPy 单 kernel 全链 Greeks；Numba fallback；运算量 O(N) per tick |
+| `StreamingAggregator` | O(ΔN) 增量聚合；200-tick 漂移保护；OI 权重 GEX 聚合 |
+| `VPINv2` | 1m/5m/15m 多频桶；`l1_rust` SIMD 并行引擎；自适应 ADV 桶大小 |
+| `BBOv2` | Top-5 价位加权 imbalance；双 EWMA；`l1_rust` 免分支加速 |
+| `VolAccelV2` | Session-phase 自适应窗口；Shannon 熵；动态分位数阈值 |
+| `TTMv2` | NYSE 假日日历；30min Gamma ramp 修正；盘前 0.3 权重 |
+| `EnrichedSnapshot` | frozen dataclass；L1→L2 不可变合约；`to_legacy_dict()` shim |
 
 ## 运行测试
 
 ```bash
-cd e:\US.market\Option_v3
 python -m pytest l1_compute/tests/ -v --tb=short
 
 # 数值回归：GPU vs 参考 bsm.py
 python -m pytest l1_compute/tests/test_compute.py -v -k "correctness"
 
-# 包含异步测试（需要 pytest-asyncio）
+# 异步测试（需要 pytest-asyncio）
 python -m pytest l1_compute/tests/test_reactor.py -v
 ```
-
-## 关键组件说明
-
-| 组件 | 改进点 |
-|------|--------|
-| `GPUGreeksKernel` | CuPy 单 kernel launch 全链 Greeks；NumPy fallback 数值等价 |
-| `ComputeRouter` | chain ≥ 100 → GPU；< 100 → Numba/NumPy；路由决策记录 OTel |
-| `StreamingAggregator` | O(ΔN) 增量聚合；200-tick 漂移保护；O(K) lazy 墙 recompute |
-| `IVResolver` | WS(TTL) → REST → Chain → SABR 瀑布；Sticky-Strike skew 修正 |
-| `SABRCalibrator` | Hagan et al. L-BFGS-B 校准；120s 间隔重校；scipy 无依赖 fallback |
-| `VPINv2` | 多桶多频 (1m/5m/15m)；自适应 ADV 桶大小；`l1_rust` SIMD 并行引擎加速计算 |
-| `BBOv2` | Top-5 价位加权 imbalance；双 EWMA；跨合约 ATM 聚合；`l1_rust` 免分支加速 |
-| `VolAccelV2` | Session-phase 自适应窗口；动态分位数阈值；Shannon 熵 |
-| `TTMv2` | NYSE 假日日历；PM/AM settlement；30min Gamma ramp；盘前 0.3 权重 |
-| `Arrow Schema` | 将离散计算转换成连续内存的 PyArrow RecordBatch `to_numpy(zero_copy_only=False)` 处理。 |
-| `EnrichedSnapshot` | frozen dataclass；L1→L2 不可变合约；to_legacy_dict() shim |
-| `L1Instrumentation` | l1.compute → 4 子 span；Prometheus 5 指标；无依赖 no-op |
-| `L1ComputeReactor` | 完整 pipeline；asyncio.to_thread 卸载；实时 depth/trade hooks |
-
-## Phase 路线图
-
-- **Phase 1**: Python 层全部核心组件架构 ✅
-- **Phase 2**: Rust SIMD (`l1_rust`) 扩展接入 (VPIN v2 SIMD + BBO SIMD) ✅
-- **Phase 3**: Arrow RecordBatch 全链路零拷贝内存流转交接 ✅
 
 ## 依赖
 
 ```
 必需:   numpy, scipy, pyarrow
-可选:   cupy-cuda12x (GPU tier), numba (CPU-parallel tier)
-可选:   exchange-calendars (NYSE holiday calendar)
-可选:   opentelemetry-api, prometheus-client (observability)
-可选:   pytest-asyncio (async test runner)
+可选:   cupy-cuda12x    (Tier 1 GPU)
+可选:   numba           (Tier 2 CPU-parallel)
+可选:   exchange-calendars  (NYSE 假日日历)
+可选:   opentelemetry-api, prometheus-client
 ```

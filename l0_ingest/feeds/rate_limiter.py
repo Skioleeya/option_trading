@@ -61,6 +61,9 @@ class APIRateLimiter:
                 wait_sec = self._cooldown_until - now
                 logger.debug(f"[RateLimiter] Enforcing cooldown, waiting {wait_sec:.1f}s")
                 await asyncio.sleep(wait_sec)
+                async with self._lock:  # BUG-4 FIX: 清空积压 token，防止 cooldown 解除后 burst 重触发 301607
+                    self._tokens = 1.0
+                    self._last_refill = time.monotonic()
                 continue
 
             async with self._lock:

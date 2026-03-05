@@ -463,6 +463,8 @@ class FrozenPayload:
                 "data": {
                     "ui_state":    self.ui_state.to_dict(),
                     **self.signal.to_dict(),
+                    # ⚠️ BUG-5 NOTE: L1 使用 atm_iv，前端期望 spy_atm_iv，此处显式重命名。
+                    # 若 L1 字段名变更未同步更新此处，前端将静默收到 null。
                     "spy_atm_iv":  self.atm_iv,
                     "as_of":       self.signal.computed_at,
                     "version":     self.version,

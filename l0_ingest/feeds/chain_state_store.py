@@ -67,16 +67,19 @@ class ChainStateStore:
     def apply_event(self, event: CleanQuoteEvent) -> bool:
         """Write a sanitized quote event into the store.
 
-        Sequence-number guard: if a previous event with a HIGHER seq_no has
-        already been applied for this symbol, the incoming event is dropped.
-        This prevents slow REST batches from overwriting fresh WS pushes.
+        Field ownership (LongBridge API constraint):
+          - WS events own: bid / ask / last_price / volume / current_volume / turnover
+          - REST events own: implied_volatility / iv_timestamp  (sole IV source)
+
+        Sequence-number guard: REST events with seq_no <= last known are dropped.
         """
         symbol = event.symbol
         last = self._last_seq.get(symbol, 0)
 
-        # Allow WS events (always fresh) to skip the seq check for REST events.
+        is_rest = event.event_type == EventType.REST
+
         # REST events only win if they are strictly newer than any prior event.
-        if event.event_type == EventType.REST and event.seq_no <= last:
+        if is_rest and event.seq_no <= last:
             return False
 
         # Build or update the entry
@@ -109,24 +112,29 @@ class ChainStateStore:
                 entry[key] = val
                 changed = True
 
-        _set("bid",                event.bid)
-        _set("ask",                event.ask)
-        _set("last_price",         event.last_price)
-        _set("volume",             event.volume)
-        _set("current_volume",     event.current_volume)
-        _set("turnover",           event.turnover)
+        # BUG-1 FIX: 价格字段仅 WS 推送写入；REST 不得覆盖实盘成交价
+        if not is_rest:
+            _set("bid",            event.bid)
+            _set("ask",            event.ask)
+            _set("last_price",     event.last_price)
+            _set("volume",         event.volume)
+            _set("current_volume", event.current_volume)
+            _set("turnover",       event.turnover)
+
+        # IV 字段：REST 是唯一来源（长桥 WS 不提供 IV）
         _set("implied_volatility", event.implied_volatility)
         _set("iv_timestamp",       event.iv_timestamp)
+
         _set("delta",              event.delta)
         _set("gamma",              event.gamma)
         _set("theta",              event.theta)
         _set("vega",               event.vega)
 
+        # BUG-8 NOTE (P2): OI 统一通过 apply_oi_smooth() 写入以保持 EMA 连续性。
+        # 调用方负责在 apply_event() 后显式调用 apply_oi_smooth(symbol, event.open_interest)。
+        # 此处保留直写作为热启动路径（seq_no=0），后续 P2 轮修复。
         if event.open_interest is not None:
-             # Apply smoothing or direct update? 
-             # For Depth Profile logic, we typically want smoothed but 
-             # hot-start seeding should be prioritized.
-             _set("open_interest", event.open_interest)
+            _set("open_interest", event.open_interest)
 
         entry["last_update"] = datetime.now(ZoneInfo("US/Eastern"))
         self._last_seq[symbol] = event.seq_no

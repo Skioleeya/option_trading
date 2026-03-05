@@ -1,8 +1,7 @@
 """IV Baseline Sync — Staggered REST IV/OI Polling.
 
-Uses the shared APIRateLimiter for all calc_indexes calls.
-Now operates as a fallback/initial warmup layer — primary IV now comes
-from WebSocket OptionQuote push (see OptionChainBuilder._update_contract_in_memory).
+REST API 是 IV 的唯一来源（长桥 WS 长连接不提供 IV）。
+本模块负责：初次 warm_up + 定期 staggered sync（60s 周期）保持 iv_cache 新鲜。
 """
 
 from __future__ import annotations
@@ -162,7 +161,8 @@ class IVBaselineSync:
                             self.apply_iv_update(item.symbol, iv, oi)
                             if self._on_update:
                                 self._on_update(item.symbol, item)
-                            if spot is not None:
+                            # BUG-3 FIX: IV 有效才记录 spot ref，防止 Sticky Strike 矫正使用错误基准
+                            if iv is not None and spot is not None:
                                 self.spot_at_sync[item.symbol] = spot
                     except Exception as e:
                         logger.warning(f"[IVSync] Warm-up batch failed: {e}")
@@ -269,8 +269,8 @@ class IVBaselineSync:
                             self.apply_iv_update(item.symbol, iv, oi)
                             if self._on_update:
                                 self._on_update(item.symbol, item)
-                            # PP-2/3 FIX: per-symbol spot ref recorded at batch time
-                            if spot_ref_now is not None:
+                            # BUG-3 FIX: IV 有效才记录 spot ref，防止 Sticky Strike 矫正使用错误基准
+                            if iv is not None and spot_ref_now is not None:
                                 self.spot_at_sync[item.symbol] = spot_ref_now
                     except Exception as e:
                         if "301607" in str(e):

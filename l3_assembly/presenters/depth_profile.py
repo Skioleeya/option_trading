@@ -27,7 +27,7 @@ class DepthProfilePresenterV2:
         """
         import logging
         logger = logging.getLogger(__name__)
-        logger.warning(f"[DepthProfilePresenterV2] build called with {len(per_strike_gex) if per_strike_gex else 0} strikes, spot={spot}")
+        logger.debug(f"[DepthProfilePresenterV2] build called with {len(per_strike_gex) if per_strike_gex else 0} strikes, spot={spot}")
 
         try:
             from l3_assembly.presenters.ui.depth_profile.presenter import DepthProfilePresenter
@@ -36,7 +36,7 @@ class DepthProfilePresenterV2:
                 spot=spot,
                 flip_level=flip_level,
             )
-            logger.warning(f"[DepthProfilePresenterV2] inner build returned {len(raw_rows)} rows")
+            logger.debug(f"[DepthProfilePresenterV2] inner build returned {len(raw_rows)} rows")
         except Exception as e:
             logger.error(f"[DepthProfilePresenterV2] inner build FAILED: {repr(e)}")
             raw_rows = []

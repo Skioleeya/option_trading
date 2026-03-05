@@ -2,6 +2,9 @@
 
 Periodically fetches the Top N OI anchor nodes for the next Weekly expiry.
 All REST calls go through the shared APIRateLimiter.
+
+配额优化：expiry metadata (option_chain_info_by_date) 在到期日滚动前只查一次，
+避免每个 600s 周期消耗 14 次 REST 调用扫描日期。
 """
 
 from __future__ import annotations
@@ -28,7 +31,12 @@ TIER3_INTERVAL = 600
 
 
 class Tier3Poller:
-    """Polls next Weekly option chain via REST at 10-minute intervals."""
+    """Polls next Weekly option chain via REST at 10-minute intervals.
+
+    Expiry metadata (which Friday is the next weekly, which symbols exist) is
+    cached until the expiry date rolls over — eliminates 14 REST calls per cycle
+    that were previously spent on option_chain_info_by_date date enumeration.
+    """
 
     def __init__(self, rate_limiter: APIRateLimiter) -> None:
         self.cache: list[dict[str, Any]] = []
@@ -36,6 +44,10 @@ class Tier3Poller:
         self._task: asyncio.Task | None = None
         self._syncing = False
         self._limiter = rate_limiter
+        # ── Metadata cache ─────────────────────────────────────────────────────
+        # Stores (weekly_date, {symbol: strike}) — refreshed only on rollover.
+        self._meta_expiry: date | None = None
+        self._meta_sym_to_strike: dict[str, float] = {}
 
     def start(self, ctx: QuoteContext, get_spot_fn: Callable[[], float | None]) -> None:
         """Start the background polling loop."""
@@ -65,62 +77,92 @@ class Tier3Poller:
                 logger.error(f"[Tier3Poller] Sync error: {e}")
             await asyncio.sleep(TIER3_INTERVAL)
 
+    async def _refresh_metadata(self) -> bool:
+        """Scan option_chain_info_by_date to find the next Weekly expiry and build symbol map.
+
+        Only called when metadata is stale (first run or expiry rolled over).
+        Consumes up to 14 REST calls but amortized over many data cycles.
+
+        Returns True if metadata was refreshed successfully.
+        """
+        now_date = datetime.now(ZoneInfo("US/Eastern")).date()
+        valid_dates = []
+        for i in range(14):
+            check_date = now_date + timedelta(days=i)
+            async with self._limiter.acquire():
+                try:
+                    chain_info = self._ctx.option_chain_info_by_date("SPY.US", check_date)
+                except Exception as e:
+                    if "301607" in str(e):
+                        self._limiter.trigger_cooldown()
+                    logger.warning(f"[Tier3Poller] Metadata fetch failed: {e}")
+                    continue
+
+            if chain_info and len(chain_info) > 0:
+                valid_dates.append((check_date, chain_info))
+
+        # Weekly = first Friday beyond the first 2 expiries
+        weekly_date = None
+        weekly_chain = None
+        for d, info in valid_dates[2:]:
+            if d.weekday() == 4:  # Friday
+                weekly_date = d
+                weekly_chain = info
+                break
+
+        if not weekly_date or not weekly_chain:
+            logger.warning("[Tier3Poller] Could not find Weekly expiry — skipping metadata refresh.")
+            return False
+
+        spot = self._get_spot() or 0.0
+        sym_to_strike: dict[str, float] = {}
+        for s in weekly_chain:
+            strike = float(s.price) if hasattr(s, "price") else 0.0
+            if abs(strike - spot) > TIER3_WINDOW:
+                continue
+            if hasattr(s, "call_symbol") and s.call_symbol:
+                sym_to_strike[s.call_symbol] = strike
+            if hasattr(s, "put_symbol") and s.put_symbol:
+                sym_to_strike[s.put_symbol] = strike
+
+        self._meta_expiry = weekly_date
+        self._meta_sym_to_strike = sym_to_strike
+        self.expiry = weekly_date
+        logger.info(
+            f"[Tier3Poller] Metadata refreshed: Weekly={weekly_date}, "
+            f"{len(sym_to_strike)} symbols within ±{TIER3_WINDOW}pt"
+        )
+        return True
+
     async def _fetch(self, spot: float) -> None:
         """Fetch next Weekly chain via REST, keep only Top N OI nodes."""
         self._syncing = True
         try:
-            now_date = datetime.now(ZoneInfo("US/Eastern")).date()
+            today = datetime.now(ZoneInfo("US/Eastern")).date()
 
-            # Scan for valid expiry dates
-            valid_dates = []
-            for i in range(14):
-                check_date = now_date + timedelta(days=i)
-                async with self._limiter.acquire():
-                    try:
-                        chain_info = self._ctx.option_chain_info_by_date("SPY.US", check_date)
-                    except Exception as e:
-                        if "301607" in str(e):
-                            self._limiter.trigger_cooldown()
-                        logger.warning(f"[Tier3Poller] Metadata fetch failed: {e}")
-                        continue
+            # ── 配额优化: 只在到期日滚动时重新扫描 metadata ──────────────────
+            needs_refresh = (
+                self._meta_expiry is None       # first run
+                or self._meta_expiry < today    # expiry has passed → rollover
+            )
+            if needs_refresh:
+                ok = await self._refresh_metadata()
+                if not ok:
+                    return
+            else:
+                logger.debug(
+                    f"[Tier3Poller] Using cached metadata: Weekly={self._meta_expiry}, "
+                    f"{len(self._meta_sym_to_strike)} symbols"
+                )
 
-                if chain_info and len(chain_info) > 0:
-                    valid_dates.append((check_date, chain_info))
-
-            # Weekly = first Friday beyond the first 2 expiries
-            weekly_date = None
-            weekly_chain = None
-            for d, info in valid_dates[2:]:
-                if d.weekday() == 4:  # Friday
-                    weekly_date = d
-                    weekly_chain = info
-                    break
-
-            if not weekly_date or not weekly_chain:
-                return
-
-            self.expiry = weekly_date
-
-            # Filter to ±60pt window
-            symbols = []
-            sym_to_strike: dict[str, float] = {}
-            for s in weekly_chain:
-                strike = float(s.price) if hasattr(s, 'price') else 0.0
-                if abs(strike - spot) > TIER3_WINDOW:
-                    continue
-                if hasattr(s, 'call_symbol') and s.call_symbol:
-                    symbols.append(s.call_symbol)
-                    sym_to_strike[s.call_symbol] = strike
-                if hasattr(s, 'put_symbol') and s.put_symbol:
-                    symbols.append(s.put_symbol)
-                    sym_to_strike[s.put_symbol] = strike
-
+            symbols = list(self._meta_sym_to_strike.keys())
             if not symbols:
                 return
 
-            # Fetch OI via calc_indexes through the shared rate limiter
+            # ── Data fetch: OI / Volume / IV ──────────────────────────────────
+            weekly_date = self._meta_expiry
             all_data: list[dict[str, Any]] = []
-            batch_size = 50  # Was 10 — safe under rate limiter control
+            batch_size = 50
             for i in range(0, len(symbols), batch_size):
                 batch = symbols[i:i + batch_size]
                 async with self._limiter.acquire():
@@ -130,7 +172,7 @@ class Tier3Poller:
                                     CalcIndex.ImpliedVolatility]
                         )
                         for r in results:
-                            strike = sym_to_strike.get(r.symbol, 0.0)
+                            strike = self._meta_sym_to_strike.get(r.symbol, 0.0)
                             opt_type = "CALL" if "C" in r.symbol else "PUT"
                             oi = int(r.open_interest) if r.open_interest else 0
                             iv_raw = r.implied_volatility

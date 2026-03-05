@@ -235,6 +235,26 @@ class SanitizationPipeline:
             iv    = f_iv / 100.0
             iv_ts = time.monotonic()
 
+        # ── BUG-6 FIX: 无套利条件检查（穿透报价，arxiv 2025） ────────────────────────
+        # bid > ask 违反无套利条件，会导致 mid-price 偏高，从而括大 ATM Decay 计算误差。
+        if bid is not None and ask is not None and bid > ask:
+            logger.warning(
+                "[SANITIZATION] %s: Crossed quote bid=%.4f > ask=%.4f, dropping prices",
+                raw.symbol, bid, ask,
+            )
+            bid = ask = None
+
+        # ── BUG-7 FIX: 报价时效 TTL 检测（ESMA MiFIR 2024） ────────────────────────────
+        # WS 连接抑动可能导致报价延迟到达；>30s 的报价应抑制价格字段以避免 IV 时间戳偏差。
+        _QUOTE_STALENESS_THRESHOLD = 30.0  # seconds
+        _quote_age = time.monotonic() - raw.arrival_mono
+        if _quote_age > _QUOTE_STALENESS_THRESHOLD:
+            logger.warning(
+                "[SANITIZATION] %s: Stale quote age=%.1fs > 30s, suppressing price fields",
+                raw.symbol, _quote_age,
+            )
+            bid = ask = last_price = None
+
         # ── Guard: must carry at least one useful field ───────────────────────
         useful = any(v is not None for v in (bid, ask, last_price, volume, oi, iv))
         if not useful:

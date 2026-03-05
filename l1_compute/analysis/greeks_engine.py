@@ -32,8 +32,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# WS IV TTL — see PP-1 fix note in original code.
-_WS_IV_TTL: float = 7200.0
+# IV 唯一来源：REST API calc_indexes（长桥 WS 长连接不提供 IV）。
+# ws_iv_raw / _WS_IV_TTL 已移除 — 在长桥实盘中永远为 None，是死代码。
 
 
 def _build_greeks_sync(
@@ -48,7 +48,7 @@ def _build_greeks_sync(
     Args:
         chain_data:   Snapshot list of option entry dicts.
         spot:         Current SPY spot price.
-        iv_cache:     REST IV baseline cache from IVBaselineSync.
+        iv_cache:     REST IV baseline cache from IVBaselineSync（唯一 IV 来源）。
         spot_at_sync: Per-symbol spot reference at IV sync time.
         t_years:      Time to maturity in years.
 
@@ -94,13 +94,9 @@ def _build_greeks_sync(
         ois_arr[idx] = float(entry.get("open_interest", 0))
         mults_arr[idx] = float(entry.get("contract_multiplier", 100))
 
-        # IV resolution: WS (PP-1 TTL) > REST cache > chain entry
-        ws_iv_raw = entry.get("implied_volatility")
-        iv_age    = now_mono - entry.get("iv_timestamp", 0.0)
-        ws_iv     = ws_iv_raw if (ws_iv_raw and ws_iv_raw > 0 and iv_age < _WS_IV_TTL) else None
-        rest_iv   = iv_cache.get(symbol)
-        chain_iv  = entry.get("implied_volatility", 0) or 0
-        raw_iv    = ws_iv or rest_iv or (chain_iv if chain_iv > 0 else None)
+        # BUG-2 FIX: 长桥 WS 不提供 IV，REST iv_cache 是唯一来源。
+        # 原始 ws_iv_raw / chain_iv 路径已移除（死代码：长桥 WS 实盘中永远为 None）。
+        raw_iv = iv_cache.get(symbol)
 
         if raw_iv and raw_iv > 0:
             spot_ref = spot_at_sync.get(symbol, spot)

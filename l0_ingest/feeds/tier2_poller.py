@@ -2,6 +2,9 @@
 
 Periodically fetches OI/Volume/IV data for the 2DTE expiry via REST.
 All REST calls go through the shared APIRateLimiter.
+
+配额优化：expiry metadata (option_chain_info_by_date) 在到期日滚动前只查一次，
+避免每个 120s 周期消耗 14 次 REST 调用扫描日期。
 """
 
 from __future__ import annotations
@@ -26,7 +29,12 @@ TIER2_INTERVAL = 120
 
 
 class Tier2Poller:
-    """Polls 2DTE option chain via REST at 120s intervals."""
+    """Polls 2DTE option chain via REST at 120s intervals.
+
+    Expiry metadata (which date is 2DTE, which symbols exist) is cached until
+    the expiry date rolls over — eliminates 14 REST calls per cycle that were
+    previously spent on option_chain_info_by_date date enumeration.
+    """
 
     def __init__(self, rate_limiter: APIRateLimiter) -> None:
         self.cache: list[dict[str, Any]] = []
@@ -34,6 +42,10 @@ class Tier2Poller:
         self._task: asyncio.Task | None = None
         self._syncing = False
         self._limiter = rate_limiter
+        # ── Metadata cache ─────────────────────────────────────────────────────
+        # Stores (expiry_date, {symbol: strike}) — refreshed only on rollover.
+        self._meta_expiry: date | None = None
+        self._meta_sym_to_strike: dict[str, float] = {}
 
     def start(self, ctx: QuoteContext, get_spot_fn: Callable[[], float | None]) -> None:
         """Start the background polling loop."""
@@ -63,56 +75,87 @@ class Tier2Poller:
                 logger.error(f"[Tier2Poller] Sync error: {e}")
             await asyncio.sleep(TIER2_INTERVAL)
 
+    async def _refresh_metadata(self) -> bool:
+        """Scan option_chain_info_by_date to find the 2DTE expiry and build symbol map.
+
+        Only called when metadata is stale (first run or expiry rolled over).
+        Consumes up to 14 REST calls but amortized over many data cycles.
+
+        Returns True if metadata was refreshed successfully.
+        """
+        now_date = datetime.now(ZoneInfo("US/Eastern")).date()
+        valid_dates = []
+        for i in range(14):
+            check_date = now_date + timedelta(days=i)
+            async with self._limiter.acquire():
+                try:
+                    chain_info = self._ctx.option_chain_info_by_date("SPY.US", check_date)
+                except Exception as e:
+                    if "301607" in str(e):
+                        self._limiter.trigger_cooldown()
+                    logger.warning(f"[Tier2Poller] Metadata fetch failed: {e}")
+                    continue
+
+            if chain_info and len(chain_info) > 0:
+                valid_dates.append((check_date, chain_info))
+                if len(valid_dates) >= 3:
+                    break
+
+        if len(valid_dates) < 3:
+            logger.warning("[Tier2Poller] Could not find 2DTE expiry — skipping metadata refresh.")
+            return False
+
+        dte2_date, chain_info = valid_dates[2]
+        spot = self._get_spot() or 0.0
+
+        sym_to_strike: dict[str, float] = {}
+        for s in chain_info:
+            strike = float(s.price) if hasattr(s, "price") else 0.0
+            if abs(strike - spot) > TIER2_WINDOW:
+                continue
+            if hasattr(s, "call_symbol") and s.call_symbol:
+                sym_to_strike[s.call_symbol] = strike
+            if hasattr(s, "put_symbol") and s.put_symbol:
+                sym_to_strike[s.put_symbol] = strike
+
+        self._meta_expiry = dte2_date
+        self._meta_sym_to_strike = sym_to_strike
+        self.expiry = dte2_date
+        logger.info(
+            f"[Tier2Poller] Metadata refreshed: 2DTE={dte2_date}, "
+            f"{len(sym_to_strike)} symbols within ±{TIER2_WINDOW}pt"
+        )
+        return True
+
     async def _fetch(self, spot: float) -> None:
         """Fetch 2DTE chain via REST and cache locally."""
         self._syncing = True
         try:
-            now_date = datetime.now(ZoneInfo("US/Eastern")).date()
+            today = datetime.now(ZoneInfo("US/Eastern")).date()
 
-            # Find 3rd valid expiry (index 2 = 2DTE)
-            valid_dates = []
-            for i in range(14):
-                check_date = now_date + timedelta(days=i)
-                async with self._limiter.acquire():
-                    try:
-                        chain_info = self._ctx.option_chain_info_by_date("SPY.US", check_date)
-                    except Exception as e:
-                        if "301607" in str(e):
-                            self._limiter.trigger_cooldown()
-                        logger.warning(f"[Tier2Poller] Metadata fetch failed: {e}")
-                        continue
+            # ── 配额优化: 只在到期日滚动时重新扫描 metadata ──────────────────
+            needs_refresh = (
+                self._meta_expiry is None       # first run
+                or self._meta_expiry < today    # expiry has passed → rollover
+            )
+            if needs_refresh:
+                ok = await self._refresh_metadata()
+                if not ok:
+                    return
+            else:
+                logger.debug(
+                    f"[Tier2Poller] Using cached metadata: 2DTE={self._meta_expiry}, "
+                    f"{len(self._meta_sym_to_strike)} symbols"
+                )
 
-                if chain_info and len(chain_info) > 0:
-                    valid_dates.append((check_date, chain_info))
-                    if len(valid_dates) >= 3:
-                        break
-
-            if len(valid_dates) < 3:
-                return
-
-            dte2_date, chain_info = valid_dates[2]
-            self.expiry = dte2_date
-
-            # Filter to ±30pt window
-            symbols = []
-            sym_to_strike: dict[str, float] = {}
-            for s in chain_info:
-                strike = float(s.price) if hasattr(s, 'price') else 0.0
-                if abs(strike - spot) > TIER2_WINDOW:
-                    continue
-                if hasattr(s, 'call_symbol') and s.call_symbol:
-                    symbols.append(s.call_symbol)
-                    sym_to_strike[s.call_symbol] = strike
-                if hasattr(s, 'put_symbol') and s.put_symbol:
-                    symbols.append(s.put_symbol)
-                    sym_to_strike[s.put_symbol] = strike
-
+            symbols = list(self._meta_sym_to_strike.keys())
             if not symbols:
                 return
 
-            # Fetch via calc_indexes through the shared rate limiter
+            # ── Data fetch: IV / OI / Volume ──────────────────────────────────
+            dte2_date = self._meta_expiry
             results_data: list[dict[str, Any]] = []
-            batch_size = 50  # Was 10 — safe under rate limiter control
+            batch_size = 50
             for i in range(0, len(symbols), batch_size):
                 batch = symbols[i:i + batch_size]
                 async with self._limiter.acquire():
@@ -122,7 +165,7 @@ class Tier2Poller:
                                     CalcIndex.ImpliedVolatility]
                         )
                         for r in results:
-                            strike = sym_to_strike.get(r.symbol, 0.0)
+                            strike = self._meta_sym_to_strike.get(r.symbol, 0.0)
                             opt_type = "CALL" if "C" in r.symbol else "PUT"
                             iv_raw = r.implied_volatility
                             iv_val = 0.0
