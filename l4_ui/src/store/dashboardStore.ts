@@ -64,17 +64,15 @@ export interface DashboardState {
      */
     applyFullUpdate: (payload: DashboardPayload) => void
 
-    /**
-     * Delta update: merge a JSON-Patch result on top of current payload.
-     * Called when server sends 'dashboard_delta' (already decoded by
-     * DeltaDecoder before reaching here).
-     */
+    /** Delta update: merge a JSON-Patch result on top of current payload. */
     applyMergedPayload: (next: DashboardPayload) => void
 
     /** Push a new ATM tick into history (de-duplicates by timestamp). */
     appendAtmHistory: (tick: AtmDecay) => void
-}
 
+    /** Hydrate history from API (merges with existing live ticks). */
+    hydrateAtmHistory: (history: AtmDecay[]) => void
+}
 // ─────────────────────────────────────────────────────────────────────────────
 // Sticky-key protection Constants
 // ─────────────────────────────────────────────────────────────────────────────
@@ -192,6 +190,11 @@ export const useDashboardStore = create<DashboardState>()(
             const prev = get().payload
             const merged = mergePayloads(prev, incoming)
             const atm = extractAtm(merged)
+
+            if (atm === null && get().atm !== null) {
+                console.warn('[L4 Debug] ATM becoming NULL in applyFullUpdate. Prev:', get().atm, 'Incoming:', incoming);
+            }
+
             set((state) => {
                 let nextHistory = state.atmHistory
                 if (atm && !state.atmHistory.some((t) => t.timestamp === atm.timestamp)) {
@@ -225,6 +228,11 @@ export const useDashboardStore = create<DashboardState>()(
             const prev = get().payload
             const merged = mergePayloads(prev, next)
             const atm = extractAtm(merged)
+
+            if (atm === null && get().atm !== null) {
+                console.warn('[L4 Debug] ATM becoming NULL in applyMergedPayload. Prev:', get().atm, 'Incoming:', next);
+            }
+
             set((state) => {
                 let nextHistory = state.atmHistory
                 if (atm && !state.atmHistory.some((t) => t.timestamp === atm.timestamp)) {
@@ -259,6 +267,23 @@ export const useDashboardStore = create<DashboardState>()(
                 }
                 return {
                     atmHistory: [...state.atmHistory.slice(-MAX_ATM_HISTORY + 1), tick],
+                }
+            })
+        },
+
+        hydrateAtmHistory: (history) => {
+            set((state) => {
+                const existingTimestamps = new Set(state.atmHistory.map((t) => t.timestamp))
+                const newPoints = history.filter((t) => t.timestamp && !existingTimestamps.has(t.timestamp))
+
+                if (newPoints.length === 0) return state
+
+                const combined = [...state.atmHistory, ...newPoints].sort((a, b) =>
+                    (a.timestamp || '').localeCompare(b.timestamp || '')
+                )
+
+                return {
+                    atmHistory: combined.slice(-MAX_ATM_HISTORY),
                 }
             })
         },

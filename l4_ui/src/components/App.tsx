@@ -52,7 +52,7 @@ export const App: React.FC = () => {
             .then(res => res.json())
             .then(data => {
                 if (data && Array.isArray(data.history) && data.history.length > 0) {
-                    useDashboardStore.setState({ atmHistory: data.history });
+                    useDashboardStore.getState().hydrateAtmHistory(data.history);
                 }
             })
             .catch(err => console.warn('[App] Cold history hydration failed:', err));

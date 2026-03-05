@@ -16,13 +16,17 @@ import {
     CrosshairMode,
     LineSeries,
     LineType,
+    createSeriesMarkers,
     type IChartApi,
-    type ISeriesApi,
-    type SeriesOptionsMap,
     type Time,
+    type SeriesMarker,
+    type ISeriesMarkersPluginApi,
 } from 'lightweight-charts'
 import { useDashboardStore, selectAtmHistory } from '../../store/dashboardStore'
 import type { AtmDecay } from '../../types/dashboard'
+
+// Extended AtmDecay to recognize the new L1 field gracefully
+type ExtendedAtmDecay = AtmDecay & { strike_changed?: boolean }
 
 interface Props {
     data?: AtmDecay[]
@@ -47,27 +51,21 @@ const toUnixSec = (ts: string) => Math.floor(new Date(ts).getTime() / 1000)
 
 /**
  * Gate: keep only intraday ticks.
- * User requested strict restriction: exactly 09:30 to 16:00 ET.
- * No pre-market logic, no after-hours drift allowed.
+ * Optimized for performance: parse time directly from the ISO string
+ * assuming backend emits NY local time or UTC string like "...T09:30...-05:00"
  */
+function getHHMM(ts: string): number {
+    const m = ts.match(/T(\d{2}):(\d{2})/)
+    if (!m) return 0
+    return parseInt(m[1], 10) * 100 + parseInt(m[2], 10)
+}
+
 function isMarketHours(ts: string): boolean {
-    const s = new Date(ts).toLocaleTimeString('en-US', {
-        timeZone: 'America/New_York', hour: 'numeric', minute: 'numeric', hour12: false,
-    })
-    const parts = s.split(':')
-    if (parts.length !== 2) return true
-
-    const h = parseInt(parts[0], 10)
-    const m = parseInt(parts[1], 10)
-    const t = h * 100 + m
-
-    if (isNaN(t)) return true
-
-    // Keep data starting from 9:25 AM, allow all post-market data points to render
+    const t = getHHMM(ts)
     return t >= 925
 }
 
-function buildPoints(data: AtmDecay[], key: keyof AtmDecay) {
+function buildPoints(data: ExtendedAtmDecay[], key: keyof AtmDecay) {
     const seen = new Set<number>()
     return data
         .filter(d => d.timestamp && d[key] != null && isMarketHours(d.timestamp))
@@ -81,19 +79,21 @@ function buildPoints(data: AtmDecay[], key: keyof AtmDecay) {
 
 
 // ── Component ─────────────────────────────────────────────────────────────────
-// The return type of chart.addSeries(LineSeries, ...) per the official v5 docs is
-// ISeriesApi<"Line", ...>  where "Line" is a key of SeriesOptionsMap.
-type LineSeries = ISeriesApi<keyof SeriesOptionsMap>
-
 export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
-    const storeData = useDashboardStore(selectAtmHistory)
-    const data = storeData.length > 0 ? storeData : (propData ?? [])
+    const storeData = useDashboardStore(selectAtmHistory) as ExtendedAtmDecay[]
+    const data = storeData.length > 0 ? storeData : (propData as ExtendedAtmDecay[] ?? [])
     const containerRef = useRef<HTMLDivElement>(null)
     const chartRef = useRef<IChartApi | null>(null)
-    const seriesRef = useRef<LineSeries[]>([])
+    // Using any for the series reference since the types for addSeries in v5 
+    // vs the ISeriesApi interface have some strict generic variance
+    const seriesRef = useRef<any[]>([])
+    const markersPluginRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null)
+    const markersRef = useRef<SeriesMarker<Time>[]>([])
     const initialised = useRef(false)
     const prevLen = useRef(0)
+    const firstTimeRef = useRef<string | null>(null)
     const lastTimeRef = useRef<number>(0)
+    const hasAddedCliff = useRef(false)
 
     // ── Chart init (mount only) ──────────────────────────────────────────────
     useEffect(() => {
@@ -173,6 +173,11 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
         chartRef.current = chart
         seriesRef.current = srs
 
+        // Initialize markers plugin on the primary series
+        if (srs[0]) {
+            markersPluginRef.current = createSeriesMarkers(srs[0])
+        }
+
         // Responsive resize via ResizeObserver
         const ro = new ResizeObserver(entries => {
             const c = chartRef.current
@@ -187,6 +192,9 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
             chart.remove()
             chartRef.current = null
             seriesRef.current = []
+            markersPluginRef.current?.detach()
+            markersPluginRef.current = null
+            markersRef.current = []
             initialised.current = false
             prevLen.current = 0
             lastTimeRef.current = 0
@@ -199,15 +207,32 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
         const srs = seriesRef.current
         if (!chart || !srs.length || !data.length) return
 
-        if (!initialised.current) {
-            // Full initial load — only committed when at least one series has data.
-            // If all points are filtered (e.g. outside market window), skip so the
-            // next tick retries the full-load path instead of silently locking out.
+        // Determine if we need a full reload vs incremental update.
+        // Re-run full load if:
+        // 1. Not initialized
+        // 2. Data size jumped significantly (e.g. history arrived)
+        // 3. The first data point changed (e.g. history prepended)
+        const isJump = data.length > prevLen.current + 5
+        const isFirstPointChanged = data[0]?.timestamp !== firstTimeRef.current
+
+        if (!initialised.current || isJump || isFirstPointChanged) {
             let anyDataLoaded = false
+            const nextMarkers: SeriesMarker<Time>[] = []
+
+            // Reset state for full reload
+            lastTimeRef.current = 0
+            hasAddedCliff.current = false
+            firstTimeRef.current = data[0]?.timestamp ?? null
+
             SERIES_CFG.forEach(({ key }, i) => {
                 const pts = buildPoints(data, key)
                 if (pts.length) {
-                    srs[i]?.setData(pts)
+                    const series = srs[i];
+                    if (series && typeof series.setData === 'function') {
+                        series.setData(pts)
+                    } else {
+                        console.warn(`[AtmDecayChart] series[${i}] has no setData method`, series);
+                    }
                     const lastPt = pts[pts.length - 1]
                     if (lastPt) {
                         lastTimeRef.current = Math.max(lastTimeRef.current, lastPt.time as number)
@@ -215,7 +240,45 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
                     anyDataLoaded = true
                 }
             })
+
+            data.forEach(d => {
+                if (!d.timestamp || !isMarketHours(d.timestamp)) return
+
+                const t = toUnixSec(d.timestamp) as Time
+                const hhmm = getHHMM(d.timestamp)
+
+                if (d.strike_changed) {
+                    nextMarkers.push({
+                        time: t,
+                        position: 'aboveBar',
+                        color: '#fbbf24',
+                        shape: 'arrowDown',
+                        text: `Strike Switch`,
+                    })
+                }
+
+                if (!hasAddedCliff.current && hhmm >= 1530 && hhmm < 1600) {
+                    nextMarkers.push({
+                        time: t,
+                        position: 'aboveBar',
+                        color: '#ef4444',
+                        shape: 'arrowDown',
+                        text: `15:30 CLIFF`,
+                    })
+                    hasAddedCliff.current = true
+                }
+            })
+
             if (anyDataLoaded) {
+                if (nextMarkers.length > 0) {
+                    const plugin = markersPluginRef.current;
+                    if (plugin && typeof plugin.setMarkers === 'function') {
+                        plugin.setMarkers(nextMarkers)
+                        markersRef.current = nextMarkers
+                    } else {
+                        console.error('[AtmDecayChart] setMarkers failed on mount: markers plugin missing', plugin);
+                    }
+                }
                 chart.timeScale().fitContent()
                 initialised.current = true
                 prevLen.current = data.length
@@ -227,6 +290,9 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
             if (delta <= 0) return
             const newTicks = data.slice(-delta)
 
+            let updatedMarkers = false
+            const nextMarkers = [...markersRef.current]
+
             newTicks.forEach(tick => {
                 if (!tick.timestamp || !isMarketHours(tick.timestamp)) return
                 const t = toUnixSec(tick.timestamp)
@@ -235,11 +301,50 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
                 SERIES_CFG.forEach(({ key }, i) => {
                     const v = tick[key]
                     if (v != null) {
-                        srs[i]?.update({ time: t as Time, value: (v as number) * 100 })
+                        const series = srs[i];
+                        if (series && typeof series.update === 'function') {
+                            series.update({ time: t as Time, value: (v as number) * 100 })
+                        }
                     }
                 })
+
+                if (tick.strike_changed) {
+                    nextMarkers.push({
+                        time: t as Time,
+                        position: 'aboveBar',
+                        color: '#fbbf24',
+                        shape: 'arrowDown',
+                        text: `Strike Switch`,
+                    })
+                    updatedMarkers = true
+                }
+
+                const hhmm = getHHMM(tick.timestamp)
+                if (!hasAddedCliff.current && hhmm >= 1530 && hhmm < 1600) {
+                    nextMarkers.push({
+                        time: t as Time,
+                        position: 'aboveBar',
+                        color: '#ef4444',
+                        shape: 'arrowDown',
+                        text: `15:30 CLIFF`,
+                    })
+                    hasAddedCliff.current = true
+                    updatedMarkers = true
+                }
+
                 lastTimeRef.current = t
             })
+
+            if (updatedMarkers) {
+                const plugin = markersPluginRef.current;
+                if (plugin && typeof plugin.setMarkers === 'function') {
+                    plugin.setMarkers(nextMarkers)
+                    markersRef.current = nextMarkers
+                } else {
+                    console.error('[AtmDecayChart] setMarkers failed on update: markers plugin missing', plugin);
+                }
+            }
+
             prevLen.current = data.length
         }
     }, [data])

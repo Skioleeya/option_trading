@@ -179,9 +179,11 @@ export interface DashboardPayload {
 // ATM Decay
 export interface AtmDecay {
     strike: number | null
+    base_strike?: number | null
     locked_at: string | null
     straddle_pct: number | null
     call_pct: number | null
     put_pct: number | null
     timestamp?: string
+    strike_changed?: boolean
 }

@@ -95,6 +95,11 @@ class AtmDecayTracker:
         # to let the LV1 bid/ask feed fully populate before locking a strike.
         self._warmup_ticks_remaining: int = 5
 
+        # Rolling Anchor (SCM CDD Stitching) parameters
+        self.accumulated_offset = {"c": 0.0, "p": 0.0, "s": 0.0}
+        self._out_of_bounds_ticks: int = 0
+        self._strike_changed_flag: bool = False
+
         self.is_initialized = False
 
     async def initialize(self, spot: float = 0.0) -> None:
@@ -117,6 +122,7 @@ class AtmDecayTracker:
                     anchor = json.loads(raw)
                     if self._validate_anchor(anchor):
                         self.anchor = anchor
+                        self.accumulated_offset = anchor.get("accumulated_offset", {"c": 0.0, "p": 0.0, "s": 0.0})
                         logger.info(
                             f"[AtmDecayTracker] Restored anchor from Redis: "
                             f"strike={anchor['strike']} (spot={spot if spot else 'N/A'})"
@@ -135,6 +141,7 @@ class AtmDecayTracker:
                 anchor = json.loads(cold_file.read_text())
                 if self._validate_anchor(anchor):
                     self.anchor = anchor
+                    self.accumulated_offset = anchor.get("accumulated_offset", {"c": 0.0, "p": 0.0, "s": 0.0})
                     logger.info(
                         f"[AtmDecayTracker] Restored anchor from cold JSON: "
                         f"strike={anchor['strike']} (spot={spot if spot else 'N/A'})"
@@ -207,6 +214,9 @@ class AtmDecayTracker:
         strike = a["strike"]
         if not isinstance(strike, (int, float)) or not _is_integer_strike(strike):
             return False
+        # Inject base_strike if it's missing (backward compat)
+        if "base_strike" not in a:
+            a["base_strike"] = strike
         if not a["call_symbol"] or not a["put_symbol"]:
             return False
         return True
@@ -228,6 +238,8 @@ class AtmDecayTracker:
             logger.error(f"[AtmDecayTracker] Cold JSON write failed: {exc}")
 
     async def _persist(self, anchor: dict[str, Any]) -> None:
+        # Bake in accumulators into the JSON representation
+        anchor["accumulated_offset"] = getattr(self, "accumulated_offset", {"c": 0.0, "p": 0.0, "s": 0.0})
         self.anchor = anchor
         self._today = datetime.fromisoformat(anchor["timestamp"]).strftime("%Y%m%d")
         await self._save_redis(anchor)
@@ -253,6 +265,7 @@ class AtmDecayTracker:
         if not self.is_initialized:
             return None
 
+        logger.debug(f"[AtmDecayTracker] Update tick. Redis presence: {self.redis is not None}")
         now = datetime.now(ET)
         if now.hour < 9 or (now.hour == 9 and now.minute < 30):
             return None  # true pre-market
@@ -269,6 +282,20 @@ class AtmDecayTracker:
 
         if not self.anchor:
             return None
+
+        # ── Rolling Anchor (Hysteresis & Temporal Gating) ──
+        # alpha = 0.35% offset trigger, tau = 45 ticks continuous sustain
+        alpha = 0.0035
+        tau_ticks = 45
+        
+        current_strike = self.anchor["strike"]
+        if spot > 0 and abs(spot - current_strike) / spot > alpha:
+            self._out_of_bounds_ticks += 1
+            if self._out_of_bounds_ticks >= tau_ticks:
+                await self._roll_anchor(chain, spot, now)
+        else:
+            # Reset hysteresis timer if we fall back into the safe buffer 
+            self._out_of_bounds_ticks = 0
 
         return self._calculate_decay(chain)
 
@@ -372,6 +399,7 @@ class AtmDecayTracker:
             if call_sym and put_sym:
                 await self._persist({
                     "strike": candidate,
+                    "base_strike": candidate,
                     "call_symbol": call_sym,
                     "put_symbol": put_sym,
                     "call_price": call_px,
@@ -391,11 +419,79 @@ class AtmDecayTracker:
             f"{[int(s) for s in strikes[:10]]}. Waiting for more data."
         )
 
+    async def _roll_anchor(self, chain: list[dict[str, Any]], spot: float, now: datetime) -> None:
+        """Switch to a new ATM strike using Hysteresis and accumulate SCM decay (Stitching)."""
+        if not self.anchor or not chain or spot <= 0:
+            return
+
+        today_ymd = now.strftime("%y%m%d")
+        zero_dte = [opt for opt in chain if _parse_expiry(opt.get("symbol", "")) == today_ymd]
+        if not zero_dte:
+            return
+
+        strikes = sorted(
+            {opt["strike"] for opt in zero_dte if _is_integer_strike(opt["strike"])},
+            key=lambda s: abs(s - spot),
+        )
+        if not strikes:
+            return
+
+        best_candidate = strikes[0]
+        if best_candidate == self.anchor["strike"]:
+            # Nearest active integer is still our current anchor
+            self._out_of_bounds_ticks = 0
+            return
+
+        _MIN_LEG_PRICE = 0.05
+        new_c_sym = new_p_sym = new_c_px = new_p_px = None
+        for opt in zero_dte:
+            if abs(opt["strike"] - best_candidate) > 0.01:
+                continue
+            otype = opt.get("option_type", opt.get("type", "")).upper()
+            px = _mid_price(opt.get("bid", 0.0), opt.get("ask", 0.0), opt.get("last_price", 0.0))
+            if otype in ("CALL", "C") and px >= _MIN_LEG_PRICE:
+                new_c_sym = opt["symbol"]
+                new_c_px = px
+            elif otype in ("PUT", "P") and px >= _MIN_LEG_PRICE:
+                new_p_sym = opt["symbol"]
+                new_p_px = px
+
+        if new_c_sym and new_p_sym:
+            # 1. Capture final decay % of current anchor to stitch to the accumulator.
+            raw_pcts = self._calculate_raw_pct(chain)
+            if raw_pcts:
+                if not hasattr(self, "accumulated_offset"):
+                    self.accumulated_offset = {"c": 0.0, "p": 0.0, "s": 0.0}
+                self.accumulated_offset["c"] += raw_pcts[0]
+                self.accumulated_offset["p"] += raw_pcts[1]
+                self.accumulated_offset["s"] += raw_pcts[2]
+
+            logger.warning(
+                f"[AtmDecay] Rolling anchor {self.anchor['strike']} -> {best_candidate} "
+                f"(SCM CDD stitched, offsets: S={self.accumulated_offset['s']:+.3f})"
+            )
+            
+            # 2. Lock new anchor
+            await self._persist({
+                "strike": best_candidate,
+                "base_strike": self.anchor.get("base_strike", self.anchor["strike"]),
+                "call_symbol": new_c_sym,
+                "put_symbol": new_p_sym,
+                "call_price": new_c_px,
+                "put_price": new_p_px,
+                "timestamp": now.isoformat(),
+            })
+            
+            # 3. Fire visual stitching marker for L4
+            self._strike_changed_flag = True
+            self._out_of_bounds_ticks = 0
+
 
     # ------------------------------------------------------------------
-    # Decay calculation — symbol-locked, dedup-guarded
+    # Decay calculation — symbol-locked, dedup-guarded, CDD Stitched
     # ------------------------------------------------------------------
-    def _calculate_decay(self, chain: list[dict[str, Any]]) -> dict[str, Any] | None:
+    def _calculate_raw_pct(self, chain: list[dict[str, Any]]) -> tuple[float, float, float] | None:
+        """Calculate the un-stitched raw percent decay for the current anchor."""
         a = self.anchor
         if not a:
             return None
@@ -406,7 +502,6 @@ class AtmDecayTracker:
         anchor_p = a["put_price"]
         anchor_s = anchor_c + anchor_p
 
-        # ── Exact symbol match ──────────────────────────────────────────
         curr_c = curr_p = 0.0
         for opt in chain:
             sym = opt.get("symbol")
@@ -422,16 +517,37 @@ class AtmDecayTracker:
         c_pct = (curr_c - anchor_c) / anchor_c if anchor_c > 0 else 0.0
         p_pct = (curr_p - anchor_p) / anchor_p if anchor_p > 0 else 0.0
         s_pct = (curr_s - anchor_s) / anchor_s if anchor_s > 0 else 0.0
+        
+        return c_pct, p_pct, s_pct
+
+    def _calculate_decay(self, chain: list[dict[str, Any]]) -> dict[str, Any] | None:
+        raw_pcts = self._calculate_raw_pct(chain)
+        if not raw_pcts:
+            return None
+            
+        c_raw, p_raw, s_raw = raw_pcts
+
+        # Apply CDD stitching offsets to create the Synthetic Constant-Moneyness curve
+        offsets = getattr(self, "accumulated_offset", {"c": 0.0, "p": 0.0, "s": 0.0})
+        c_pct = c_raw + offsets.get("c", 0.0)
+        p_pct = p_raw + offsets.get("p", 0.0)
+        s_pct = s_raw + offsets.get("s", 0.0)
 
         ts = datetime.now(ET)
         item = {
-            "strike": a["strike"],
-            "locked_at": datetime.fromisoformat(a["timestamp"]).strftime("%H:%M:%S"),
+            "strike": self.anchor["strike"],
+            "base_strike": self.anchor.get("base_strike", self.anchor["strike"]),
+            "locked_at": datetime.fromisoformat(self.anchor["timestamp"]).strftime("%H:%M:%S"),
             "call_pct": c_pct,
             "put_pct": p_pct,
             "straddle_pct": s_pct,
             "timestamp": ts.isoformat(),
+            "strike_changed": self._strike_changed_flag
         }
+        
+        # Reset flag immediately so it's only emitted for one tick
+        if self._strike_changed_flag:
+            self._strike_changed_flag = False
 
         # ── Deduplication — ONLY for Redis storage ─────────────────────
         # We always return the item to the UI to prevent flickering, 
@@ -448,25 +564,22 @@ class AtmDecayTracker:
             import asyncio
             asyncio.ensure_future(self._append_series(item, ts.strftime("%Y%m%d")))
             logger.info(
-                f"[AtmDecay] {int(a['strike'])} | "
+                f"[AtmDecay] {int(self.anchor['strike'])} | "
                 f"C:{c_pct:+.4f}  P:{p_pct:+.4f}  S:{s_pct:+.4f} (stored)"
             )
-            return item
 
-        # Do not emit identical tick to payload, let frontend sticky-merge
-        return None
+        # We always return the item to the UI to prevent flickering
+        return item
 
     # ------------------------------------------------------------------
     # Time-series storage
     # ------------------------------------------------------------------
     async def _append_series(self, data: dict[str, Any], date_str: str) -> None:
         if not self.redis:
+            logger.warning(f"[AtmDecayTracker] CANNOT STORE SERIES: self.redis is NONE")
             return
         key = self._series_key_tpl.format(date=date_str)
         await self.redis.rpush(key, json.dumps(data))
-        list_len = await self.redis.llen(key)
-        if list_len == 1:
-            await self.redis.expire(key, settings.opening_atm_redis_ttl_seconds)
 
         # ── COLD JSON FALLBACK ──
         # Offload safely so it doesn't block the hot L1 path

@@ -1,0 +1,54 @@
+# AI x Quant: 2024-2026 跨学科前沿应用报告
+
+## 1. 跨模态数据处理：从 L1 逐笔数据到图像语义
+
+在 2024-2026 年间，将高频交易 (HFT) 中的 L1/LOB 数据转化为“图像语义”或“空间拓扑”已成为主流。
+
+### 核心论文：*Painting the Market: Generative Diffusion Models for Financial LOB Simulation* (2025)
+- **核心逻辑**：该研究由顶级量化机构与学术界合作，将 Limit Order Book (LOB) 的快照转化为结构化的 **“时空图像” (Spatio-temporal Image)**。
+- **创新点**：
+    - **Diffusion Model + Inpainting**：利用扩散模型对 LOB 图像进行“修复”式预测。通过遮蔽未来状态并利用模型生成填充，能够比传统的 LSTM/CNN 捕捉到更深层的流动性黑洞和订单流不平衡。
+    - **空间归纳偏置**：利用 CNN 的空间特性捕捉价格档位间的耦合关系，解决了传统时序方法忽略价格档位距离（Price Proximity）的问题。
+- **应用场景**：高频做市商平衡风险，预测由异常订单流引起的闪崩（Flash Crash）。
+
+### 关联技术：LiT (Limit Order Book Transformer, 2025)
+- **方法**：虽然基于 Transformer，但其输入层采用 **“Grid-like Embedding”**，将订单簿深度与时间序列映射为类似于 Patch 的视觉单位，结合了 Vision Transformer (ViT) 的全局注意力。
+
+---
+
+## 2. 多智能体博弈 (Multi-Agent)：LLM 与纳什均衡
+
+2025 年被学术界称为“智能体之年”，LLM 智能体在博弈论中的应用显著突破。
+
+### 核心框架：ECON (Efficient Coordination via Nash Equilibrium, 2025)
+- **发布动态**：首发于 2025 年 6 月 arXiv，并被选为 **ICML 2026** 的重点展示项目。
+- **核心逻辑**：
+    - **Bayesian Nash Equilibrium (BNE)**：针对 LOB 环境下的信息不对称（Incomplete Information），ECON 框架允许 LLM 智能体在不进行直接通信的情况下，基于对市场其他参与者“信念 (Beliefs)”的概率建模来选择最优应答。
+    - **Hierarchical RL + LLM**：LLM 负责高层博弈策略设计（如“在流动性匮乏时采用激进消耗策略”），底层执行则交给强化学习模型，实现了策略的可解释性与执行的高效性。
+- **结论**：在模拟的市场环境中，基于 ECON 的智能体比传统做市商算法表现出更强的纳什均衡稳定性，能有效缓解“逐底竞争”带来的市场波动。
+
+---
+
+## 3. 可解释性 AI (XAI)：应对特征重要性归因
+
+对冲基金目前最关注的并非单一准确率，而是特征之间的**共线性 (Collinearity)** 对解释权的影响。
+
+### 顶级对冲基金应用：ExCIR (Explainability through Correlation Impact Ratio, 2025/2026)
+- **背景**：传统的 SHAP 和 LIME 在量化金融中容易失效，因为量化特征（如各种 Alpha Factors）通常高度相关。
+- **核心进展**：
+    - **BLOCKCIR 策略**：ExCIR 引入了“块归因”机制。它不是计算单因子的重要性，而是将高度相关的因子（如基于成交量的各种动量指标）聚类为块，计算 **Correlation-Aware Attribution**。
+    - **鲁棒中心化 (Robust Centering)**：利用 mid-mean 统计量减少金融数据中“厚尾 (Heavy-tail)”分布对贡献度评分的干扰。
+- **权威出处**：2025 年 ACM ICAIF (International Conference on AI in Finance) 及其 XAI-FIN 工作组的重点论文。
+
+---
+
+## 总结：AI x Quant 2024-2026 演进规律
+
+| 维度 | 传统方法 (2020-2023) | 顶级现状 (2024-2026) |
+| :--- | :--- | :--- |
+| **特征提取** | 多层感知机/RNN 序列 | **扩散模型图像化 (Diffusion inpainting)** |
+| **博弈模型** | 规则驱动/简单 RL | **LLM 贝叶斯纳什均衡 (ECON Framework)** |
+| **逻辑解释** | 简单 SHAP/LIME | **关联感知归因 (BLOCK-ExCIR Grouping)** |
+
+> [!TIP]
+> 建议关注 **ICML 2026 Finance Track** 中关于 "ECON Framework" 的实际工程实现，这可能是未来三年自动化交易执行 (Execution) 的天花板方案。
