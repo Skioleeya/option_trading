@@ -186,6 +186,7 @@ class PayloadAssemblerV2:
             data.wall_migration_data = ui_metrics.get("wall_migration_data", data.wall_migration_data)
             data.mtf_consensus = ui_metrics.get("mtf_consensus", data.mtf_consensus)
             data.skew_dynamics = ui_metrics.get("skew_dynamics", data.skew_dynamics)
+            data.iv_velocity = ui_metrics.get("iv_velocity", data.iv_velocity)
 
         return data
 
@@ -273,6 +274,15 @@ class PayloadAssemblerV2:
             logger.warning(f"[L3 Assembler] SkewDynamics failed: {exc}")
             skew_dynamics = {}
 
+        # IV Velocity
+        try:
+            iv_velocity = getattr(snap, "iv_velocity", None)
+            if iv_velocity and hasattr(iv_velocity, "model_dump"):
+                iv_velocity = iv_velocity.model_dump()
+        except Exception as exc:
+            logger.warning(f"[L3 Assembler] IV Velocity fallback failed: {exc}")
+            iv_velocity = None
+
         return UIState(
             micro_stats=micro_stats,
             tactical_triad=tactical_triad,
@@ -282,6 +292,7 @@ class PayloadAssemblerV2:
             mtf_flow=mtf_flow,
             skew_dynamics=skew_dynamics,
             macro_volume_map=snap.volume_map,
+            iv_velocity=iv_velocity,
         )
 
     @staticmethod
@@ -323,7 +334,7 @@ class _SnapshotData:
         "momentum", "vrp", "vrp_state", "net_charm", "svol_corr", "svol_state",
         "fused_signal_direction", "wall_dyn", "wall_migration_data",
         "per_strike_gex", "mtf_consensus", "skew_dynamics", "volume_map",
-        "net_gex", "call_wall", "put_wall",
+        "net_gex", "call_wall", "put_wall", "iv_velocity",
     )
 
     def __init__(self) -> None:
@@ -349,6 +360,7 @@ class _SnapshotData:
         self.net_gex: float = 0.0
         self.call_wall: float = 0.0
         self.put_wall: float = 0.0
+        self.iv_velocity: dict | None = None
 
 
 def _convert_active_option(d: dict) -> Any:

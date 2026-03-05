@@ -289,6 +289,7 @@ class UIState:
     mtf_flow:         MTFFlowState
     skew_dynamics:    dict[str, Any]       # pass-through (fully typed in Phase 2.7)
     macro_volume_map: dict[str, Any]
+    iv_velocity:      dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -300,6 +301,7 @@ class UIState:
             "mtf_flow":         self.mtf_flow.to_dict(),
             "skew_dynamics":    dict(self.skew_dynamics),
             "macro_volume_map": dict(self.macro_volume_map),
+            "iv_velocity":      self.iv_velocity,
         }
 
     @classmethod
@@ -314,6 +316,7 @@ class UIState:
             mtf_flow=MTFFlowState.zero_state(),
             skew_dynamics={},
             macro_volume_map={},
+            iv_velocity=None,
         )
 
 

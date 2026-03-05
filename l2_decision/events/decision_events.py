@@ -164,7 +164,7 @@ class DecisionOutput:
     latency_ms: float
     version: int                            # L0 MVCC version propagated from L1
     computed_at: datetime
-
+    raw_telemetry: dict[str, float] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -219,6 +219,9 @@ class DecisionOutput:
                 "iv_regime":       components.get("iv_regime", {}).get("direction", "NORMAL"),
                 "gex_intensity":   "NEUTRAL",
                 "explanation":     f"Guard: {self.guard_actions[0]}" if self.guard_actions else "",
+                "raw_vpin":        self.raw_telemetry.get("vpin_composite", 0.0),
+                "raw_bbo_imb":     self.raw_telemetry.get("bbo_imbalance_raw", 0.0),
+                "raw_vol_accel":   self.raw_telemetry.get("vol_accel_ratio", 0.0),
             }
         }
 

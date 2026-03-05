@@ -253,6 +253,8 @@ class AgentG:
 
         avg_tox = sum(atm_tox_vals) / len(atm_tox_vals) if atm_tox_vals else 0.0
         avg_bbo = sum(atm_bbo_vals) / len(atm_bbo_vals) if atm_bbo_vals else 0.0
+        if avg_bbo == 0.0:
+            avg_bbo = snapshot.get("bbo_imbalance", 0.0)
 
         # Paper 3: GEX-adaptive blend — neg GEX favors BBO (MM hedging signal quality rises)
         _bbo_w = 0.60 if (net_gex_f is not None and net_gex_f < 0) else 0.40
@@ -291,6 +293,8 @@ class AgentG:
                     atm_vpin_vals.append(float(vpin_s))
 
         avg_atm_vpin = sum(atm_vpin_vals) / len(atm_vpin_vals) if atm_vpin_vals else 0.0
+        if avg_atm_vpin == 0.0:
+            avg_atm_vpin = snapshot.get("vpin_score", 0.0)
         micro_flow_signal_dict["avg_atm_vpin_score"] = avg_atm_vpin
 
         # ── Practice 3: dealer_squeeze_alert from micro state ────────────────
@@ -546,7 +550,8 @@ class AgentG:
                     "active_options": self._active_options_presenter.get_latest(),
                     "mtf_flow": MTFFlowPresenter.build(
                         mtf_consensus=mtf_consensus
-                    )
+                    ),
+                    "iv_velocity": iv_data.model_dump() if iv_data else None,
                 },
                 "fused_signal": {
                     "direction": fused_signal.direction,
@@ -557,6 +562,9 @@ class AgentG:
                     "gex_intensity": fused_signal.gex_intensity.value,
                     "explanation": fused_signal.explanation,
                     "components": fused_signal.components,
+                    "raw_vpin": avg_atm_vpin,
+                    "raw_bbo_imb": avg_bbo,
+                    "raw_vol_accel": vib_data.vol_accel_ratio if vib_data else 0.0,
                 },
                 "micro_structure": agent_b.data.get("micro_structure"),
             },

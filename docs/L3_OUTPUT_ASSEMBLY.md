@@ -42,7 +42,7 @@
 ## 2. 写时复制组装 (PayloadAssembler & Target COW)
 
 - **废除 Deepcopy**：新的 `FrozenPayload` 对全链路不可变 (Immutable)。各模块状态组装利用引用传递（尤其是 `active_options` 这种超大会话结构）；一旦生成不可篡改。
-- **兼容模式接回**：提供 `to_dict()` 完美对齐老版本 `agent_g.data.*` 的扁平化 JSON Schema，保证 L4 终端无痛切换。
+- **兼容模式接回**：提供 `to_dict()` 完美对齐老版本 `agent_g.data.*` 的扁平化 JSON Schema，保证 L4 终端无痛切换。同时实现了深层解包逻辑，针对性地提取 `AgentResult.data["fused_signal"]` 旁路传导到前端，避开了以往对字典嵌套丢字段的问题。
 - **异常短路/清零机制**：内部包裹了健壮的 Error Path，一旦某微结构遭遇 NaN 生成错误，返回 `neutral/zero-state` 而非把错误数据推到前台。
 
 ## 3. 分化重构：Presenters V2

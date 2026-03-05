@@ -140,6 +140,15 @@ export function buildCommandRegistry(): Command[] {
                     AlertEngine.evaluate(useDashboardStore.getState())
                 },
             },
+            {
+                id: 'debug_toggle_hack_matrix',
+                label: 'Toggle Hack Matrix (L1 SIMD Overlay)',
+                category: 'DEBUG',
+                shortcut: 'Ctrl+D',
+                action: () => {
+                    window.dispatchEvent(new CustomEvent('l4:toggle_debug_overlay'))
+                },
+            },
         ] as Command[] : []),
     ]
 

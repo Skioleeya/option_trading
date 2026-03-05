@@ -1,8 +1,0 @@
-{
-  "strike": 680.0,
-  "call_symbol": "SPY260303C680000.US",
-  "put_symbol": "SPY260303P680000.US",
-  "call_price": 1.02,
-  "put_price": 0.82,
-  "timestamp": "2026-03-03T15:18:30.711673-05:00"
-}

@@ -18,6 +18,10 @@ export interface FusedSignal {
     // Phase 23/25B: MTF alignment score
     alignment?: number
     align_label?: string
+    // Raw tracking data for debugging/advanced users
+    raw_vpin?: string
+    raw_bbo_imb?: string
+    raw_vol_accel?: string
 }
 
 export interface IVVelocityResult {
@@ -123,6 +127,7 @@ export interface AgentGResult {
                 vanna: { label: string; badge: string }
                 momentum: { label: string; badge: string }
             }
+            iv_velocity?: IVVelocityResult | null
             wall_migration: Array<{
                 type_label: string
                 type_bg: string

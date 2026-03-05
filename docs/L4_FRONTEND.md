@@ -62,7 +62,7 @@ UI 在保持原版 TradingView-style 的冷酷暗色调三栏版式同时（`lib
 - **左栏**：微观结构 (`MicroStats`), Gamma/Vanna 流动变局 (`WallMigration`), 全链横向扫描引擎 (`DepthProfile`)
 - **中栏**：高频行情 Head (`Header`), Gex绝对值条 (`GexStatusBar`), ATM 衰减动能 (`AtmDecayChart` / `Overlay`)
 - **右栏**：多重决策融合器 (`DecisionEngine`), 核心博弈极向 (`TacticalTriad`), Skew 曲率 (`SkewDynamics`), 资金流 (`MtfFlow`), 活跃榜 (`ActiveOptions`)
-
+- **隐藏诊断面 (v3.1)**: 引入了名为 **Hack Matrix** 的底层 L1 SIMD 数据诊断大屏（`DebugOverlay.tsx`），通过 `Ctrl+D` 热键或 `CommandPalette` (`Ctrl+K`) 唤出，供量化研究员核对底层算力。另外 `DecisionEngine` 组件内也会将微观值以 `[7px]` 极小字体暗化挂载展示（注：严格使用 `??` 和 `!== undefined` 来确保合法空值 `0.0` 正确渲染，防止被 JS 弱类型逻辑隐藏）。
 ## 4. 连接守护与告警系统 (Monitor & Alerts)
 
 - **ConnectionMonitor**: 接管 WS 心跳。实现状态五连跳 `DISCONNECTED → CONNECTING → AWAIT_STATE → RUNNING → STALLED`。

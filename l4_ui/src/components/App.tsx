@@ -29,6 +29,7 @@ import { L4Rum } from '../observability/l4_rum'
 import { AlertEngine } from '../alerts/alertEngine'
 import { AlertToast } from './AlertToast'
 import { CommandPalette } from './CommandPalette'
+import { DebugOverlay } from './DebugOverlay'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // App
@@ -36,10 +37,14 @@ import { CommandPalette } from './CommandPalette'
 
 export const App: React.FC = () => {
     useDashboardWS()
+    const [debugOpen, setDebugOpen] = React.useState(false)
 
     useEffect(() => {
         L4Rum.markFmp()
         AlertEngine.start()
+
+        const handleOverlayToggle = () => setDebugOpen(prev => !prev)
+        window.addEventListener('l4:toggle_debug_overlay', handleOverlayToggle)
 
         // Cold boot: Attempt to hydrate ATM Decay historical array bounds natively BEFORE websocket. 
         // Eliminates single-tick wipeouts during crashes or manual F5.
@@ -52,7 +57,10 @@ export const App: React.FC = () => {
             })
             .catch(err => console.warn('[App] Cold history hydration failed:', err));
 
-        return () => AlertEngine.stop()
+        return () => {
+            AlertEngine.stop()
+            window.removeEventListener('l4:toggle_debug_overlay', handleOverlayToggle)
+        }
     }, [])
 
     const now = new Date()
@@ -60,6 +68,7 @@ export const App: React.FC = () => {
 
     return (
         <>
+            <DebugOverlay open={debugOpen} onClose={() => setDebugOpen(false)} />
             {/* ─── Portal siblings (no layout impact) ─────────────────────────── */}
             <CommandPalette />
             <AlertToast />

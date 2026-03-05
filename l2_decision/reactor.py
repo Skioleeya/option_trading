@@ -201,6 +201,15 @@ class L2DecisionReactor:
         total_latency_ms = (time.perf_counter() - t0) * 1000.0
         self._instrumentation.record_decision_confidence(guarded.confidence)
 
+        raw_telemetry_dict = {}
+        if hasattr(snapshot, "microstructure") and snapshot.microstructure:
+            ms = snapshot.microstructure
+            raw_telemetry_dict = {
+                "vpin_composite": getattr(ms, "vpin_composite", 0.0),
+                "bbo_imbalance_raw": getattr(ms, "bbo_imbalance_raw", 0.0),
+                "vol_accel_ratio": getattr(ms, "vol_accel_ratio", 0.0),
+            }
+
         output = DecisionOutput(
             direction=guarded.direction,
             confidence=guarded.confidence,
@@ -214,6 +223,7 @@ class L2DecisionReactor:
             latency_ms=total_latency_ms,
             version=version,
             computed_at=datetime.now(_ET),
+            raw_telemetry=raw_telemetry_dict,
         )
 
         # 7. Audit trail (non-blocking append)

@@ -31,6 +31,7 @@ class AggregateGreeks:
     total_call_gex: float = 0.0
     total_put_gex: float = 0.0
     num_contracts: int = 0
+    per_strike_gex: list[dict] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -156,5 +157,5 @@ class EnrichedSnapshot:
             "version":        self.version,
             "computed_at":    self.computed_at.isoformat(),
             "chain_elements": chain_elements,
-            "per_strike_gex": self.aggregates.per_strike_gex,
+            "per_strike_gex": chain_elements,  # Map full chain as strike info
         }

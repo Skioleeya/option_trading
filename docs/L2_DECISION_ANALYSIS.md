@@ -57,6 +57,8 @@
 - **Fusion Engine**：通过 `IVRegime` （波动率制度）判定当前环境，调用对应的融合查表（比如 Spike 阶段降低动量权重，提高 MicroFlow 敏感度）。
 - **Attention Fusion** (储备库): 支持基于 Numpy Softmax 的动态权重机制以及 Platt Scaling 置信度校准。
 
+> **Telemetry Pass-Through (v3.1 特性)**: 在 `L2DecisionReactor` 输出组装 `DecisionOutput` 时，直接内联穿透保留了 L1 算出的底层流指标存至 `raw_telemetry`，并在提取 `.data["fused_signal"]` 时将这些值映射为了 (`raw_vpin`, `raw_bbo_imb`, `raw_vol_accel`)。当局部 Strike 聚合由于无成交触发空值时，内置兜底机制保证了数值能够正确到达前端不受阻断。
+
 ## 4. 优先级护栏链 (Risk Guard Rails)
 
 融合后的盲目信号必须穿越以下审查（一旦阻断即判定为 HALT 或降级）：

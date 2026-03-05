@@ -36,6 +36,7 @@ export const Header: React.FC<Props> = memo(({
     const storeStatus = useDashboardStore(selectConnectionStatus)
     const timestamp = useDashboardStore((s) => s.payload?.timestamp ?? null)
     const ivRegimeRaw = useDashboardStore((s) => s.payload?.agent_g?.data?.fused_signal?.iv_regime ?? 'NORMAL')
+    const storeIvVelocity = useDashboardStore((s) => s.payload?.agent_g?.data?.ui_state?.iv_velocity ?? null)
 
     const spot = storeSpot ?? propSpot ?? null
     const ivPct = storeIvPct ?? propIvPct ?? null
@@ -78,7 +79,17 @@ export const Header: React.FC<Props> = memo(({
                 <div className="flex items-center gap-1.5">
                     <span className="text-[10px] font-bold text-[#71717a]">IV</span>
                     <span className={`font-mono text-[12px] font-black ${ivRegimeColor}`}>{ivPct != null ? `${(ivPct * 100).toFixed(2)}%` : '—'}</span>
-                    <span className={`text-[9px] font-black tracking-widest px-1.5 py-[1px] rounded-[2px] border ${ivBadgeCls}`}>{ivRegime}</span>
+                    <span className={`text-[9px] font-black tracking-widest px-1.5 py-[1px] rounded-[2px] border flex flex-col items-center justify-center ${ivBadgeCls}`}>
+                        <div className="flex items-center gap-1">
+                            {ivRegime}
+                            {/* IV Velocity Micro Indicator */}
+                            {storeIvVelocity && storeIvVelocity.state && typeof storeIvVelocity.state === 'string' && (
+                                <span className={`text-[7px] font-mono whitespace-nowrap ml-1 ${storeIvVelocity.state.includes('EXPANSION') || storeIvVelocity.state.includes('MOVE') ? 'text-[#ef4444] animate-pulse' : storeIvVelocity.state.includes('DROP') ? 'text-[#10b981]' : 'text-text-muted'}`}>
+                                    {storeIvVelocity.state.includes('EXPANSION') || storeIvVelocity.state.includes('MOVE') ? '↑' : storeIvVelocity.state.includes('DROP') ? '↓' : '•'} {storeIvVelocity.state}
+                                </span>
+                            )}
+                        </div>
+                    </span>
                 </div>
                 <div className="w-[1px] h-[12px] bg-[#3f3f46]" />
                 <div className="flex items-center gap-1.5">

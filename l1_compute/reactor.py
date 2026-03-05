@@ -322,6 +322,7 @@ class L1ComputeReactor:
             total_call_gex=agg.total_call_gex,
             total_put_gex=agg.total_put_gex,
             num_contracts=n_valid,
+            per_strike_gex=agg.per_strike_gex,
         )
 
         ttm_seconds = ttm_years * 252.0 * 6.5 * 3600.0
