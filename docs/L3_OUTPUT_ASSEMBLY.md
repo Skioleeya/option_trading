@@ -1,314 +1,72 @@
 # L3 — 输出组装层 (Output Assembly Layer)
 
-## 2025–2026 主流金融架构重构指引
-
-> **定位**: L3 是系统的发布中枢——将 L2 决策信号、L1 计算数据和 L0 原始快照组装为结构化 payload，通过高效协议分发给前端与外部消费者。
+> **定位**: L3 是系统的发布中枢——负责消费 L2 决策信号、L1 量化计算快照以及 L0 元数据，将其高效打包为全量/增量 Payload 结构，再通过广播轮询器向前端 WebSocket 客户端安全推送。
 >
-> **架构宗旨 (2025–2026)**: 从"Python dict 深拷贝 + JSON WebSocket 广播"模式，全面迁移至 **Protobuf/FlatBuffers 序列化 + 多通道分发 + 增量更新 (Delta Encoding) + Observability Dashboard Backend**。
+> **架构状态 (v3.1)**: 已摒弃落后的 `SnapshotBuilder` (Python 字典深拷贝满天飞)，完全迁移至 **"Write-on-Copy (COW) Assembler + 强类型 Pydantic Presenters + Delta Encoder 增量编码 + 并发 Governor"**。
 
 ---
 
-## 1. 架构目标与度量标准
-
-| KPI | 当前基线 (v3) | 2025 H2 目标 | 2026 目标 |
-|-----|--------------|-------------|----------|
-| Payload 组装延迟 | ~5–15 ms (deepcopy) | **< 1 ms** (结构化序列化) | **< 500 µs** (lazy COW) |
-| WS 广播延迟 (100 客户端) | ~10–30 ms | **< 3 ms** | **< 1 ms** (binary protocol) |
-| Payload 大小 | ~15–30 KB (JSON) | **< 5 KB** (Protobuf) | **< 2 KB** (delta encoding) |
-| 广播可靠性 | best-effort | **at-least-once + 序列号** | exactly-once (ACK) |
-| 历史查询延迟 (p99) | ~50–200 ms (Redis ZRANGEBYSCORE) | **< 20 ms** | **< 5 ms** (内存 Parquet) |
-
----
-
-## 2. 输出架构 (Target State)
+## 1. 核心输出架构 (当前状态)
 
 ```
-     L2 DecisionOutput + L1 EnrichedSnapshot + L0 Metadata
+      L2 DecisionOutput + L1 EnrichedSnapshot + AtmDecay
                            │
               ┌────────────▼────────────────┐
-              │     L3 Assembly Reactor      │
-              │                              │
-              │  ┌──────────────────────┐    │
-              │  │  Payload Assembler   │    │  ← COW 零拷贝组装
-              │  │  (Structured Types)  │    │
-              │  └──────────┬───────────┘    │
-              │             │                │
-              │  ┌──────────▼───────────┐    │
-              │  │  Delta Encoder       │    │  ← 增量更新 (仅发送变化)
-              │  │  (vs last payload)   │    │
-              │  └──────────┬───────────┘    │
-              │             │                │
-              │  ┌──────────▼───────────┐    │
-              │  │  Multi-Channel       │    │
-              │  │  Distributor         │    │
-              │  │  ├─ WS (binary PB)  │    │
-              │  │  ├─ SSE (JSON)      │    │  ← 轻量级备选
-              │  │  ├─ gRPC stream     │    │  ← 外部量化系统
-              │  │  └─ Kafka/NATS      │    │  ← 微服务间通信
-              │  └──────────┬───────────┘    │
-              │             │                │
-              │  ┌──────────▼───────────┐    │
-              │  │  Time-Series Store   │    │  ← 内存 + 持久化
-              │  │  (Arrow + Parquet)   │    │
-              │  └──────────────────────┘    │
-              │                              │
-              └──────────────────────────────┘
+              │     L3AssemblyReactor       │
+              │                             │
+              │  ┌───────────────────────┐  │
+              │  │  PayloadAssemblerV2   │  │ ← COW 组装器，双源兼容
+              │  │  (Frozen Dataclass)   │  │
+              │  └──────────┬────────────┘  │
+              │             │               │
+              │  ┌──────────▼────────────┐  │ ← UI State Presenters 子集
+              │  │ TacticalTriadPresenter│  │   MicroStats / ActiveOptions
+              │  │ WallMigrationPresenter│  │   MTFFlow / SkewDynamics
+              │  │ DepthProfilePresenter │  │   [使用 Numba/GPU 路由处理海量数据]
+              │  └──────────┬────────────┘  │
+              │             │               │
+              │  ┌──────────▼────────────┐  │
+              │  │  FieldDeltaEncoder    │  │ ← 增量提取：仅下发 Diff 结构
+              │  │  (vs last payload)    │  │
+              │  └──────────┬────────────┘  │
+              │             │               │
+              │  ┌──────────▼────────────┐  │
+              │  │ BroadcastGovernor     │  │ ← Asyncio.gather 并发推送
+              │  └──────────┬────────────┘  │
+              │             │               │
+              └─────────────┼───────────────┘
+                            │
+               WebSocket / HTTP Client (L4)
 ```
 
----
+## 2. 写时复制组装 (PayloadAssembler & Target COW)
 
-## 3. Payload 组装 2.0
+- **废除 Deepcopy**：新的 `FrozenPayload` 对全链路不可变 (Immutable)。各模块状态组装利用引用传递（尤其是 `active_options` 这种超大会话结构）；一旦生成不可篡改。
+- **兼容模式接回**：提供 `to_dict()` 完美对齐老版本 `agent_g.data.*` 的扁平化 JSON Schema，保证 L4 终端无痛切换。
+- **异常短路/清零机制**：内部包裹了健壮的 Error Path，一旦某微结构遭遇 NaN 生成错误，返回 `neutral/zero-state` 而非把错误数据推到前台。
 
-### 3.1 从 deepcopy 到 Copy-on-Write (COW)
+## 3. 分化重构：Presenters V2
 
-当前问题：每次 compute tick 整个 payload 做 `deepcopy` → 大量 GC 压力。
+负责把 L1/L2 的裸数据“梳妆打扮”为前台使用的 UI 部件（MetricCard 等）：
+- **DepthProfilePresenterV2**：最为复杂，接收 100 档全链 Greeks 数据。内嵌 EMA 2-Tier 收敛系统计算 Gamma Profile。利用 `STRIKE_COUNT` (14 档) 窗口进行裁剪平滑，阻断 NaN/Inf 无效数据。
+- **其它 Presenters**：含 `MicroStats`, `TacticalTriad`, `WallMigration`, `MTFFlow` 等，负责封装 Badge/Tooltip 元信息供 UI 组件渲染。
 
-```python
-class PayloadAssembler:
-    """Copy-on-Write 组装器 — 仅在变化时创建新引用"""
+## 4. 增量更新 (Field Delta Encoding)
 
-    def __init__(self):
-        self._last_payload: FrozenPayload | None = None
+为了避免 1 Hz 高频广播对 WebSocket 带宽的摧残引发堵塞（尤其是客户端背压引起后端 OOM）：
+- 只要上游 Snapshot 发生计算循环，`BroadcastGovernor` 会使用 `FieldDeltaEncoder` 同 `_last_payload` 比对。
+- 如果数据没有突变（例如周末停盘、夜盘断流），生成并推送轻量级 Keepalive / Delta Payload。
+- 设计上附带 30s 的强制全量快照 (Full Flush) 防错纠偏机制。
 
-    def assemble(self, decision: DecisionOutput,
-                 snapshot: EnrichedSnapshot,
-                 atm_decay: AtmDecayPayload) -> FrozenPayload:
-        """组装不可变 payload"""
+## 5. 多层时序存储 (Time-Series Store)
 
-        # Presenters 仍然是纯函数
-        ui_state = UIState(
-            micro_stats=MicroStatsPresenter.build(decision),
-            tactical_triad=TacticalTriadPresenter.build(decision),
-            skew_dynamics=SkewDynamicsPresenter.build(decision),
-            active_options=ActiveOptionsPresenter.build(snapshot),
-            mtf_flow=MTFFlowPresenter.build(decision),
-            wall_migration=WallMigrationPresenter.build(decision),
-            depth_profile=DepthProfilePresenter.build(snapshot),
-        )
+不仅向外推热数据，还要兼顾历史查阅（供 UI 绘制 K 线）：
+- **Hot Layer (内存)**：采用 `collections.deque` 实现 O(1) 最近数据读取。
+- **Warm Layer (Redis)**：自动转码写入 Redis TimeSeries，向后兼容原先的 `/history` 和 `/api/atm-decay/history` 接口请求。
 
-        payload = FrozenPayload(
-            timestamp=datetime.utcnow(),
-            spot=snapshot.spot,
-            signal=decision.signal,
-            ui_state=ui_state,
-            atm=atm_decay,
-            version=snapshot.version,
-        )
+## 6. 迁移与升级路线图 (2025-2026 Vision)
 
-        self._last_payload = payload
-        return payload
-```
-
-### 3.2 Presenter 2.0 — 强类型输出
-
-从 dict 返回值迁移到 **Pydantic model / Protobuf message**:
-
-```python
-class MicroStatsOutput(BaseModel):
-    """强类型 Presenter 输出"""
-    net_gex: MetricCard
-    wall_dynamics: MetricCard
-    vanna_state: MetricCard
-    momentum: MetricCard
-
-class MetricCard(BaseModel):
-    label: str
-    value: str
-    badge: str    # "positive" | "negative" | "neutral"
-    tooltip: str  # 新增: 悬停解释
-```
-
----
-
-## 4. 增量更新 (Delta Encoding)
-
-### 4.1 原理
-
-大部分 ticker 之间，80%+ 的 payload 字段未变化。发送完整 JSON 是极大浪费。
-
-### 4.2 实现方案
-
-```python
-class DeltaEncoder:
-    """计算两次 payload 之间的差异"""
-
-    def encode(self, current: FrozenPayload, previous: FrozenPayload | None) -> DeltaPayload:
-        if previous is None:
-            return DeltaPayload(type="full", data=current.to_dict())
-
-        diff = {}
-        for field in current.__fields__:
-            curr_val = getattr(current, field)
-            prev_val = getattr(previous, field)
-            if curr_val != prev_val:
-                diff[field] = curr_val
-
-        return DeltaPayload(
-            type="delta",
-            version=current.version,
-            prev_version=previous.version,
-            changes=diff,
-        )
-```
-
-```
-客户端侧:
-  if payload.type == "full":
-      state = payload.data
-  elif payload.type == "delta":
-      assert state.version == payload.prev_version
-      state = { **state, **payload.changes }
-```
-
-**带宽节省**: 预估 JSON 大小从 ~25 KB → ~3–5 KB (80% 压缩)。
-
----
-
-## 5. 多通道分发架构
-
-### 5.1 通道矩阵
-
-| 通道 | 协议 | 格式 | 延迟 | 消费者 |
-|------|------|------|------|--------|
-| **Primary WS** | WebSocket | Protobuf (binary) | < 1 ms | React 仪表板 |
-| **Legacy WS** | WebSocket | JSON | < 5 ms | 向后兼容 |
-| **SSE Endpoint** | HTTP/2 SSE | JSON | < 10 ms | 移动端/轻量客户端 |
-| **gRPC Stream** | gRPC bidirectional | Protobuf | < 1 ms | 外部量化系统 |
-| **Event Bus** | NATS/Kafka | Protobuf | < 2 ms | 微服务下游消费 |
-
-### 5.2 Protobuf Schema (核心)
-
-```protobuf
-syntax = "proto3";
-
-message DashboardPayload {
-  uint64 version = 1;
-  google.protobuf.Timestamp timestamp = 2;
-  double spot = 3;
-  SignalData signal = 4;
-  UIStateData ui_state = 5;
-  AtmDecayData atm = 6;
-}
-
-message UIStateData {
-  MicroStats micro_stats = 1;
-  TacticalTriad tactical_triad = 2;
-  SkewDynamics skew_dynamics = 3;
-  repeated ActiveOption active_options = 4;
-  MTFFlow mtf_flow = 5;
-  repeated WallMigrationEntry wall_migration = 6;
-  DepthProfile depth_profile = 7;
-}
-
-message MetricCard {
-  string label = 1;
-  string value = 2;
-  string badge = 3;
-  string tooltip = 4;
-}
-```
-
----
-
-## 6. ATM Decay Tracker 2.0
-
-| 改进 | 当前 | 目标 |
-|------|------|------|
-| 更新源 | chain + spot | **直接从 L1 EnrichedSnapshot** |
-| 持久化 | Redis ZSET | **Redis TimeSeries + Parquet 日归档** |
-| 历史查询 | 全日单序列 | **多 strike 追踪 + 比较** |
-| 新指标 | IV + Theta | **+ Gamma acceleration + Realized vs Implied** |
-
----
-
-## 7. 时序存储 2.0 (Time-Series Backend)
-
-### 7.1 双层存储
-
-```
-┌─────────────────────────────────────────────────┐
-│                Time-Series Store                 │
-│                                                  │
-│  Hot Layer (最近 2 小时):                        │
-│    Arrow RecordBatch in-memory ring buffer       │
-│    查询: O(1) 最新 N 条                          │
-│                                                  │
-│  Warm Layer (当日):                              │
-│    Redis TimeSeries (per-field streams)           │
-│    查询: 任意时间窗口聚合 (MRANGE)               │
-│                                                  │
-│  Cold Layer (历史):                              │
-│    Parquet files on disk (daily rotation)         │
-│    查询: DuckDB / Polars ad-hoc analysis         │
-└─────────────────────────────────────────────────┘
-```
-
-### 7.2 API 端点升级
-
-| 端点 | 当前 | 2025–2026 |
-|------|------|---------|
-| `GET /history` | Redis ZSET | Arrow Flight 或 REST + Protobuf |
-| `GET /api/atm-decay/history` | Redis | Redis TimeSeries + 自动聚合 |
-| `GET /api/features/history` | 无 | 新增: Feature Store 时序查询 |
-| `GET /api/signals/history` | 无 | 新增: 信号审计日志查询 |
-| `WebSocket /ws/dashboard` | JSON | Protobuf binary (向后兼容 JSON 备选) |
-
----
-
-## 8. 双循环架构 2.0
-
-```
-_compute_reactor                     _broadcast_governor
-  ├─ 从 L1 EventBus 消费快照         ├─ 固定 1Hz (可配置)
-  ├─ L2 DecisionReactor.run()        ├─ DeltaEncoder.encode()
-  ├─ PayloadAssembler.assemble()     ├─ 多通道分发 (WS + gRPC + NATS)
-  ├─ TimeSeriesStore.write()         ├─ OTel span (broadcast_latency)
-  └─ Event 发布到 internal bus       └─ 客户端 ACK 追踪 (可选)
-```
-
-**关键改进**:
-- **Reactor 模式**: 计算循环从定时轮询改为事件驱动（L1 产出时立即触发）
-- **Broadcast Governor**: 限速器确保高频计算不淹没客户端
-- **背压感知**: 若客户端消费慢于 1Hz，自动降级为 delta-only 模式
-
----
-
-## 9. 可观测性
-
-| Span | 度量 |
-|------|------|
-| `l3.assemble` | 组装延迟、COW 命中率 |
-| `l3.delta_encode` | 差异比例、压缩大小 |
-| `l3.broadcast.ws` | per-client 延迟、消息积压 |
-| `l3.broadcast.grpc` | stream 健康、重连次数 |
-| `l3.timeseries.write` | 写入延迟、GC 频率 |
-| `l3.presenter.*` | 各 Presenter 延迟 |
-
----
-
-## 10. 迁移路线图
-
-```
-Phase 1 (2025 Q3): Presenter 强类型化 (Pydantic) + COW 组装
-Phase 2 (2025 Q4): DeltaEncoder + Protobuf schema 定义
-Phase 3 (2026 Q1): 多通道分发 (WS binary + gRPC)
-Phase 4 (2026 Q1): Time-Series Store 三层架构
-Phase 5 (2026 Q2): Broadcast Governor + 背压感知
-Phase 6 (2026 H2): Arrow Flight 历史查询 + Kafka/NATS 事件总线
-```
-
----
-
-## 11. 关键文件（当前 → 目标映射）
-
-| 当前文件 | 重构目标 | 备注 |
-|---------|---------|------|
-| `services/system/snapshot_builder.py` | → `assembly/payload_assembler.py` | COW + 强类型 |
-| `ui/*.py` (7 Presenters) | → `presenters/*.py` (Pydantic output) | 输出类型化 |
-| `services/system/historical_store.py` | → `storage/timeseries_store.py` | 三层存储 |
-| `services/system/redis_service.py` | 保持 + 增加 TimeSeries 支持 | — |
-| `main.py` (AppContainer) | → `runtime/compute_reactor.py` + `runtime/broadcast_governor.py` | 分离 |
-| — (新文件) | `assembly/delta_encoder.py` | 增量编码 |
-| — (新文件) | `proto/dashboard.proto` | Protobuf 定义 |
-| — (新文件) | `channels/grpc_server.py` | gRPC 流式端点 |
-| — (新文件) | `channels/nats_publisher.py` | 事件总线 |
+- **Phase 1 (v3.1，已完成)**：写时复制组装器 + Presenter 强类型化 + Delta 增量压缩 + Asyncio 并行广播。
+- **Phase 2 (2025 Q4)**：Protobuf (PB) / Flatbuffers 极简二进制序列化，彻底终结 JSON。
+- **Phase 3 (2026 Q1)**：gRPC 双向流 API 通道接入（针对外部机构量化引擎消费）。
+- **Phase 4 (2026 H2)**：Cold Layer 落盘引擎（Arrow Flight / DuckDB 加速 Parquet 历史离线分析引擎）。

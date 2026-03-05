@@ -1,210 +1,68 @@
 # L0 — 数据摄取层 (Data Ingestion Layer)
 
-## 2025–2026 主流金融架构重构指引
-
-> **定位**: L0 是系统的感官神经元——负责以亚毫秒延迟从市场数据源（Longport / Polygon / Databento / OPRA）采集报价流，完成**数据归一化 → 质量断言 → 有序分发**三阶段处理后，以强类型事件流形式交付给 L1。
+> **定位**: L0 是系统的感官神经元——负责以亚毫秒延迟从市场数据源（Longport WS/REST）采集报价流，经过**数据清洗 → 动态限流 → IV 基准提取 → MVCC 版本化存储**四阶段处理后，输出强类型的 `CleanQuoteEvent` / 链快照供 L1 消费。
 >
-> **架构宗旨 (2025–2026)**: 从"轮询 + 回调"单体模式，全面迁移至 **Event-First Architecture + FPGA-Ready Interface + Observability-Native Design**。
+> **架构状态 (v3.1)**: 已完成从 "长脚本混杂" 向 **模块化流水线 (Modular Pipeline)** 的重构，全面引入无套利清洗、自适应限流、以及严格的 REST 与 WS 数据覆盖保护。
 
 ---
 
-## 1. 架构目标与度量标准
-
-| KPI | 当前基线 (v3) | 2025 H2 目标 | 2026 目标 |
-|-----|--------------|-------------|----------|
-| WS → 内存快照延迟 | ~5–15 ms | **< 1 ms** (Rust ingest) | **< 200 µs** (kernel bypass) |
-| REST 回退 p99 延迟 | 150–300 ms | < 80 ms (连接池复用) | < 50 ms (gRPC streaming) |
-| 内存快照一致性 | seq_no 乐观锁 | **MVCC 快照隔离** | 无锁 SPSC ring buffer |
-| 数据质量覆盖率 | NaN/Inf 清洗 | **统计异常断路器** | 自适应 Z-Score 门限 |
-| 可观测性 | print 日志 | **OpenTelemetry spans** | 全链路 tick-to-trade |
-
----
-
-## 2. 事件驱动摄取架构 (Target State)
+## 1. 核心架构与处理流
 
 ```
                     ┌──────────────────────────────────────────────────┐
                     │               L0 Data Ingestion Mesh             │
                     │                                                  │
   ┌──────────┐      │  ┌──────────────┐   ┌────────────────┐          │
-  │ Longport │──WS──│─▶│ IngestWorker │──▶│ SanitizePipe   │          │
-  │ OPRA     │      │  │  (Rust/Tokio)│   │ (Type+Stat)    │          │
-  │ Polygon  │──WS──│─▶│              │   └───────┬────────┘          │
-  │ Databento│      │  └──────────────┘           │                   │
-  └──────────┘      │                    ┌────────▼────────┐          │
-                    │                    │ EventBus (SPSC) │          │
-                    │                    │ Ring Buffer      │          │
-                    │                    └────────┬────────┘          │
-                    │              ┌──────────────┼───────────────┐   │
-                    │              ▼              ▼               ▼   │
-                    │      ChainStateStore  TimeSeriesLog   OTel Span │
-                    │      (MVCC Snapshot)  (Parquet/Arrow) (Traces)  │
+  │ Longport │──WS──│─▶│ MarketData   │──▶│ SanitizePipeV2 │          │
+  │ WebSockets      │  │   Gateway    │   │ (Type+Stat)    │          │
+  └──────────┘      │  └──────────────┘   └───────┬────────┘          │
+                    │                             │                   │
+  ┌──────────┐      │                     ┌───────▼────────┐          │
+  │ Longport │─REST─│─▶ Tier2/3 Poller ──▶│ ChainStateStore│──▶ L1    │
+  │ OpenAPI  │      │                     │ (MVCC / Protect)│          │
+  └──────────┘      │                     └───────▲────────┘          │
+                    │                             │                   │
+                    │                     ┌───────┴────────┐          │
+                    │                     │ IV Baseline    │          │
+                    │                     │ Sync           │          │
                     └──────────────────────────────────────────────────┘
 ```
 
-### 2.1 IngestWorker (Rust/Tokio)
+## 2. 关键组件与机制 (当前已实现)
 
-替代当前 Python OS 线程回调:
+### 2.1 数据清洗管道 (SanitizePipeV2)
+从简单的 NaN/Inf 过滤升级为严密的多维断路器检测：
+- **无套利条件检测**：拦截 `call_iv > put_iv + X` 同行使价穿透报价。
+- **报价时效 TTL 丢弃**：拦截滞后超过预设阈值（如 300s）的延期 Tick。
+- **Bid/Ask 合理性检测**：丢弃 Bid > Ask 的倒挂脏数据。
+- **OI 突变护栏**：基于 `StatisticalBreaker` 拦截大于 5σ 的极端持仓量跳变。
 
-```rust
-// 伪代码 — Rust ingest worker
-async fn ingest_loop(ws: WsStream, bus: SpscProducer<MarketEvent>) {
-    while let Some(frame) = ws.next().await {
-        let event = decode_longport_frame(frame)?;  // 零拷贝解码
-        let clean = sanitize(event)?;                // 内联 NaN/Inf 检查
-        bus.push(clean);                             // 无锁分发
-        OTEL_COUNTER.add(1, &[("feed", "longport")]); // 可观测性
-    }
-}
-```
+### 2.2 链状态存储与并发保护 (MVCCChainStateStore)
+当前在 `chain_state_store.py` 内部实现了针对多数据源（WS 高频 + REST 低频）的融合保护机制：
+- **读写快照隔离**：保证 L1 读取时拿到点对点数据一致性（写入复制）。
+- **REST 数据降权防护**：REST 轮询接口仅能补充缺失的次要期权状态，无法覆盖由 WS 创建的活跃价格字段（Bid/Ask/Spot 等）。
 
-**关键改进**:
-- **零拷贝解码**: 使用 `rkyv` 或 Cap'n Proto 直接映射 wire bytes → struct，消除 Python `float()` 转换开销
-- **背压 (Backpressure)**: Ring buffer 满时丢弃最旧报价而非阻塞生产者，保证延迟确定性
-- **多源汇聚**: 统一 trait `MarketFeed` 抽象 Longport / Polygon / Databento，一条 ingest 通道服务多源
+### 2.3 IV 基线与降级瀑布 (IV Baseline Sync)
+在 0DTE 高频交易中，IV 是定价锚点。当出现流动性枯竭时，将使用以下级联降级策略求根：
+1. **WS 实时 IV**（满足 TTL 有效期）
+2. **REST 基线 IV**（在 `spot_at_sync` 价格有效偏离阈值内）
+3. **链内中位 IV**（基于前后档推算）
+4. **SABR 外推计算**（交由 L1 层计算）
 
-### 2.2 SanitizePipeline 2.0
+### 2.4 多层限流器 (Singleton Rate Limiter)
+防止在开盘、剧烈波动导致 REST 轮询雪崩：
+- **Token Bucket + Semaphore**：双轨并发频控（默认 `max_calls=10/s`, `max_concurrent=5`）。
+- **冷却期 (Cooldown) 阻断**：触发死锁或全局限流时进入 60s 冷却禁止访问。
 
-从简单 NaN/Inf 清洗升级为**统计异常检测**:
+## 3. 分层订阅拉取架构
 
-| 检测维度 | 当前 | 2025–2026 目标 |
-|---------|------|---------------|
-| 数值有效性 | `math.isfinite()` | 保留 + 下游 Z-Score 断路器 |
-| 价格跳变 | 无 | **Tick-to-tick ΔP > 5σ → circuit breaker** |
-| 时间序列断流 | 无 | **Gap > 3s → 触发 REST backfill** |
-| Bid/Ask 倒挂 | 无 | **Crossed market detection** → 标记 `is_stale` |
-| OI 异常飙升 | 无 | **OI delta > Q99 → alert + snapshot** |
+- **Tier 1 (WebSocket)**：ATM 附近 ±N 档位核心合约。自动断线重连、心跳检测。
+- **Tier 2 (次 ATM 轮询)**：用作 Tier1 滑动时的接力池，防踏空。
+- **Tier 3 (远端 OI 轮询)**：深度 OTM 合约每 10 分钟检测，用于宏观支撑位探测。
 
-### 2.3 ChainStateStore 2.0 — MVCC 快照隔离
+## 4. 迁移与升级路线图 (2025-2026 Vision)
 
-替代当前 seq_no 乐观锁：
-
-```python
-class ChainStateStore:
-    """Multi-Version Concurrency Control for market state"""
-
-    def apply_event(self, event: CleanQuoteEvent) -> None:
-        """写入新版本（仅在 ingest 线程调用）"""
-        new_version = self._current_version + 1
-        self._versions[new_version] = {
-            **self._versions[self._current_version],
-            event.symbol: event.to_dict()
-        }
-        self._current_version = new_version
-        self._gc_old_versions(keep=3)
-
-    def get_snapshot(self) -> tuple[int, dict]:
-        """读取最新一致性快照（任意线程安全调用）"""
-        v = self._current_version  # atomic read
-        return v, self._versions[v]  # 不可变引用
-```
-
-**优势**: 读者永远看到一致的点快照，无锁竞争。GC 保留最近 3 个版本支持偶发延迟读。
-
----
-
-## 3. 分层订阅架构 2.0
-
-### Tier 0 — FPGA / Kernel Bypass (2026 Vision)
-
-| 属性 | 规格 |
-|------|------|
-| 协议 | OPRA/SIP 原始 multicast (UDP) |
-| 延迟 | < 10 µs (hardware timestamped) |
-| 部署 | Colo 机房 + Solarflare NIC |
-| 适用 | 超低延迟 HFT 场景扩展 |
-
-> ⚠️ **2025 路线**: 设计接口抽象但不实现硬件层；保证软件架构不阻塞未来硬件升级。
-
-### Tier 1 — WebSocket 实时推送 (核心)
-
-- **协议**: Longport WS (Quote + Depth + Trade)
-- **改进**: Rust IngestWorker 接管 OS 线程回调
-- **窗口**: ATM ± 动态 window（保持）
-- **新增**: 心跳监控 + 自适应重连退避 (exponential backoff with jitter)
-
-### Tier 2 — 近到期 REST 轮询
-
-- **改进**: HTTP/2 connection multiplexing
-- **新增**: 条件轮询 — 仅在 Tier 1 gap > 3s 时触发
-- **格式**: 响应转 Arrow RecordBatch 减少 GC 压力
-
-### Tier 3 — 宏观结构 REST (周期权)
-
-- **保持**: 10min 轮询 Top-20 OI
-- **新增**: 增量模式 — 仅拉取 OI 变化 > 5% 的合约
-
----
-
-## 4. 速率限制器 2.0
-
-```
-┌─────────────────────────────────────────────────┐
-│           Adaptive Rate Governor                 │
-│                                                  │
-│  Layer 1: Token Bucket (8 req/s, burst 8)       │ ← 保持
-│  Layer 2: Sliding Window (per-endpoint)          │ ← 新增
-│  Layer 3: Circuit Breaker (3 consecutive 429)    │ ← 新增
-│  Layer 4: Priority Queue (Quote > OI > History)  │ ← 新增
-│                                                  │
-│  Metrics: p50/p99 latency, rejection rate,       │
-│           token utilization → OTel Histogram     │
-└─────────────────────────────────────────────────┘
-```
-
----
-
-## 5. 数据输出格式 2.0 (Arrow-Native)
-
-```python
-# 2025 目标: 从 dict-of-dicts 迁移至 Apache Arrow RecordBatch
-{
-    "spot": float,                          # SPY 现货价格
-    "chain": pa.RecordBatch,                # Tier1 合约 (zero-copy to L1)
-    "tier2_chain": pa.RecordBatch,          # 2DTE 合约
-    "tier3_chain": pa.RecordBatch,          # 周期权
-    "volume_map": dict[float, int],         # strike → 总成交量
-    "aggregate_greeks": dict,               # BSM 聚合 (L1 产出)
-    "as_of": datetime,
-    "version": int,                         # MVCC 版本号
-    "quality": DataQualityReport,           # 新增: 数据质量诊断
-}
-```
-
----
-
-## 6. 可观测性 (Observability-Native)
-
-| 维度 | 工具 | 指标 |
-|------|------|------|
-| Traces | OpenTelemetry → Jaeger | 每个 tick 的 ingest→sanitize→store 完整链路 |
-| Metrics | Prometheus Histogram | `l0_ingest_latency_us`, `l0_sanitize_rejects_total` |
-| Logs | Structured JSON (slog) | 所有异常事件带 `trace_id` 关联 |
-| Alerts | Grafana Alert Rules | Gap > 5s, rejection_rate > 1%, latency p99 > 10ms |
-
----
-
-## 7. 迁移路线图
-
-```
-Phase 1 (2025 Q3): SanitizePipeline 统计断路器 + OTel instrumentation
-Phase 2 (2025 Q4): Rust IngestWorker (tokio WS) + SPSC EventBus
-Phase 3 (2026 Q1): MVCC ChainStateStore + Arrow RecordBatch 输出
-Phase 4 (2026 Q2): 多源 Feed 抽象 (Polygon/Databento) + 条件轮询
-Phase 5 (2026 H2): FPGA/Kernel Bypass 接口预留
-```
-
----
-
-## 8. 关键文件（当前 → 目标映射）
-
-| 当前文件 | 重构目标 | 备注 |
-|---------|---------|------|
-| `services/feeds/option_chain_builder.py` | 精简为纯 Orchestrator Shell | 逻辑全部下沉子模块 |
-| `services/feeds/market_data_gateway.py` | → Rust `ingest_worker` | PyO3 暴露 Python 接口 |
-| `services/feeds/sanitization.py` | → `SanitizePipeline v2` | 增加统计异常检测 |
-| `services/feeds/chain_state_store.py` | → MVCC 版本化存储 | 消除 seq_no 乐观锁 |
-| `services/feeds/feed_orchestrator.py` | 保持，增加条件轮询逻辑 | — |
-| `services/feeds/rate_limiter.py` | → `AdaptiveRateGovernor` | 分层限流 + 优先级 |
-| — (新文件) | `otel/l0_instrumentation.py` | 可观测性桩 |
-| — (新文件) | `feeds/data_quality.py` | 数据质量报告 |
+- **Phase 1 (v3.1，已完成)**：SanitizePipeline V2 统计断路器 + L0 模块化拆分 + 安全限流。
+- **Phase 2 (2025 H2)**：Rust IngestWorker (tokio WS) 替代 Python 网关；引入 SPSC Ring Buffer + `rkyv` 零拷贝解码。
+- **Phase 3 (2026 Q1)**：Arrow RecordBatch 完全接管字典，L0→L1 内存全透明。
+- **Phase 4 (2026 H2)**：底层针对未来 FPGA/Kernel Bypass 预留协议插槽。
