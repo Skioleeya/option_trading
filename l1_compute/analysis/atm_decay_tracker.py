@@ -139,12 +139,34 @@ class AtmDecayTracker:
                         f"[AtmDecayTracker] Restored anchor from cold JSON: "
                         f"strike={anchor['strike']} (spot={spot if spot else 'N/A'})"
                     )
-                    # Heal Redis
+                    # Heal Redis Anchor
                     if self.redis:
                         try:
                             await self._save_redis(anchor)
                         except Exception:
                             pass
+                    
+                    # ── STAGE 2: Restore Historical Series Array from Cold JSON ──
+                    if self.redis:
+                        cold_history_file = self._cold_dir / f"atm_series_{self._today}.json"
+                        if cold_history_file.exists():
+                            try:
+                                history_points = json.loads(cold_history_file.read_text())
+                                if history_points and isinstance(history_points, list):
+                                    series_key = self._series_key_tpl.format(date=self._today)
+                                    # Only patch if Redis history is empty
+                                    current_len = await self.redis.llen(series_key)
+                                    if current_len == 0:
+                                        # Dump JSON points directly back into array
+                                        pipe = self.redis.pipeline()
+                                        for point in history_points:
+                                            pipe.rpush(series_key, json.dumps(point))
+                                        pipe.expire(series_key, settings.opening_atm_redis_ttl_seconds)
+                                        await pipe.execute()
+                                        logger.info(f"[AtmDecayTracker] Recovered {len(history_points)} cold tracking points natively into Redis.")
+                            except Exception as exc:
+                                logger.error(f"[AtmDecayTracker] Cold JSON timeseries restore failed: {exc}")
+
                     self.is_initialized = True
                     return
                 else:
@@ -275,6 +297,15 @@ class AtmDecayTracker:
             return
         logger.info(f"[AtmDecayTracker] Flushing series for {self._today}")
         await self.redis.delete(self._series_key_tpl.format(date=self._today))
+        
+        # Also flush cold JSON
+        cold_history_file = self._cold_dir / f"atm_series_{self._today}.json"
+        if cold_history_file.exists():
+            try:
+                cold_history_file.unlink()
+            except Exception as e:
+                logger.error(f"[AtmDecayTracker] Failed to flush cold JSON history: {e}")
+                
         self._prev_pcts = None
 
     async def pre_fill_history(self) -> None:
@@ -416,14 +447,14 @@ class AtmDecayTracker:
             # Fire-and-forget append
             import asyncio
             asyncio.ensure_future(self._append_series(item, ts.strftime("%Y%m%d")))
+            logger.info(
+                f"[AtmDecay] {int(a['strike'])} | "
+                f"C:{c_pct:+.4f}  P:{p_pct:+.4f}  S:{s_pct:+.4f} (stored)"
+            )
+            return item
 
-        logger.info(
-            f"[AtmDecay] {int(a['strike'])} | "
-            f"C:{c_pct:+.4f}  P:{p_pct:+.4f}  S:{s_pct:+.4f} "
-            f"{'(stored)' if should_store else '(dedup)'}"
-        )
-
-        return item
+        # Do not emit identical tick to payload, let frontend sticky-merge
+        return None
 
     # ------------------------------------------------------------------
     # Time-series storage
@@ -433,5 +464,16 @@ class AtmDecayTracker:
             return
         key = self._series_key_tpl.format(date=date_str)
         await self.redis.rpush(key, json.dumps(data))
-        if await self.redis.llen(key) == 1:
+        list_len = await self.redis.llen(key)
+        if list_len == 1:
             await self.redis.expire(key, settings.opening_atm_redis_ttl_seconds)
+
+        # ── COLD JSON FALLBACK ──
+        # Offload safely so it doesn't block the hot L1 path
+        try:
+            raw_history = await self.redis.lrange(key, 0, -1)
+            parsed_history = [json.loads(pt) for pt in raw_history]
+            cold_history_file = self._cold_dir / f"atm_series_{date_str}.json"
+            cold_history_file.write_text(json.dumps(parsed_history))
+        except Exception as e:
+            logger.error(f"[AtmDecayTracker] Async JSON flush fail: {e}")

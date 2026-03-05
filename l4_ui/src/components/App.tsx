@@ -12,6 +12,7 @@
 import React, { useEffect } from 'react'
 import '../index.css'
 import { useDashboardWS } from '../hooks/useDashboardWS'
+import { useDashboardStore } from '../store/dashboardStore'
 import { Header } from './center/Header'
 import { GexStatusBar } from './center/GexStatusBar'
 import { AtmDecayOverlay } from './center/AtmDecayOverlay'
@@ -39,6 +40,18 @@ export const App: React.FC = () => {
     useEffect(() => {
         L4Rum.markFmp()
         AlertEngine.start()
+
+        // Cold boot: Attempt to hydrate ATM Decay historical array bounds natively BEFORE websocket. 
+        // Eliminates single-tick wipeouts during crashes or manual F5.
+        fetch('http://localhost:8001/api/atm-decay/history')
+            .then(res => res.json())
+            .then(data => {
+                if (data && Array.isArray(data.history) && data.history.length > 0) {
+                    useDashboardStore.setState({ atmHistory: data.history });
+                }
+            })
+            .catch(err => console.warn('[App] Cold history hydration failed:', err));
+
         return () => AlertEngine.stop()
     }, [])
 

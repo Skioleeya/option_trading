@@ -125,7 +125,7 @@ export function smartMergeUiState(prev: any, next: any): any {
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-const MAX_ATM_HISTORY = 500
+const MAX_ATM_HISTORY = 50000 // Increased from 500 to support entire RTH session at 1Hz
 
 function extractSpot(p: DashboardPayload): number | null {
     return p?.spot ?? null
@@ -193,10 +193,20 @@ export const useDashboardStore = create<DashboardState>()(
             const merged = mergePayloads(prev, incoming)
             const atm = extractAtm(merged)
             set((state) => {
-                const nextHistory =
-                    atm && !state.atmHistory.some((t) => t.timestamp === atm.timestamp)
-                        ? [...state.atmHistory.slice(-MAX_ATM_HISTORY + 1), atm]
-                        : state.atmHistory
+                let nextHistory = state.atmHistory
+                if (atm && !state.atmHistory.some((t) => t.timestamp === atm.timestamp)) {
+                    const last = state.atmHistory[state.atmHistory.length - 1]
+                    const isStatic = last &&
+                        Math.abs((last.call_pct || 0) - (atm.call_pct || 0)) < 1e-6 &&
+                        Math.abs((last.put_pct || 0) - (atm.put_pct || 0)) < 1e-6 &&
+                        Math.abs((last.straddle_pct || 0) - (atm.straddle_pct || 0)) < 1e-6
+
+                    if (isStatic) {
+                        nextHistory = [...state.atmHistory.slice(0, -1), atm]
+                    } else {
+                        nextHistory = [...state.atmHistory.slice(-MAX_ATM_HISTORY + 1), atm]
+                    }
+                }
 
                 return {
                     payload: merged,
@@ -216,10 +226,20 @@ export const useDashboardStore = create<DashboardState>()(
             const merged = mergePayloads(prev, next)
             const atm = extractAtm(merged)
             set((state) => {
-                const nextHistory =
-                    atm && !state.atmHistory.some((t) => t.timestamp === atm.timestamp)
-                        ? [...state.atmHistory.slice(-MAX_ATM_HISTORY + 1), atm]
-                        : state.atmHistory
+                let nextHistory = state.atmHistory
+                if (atm && !state.atmHistory.some((t) => t.timestamp === atm.timestamp)) {
+                    const last = state.atmHistory[state.atmHistory.length - 1]
+                    const isStatic = last &&
+                        Math.abs((last.call_pct || 0) - (atm.call_pct || 0)) < 1e-6 &&
+                        Math.abs((last.put_pct || 0) - (atm.put_pct || 0)) < 1e-6 &&
+                        Math.abs((last.straddle_pct || 0) - (atm.straddle_pct || 0)) < 1e-6
+
+                    if (isStatic) {
+                        nextHistory = [...state.atmHistory.slice(0, -1), atm]
+                    } else {
+                        nextHistory = [...state.atmHistory.slice(-MAX_ATM_HISTORY + 1), atm]
+                    }
+                }
 
                 return {
                     payload: merged,

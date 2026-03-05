@@ -21,12 +21,12 @@ export const ActiveOptions: React.FC<Props> = memo(({ options: propOptions }) =>
         <div className="p-2">
             <div className="flex items-center justify-between mb-1.5 px-0.5">
                 <span className="text-[10px] font-bold tracking-wider text-text-primary">ACTIVE OPTIONS</span>
-                <span className="text-[9px] font-medium text-text-muted">TOP BY VOLUME</span>
+                <span className="text-[9px] font-medium text-white">TOP BY VOLUME</span>
             </div>
 
             <table className="w-full text-2xs mono">
                 <thead>
-                    <tr className="text-text-muted border-b border-white/5 uppercase font-medium">
+                    <tr className="text-white border-b border-white/5 uppercase font-medium">
                         <th className="text-center py-1 w-6">#</th>
                         <th className="text-left py-1">SYM</th>
                         <th className="text-center py-1 w-4">T</th>

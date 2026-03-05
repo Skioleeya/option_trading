@@ -121,11 +121,18 @@ class MTFFlowPresenter:
 
         # Overall alignment is used in the header badge
         align_label = "ALIGNED" if alignment >= 0.67 else ("SPLIT" if alignment >= 0.34 else "DIVERGE")
-        align_color = {
-            "ALIGNED":  "text-accent-red" if consensus == "BULLISH" else "text-accent-green",
-            "SPLIT":    "text-accent-amber",
-            "DIVERGE":  "text-text-secondary",
-        }.get(align_label, "text-text-secondary")
+        
+        if align_label == "ALIGNED":
+            if consensus == "BULLISH":
+                align_color = "text-accent-red"
+            elif consensus == "BEARISH":
+                align_color = "text-accent-green"
+            else:
+                align_color = "text-text-secondary"
+        elif align_label == "SPLIT":
+            align_color = "text-accent-amber"
+        else:
+            align_color = "text-text-secondary"
 
         return {
             "m1":           m1,

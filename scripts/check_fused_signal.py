@@ -13,12 +13,12 @@ async def check():
             if d.get("type") in ("dashboard_init", "dashboard_update"):
                 data = d.get("agent_g", {}).get("data", {})
                 ui_state = data.get("ui_state", {})
-                skew = ui_state.get("skew_dynamics")
+                mtf = ui_state.get("mtf_flow")
                 print(f"\nMessage type : {d['type']}")
-                print(f"\n--- skew_dynamics at agent_g.data.ui_state.skew_dynamics ---")
-                if skew is None:
-                    print("skew_dynamics is MISSING or None")
+                print(f"\n--- mtf_flow at agent_g.data.ui_state.mtf_flow ---")
+                if not mtf:
+                    print("mtf_flow is EMPTY or None")
                 else:
-                    print(json.dumps(skew, indent=2))
+                    print(json.dumps(mtf, indent=2))
                 return
 asyncio.run(check())

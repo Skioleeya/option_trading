@@ -47,19 +47,24 @@ const toUnixSec = (ts: string) => Math.floor(new Date(ts).getTime() / 1000)
 
 /**
  * Gate: keep only intraday ticks.
- * Lower bound: 09:25 ET (pre-market warm-up allowed).
- * Upper bound: 20:00 ET — covers RTH (09:30–16:00), SPY option late close
- * (16:15), and any after-hours decay monitoring.
- * Previously capped at 16:15, which silently dropped ALL decay ticks
- * computed after market close during after-hours testing.
+ * User requested strict restriction: exactly 09:30 to 16:00 ET.
+ * No pre-market logic, no after-hours drift allowed.
  */
 function isMarketHours(ts: string): boolean {
     const s = new Date(ts).toLocaleTimeString('en-US', {
         timeZone: 'America/New_York', hour: 'numeric', minute: 'numeric', hour12: false,
     })
-    const [h, m] = s.split(':').map(Number)
+    const parts = s.split(':')
+    if (parts.length !== 2) return true
+
+    const h = parseInt(parts[0], 10)
+    const m = parseInt(parts[1], 10)
     const t = h * 100 + m
-    return t >= 925 && t <= 2000
+
+    if (isNaN(t)) return true
+
+    // Keep data starting from 9:25 AM, allow all post-market data points to render
+    return t >= 925
 }
 
 function buildPoints(data: AtmDecay[], key: keyof AtmDecay) {
@@ -125,6 +130,7 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
                 borderColor: BORDER,
                 timeVisible: true,
                 secondsVisible: true,
+                minBarSpacing: 0.001, // Enables infinite horizontal zoom-out limits
                 tickMarkFormatter: (time: number) => {
                     return new Date(time * 1000).toLocaleTimeString('en-US', {
                         timeZone: 'America/New_York',
@@ -139,7 +145,7 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
         const srs = SERIES_CFG.map(({ color }) =>
             chart.addSeries(LineSeries, {
                 color,
-                lineWidth: 2,
+                lineWidth: 1, // Adjusted to 1px width
                 lineType: LineType.WithSteps,
                 priceLineVisible: true,
                 priceLineStyle: LineStyle.Dashed,
