@@ -19,9 +19,9 @@ export interface FusedSignal {
     alignment?: number
     align_label?: string
     // Raw tracking data for debugging/advanced users
-    raw_vpin?: string
-    raw_bbo_imb?: string
-    raw_vol_accel?: string
+    raw_vpin?: number | string
+    raw_bbo_imb?: number | string
+    raw_vol_accel?: number | string
 }
 
 export interface IVVelocityResult {

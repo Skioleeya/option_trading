@@ -51,6 +51,8 @@ class ComputeDecision:
     chain_size: int
 
 
+from shared.config import settings
+
 class ComputeRouter:
     """Adaptive compute tier router for BSM Greeks batch computation.
 
@@ -109,18 +111,18 @@ class ComputeRouter:
         if self._force is not None:
             return self._force, f"forced:{self._force.value}"
 
-        if chain_size >= _GPU_CHAIN_THRESHOLD:
+        if chain_size >= settings.gpu_offload_threshold:
             if self._kernel.gpu_available:
-                return ComputeTier.GPU, f"chain_size={chain_size} >= {_GPU_CHAIN_THRESHOLD}"
+                return ComputeTier.GPU, f"chain_size={chain_size} >= {settings.gpu_offload_threshold} (offload threshold)"
             # GPU needed but unavailable
             if _NUMBA_AVAILABLE:
-                return ComputeTier.NUMBA, f"gpu_unavailable, chain_size={chain_size} >= {_GPU_CHAIN_THRESHOLD}"
+                return ComputeTier.NUMBA, f"gpu_unavailable, chain_size={chain_size} >= {settings.gpu_offload_threshold}"
             return ComputeTier.NUMPY, "gpu_unavailable+numba_unavailable"
         else:
             # Small chain — CPU is faster (no kernel launch overhead)
             if _NUMBA_AVAILABLE:
-                return ComputeTier.NUMBA, f"chain_size={chain_size} < {_GPU_CHAIN_THRESHOLD}"
-            return ComputeTier.NUMPY, f"chain_size={chain_size} < {_GPU_CHAIN_THRESHOLD}, numba_unavailable"
+                return ComputeTier.NUMBA, f"chain_size={chain_size} < {settings.gpu_offload_threshold}"
+            return ComputeTier.NUMPY, f"chain_size={chain_size} < {settings.gpu_offload_threshold}, numba_unavailable"
 
     def _execute(
         self,

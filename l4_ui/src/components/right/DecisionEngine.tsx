@@ -115,10 +115,10 @@ export const DecisionEngine: React.FC<Props> = memo(({ fused: propFused }) => {
                             <div className={`text-[7px] mono mt-0.5 ${DIR_TEXT[qDir]} opacity-60 flex justify-between`}>
                                 <span>conf {qConf}%</span>
                                 {q.key === 'micro_flow' && fused && (fused.raw_vpin !== undefined || fused.raw_bbo_imb !== undefined) && (
-                                    <span className="opacity-40 select-text">V:{fused.raw_vpin ?? '-'} BBO:{fused.raw_bbo_imb ?? '-'}</span>
+                                    <span className="select-text text-text-secondary/70">V:{typeof fused.raw_vpin === 'number' ? (fused.raw_vpin as number).toFixed(4) : fused.raw_vpin ?? '-'} BBO:{typeof fused.raw_bbo_imb === 'number' ? (fused.raw_bbo_imb as number).toFixed(4) : fused.raw_bbo_imb ?? '-'}</span>
                                 )}
                                 {q.key === 'flow_analyzer' && fused && (fused.raw_vol_accel !== undefined) && (
-                                    <span className="opacity-40 select-text">ACC:{fused.raw_vol_accel ?? '-'}</span>
+                                    <span className="select-text text-text-secondary/70">ACC:{typeof fused.raw_vol_accel === 'number' ? (fused.raw_vol_accel as number).toFixed(4) : fused.raw_vol_accel ?? '-'}</span>
                                 )}
                                 {isFullWidth && <span className="opacity-40 italic">Paper 3 High Leverage Predictor</span>}
                             </div>

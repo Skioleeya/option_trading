@@ -169,7 +169,7 @@ class FieldDeltaEncoder:
             changes["atm"] = curr.atm
 
         # UIState — compare sub-blocks
-        ui_changes = _diff_ui_state(prev.ui_state, curr.ui_state)
+        ui_changes = _diff_ui_state(prev.ui_state, curr.ui_state, spot=curr.spot)
         if ui_changes:
             # Merge into agent_g.data.ui_state path for legacy compat
             changes["agent_g_ui_state"] = ui_changes
@@ -187,8 +187,11 @@ class FieldDeltaEncoder:
         return self._total_deltas / self._total_encoded
 
 
-def _diff_ui_state(prev: UIState, curr: UIState) -> dict[str, Any]:
-    """Compare UIState sub-blocks and return only changed keys."""
+def _diff_ui_state(prev: UIState, curr: UIState, spot: float = 0.0) -> dict[str, Any]:
+    """Compare UIState sub-blocks and return only changed keys.
+    
+    Includes 'Visual Thresholding' (lossy compression) for Depth Profile.
+    """
     changes: dict[str, Any] = {}
 
     if prev.micro_stats != curr.micro_stats:
@@ -201,7 +204,23 @@ def _diff_ui_state(prev: UIState, curr: UIState) -> dict[str, Any]:
         changes["wall_migration"] = [r.to_dict() for r in curr.wall_migration]
 
     if prev.depth_profile != curr.depth_profile:
-        changes["depth_profile"] = [r.to_dict() for r in curr.depth_profile]
+        # OPTIMIZATION: Visual Thresholding (2025 Quant Standard)
+        # Only send strikes within 5% of spot OR critical 'Hero' strikes.
+        # Rest are sent in the 30s full snapshot.
+        filtered = []
+        if spot > 0:
+            # Find global maxes to preserve 'Hero' strikes (Call/Put Walls)
+            max_p = max((r.put_pct for r in curr.depth_profile), default=0)
+            max_c = max((r.call_pct for r in curr.depth_profile), default=0)
+            
+            for r in curr.depth_profile:
+                is_hero = r.is_spot or r.is_flip or r.put_pct == max_p or r.call_pct == max_c
+                is_in_range = abs(r.strike - spot) / spot <= 0.05
+                if is_hero or is_in_range:
+                    filtered.append(r.to_dict())
+            changes["depth_profile"] = filtered
+        else:
+            changes["depth_profile"] = [r.to_dict() for r in curr.depth_profile]
 
     if prev.active_options != curr.active_options:
         changes["active_options"] = [r.to_dict() for r in curr.active_options]

@@ -21,3 +21,6 @@ class MarketStructureConfig(BaseConfig):
 
     # Charm
     charm_terminal_threshold: float = Field(default=0.5)
+
+    # Hardware Tuning
+    gpu_offload_threshold: int = Field(default=20)

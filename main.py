@@ -1,10 +1,19 @@
+from __future__ import annotations
+import os
+
+# --- Hardware Optimization: Set thread limits before NumPy/SciPy imports ---
+os.environ["OMP_NUM_THREADS"] = "4"
+os.environ["MKL_NUM_THREADS"] = "4"
+os.environ["OPENBLAS_NUM_THREADS"] = "4"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "4"
+os.environ["NUMEXPR_NUM_THREADS"] = "4"
+# --------------------------------------------------------------------------
+
 """SPY 0DTE Dashboard — FastAPI Application.
 
 Main entry point for the backend service.
 Orchestrates all services via AppContainer with async lifespan management.
 """
-
-from __future__ import annotations
 
 import logging
 from fastapi import FastAPI

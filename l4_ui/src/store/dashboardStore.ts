@@ -123,7 +123,7 @@ export function smartMergeUiState(prev: any, next: any): any {
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-const MAX_ATM_HISTORY = 50000 // Increased from 500 to support entire RTH session at 1Hz
+const MAX_ATM_HISTORY = 5000 // Reduced from 50000 to improve rendering performance
 
 function extractSpot(p: DashboardPayload): number | null {
     return p?.spot ?? null

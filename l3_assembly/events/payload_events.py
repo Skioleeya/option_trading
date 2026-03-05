@@ -174,8 +174,8 @@ class DepthProfileRow:
     def to_dict(self) -> dict[str, Any]:
         return {
             "strike":           self.strike,
-            "call_pct":         self.call_pct,
-            "put_pct":          self.put_pct,
+            "call_pct":         round(self.call_pct, 4) if self.call_pct is not None else 0.0,
+            "put_pct":          round(self.put_pct, 4) if self.put_pct is not None else 0.0,
             "is_spot":          self.is_spot,
             "is_flip":          self.is_flip,
             "is_dominant_put":  self.is_dominant_put,
@@ -215,19 +215,19 @@ class ActiveOptionRow:
             "symbol":             self.symbol,
             "option_type":        self.option_type,
             "strike":             self.strike,
-            "implied_volatility": self.implied_volatility,
+            "implied_volatility": round(self.implied_volatility, 4),
             "volume":             self.volume,
-            "turnover":           self.turnover,
-            "flow":               self.flow,
+            "turnover":           round(self.turnover, 2),
+            "flow":               round(self.flow, 2),
             "flow_deg_formatted": self.flow_deg_formatted,
             "flow_volume_label":  self.flow_volume_label,
             "flow_color":         self.flow_color,
             "flow_glow":          self.flow_glow,
             "flow_intensity":     self.flow_intensity,
             "flow_direction":     self.flow_direction,
-            "flow_d_z":           self.flow_d_z,
-            "flow_e_z":           self.flow_e_z,
-            "flow_g_z":           self.flow_g_z,
+            "flow_d_z":           round(self.flow_d_z, 4),
+            "flow_e_z":           round(self.flow_e_z, 4),
+            "flow_g_z":           round(self.flow_g_z, 4),
         }
 
 
@@ -298,8 +298,8 @@ class UIState:
             "depth_profile":    [r.to_dict() for r in self.depth_profile],
             "active_options":   [r.to_dict() for r in self.active_options],
             "mtf_flow":         self.mtf_flow.to_dict(),
-            "skew_dynamics":    dict(self.skew_dynamics),
-            "macro_volume_map": dict(self.macro_volume_map),
+            "skew_dynamics":    {k: round(v, 4) if isinstance(v, (int, float)) else v for k, v in self.skew_dynamics.items()},
+            "macro_volume_map": {k: round(v, 2) if isinstance(v, (int, float)) else v for k, v in self.macro_volume_map.items()},
             "iv_velocity":      self.iv_velocity,
         }
 
@@ -458,8 +458,8 @@ class FrozenPayload:
             "broadcast_timestamp": self.broadcast_timestamp,
             "heartbeat_timestamp": self.heartbeat_timestamp,
             "timestamp":           self.data_timestamp,   # legacy alias
-            "spot":                self.spot,
-            "drift_ms":            self.drift_ms,
+            "spot":                round(self.spot, 2),
+            "drift_ms":            round(self.drift_ms, 1),
             "drift_warning":       self.drift_warning,
             "is_stale":            self.is_stale,
             "atm":                 self.atm,
@@ -470,13 +470,13 @@ class FrozenPayload:
                     **self.signal.to_dict(),
                     # ⚠️ BUG-5 NOTE: L1 使用 atm_iv，前端期望 spy_atm_iv，此处显式重命名。
                     # 若 L1 字段名变更未同步更新此处，前端将静默收到 null。
-                    "spy_atm_iv":  self.atm_iv,
+                    "spy_atm_iv":  round(self.atm_iv, 4),
                     "as_of":       self.signal.computed_at,
                     "version":     self.version,
                     # GexStatusBar fields
-                    "net_gex":          self.net_gex,
-                    "gamma_walls":      self.gamma_walls,
-                    "gamma_flip_level": self.gamma_flip_level,
+                    "net_gex":          round(self.net_gex, 2),
+                    "gamma_walls":      {k: round(v, 2) if v is not None else None for k, v in self.gamma_walls.items()},
+                    "gamma_flip_level": round(self.gamma_flip_level, 2),
                     # DecisionEngine: fused_signal from AgentG.data (Phase 4)
                     "fused_signal":     self.fused_signal,
                     # Microstructure: Phase 1 Refactor support

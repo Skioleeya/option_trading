@@ -207,6 +207,12 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
         const srs = seriesRef.current
         if (!chart || !srs.length || !data.length) return
 
+        // OPTIMIZATION: Skip chart updates if tab is hidden
+        if (document.visibilityState === 'hidden') {
+            prevLen.current = data.length
+            return
+        }
+
         // Determine if we need a full reload vs incremental update.
         // Re-run full load if:
         // 1. Not initialized
