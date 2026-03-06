@@ -53,3 +53,14 @@ backend/nul
 
 nul
 backend/nul
+
+# Obsidian (vault at repo root)
+.obsidian/workspace.json
+.obsidian/workspaces.json
+.obsidian/cache/
+.obsidian/snapshots/
+.obsidian/.trash/
+.obsidian/plugins/*/cache/
+
+# Local runtime temp data
+tmp/atm_decay_*/

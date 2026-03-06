@@ -1,0 +1,10 @@
+{
+  "useMarkdownLinks": true,
+  "newLinkFormat": "relative",
+  "userIgnoreFilters": [
+    "tmp/",
+    "**/tmp/",
+    "tmp/atm_decay_*",
+    "**/tmp/atm_decay_*"
+  ]
+}
