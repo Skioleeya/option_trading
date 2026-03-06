@@ -1,12 +1,12 @@
 # Handoff (Index)
 
 ## Active Handoff
-- Path: notes/sessions/2026-03-06/1541/1646_spy_atm_iv_flow_hotfix_mod/handoff.md
-- Meta: notes/sessions/2026-03-06/1541/1646_spy_atm_iv_flow_hotfix_mod/meta.yaml
+- Path: notes/sessions/2026-03-06/1632/1830_debt_gate_agents_mod/handoff.md
+- Meta: notes/sessions/2026-03-06/1632/1830_debt_gate_agents_mod/meta.yaml
 
 ## Latest Outcome
-- Session: 2026-03-06/1541/1646_spy_atm_iv_flow_hotfix_mod
-- Summary: Fixed major SPY ATM IV dataflow bug (`l0_version=0` hardcode), synced related `docs/SOP` contracts, and added AGENTS+validator SOP sync enforcement (`docs/SOP` update or `SOP-EXEMPT` now required).
+- Session: 2026-03-06/1632/1830_debt_gate_agents_mod
+- Summary: Added AGENTS zero-debt contract and validator debt gate (exemption fields, SLA window, metrics arithmetic, duplicate unresolved scan), plus template upgrades.
 
 ## Next Session Bootstrap
 1. Read this file.

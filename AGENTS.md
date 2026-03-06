@@ -149,3 +149,48 @@ All agents MUST synchronize `docs/SOP` when behavior-level changes are delivered
 ### 7.4 Validation Gate
 * `scripts/validate_session.ps1` SHOULD enforce this contract using session `meta.yaml` + `handoff.md`.
 * If trigger conditions are met but no `docs/SOP` update and no `SOP-EXEMPT`, validation MUST fail.
+
+---
+## 8. Technical Debt Zero-Tolerance Contract (Mandatory)
+All agents MUST treat unclosed debt as delivery risk, not documentation noise.
+
+### 8.1 No Deferred Debt by Default
+* Unchecked items in `open_tasks.md` are considered active debt and block clean handoff by default.
+* Parking Lot is not an escape hatch; deferred items still count as debt unless explicitly exempted.
+
+### 8.2 Debt Exemption Record (Strict)
+If any unchecked item remains, `handoff.md` MUST include all fields:
+* `DEBT-EXEMPT: <reason>`
+* `DEBT-OWNER: <owner>`
+* `DEBT-DUE: YYYY-MM-DD`
+* `DEBT-RISK: <risk>`
+
+Missing any field invalidates handoff.
+
+### 8.3 SLA by Priority
+* `P0` debt due date MUST be today (same trading day).
+* `P1` debt due date MUST be within 2 calendar days.
+* `P2` debt due date MUST be within 5 calendar days.
+* Overdue debt MUST fail validation.
+
+### 8.4 Single Debt Source of Truth
+* Cross-session debt inventory MUST be maintained in `notes/context/open_tasks.md`.
+* Session-local unchecked items MUST either:
+  * be migrated into global backlog, or
+  * be tagged with supersede marker on old records.
+
+### 8.5 Superseded Debt Hygiene
+* If a historical debt is resolved by a later session, old task records MUST include:
+  * `SUPERSEDED-BY: <session-id>` (or legacy typo-compatible `SUPSERSEDED-BY`).
+* Duplicate unresolved debt across sessions without supersede marker MUST fail validation.
+
+### 8.6 Mandatory Debt Metrics
+Each `handoff.md` MUST include:
+* `DEBT-NEW: <int>`
+* `DEBT-CLOSED: <int>`
+* `DEBT-DELTA: <int>` where `DEBT-DELTA = DEBT-NEW - DEBT-CLOSED`
+* If `DEBT-DELTA > 0`, `DEBT-JUSTIFICATION: <reason>` is mandatory.
+
+### 8.7 Scripted Enforcement
+* `scripts/validate_session.ps1` MUST enforce Sections 8.2 / 8.3 / 8.5 / 8.6 for active session handoff.
+* Sessions failing debt gate are not delivery-complete and SHOULD NOT be pushed.

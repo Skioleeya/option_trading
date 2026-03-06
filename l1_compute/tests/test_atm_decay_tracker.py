@@ -218,3 +218,120 @@ async def test_roll_anchor_keeps_base_strike(monkeypatch):
     assert tracker.anchor is not None
     assert tracker.anchor["strike"] == 672.0
     assert tracker.anchor["base_strike"] == 681.0
+
+
+@pytest.mark.asyncio
+async def test_roll_stitching_compounds_and_caps_floor(monkeypatch):
+    monkeypatch.setattr(tracker_mod.settings, "opening_atm_cold_storage_root", str(_mk_cold_dir()))
+
+    tracker = AtmDecayTracker(redis_client=None, quote_ctx=None)
+    now = datetime(2026, 3, 6, 10, 5, tzinfo=ET)
+    tracker.anchor = {
+        "strike": 681.0,
+        "base_strike": 681.0,
+        "call_symbol": _symbol(now, "C", 681.0),
+        "put_symbol": _symbol(now, "P", 681.0),
+        "call_price": 1.0,
+        "put_price": 1.0,
+        "timestamp": now.isoformat(),
+    }
+
+    roll_chain = [
+        _mk_opt(now, 681.0, "C", 0.1, 0.1),
+        _mk_opt(now, 681.0, "P", 1.0, 1.0),
+        _mk_opt(now, 672.0, "C", 2.0, 2.0),
+        _mk_opt(now, 672.0, "P", 2.0, 2.0),
+    ]
+    await tracker._roll_anchor(roll_chain, spot=672.0, now=now)
+    assert tracker.anchor is not None
+    assert tracker.anchor["strike"] == 672.0
+    assert tracker.accumulated_factor["c"] == pytest.approx(0.1, rel=1e-9, abs=1e-9)
+
+    post_roll_chain = [
+        _mk_opt(now, 672.0, "C", 0.2, 0.2),
+        _mk_opt(now, 672.0, "P", 2.0, 2.0),
+    ]
+    out = tracker._calculate_decay(post_roll_chain)
+    assert out is not None
+    assert out["call_pct"] == pytest.approx(-0.99, rel=1e-9, abs=1e-9)
+    assert out["call_pct"] >= -1.0
+
+
+@pytest.mark.asyncio
+async def test_update_skips_post_close_ticks(monkeypatch):
+    monkeypatch.setattr(tracker_mod.settings, "opening_atm_cold_storage_root", str(_mk_cold_dir()))
+
+    fixed_now = datetime(2026, 3, 6, 16, 0, 1, tzinfo=ET)
+
+    class _FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return fixed_now
+            return fixed_now.astimezone(tz)
+
+    monkeypatch.setattr(tracker_mod, "datetime", _FixedDateTime)
+
+    tracker = AtmDecayTracker(redis_client=None, quote_ctx=None)
+    tracker.is_initialized = True
+    tracker.anchor = _mk_anchor(datetime(2026, 3, 6, 10, 0, tzinfo=ET), 672.0)
+    chain = [
+        _mk_opt(fixed_now, 672.0, "C", 1.0, 1.0),
+        _mk_opt(fixed_now, 672.0, "P", 1.0, 1.0),
+    ]
+
+    out = await tracker.update(chain, spot=672.0)
+    assert out is None
+
+
+@pytest.mark.asyncio
+async def test_update_resets_in_memory_state_on_day_rollover(monkeypatch):
+    monkeypatch.setattr(tracker_mod.settings, "opening_atm_cold_storage_root", str(_mk_cold_dir()))
+
+    fixed_now = datetime(2026, 3, 7, 9, 29, 0, tzinfo=ET)
+
+    class _FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return fixed_now
+            return fixed_now.astimezone(tz)
+
+    monkeypatch.setattr(tracker_mod, "datetime", _FixedDateTime)
+
+    tracker = AtmDecayTracker(redis_client=None, quote_ctx=None)
+    tracker.is_initialized = True
+    tracker._today = "20260306"
+    tracker.anchor = _mk_anchor(datetime(2026, 3, 6, 10, 0, tzinfo=ET), 672.0)
+    tracker.accumulated_factor = {"c": 0.2, "p": 1.1, "s": 0.7}
+    tracker.accumulated_offset = {"c": -0.8, "p": 0.1, "s": -0.3}
+    tracker._recent_spots = [671.0, 672.0, 673.0]
+
+    out = await tracker.update([], spot=0.0)
+
+    assert out is None
+    assert tracker._today == "20260307"
+    assert tracker.anchor is None
+    assert tracker.accumulated_factor == {"c": 1.0, "p": 1.0, "s": 1.0}
+    assert tracker.accumulated_offset == {"c": 0.0, "p": 0.0, "s": 0.0}
+
+
+def test_load_stitch_state_from_legacy_offset_clamps_invalid_floor(monkeypatch):
+    monkeypatch.setattr(tracker_mod.settings, "opening_atm_cold_storage_root", str(_mk_cold_dir()))
+    tracker = AtmDecayTracker(redis_client=None, quote_ctx=None)
+
+    anchor = {
+        "strike": 672.0,
+        "base_strike": 672.0,
+        "call_symbol": "C",
+        "put_symbol": "P",
+        "call_price": 1.0,
+        "put_price": 1.0,
+        "timestamp": "2026-03-06T09:30:00-05:00",
+        "accumulated_offset": {"c": -1.35, "p": 0.25, "s": 0.0},
+    }
+    tracker._load_stitch_state(anchor)
+
+    assert tracker.accumulated_factor["c"] == 0.0
+    assert tracker.accumulated_factor["p"] == pytest.approx(1.25, rel=1e-9, abs=1e-9)
+    assert tracker.accumulated_offset["c"] == -1.0

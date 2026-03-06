@@ -22,6 +22,13 @@ from .anchor import (
 )
 from .models import ET, MAX_ANCHOR_DISTANCE, SPOT_STABILITY_MAX_RANGE, SPOT_STABILITY_MIN_SAMPLES, spot_distance
 from .storage import AtmDecayStorage
+from .stitching import (
+    advance_factor,
+    default_stitch_factor,
+    factor_to_legacy_offset,
+    legacy_offset_to_factor,
+    stitch_with_factor,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +60,7 @@ class AtmDecayTracker:
         self._prev_pcts: tuple[float, float, float] | None = None
         self._warmup_ticks_remaining: int = 5
         self.accumulated_offset = {"c": 0.0, "p": 0.0, "s": 0.0}
+        self.accumulated_factor = default_stitch_factor()
         self._out_of_bounds_ticks: int = 0
         self._strike_changed_flag: bool = False
         self._recent_spots: list[float] = []
@@ -98,7 +106,7 @@ class AtmDecayTracker:
                             )
                         else:
                             self.anchor = anchor
-                            self.accumulated_offset = anchor.get("accumulated_offset", {"c": 0.0, "p": 0.0, "s": 0.0})
+                            self._load_stitch_state(anchor)
                             logger.info(
                                 f"[AtmDecayTracker] Restored anchor from Redis: "
                                 f"strike={anchor['strike']} (spot={spot if spot else 'N/A'})"
@@ -136,7 +144,7 @@ class AtmDecayTracker:
                         )
                     else:
                         self.anchor = anchor
-                        self.accumulated_offset = anchor.get("accumulated_offset", {"c": 0.0, "p": 0.0, "s": 0.0})
+                        self._load_stitch_state(anchor)
                         logger.info(
                             f"[AtmDecayTracker] Restored anchor from cold JSON: "
                             f"strike={anchor['strike']} (spot={spot if spot else 'N/A'})"
@@ -174,9 +182,45 @@ class AtmDecayTracker:
         self._prev_pcts = None
         self._warmup_ticks_remaining = 5
         self._recent_spots.clear()
+        self.accumulated_factor = default_stitch_factor()
+        self.accumulated_offset = factor_to_legacy_offset(self.accumulated_factor)
+
+    def _load_stitch_state(self, anchor: dict[str, Any]) -> None:
+        raw_factor = anchor.get("accumulated_factor")
+        if isinstance(raw_factor, dict):
+            merged: dict[str, float] = default_stitch_factor()
+            for key in ("c", "p", "s"):
+                val = raw_factor.get(key, 1.0)
+                try:
+                    merged[key] = max(0.0, float(val))
+                except (TypeError, ValueError):
+                    merged[key] = 1.0
+            self.accumulated_factor = merged
+        else:
+            self.accumulated_factor = legacy_offset_to_factor(anchor.get("accumulated_offset"))
+        self.accumulated_offset = factor_to_legacy_offset(self.accumulated_factor)
+
+    def _reset_for_new_day(self, today: str) -> None:
+        if self.anchor:
+            logger.info(
+                "[AtmDecayTracker] New trade date detected (%s -> %s). "
+                "Resetting in-memory anchor/stitch state.",
+                self._today,
+                today,
+            )
+        self._today = today
+        self.anchor = None
+        self._prev_pcts = None
+        self._warmup_ticks_remaining = 5
+        self._out_of_bounds_ticks = 0
+        self._strike_changed_flag = False
+        self._recent_spots.clear()
+        self.accumulated_factor = default_stitch_factor()
+        self.accumulated_offset = factor_to_legacy_offset(self.accumulated_factor)
 
     async def _persist(self, anchor: dict[str, Any]) -> None:
-        anchor["accumulated_offset"] = getattr(self, "accumulated_offset", {"c": 0.0, "p": 0.0, "s": 0.0})
+        anchor["accumulated_factor"] = dict(getattr(self, "accumulated_factor", default_stitch_factor()))
+        anchor["accumulated_offset"] = factor_to_legacy_offset(anchor["accumulated_factor"])
         self.anchor = anchor
         self._today = datetime.fromisoformat(anchor["timestamp"]).strftime("%Y%m%d")
         await self._storage.save_anchor(self._today, anchor, settings.opening_atm_redis_ttl_seconds)
@@ -192,7 +236,13 @@ class AtmDecayTracker:
 
         logger.debug(f"[AtmDecayTracker] Update tick. Redis presence: {self.redis is not None}")
         now = datetime.now(ET)
+        today = now.strftime("%Y%m%d")
+        if today != self._today:
+            self._reset_for_new_day(today)
+
         if now.hour < 9 or (now.hour == 9 and now.minute < 30):
+            return None
+        if now.hour > 16 or (now.hour == 16 and (now.minute > 0 or now.second > 0)):
             return None
 
         record_spot_sample(self._recent_spots, spot)
@@ -272,9 +322,10 @@ class AtmDecayTracker:
 
         raw_pcts = self._calculate_raw_pct(chain)
         if raw_pcts:
-            self.accumulated_offset["c"] += raw_pcts[0]
-            self.accumulated_offset["p"] += raw_pcts[1]
-            self.accumulated_offset["s"] += raw_pcts[2]
+            self.accumulated_factor["c"] = advance_factor(self.accumulated_factor.get("c", 1.0), raw_pcts[0])
+            self.accumulated_factor["p"] = advance_factor(self.accumulated_factor.get("p", 1.0), raw_pcts[1])
+            self.accumulated_factor["s"] = advance_factor(self.accumulated_factor.get("s", 1.0), raw_pcts[2])
+            self.accumulated_offset = factor_to_legacy_offset(self.accumulated_factor)
 
         logger.warning(
             f"[AtmDecay] Rolling anchor {self.anchor['strike']} -> {next_anchor['strike']} "
@@ -293,10 +344,10 @@ class AtmDecayTracker:
             return None
 
         c_raw, p_raw, s_raw = raw_pcts
-        offsets = self.accumulated_offset
-        c_pct = c_raw + offsets.get("c", 0.0)
-        p_pct = p_raw + offsets.get("p", 0.0)
-        s_pct = s_raw + offsets.get("s", 0.0)
+        factors = self.accumulated_factor
+        c_pct = stitch_with_factor(c_raw, factors.get("c", 1.0))
+        p_pct = stitch_with_factor(p_raw, factors.get("p", 1.0))
+        s_pct = stitch_with_factor(s_raw, factors.get("s", 1.0))
 
         ts = datetime.now(ET)
         item = {

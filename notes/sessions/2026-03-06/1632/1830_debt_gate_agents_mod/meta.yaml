@@ -1,0 +1,41 @@
+session_id: "2026-03-06/1632/1830_debt_gate_agents_mod"
+title: "technical debt zero-tolerance contract and validation gate"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-06 16:32:20 -05:00"
+updated_at_et: "2026-03-06 16:34:41 -05:00"
+parent_session: "2026-03-06/1613/1735_atm_decay_overdrop_hotfix_mod"
+
+branch: "master"
+base_commit: "69fd58b"
+head_commit: "69fd58b"
+
+files_changed:
+  - "AGENTS.md"
+  - "scripts/validate_session.ps1"
+  - "notes/sessions/_templates/handoff.template.md"
+  - "notes/sessions/_templates/open_tasks.template.md"
+  - "notes/sessions/2026-03-06/1613/1735_atm_decay_overdrop_hotfix_mod/handoff.md"
+  - "notes/sessions/2026-03-06/1632/1830_debt_gate_agents_mod/project_state.md"
+  - "notes/sessions/2026-03-06/1632/1830_debt_gate_agents_mod/open_tasks.md"
+  - "notes/sessions/2026-03-06/1632/1830_debt_gate_agents_mod/handoff.md"
+  - "notes/sessions/2026-03-06/1632/1830_debt_gate_agents_mod/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+commands:
+  - "./scripts/new_session.ps1 -TaskId \"1830_debt_gate_agents_mod\" -Title \"technical debt zero-tolerance contract and validation gate\" -Scope \"hotfix + modularization\" -Owner \"Codex\" -ParentSession \"2026-03-06/1613/1735_atm_decay_overdrop_hotfix_mod\" -UseTimeBucket"
+  - "./scripts/validate_session.ps1"
+  - "patch scripts/validate_session.ps1 to accept bullet-form debt fields"
+  - "./scripts/validate_session.ps1"
+tests_passed:
+  - "validate_session: pass (after debt-field parser fix)"
+tests_failed:
+  - "Not run: pytest/runtime tests (process-only session)"
+blockers: []
+notes:
+  - "Debt gate enforces DEBT-EXEMPT fields only when unchecked tasks exist."
+  - "Debt metrics (DEBT-NEW/CLOSED/DELTA) are mandatory for active session handoff."
+
+

@@ -84,6 +84,7 @@
 - **跨层语义一致性修复**：修复了 `BREACHED/DECAYING/UNAVAILABLE -> STABLE` 的错误折叠，确保 L1 风险态在 L4 面板保持原始含义。
 - **Vanna 阈值稳健性修复**：`vanna_grind_stable_threshold` 运行时执行负阈值守卫，阻断配置误设导致的状态漂移。
 - **SPY ATM IV 实时链路修复（版本契约）**：修复 `compute_loop` 传入 L1 的 `l0_version` 常量化问题，改为透传 L0 快照版本；`ChainStateStore` 提供单调 `version` 并由 `fetch_chain` 下发，保障 L2 `FeatureStore` 在新快照上强制失效 TTL 缓存，避免 `atm_iv/iv_velocity` 旧值滞留。
+- **ATM Decay 越界修复（拼接契约）**：将换锚拼接从“百分比加法”升级为“复利因子拼接”，并在 L1 强制 `-100%` 下界、16:00 后停更、跨日状态重置，阻断 `CALL <-100%` 的语义越界。
 
 ## 远期宏大迁移路线 (Updated 2026 Vision)
 

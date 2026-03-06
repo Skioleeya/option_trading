@@ -1,0 +1,42 @@
+session_id: "2026-03-06/1613/1735_atm_decay_overdrop_hotfix_mod"
+title: "atm decay overdrop bug fix with bounded stitching and session guards"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-06 16:13:13 -05:00"
+updated_at_et: "2026-03-06 16:17:17 -05:00"
+parent_session: "2026-03-06/1541/1646_spy_atm_iv_flow_hotfix_mod"
+
+branch: "master"
+base_commit: "69fd58b"
+head_commit: "69fd58b"
+
+files_changed:
+  - "l1_compute/analysis/atm_decay/stitching.py"
+  - "l1_compute/analysis/atm_decay/tracker.py"
+  - "l1_compute/tests/test_atm_decay_tracker.py"
+  - "docs/SOP/L1_LOCAL_COMPUTATION.md"
+  - "docs/SOP/SYSTEM_OVERVIEW.md"
+  - "notes/sessions/2026-03-06/1613/1735_atm_decay_overdrop_hotfix_mod/project_state.md"
+  - "notes/sessions/2026-03-06/1613/1735_atm_decay_overdrop_hotfix_mod/open_tasks.md"
+  - "notes/sessions/2026-03-06/1613/1735_atm_decay_overdrop_hotfix_mod/handoff.md"
+  - "notes/sessions/2026-03-06/1613/1735_atm_decay_overdrop_hotfix_mod/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+commands:
+  - "./scripts/new_session.ps1 -TaskId \"1735_atm_decay_overdrop_hotfix_mod\" -Title \"atm decay overdrop bug fix with bounded stitching and session guards\" -Scope \"hotfix + modularization\" -Owner \"Codex\" -ParentSession \"2026-03-06/1541/1646_spy_atm_iv_flow_hotfix_mod\" -UseTimeBucket"
+  - "./scripts/test/run_pytest.ps1 l1_compute/tests/test_atm_decay_tracker.py l1_compute/tests/test_atm_decay_modular.py -q"
+  - "./scripts/validate_session.ps1"
+tests_passed:
+  - "pytest: l1_compute/tests/test_atm_decay_tracker.py"
+  - "pytest: l1_compute/tests/test_atm_decay_modular.py"
+  - "aggregate: 13 passed"
+tests_failed:
+  - "Not run: scripts/test/test_l0_l4_pipeline.py"
+  - "Not run: full frontend build/tests"
+blockers: []
+notes:
+  - "Legacy persisted additive offsets are backfilled into multiplicative factors with -100% floor clamp."
+
+

@@ -74,6 +74,12 @@ V3.1 已完成从 L2 (Agent B) 向 L1 的逻辑下沉：
 - **BBO Imbalance v2 (订单簿失衡)**：抛弃单一 L1 盘口，采集 Top-5 L2 深度价位作加权失衡（EWMA 衰减机制阻尼毛刺信号）。
 - **Volume Acceleration**：衡量瞬间脉冲成交加速比。
 
+### 2.5 ATM Decay 拼接契约 (2026-03-06 Hotfix)
+- **复利拼接替代加法拼接**：跨 Strike 换锚时，`call/put/straddle` 的连续收益必须采用 multiplicative factor（`Π(1+r_i)-1`）而非简单 `r_i` 累加，避免出现 `CALL <-100%` 语义越界。
+- **硬下界约束**：`call_pct/put_pct/straddle_pct` 在计算层强制满足 `>= -1.0`（即不低于 `-100%`）。
+- **盘后停更**：ATM Decay 仅在常规交易时段（09:30:00-16:00:00 ET）输出，16:00:01 以后禁止继续写入序列。
+- **跨日内存重置**：当交易日切换时，Tracker 必须清空内存锚点与拼接状态，防止旧日偏移污染新交易日。
+
 ## 3. 输出契约 (Output Contract)
 
 产生冻结的 `EnrichedSnapshot` 向前传递：
