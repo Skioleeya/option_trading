@@ -84,3 +84,36 @@ Failure to follow these SOPs puts institutional capital at risk. Code with the r
 *   **Fix Scope Declaration Upfront**: For production incidents, proposals MUST explicitly declare whether delivery is `hotfix only` or `hotfix + modularization`.
 *   **Single-Pass Execution Preference**: If modular debt is already known and high-risk, include structural refactor in the same approved change set to avoid repeated churn.
 *   **Verification Contract**: Any ATM anchor change MUST pass tracker unit tests + L1 reactor regression before release.
+
+---
+
+## 6. Cross-Dialogue Handoff Contract (Mandatory)
+
+To enable reliable multi-agent continuity across conversations, every agent MUST follow the `notes/context` contract below.
+
+### 6.1 Mandatory Context Files
+*   `notes/context/project_state.md`
+*   `notes/context/open_tasks.md`
+*   `notes/context/handoff.md`
+
+### 6.2 Start-of-Session Rule (Read First)
+*   **Read Before Any Change**: Before coding, each agent MUST read the three files above.
+*   **State Alignment**: If repository reality conflicts with context notes, the agent MUST reconcile notes first, then proceed.
+
+### 6.3 End-of-Session Rule (Write Back)
+*   **project_state.md MUST update**:
+    *   current branch / commit
+    *   latest scope and what changed
+    *   current risks and immediate next action
+*   **open_tasks.md MUST update**:
+    *   task status (`P0/P1/P2`)
+    *   owner and definition of done
+    *   current blockers
+*   **handoff.md MUST update**:
+    *   session goal/outcome
+    *   files changed and commands run
+    *   verification result and exact next step
+
+### 6.4 Commit Discipline for Context
+*   **Context Is Source of Truth**: Changes to these three files SHOULD be committed with task delivery whenever feasible.
+*   **No Silent Exit**: An agent MUST NOT end a substantive work session without updating this handoff contract state.
