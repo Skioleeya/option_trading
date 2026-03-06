@@ -14,21 +14,8 @@
  */
 import React, { useState, useEffect, useRef, useCallback, memo, useMemo } from 'react'
 import { buildCommandRegistry, type Command } from '../commands/commandRegistry'
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Fuzzy search
-// ─────────────────────────────────────────────────────────────────────────────
-
-function fuzzyMatch(query: string, text: string): boolean {
-    if (!query) return true
-    const q = query.toLowerCase()
-    const t = text.toLowerCase()
-    let qi = 0
-    for (let i = 0; i < t.length && qi < q.length; i++) {
-        if (t[i] === q[qi]) qi++
-    }
-    return qi === q.length
-}
+import { fuzzyMatch } from './commandPaletteSearch'
+import { isDebugOverlayToggleHotkey, isPaletteToggleHotkey } from './commandPaletteHotkeys'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Hooks
@@ -40,10 +27,19 @@ function useCommandPaletteOpen(): [boolean, React.Dispatch<React.SetStateAction<
 
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
-            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+            if (isPaletteToggleHotkey(e)) {
                 e.preventDefault()
                 setOpen((v) => !v)
+                return
             }
+
+            // L4_FRONTEND contract: Hack Matrix is available via Ctrl/Cmd + D.
+            if (import.meta.env.DEV && isDebugOverlayToggleHotkey(e)) {
+                e.preventDefault()
+                window.dispatchEvent(new CustomEvent('l4:toggle_debug_overlay'))
+                return
+            }
+
             if (e.key === 'Escape') setOpen(false)
         }
         window.addEventListener('keydown', handler)
@@ -103,7 +99,7 @@ export const CommandPalette: React.FC = memo(() => {
     }, [setOpen])
 
     const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-        if (e.key === 'ArrowDown') { e.preventDefault(); setActive((v) => Math.min(v + 1, filtered.length - 1)) }
+        if (e.key === 'ArrowDown') { e.preventDefault(); setActive((v) => (filtered.length === 0 ? 0 : Math.min(v + 1, filtered.length - 1))) }
         if (e.key === 'ArrowUp') { e.preventDefault(); setActive((v) => Math.max(v - 1, 0)) }
         if (e.key === 'Enter' && filtered[active]) execute(filtered[active])
     }, [filtered, active, execute])

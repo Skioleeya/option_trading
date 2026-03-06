@@ -1,0 +1,40 @@
+session_id: "2026-03-06/1357/1355_alert_panel_l0_l4_hotfix_mod"
+title: "alert and debug panel l0-l4 audit"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-06 13:57:55 -05:00"
+updated_at_et: "2026-03-06 14:06:37 -05:00"
+parent_session: "2026-03-06/1341/1340_atm_decay_l0_l4_hotfix_mod"
+
+branch: "master"
+base_commit: "796b276"
+head_commit: "796b276"
+
+files_changed:
+  - "l4_ui/src/components/CommandPalette.tsx"
+  - "l4_ui/src/components/DebugOverlay.tsx"
+  - "l4_ui/src/components/commandPaletteHotkeys.ts"
+  - "l4_ui/src/components/commandPaletteSearch.ts"
+  - "l4_ui/src/components/debugOverlayModel.ts"
+  - "l4_ui/src/components/__tests__/commandPaletteHotkeys.test.ts"
+  - "l4_ui/src/components/__tests__/commandPaletteSearch.test.ts"
+  - "l4_ui/src/components/__tests__/debugOverlayModel.test.ts"
+  - "notes/sessions/2026-03-06/1357/1355_alert_panel_l0_l4_hotfix_mod/project_state.md"
+  - "notes/sessions/2026-03-06/1357/1355_alert_panel_l0_l4_hotfix_mod/open_tasks.md"
+  - "notes/sessions/2026-03-06/1357/1355_alert_panel_l0_l4_hotfix_mod/handoff.md"
+  - "notes/sessions/2026-03-06/1357/1355_alert_panel_l0_l4_hotfix_mod/meta.yaml"
+commands:
+  - "rg -n \"AlertToast|CommandPalette|DebugOverlay|...\" l4_ui/src -S"
+  - "Get-Content target and dependency files"
+  - "npm --prefix l4_ui run test -- src/components/__tests__/commandPaletteSearch.test.ts src/components/__tests__/commandPaletteHotkeys.test.ts src/components/__tests__/debugOverlayModel.test.ts"
+  - "npm --prefix l4_ui run build"
+tests_passed:
+  - "vitest: 3 files / 9 tests"
+  - "vite build: success"
+tests_failed:
+  - "vitest initial sandbox run: spawn EPERM (resolved by escalated rerun)"
+blockers: []
+notes:
+  - "AlertToast audited: no major L0-L4 bug identified in current scope."
+  - "Known follow-up: command registry nav events l4:nav_* still have no listeners."

@@ -1,6 +1,7 @@
-import React, { memo } from 'react'
+import React, { memo, useMemo } from 'react'
 import { useDashboardStore } from '../store/dashboardStore'
 import { X, Activity, Database, Cpu } from 'lucide-react'
+import { buildDebugOverlayModel } from './debugOverlayModel'
 
 // Raw L1 data diagnostics overlay
 
@@ -12,16 +13,9 @@ interface Props {
 export const DebugOverlay: React.FC<Props> = memo(({ open, onClose }) => {
     const payload = useDashboardStore(s => s.payload)
     const connStatus = useDashboardStore(s => s.connectionStatus)
+    const raw = useMemo(() => buildDebugOverlayModel(payload, connStatus), [payload, connStatus])
 
     if (!open) return null
-
-    const fused = payload?.agent_g?.data?.fused_signal
-    const raw = {
-        vpin: fused?.raw_vpin ?? 'N/A',
-        bbo: fused?.raw_bbo_imb ?? 'N/A',
-        volAccel: fused?.raw_vol_accel ?? 'N/A',
-        asOf: payload?.timestamp ?? 'Syncing...'
-    }
 
     return (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
@@ -46,7 +40,7 @@ export const DebugOverlay: React.FC<Props> = memo(({ open, onClose }) => {
                     </div>
                     <div className="flex items-center gap-4">
                         <span className={`${connStatus === 'connected' ? 'text-[#10b981]' : 'text-[#ef4444]'}`}>
-                            {connStatus.toUpperCase()}
+                            {raw.connStatus}
                         </span>
                         <span className="text-[#52525b]">{raw.asOf}</span>
                         <button onClick={onClose} className="text-[#71717a] hover:text-white transition-colors">
@@ -88,6 +82,28 @@ export const DebugOverlay: React.FC<Props> = memo(({ open, onClose }) => {
                         </div>
                     </div>
 
+                    {/* SHM IPC Stats */}
+                    <div className="grid grid-cols-4 gap-2 mb-6">
+                        <div className="bg-[#101014] border border-[#27272a] rounded px-3 py-2">
+                            <div className="text-[9px] text-[#52525b] font-bold">SHM STATUS</div>
+                            <div className={`text-[12px] font-bold mt-0.5 ${raw.shmStatus === 'OK' || raw.shmStatus === 'ONLINE' ? 'text-[#10b981]' : 'text-[#f59e0b]'}`}>
+                                {raw.shmStatus}
+                            </div>
+                        </div>
+                        <div className="bg-[#101014] border border-[#27272a] rounded px-3 py-2">
+                            <div className="text-[9px] text-[#52525b] font-bold">HEAD</div>
+                            <div className="text-[12px] font-bold text-[#a1a1aa] mt-0.5">{raw.shmHead}</div>
+                        </div>
+                        <div className="bg-[#101014] border border-[#27272a] rounded px-3 py-2">
+                            <div className="text-[9px] text-[#52525b] font-bold">TAIL</div>
+                            <div className="text-[12px] font-bold text-[#a1a1aa] mt-0.5">{raw.shmTail}</div>
+                        </div>
+                        <div className="bg-[#101014] border border-[#27272a] rounded px-3 py-2">
+                            <div className="text-[9px] text-[#52525b] font-bold">HEAD-TAIL</div>
+                            <div className="text-[12px] font-bold text-[#e4e4e7] mt-0.5">{raw.shmLag}</div>
+                        </div>
+                    </div>
+
                     {/* Matrix Stream Log */}
                     <div className="border border-[#27272a] rounded bg-black h-[400px] p-0 flex flex-col">
                         <div className="px-3 py-1.5 border-b border-[#27272a] text-[#52525b] font-bold bg-[#09090b] sticky top-0">
@@ -103,7 +119,11 @@ export const DebugOverlay: React.FC<Props> = memo(({ open, onClose }) => {
                                 <span className="text-[#10b981]">{"{"}</span>
                                 <span className="text-[#3b82f6]">"vpin_buffer"</span><span className="text-[#e4e4e7]">: {raw.vpin},</span>
                                 <span className="text-[#3b82f6]">"bbo_bias"</span><span className="text-[#e4e4e7]">: {raw.bbo},</span>
-                                <span className="text-[#3b82f6]">"accel_hz"</span><span className="text-[#e4e4e7]">: {raw.volAccel}</span>
+                                <span className="text-[#3b82f6]">"accel_hz"</span><span className="text-[#e4e4e7]">: {raw.volAccel},</span>
+                                <span className="text-[#3b82f6]">"shm_head"</span><span className="text-[#e4e4e7]">: {raw.shmHead},</span>
+                                <span className="text-[#3b82f6]">"shm_tail"</span><span className="text-[#e4e4e7]">: {raw.shmTail},</span>
+                                <span className="text-[#3b82f6]">"shm_lag"</span><span className="text-[#e4e4e7]">: {raw.shmLag},</span>
+                                <span className="text-[#3b82f6]">"shm_status"</span><span className="text-[#e4e4e7]">: "{raw.shmStatus}"</span>
                                 <span className="text-[#10b981]">{"}"}</span>
                                 {`
 --------------------------------------------------
