@@ -17,6 +17,7 @@ Legacy schema compatibility:
 from __future__ import annotations
 
 import logging
+import math
 import time
 from datetime import datetime, timezone
 from typing import Any
@@ -159,16 +160,19 @@ class PayloadAssemblerV2:
             data.put_wall = float(getattr(aggregates, "put_wall", 0.0) or 0.0)
             
             # Metadata support (Phase 1 fix: Rust status)
-            metadata = getattr(snapshot, "extra_metadata", {})
+            metadata = getattr(snapshot, "extra_metadata", {}) or {}
             data.rust_active = bool(metadata.get("rust_active", False))
             data.shm_stats = metadata.get("shm_stats")
+            data.volume_map = self._normalize_volume_map(
+                metadata.get("volume_map", getattr(snapshot, "volume_map", {}))
+            )
 
         # Legacy dict (from OptionChainBuilder.fetch_chain())
         elif isinstance(snapshot, dict):
             data.spot = float(snapshot.get("spot", 0.0) or 0.0)
             data.atm_iv = float(snapshot.get("atm_iv", snapshot.get("spy_atm_iv", 0.0)) or 0.0)
             data.snapshot_time = snapshot.get("as_of")
-            data.volume_map = snapshot.get("volume_map") or {}
+            data.volume_map = self._normalize_volume_map(snapshot.get("volume_map"))
             data.net_gex = float(snapshot.get("net_gex", 0.0) or 0.0)
             data.call_wall = float(snapshot.get("call_wall", 0.0) or 0.0)
             data.put_wall = float(snapshot.get("put_wall", 0.0) or 0.0)
@@ -194,7 +198,9 @@ class PayloadAssemblerV2:
             data.net_charm = ui_metrics.get("net_charm", data.net_charm)
             data.svol_corr = ui_metrics.get("svol_corr", data.svol_corr)
             data.svol_state = ui_metrics.get("svol_state", data.svol_state)
-            data.wall_migration_data = ui_metrics.get("wall_migration_data", data.wall_migration_data)
+            wall_migration_data = ui_metrics.get("wall_migration_data", data.wall_migration_data)
+            data.wall_migration_data = wall_migration_data
+            data.wall_dyn = self._extract_wall_dyn_payload(wall_migration_data)
             data.mtf_consensus = ui_metrics.get("mtf_consensus", data.mtf_consensus)
             data.skew_dynamics = ui_metrics.get("skew_dynamics", data.skew_dynamics)
             data.iv_velocity = ui_metrics.get("iv_velocity", data.iv_velocity)
@@ -328,6 +334,42 @@ class PayloadAssemblerV2:
             return drift_ms, delay > 0.8
         except Exception:
             return 0.0, False
+
+    @staticmethod
+    def _normalize_volume_map(raw: Any) -> dict[str, float]:
+        """Normalize volume_map to a finite non-negative strike->volume map."""
+        if not isinstance(raw, dict):
+            return {}
+
+        out: dict[str, float] = {}
+        for strike, volume in raw.items():
+            try:
+                strike_f = float(strike)
+                volume_f = float(volume)
+            except (TypeError, ValueError):
+                continue
+            if not math.isfinite(strike_f) or not math.isfinite(volume_f):
+                continue
+            if strike_f <= 0.0 or volume_f < 0.0:
+                continue
+            out[str(strike)] = volume_f
+        return out
+
+    @staticmethod
+    def _extract_wall_dyn_payload(raw: Any) -> dict[str, Any]:
+        """Normalize wall-migration payload into MicroStats wall_dyn contract."""
+        if not isinstance(raw, dict):
+            return {}
+
+        call_state = raw.get("call_wall_state")
+        put_state = raw.get("put_wall_state")
+        if call_state is None and put_state is None:
+            return {}
+
+        return {
+            "call_wall_state": str(call_state) if call_state is not None else "",
+            "put_wall_state": str(put_state) if put_state is not None else "",
+        }
 
 
 # ─────────────────────────────────────────────────────────────────────────────

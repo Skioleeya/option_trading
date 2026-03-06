@@ -1,0 +1,34 @@
+﻿session_id: "2026-03-06/1241/1338_depth_profile_l0_l4_hotfix_mod"
+title: "depth profile l0-l4 audit and fix"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-06 12:41:54 -05:00"
+updated_at_et: "2026-03-06 12:44:21 -05:00"
+parent_session: "2026-03-06/1145/1210_wall_migration_l0_l4_hotfix_mod"
+
+branch: "master"
+base_commit: "5a88b76"
+head_commit: "5a88b76"
+
+files_changed: []
+files_changed:
+  - "app/loops/compute_loop.py"
+  - "l3_assembly/assembly/payload_assembler.py"
+  - "l3_assembly/tests/test_assembly.py"
+  - "notes/sessions/2026-03-06/1241/1338_depth_profile_l0_l4_hotfix_mod/project_state.md"
+  - "notes/sessions/2026-03-06/1241/1338_depth_profile_l0_l4_hotfix_mod/open_tasks.md"
+  - "notes/sessions/2026-03-06/1241/1338_depth_profile_l0_l4_hotfix_mod/handoff.md"
+  - "notes/sessions/2026-03-06/1241/1338_depth_profile_l0_l4_hotfix_mod/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File .\\scripts\\new_session.ps1 -TaskId \"1338_depth_profile_l0_l4_hotfix_mod\" -Title \"depth profile l0-l4 audit and fix\" -Scope \"hotfix + modularization\" -Owner \"Codex\" -ParentSession \"2026-03-06/1145/1210_wall_migration_l0_l4_hotfix_mod\" -UseTimeBucket"
+  - "powershell -ExecutionPolicy Bypass -File .\\scripts\\test\\run_pytest.ps1 l3_assembly/tests/test_assembly.py -q"
+  - "python reproducer for payload_assembler macro_volume_map passthrough (before/after)"
+tests_passed:
+  - "l3_assembly/tests/test_assembly.py: 24 passed"
+tests_failed:
+  - "l3_assembly/tests/test_presenters.py: 2 failed (pre-existing, out of scope)"
+blockers: []
+notes: []
+
+

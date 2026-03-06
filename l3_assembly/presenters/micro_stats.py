@@ -11,31 +11,34 @@ from __future__ import annotations
 
 from typing import Any
 
-from l3_assembly.events.payload_events import MetricCard, MicroStatsState
+from l3_assembly.events.payload_events import (
+    MetricCard,
+    MicroStatsState,
+    VALID_BADGE_TOKENS,
+)
 
 
-# ── Badge normalizer ── map legacy badge classes to canonical V2 badge tokens
-_BADGE_MAP: dict[str, str] = {
-    "badge-super-pin":     "badge-positive",
-    "badge-damping":       "badge-neutral",
-    "badge-acceleration":  "badge-warning",
-    "badge-neutral":       "badge-neutral",
-    "badge-positive":      "badge-positive",
-    "badge-negative":      "badge-negative",
-    "badge-danger":        "badge-danger",
-    "badge-warning":       "badge-warning",
-    # legacy raw values that may appear
-    "positive":            "badge-positive",
-    "negative":            "badge-negative",
-    "neutral":             "badge-neutral",
-    "warning":             "badge-warning",
-    "danger":              "badge-danger",
+# ── Badge normalizer ── keeps frontend token semantics while supporting aliases
+_BADGE_ALIASES: dict[str, str] = {
+    "badge-super-pin": "badge-amber",
+    "badge-damping": "badge-hollow-green",
+    "badge-acceleration": "badge-hollow-purple",
+    "positive": "badge-positive",
+    "negative": "badge-negative",
+    "neutral": "badge-neutral",
+    "warning": "badge-warning",
+    "danger": "badge-danger",
 }
 
 
 def _normalize_badge(raw: str) -> str:
-    """Map any badge string to a valid MetricCard badge token."""
-    return _BADGE_MAP.get(raw, "badge-neutral")
+    """Map legacy aliases to valid frontend badge tokens."""
+    token = str(raw or "").strip()
+    if token in VALID_BADGE_TOKENS:
+        return token
+    if token in _BADGE_ALIASES:
+        return _BADGE_ALIASES[token]
+    return _BADGE_ALIASES.get(token.lower(), "badge-neutral")
 
 
 class MicroStatsPresenterV2:

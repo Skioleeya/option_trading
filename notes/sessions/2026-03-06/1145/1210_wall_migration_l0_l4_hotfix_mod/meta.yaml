@@ -4,7 +4,7 @@ scope: "hotfix + modularization"
 owner: "Codex"
 timezone: "America/New_York"
 started_at_et: "2026-03-06 11:45:26 -05:00"
-updated_at_et: "2026-03-06 12:13:49 -05:00"
+updated_at_et: "2026-03-06 12:31:16 -05:00"
 parent_session: "2026-03-06/1130/timebucket_session_layout"
 
 branch: "master"
@@ -12,6 +12,9 @@ base_commit: "00789bd"
 head_commit: "00789bd"
 
 files_changed:
+  - "docs/SOP/L1_LOCAL_COMPUTATION.md"
+  - "docs/SOP/L4_FRONTEND.md"
+  - "docs/SOP/SYSTEM_OVERVIEW.md"
   - "AGENTS.md"
   - "pytest.ini"
   - ".gitignore"

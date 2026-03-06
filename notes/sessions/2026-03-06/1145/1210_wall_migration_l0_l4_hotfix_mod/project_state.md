@@ -1,7 +1,7 @@
 # Project State
 
 ## Snapshot
-- DateTime (ET): 2026-03-06 12:13:49 -05:00
+- DateTime (ET): 2026-03-06 12:31:16 -05:00
 - Branch: `master`
 - Last Commit: `00789bd`
 - Environment:
@@ -21,12 +21,19 @@
 
 ## What Changed (Latest Session)
 - Files:
+  - `docs/SOP/L1_LOCAL_COMPUTATION.md`
+  - `docs/SOP/L4_FRONTEND.md`
+  - `docs/SOP/SYSTEM_OVERVIEW.md`
   - `AGENTS.md`
   - `pytest.ini`
   - `.gitignore`
   - `scripts/test/run_pytest.ps1`
   - `scripts/README.md`
 - Behavior:
+  - Refactored AGENTS overall structure and wording to reduce semantic repetition and compress length from 180 to 129 lines while preserving mandatory constraints.
+  - Added mandatory SOP fast-load pack to AGENTS bootstrap contract (Section 6.1.1 + checklist linkage in 6.2.2).
+  - De-duplicated AGENTS context-load semantics by converting Section 6.2.2 into a reference checklist (linking 6.2/4.1/6.3/6.5) instead of restating full rules.
+  - Synced SOP docs with delivered fixes: Wall sentinel guard, WallMigration token/color governance, pytest cache/context execution policy.
   - Added AGENTS hard mandate (Section 4.1) for pytest single-entry, non-admin context, and cache isolation.
   - Pytest cache directory is fixed to `tmp/pytest_cache`.
   - Standard wrapper now blocks Administrator context to avoid mixed-permission cache artifacts.

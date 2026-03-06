@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import time
+from typing import Any
 
 from shared.config import settings
 from app.loops.shared_state import SharedLoopState
@@ -13,6 +14,34 @@ if TYPE_CHECKING:
     from app.container import AppContainer
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_volume_map(raw: Any) -> dict[str, float]:
+    """Normalize volume_map into a JSON-safe strike->volume dict."""
+    if not isinstance(raw, dict):
+        return {}
+
+    out: dict[str, float] = {}
+    for strike, volume in raw.items():
+        try:
+            strike_f = float(strike)
+            volume_f = float(volume)
+        except (TypeError, ValueError):
+            continue
+        if strike_f <= 0 or volume_f < 0:
+            continue
+        out[str(strike)] = volume_f
+    return out
+
+
+def _build_l1_extra_metadata(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Build the L0->L1 metadata pass-through contract."""
+    return {
+        "rust_active": snapshot.get("rust_active", False),
+        "shm_stats": snapshot.get("shm_stats"),
+        "volume_map": _normalize_volume_map(snapshot.get("volume_map")),
+    }
+
 
 async def run_compute_loop(ctr: 'AppContainer', state: SharedLoopState) -> None:
     """Compute loop: fetch data → run agents → build payload → save state.
@@ -51,10 +80,7 @@ async def run_compute_loop(ctr: 'AppContainer', state: SharedLoopState) -> None:
                     l0_version=0,
                     iv_cache=iv_cache,
                     spot_at_sync=spot_sync,
-                    extra_metadata={
-                        "rust_active": snapshot.get("rust_active", False),
-                        "shm_stats": snapshot.get("shm_stats")
-                    }
+                    extra_metadata=_build_l1_extra_metadata(snapshot),
                 )
 
             if l1_snap and ctr.l2_reactor:

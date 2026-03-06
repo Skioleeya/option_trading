@@ -65,6 +65,12 @@ UI 在保持原版 TradingView-style 的冷酷暗色调三栏版式同时（`lib
 - **中栏**：高频行情 Head (`Header`), Gex绝对值条 (`GexStatusBar`), ATM 衰减动能 (`AtmDecayChart` / `Overlay`)
 - **右栏**：多重决策融合器 (`DecisionEngine`), 核心博弈极向 (`TacticalTriad`), Skew 曲率 (`SkewDynamics`), 资金流 (`MtfFlow`), 活跃榜 (`ActiveOptions` - **v4.0 增强**: 支持 Impact 排序与 Sweep 呼吸灯)
 - **隐藏诊断面 (v3.1)**: 引入了名为 **Hack Matrix** 的底层 L1 SIMD 数据诊断大屏（`DebugOverlay.tsx`），通过 `Ctrl+D` 热键或 `CommandPalette` (`Ctrl+K`) 唤出，供量化研究员核对底层算力。另外 `DecisionEngine` 组件内也会将微观值以 `[7px]` 极小字体暗化挂载展示（注：严格使用 `??` 和 `!== undefined` 来确保合法空值 `0.0` 正确渲染，防止被 JS 弱类型逻辑隐藏）。
+
+### 3.1 WallMigration 颜色与状态治理 (2026-03-06)
+- **Token 单一来源**：`WallMigration` 必须通过专用主题模块统一管理颜色/边框/阴影 token，禁止组件内散落硬编码状态色。
+- **亚洲风格一致性**：严格执行 `红涨绿跌`（Call/上涨=Red，Put/下行=Green），并与 `theme.ts`/`index.css` 变量保持一致。
+- **后端灯光透传优先**：`row.lights.current_*` 作为视觉主信号优先级高于本地 fallback，防止 L3→L4 状态语义偏移。
+- **健壮解析**：状态字符串与历史值渲染需容错（空值/非数值不崩溃），确保 WS 短暂缺帧时组件稳定。
 ## 4. 连接守护与告警系统 (Monitor & Alerts)
 
 - **ConnectionMonitor**: 接管 WS 心跳。实现状态五连跳 `DISCONNECTED → CONNECTING → AWAIT_STATE → RUNNING → STALLED`。

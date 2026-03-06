@@ -62,6 +62,7 @@ L1 层目前由 `L1ComputeReactor` 统一管理：
 V3.1 已完成从 L2 (Agent B) 向 L1 的逻辑下沉：
 - **VannaFlowAnalyzer**：跟踪 Delta 敞口与 IV 微分相乘的流追踪。
 - **WallMigrationTracker**：跟踪 Gamma Call/Put 墙面（以及 Flip Level）在不同 Strike 上的移动。
+- **Wall Sentinel Guard (2026-03-06 Hotfix)**：`call_wall/put_wall` 在进入 WallMigration 状态机前必须执行归一化；`<=0`、NaN、Inf 一律视为 unavailable，禁止触发 `BREACHED` 判定（防止 0.0 哨兵值导致误报）。
 - **GEX Notional Validation**：系统对 SPY 基准的 GEX 名义值计算与机构级基准 (VolLand/SpotGamma) 误差 < 1%。
 
 ### 2.4 Rust SIMD 微结构信号 (l1_rust)

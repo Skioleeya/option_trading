@@ -62,6 +62,7 @@ class _MockSnapshot:
         self.spot = spot
         self.chain = []
         self.computed_at = datetime.now(timezone.utc)
+        self.extra_metadata = {}
         class _Aggs:
             flip_level = 558.0
             net_gex = 1e9
@@ -93,6 +94,47 @@ class TestPayloadAssemblerV2:
         assembler = PayloadAssemblerV2()
         result = assembler.assemble(_MockDecision(version=99), _MockSnapshot(), None, ())
         assert result.version == 99
+
+    def test_macro_volume_map_propagates_from_typed_snapshot_metadata(self):
+        assembler = PayloadAssemblerV2()
+        snap = _MockSnapshot()
+        snap.extra_metadata = {
+            "volume_map": {
+                "560.0": 12345,
+                561.0: 6789,
+                "bad_strike": 100,
+                "562.0": "bad_volume",
+            }
+        }
+
+        result = assembler.assemble(_MockDecision(), snap, None, ())
+        assert result.ui_state.macro_volume_map == {
+            "560.0": 12345.0,
+            "561.0": 6789.0,
+        }
+
+    def test_micro_stats_preserve_wall_dyn_and_badge_tokens(self):
+        assembler = PayloadAssemblerV2()
+        ui_metrics = {
+            "gex_regime": "DAMPING",
+            "vanna_state": "DANGER_ZONE",
+            "momentum": "BULLISH",
+            "wall_migration_data": {
+                "call_wall_state": "REINFORCED_WALL",
+                "put_wall_state": "REINFORCED_SUPPORT",
+            },
+        }
+
+        # First tick seeds the wall-dyn debounce state; second tick should commit PINCH.
+        assembler.assemble(_MockDecision(), _MockSnapshot(), None, (), ui_metrics)
+        result = assembler.assemble(_MockDecision(), _MockSnapshot(), None, (), ui_metrics)
+        micro = result.ui_state.micro_stats.to_dict()
+
+        assert micro["wall_dyn"]["label"] == "PINCH"
+        assert micro["wall_dyn"]["badge"] == "badge-purple"
+        assert micro["net_gex"]["badge"] == "badge-hollow-green"
+        assert micro["vanna"]["badge"] == "badge-red"
+        assert micro["momentum"]["badge"] == "badge-red"
 
     def test_none_decision_produces_neutral(self):
         assembler = PayloadAssemblerV2()

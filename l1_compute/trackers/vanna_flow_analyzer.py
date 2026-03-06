@@ -100,6 +100,9 @@ class VannaFlowAnalyzer:
         # Bridge IV gaps
         self._last_valid_iv: float | None = None
 
+        # Config sanity guard (log only once if threshold sign is invalid)
+        self._warned_grind_threshold_sign = False
+
         # Persistence (v2.1)
         self._redis = None
         self._loop = None
@@ -343,7 +346,16 @@ class VannaFlowAnalyzer:
                 logger.debug(f"[L2 Vanna] Entering DANGER_ZONE. Corr: {correlation:.2f} > {settings.vanna_danger_zone_threshold:.2f}")
                 self._was_in_danger_zone = True
             return VannaFlowState.DANGER_ZONE
-        elif correlation < settings.vanna_grind_stable_threshold:
+        grind_threshold = settings.vanna_grind_stable_threshold
+        if grind_threshold >= 0 and not self._warned_grind_threshold_sign:
+            logger.warning(
+                "[L2 Vanna] vanna_grind_stable_threshold=%.4f should be negative; using -abs(threshold).",
+                grind_threshold,
+            )
+            self._warned_grind_threshold_sign = True
+        grind_threshold = -abs(grind_threshold)
+
+        if correlation < grind_threshold:
             if getattr(self, '_was_in_danger_zone', False):
                 logger.debug(f"[L2 Vanna] Exiting DANGER_ZONE. Corr dropped to {correlation:.2f}")
                 self._was_in_danger_zone = False

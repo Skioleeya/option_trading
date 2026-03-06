@@ -28,6 +28,26 @@ from typing import Any
 # Leaf / atom types
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Canonical badge tokens accepted by L3 payload contracts.
+# Must remain aligned with frontend classes in l4_ui/src/index.css.
+VALID_BADGE_TOKENS = {
+    "badge-positive",
+    "badge-negative",
+    "badge-neutral",
+    "badge-warning",
+    "badge-danger",
+    "badge-amber",
+    "badge-red",
+    "badge-green",
+    "badge-purple",
+    "badge-cyan",
+    "badge-hollow-purple",
+    "badge-hollow-amber",
+    "badge-hollow-cyan",
+    "badge-hollow-green",
+    "badge-red-dim",
+}
+
 @dataclass(frozen=True)
 class MetricCard:
     """Atomic UI display card: a single labelled metric with badge colour.
@@ -44,13 +64,9 @@ class MetricCard:
     tooltip: str = ""
 
     def __post_init__(self) -> None:
-        VALID_BADGES = {
-            "badge-positive", "badge-negative", "badge-neutral",
-            "badge-warning", "badge-danger",
-        }
-        if self.badge not in VALID_BADGES:
+        if self.badge not in VALID_BADGE_TOKENS:
             raise ValueError(
-                f"MetricCard.badge must be one of {VALID_BADGES}, got {self.badge!r}"
+                f"MetricCard.badge must be one of {VALID_BADGE_TOKENS}, got {self.badge!r}"
             )
 
     def to_dict(self) -> dict[str, str]:

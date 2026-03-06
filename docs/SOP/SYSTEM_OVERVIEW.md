@@ -76,6 +76,7 @@
 - **启动检查表**：欲启动环境请严格参见项目根目录下的 [`启动步骤.md`](../启动步骤.md)。
 - **核心构建**：修改 Rust 逻辑后，需执行 `maturin develop` 重新编译原生库。
 - **性能验证**：定期运行 `python scripts/test_rust_bridge.py --stress` 确保 IPC 链路稳固。
+- **测试入口统一 (2026-03-06)**：`pytest` 统一走 `scripts/test/run_pytest.ps1`，缓存目录固定 `tmp/pytest_cache`，禁止管理员上下文混跑（防止 `pytest-cache-files-*` 权限残留污染仓库根目录）。
 
 ## 远期宏大迁移路线 (Updated 2026 Vision)
 

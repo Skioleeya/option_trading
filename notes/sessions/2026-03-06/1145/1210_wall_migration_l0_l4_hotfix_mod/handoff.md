@@ -1,12 +1,16 @@
 # Handoff
 
 ## Session Summary
-- DateTime (ET): 2026-03-06 12:13:49 -05:00
+- DateTime (ET): 2026-03-06 12:31:16 -05:00
 - Goal: Enforce isolated pytest cache and avoid mixed permission contexts.
 - Outcome: Root pytest cache path centralized to `tmp/pytest_cache`; wrapper added to block admin runs.
 
 ## What Changed
 - Code / Docs Files:
+  - `AGENTS.md` (global structure compacted; semantic dedup; 180→129 lines)
+  - `docs/SOP/L1_LOCAL_COMPUTATION.md`
+  - `docs/SOP/L4_FRONTEND.md`
+  - `docs/SOP/SYSTEM_OVERVIEW.md`
   - `AGENTS.md`
   - `pytest.ini`
   - `.gitignore`
@@ -30,7 +34,7 @@
 
 ## Pending
 - Must Do Next:
-  - Team should use `scripts/test/run_pytest.ps1` instead of direct `pytest` in this repo (now codified in `AGENTS.md` Section 4.1).
+  - Team should use `scripts/test/run_pytest.ps1` instead of direct `pytest` in this repo (now codified in `AGENTS.md` Section 4.1 and synced into docs/SOP).
 - Nice to Have:
   - Add CI check that fails if root `pytest-cache-files-*` directories appear.
 
