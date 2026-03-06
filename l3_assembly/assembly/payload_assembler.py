@@ -85,7 +85,10 @@ class PayloadAssemblerV2:
             snap_data = _SnapshotData()
 
         # ── 3. Drift detection ─────────────────────────────────────────────
-        drift_ms, drift_warning = self._compute_drift(snap_data.snapshot_time, signal)
+        drift_ms, drift_warning = self._compute_drift(
+            snap_data.source_data_timestamp_utc,
+            signal,
+        )
 
         # ── 4. Build UIState via Presenter V2 calls ────────────────────────
         ui_state = self._build_ui_state(snap_data, active_options or ())
@@ -112,9 +115,10 @@ class PayloadAssemblerV2:
 
         # ── 6. Timestamps ─────────────────────────────────────────────────────
         now_iso = datetime.now(timezone.utc).isoformat()
+        data_timestamp = self._resolve_data_timestamp(snap_data.source_data_timestamp_utc, signal, now_iso)
 
         payload = FrozenPayload(
-            data_timestamp=signal.computed_at or now_iso,
+            data_timestamp=data_timestamp,
             broadcast_timestamp=now_iso,
             spot=snap_data.spot,
             version=signal.version,
@@ -166,12 +170,14 @@ class PayloadAssemblerV2:
             data.volume_map = self._normalize_volume_map(
                 metadata.get("volume_map", getattr(snapshot, "volume_map", {}))
             )
+            data.source_data_timestamp_utc = metadata.get("source_data_timestamp_utc")
 
         # Legacy dict (from OptionChainBuilder.fetch_chain())
         elif isinstance(snapshot, dict):
             data.spot = float(snapshot.get("spot", 0.0) or 0.0)
             data.atm_iv = float(snapshot.get("atm_iv", snapshot.get("spy_atm_iv", 0.0)) or 0.0)
             data.snapshot_time = snapshot.get("as_of")
+            data.source_data_timestamp_utc = snapshot.get("as_of_utc") or snapshot.get("as_of")
             data.volume_map = self._normalize_volume_map(snapshot.get("volume_map"))
             data.net_gex = float(snapshot.get("net_gex", 0.0) or 0.0)
             data.call_wall = float(snapshot.get("call_wall", 0.0) or 0.0)
@@ -206,6 +212,22 @@ class PayloadAssemblerV2:
             data.iv_velocity = ui_metrics.get("iv_velocity", data.iv_velocity)
 
         return data
+
+    @classmethod
+    def _resolve_data_timestamp(
+        cls,
+        source_timestamp: Any,
+        signal: SignalData,
+        default_now_iso: str,
+    ) -> str:
+        """Resolve payload data_timestamp with L0 source timestamp priority."""
+        source_iso = cls._to_utc_iso(source_timestamp)
+        if source_iso:
+            return source_iso
+        computed_iso = cls._to_utc_iso(signal.computed_at)
+        if computed_iso:
+            return computed_iso
+        return default_now_iso
 
     def _build_ui_state(
         self,
@@ -312,28 +334,50 @@ class PayloadAssemblerV2:
             iv_velocity=iv_velocity,
         )
 
-    @staticmethod
+    @classmethod
     def _compute_drift(
-        snapshot_time: Any,
+        cls,
+        source_timestamp: Any,
         signal: SignalData,
     ) -> tuple[float, bool]:
-        """Calculate data drift between L0 snapshot and L2 compute time."""
+        """Calculate drift between L2 compute time and L0 source timestamp."""
         try:
-            from datetime import datetime
-            agent_as_of = datetime.fromisoformat(signal.computed_at.replace("Z", "+00:00"))
-
-            if isinstance(snapshot_time, datetime):
-                snap_dt = snapshot_time
-            elif isinstance(snapshot_time, str):
-                snap_dt = datetime.fromisoformat(snapshot_time)
-            else:
+            source_iso = cls._to_utc_iso(source_timestamp)
+            computed_iso = cls._to_utc_iso(signal.computed_at)
+            if not source_iso or not computed_iso:
                 return 0.0, False
 
-            delay = (agent_as_of - snap_dt).total_seconds()
-            drift_ms = delay * 1000
+            source_dt = datetime.fromisoformat(source_iso)
+            computed_dt = datetime.fromisoformat(computed_iso)
+            delay = (computed_dt - source_dt).total_seconds()
+            drift_ms = delay * 1000.0
             return drift_ms, delay > 0.8
         except Exception:
             return 0.0, False
+
+    @staticmethod
+    def _to_utc_iso(value: Any) -> str | None:
+        """Convert datetime/ISO8601 input into canonical UTC ISO string."""
+        if isinstance(value, datetime):
+            dt = value
+        elif isinstance(value, str):
+            raw = value.strip()
+            if not raw:
+                return None
+            if raw.endswith("Z"):
+                raw = f"{raw[:-1]}+00:00"
+            try:
+                dt = datetime.fromisoformat(raw)
+            except ValueError:
+                return None
+        else:
+            return None
+
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        else:
+            dt = dt.astimezone(timezone.utc)
+        return dt.isoformat()
 
     @staticmethod
     def _normalize_volume_map(raw: Any) -> dict[str, float]:
@@ -388,7 +432,7 @@ class _SnapshotData:
         "fused_signal_direction", "wall_dyn", "wall_migration_data",
         "per_strike_gex", "mtf_consensus", "skew_dynamics", "volume_map",
         "net_gex", "call_wall", "put_wall", "iv_velocity",
-        "rust_active", "shm_stats",
+        "rust_active", "shm_stats", "source_data_timestamp_utc",
     )
 
     def __init__(self) -> None:
@@ -417,6 +461,7 @@ class _SnapshotData:
         self.iv_velocity: dict | None = None
         self.rust_active: bool = False
         self.shm_stats: dict | None = None
+        self.source_data_timestamp_utc: Any = None
 
 
 def _convert_active_option(d: dict) -> Any:

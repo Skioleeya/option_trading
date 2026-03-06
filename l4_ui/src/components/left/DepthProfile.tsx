@@ -2,8 +2,18 @@
  * DepthProfile — Phase 3: Zustand field-level selector
  * DOM/CSS/Layout: UNCHANGED
  */
-import React, { useEffect, useRef, memo } from 'react'
-import { useDashboardStore, selectSpot } from '../../store/dashboardStore'
+import React, { useEffect, useRef, memo, useState, useCallback } from 'react'
+import {
+    useDashboardStore,
+    selectSpot,
+    selectGammaWalls,
+    selectFlipLevel,
+} from '../../store/dashboardStore'
+import {
+    resolveNavigationTarget,
+    resolveNearestStrike,
+    type DepthProfileNavEvent,
+} from './depthProfileNav'
 
 const selectDepthProfile = (s: ReturnType<typeof useDashboardStore.getState>) =>
     s.payload?.agent_g?.data?.ui_state?.depth_profile ?? null
@@ -31,8 +41,10 @@ const DepthProfileRow: React.FC<{
     maxPutPct: number;
     maxCallPct: number;
     spot: number | null;
-    spotRef: React.RefObject<HTMLDivElement>;
-}> = memo(({ row, maxPutPct, maxCallPct, spot, spotRef }) => {
+    spotRef: React.MutableRefObject<HTMLDivElement | null>;
+    registerRowRef: (strike: number, node: HTMLDivElement | null) => void;
+    isNavHighlighted: boolean;
+}> = memo(({ row, maxPutPct, maxCallPct, spot, spotRef, registerRowRef, isNavHighlighted }) => {
     const isMaxPut = row.put_pct === maxPutPct && maxPutPct > 0
     const isMaxCall = row.call_pct === maxCallPct && maxCallPct > 0
     const hasPut = row.put_pct > 0
@@ -40,8 +52,15 @@ const DepthProfileRow: React.FC<{
     const isFocusZone = row.is_spot || row.is_flip || isMaxPut || isMaxCall
 
     return (
-        <div ref={row.is_spot ? spotRef : null}
-            className={`relative group w-full h-[20px] flex items-center justify-center transition-colors duration-150 ${isFocusZone ? 'bg-white/[0.03]' : 'hover:bg-white/[0.02]'}`}>
+        <div
+            ref={(node) => {
+                registerRowRef(row.strike, node)
+                if (row.is_spot) {
+                    spotRef.current = node
+                }
+            }}
+            data-strike={row.strike}
+            className={`relative group w-full h-[20px] flex items-center justify-center transition-colors duration-150 ${isFocusZone ? 'bg-white/[0.03]' : 'hover:bg-white/[0.02]'} ${isNavHighlighted ? 'ring-1 ring-[#fbbf24]/80 bg-[#fbbf24]/10' : ''}`}>
             {row.is_spot && <div className="absolute left-1/2 -translate-x-1/2 w-full h-full bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#ff3366]/10 via-transparent to-transparent z-0 pointer-events-none"></div>}
             {row.is_flip && <div className="absolute top-[50%] left-0 w-full h-[1px] border-b border-dashed border-[#fbbf24]/50 z-20 pointer-events-none"></div>}
             {row.is_spot && <div className="absolute top-[50%] left-0 w-full h-[1px] border-b border-dashed border-[#ff3366]/60 z-20 pointer-events-none shadow-[0_0_8px_rgba(255,51,102,0.6)]"></div>}
@@ -91,7 +110,8 @@ const DepthProfileRow: React.FC<{
         prev.row.is_flip === next.row.is_flip &&
         prev.maxPutPct === next.maxPutPct &&
         prev.maxCallPct === next.maxCallPct &&
-        prev.spot === next.spot
+        prev.spot === next.spot &&
+        prev.isNavHighlighted === next.isNavHighlighted
     )
 })
 
@@ -101,6 +121,8 @@ export const DepthProfile: React.FC<Props> = memo(({ rows: propRows, macroVolume
     const storeRows = useDashboardStore(selectDepthProfile) as PropTableRow[] | null
     const storeMap = useDashboardStore(selectMacroVolumeMap) as Record<string, number> | null
     const storeSpot = useDashboardStore(selectSpot)
+    const storeGammaWalls = useDashboardStore(selectGammaWalls)
+    const storeFlipLevel = useDashboardStore(selectFlipLevel)
 
     const rows = storeRows ?? propRows ?? []
     const macroVolumeMap = storeMap ?? propMap ?? {}
@@ -108,14 +130,97 @@ export const DepthProfile: React.FC<Props> = memo(({ rows: propRows, macroVolume
 
     const safeRows = rows ?? []
     const spotRef = useRef<HTMLDivElement>(null)
+    const rowNodeMapRef = useRef<Map<number, HTMLDivElement>>(new Map())
+    const navHighlightTimerRef = useRef<number | null>(null)
+    const lastManualNavAtRef = useRef(0)
+    const [navHighlightStrike, setNavHighlightStrike] = useState<number | null>(null)
     const currentSpot = React.useMemo(() => safeRows.find(r => r.is_spot)?.strike, [safeRows])
+    const rowStrikes = React.useMemo(() => safeRows.map((row) => row.strike), [safeRows])
+    const callWall = storeGammaWalls?.call_wall ?? null
+    const putWall = storeGammaWalls?.put_wall ?? null
+    const flipLevel = storeFlipLevel ?? null
+
+    const registerRowRef = useCallback((strike: number, node: HTMLDivElement | null) => {
+        if (node) {
+            rowNodeMapRef.current.set(strike, node)
+        } else {
+            rowNodeMapRef.current.delete(strike)
+        }
+    }, [])
+
+    const highlightStrike = useCallback((strike: number) => {
+        setNavHighlightStrike(strike)
+        if (navHighlightTimerRef.current != null) {
+            window.clearTimeout(navHighlightTimerRef.current)
+        }
+        navHighlightTimerRef.current = window.setTimeout(() => {
+            setNavHighlightStrike(null)
+            navHighlightTimerRef.current = null
+        }, 1200)
+    }, [])
+
+    const scrollToStrike = useCallback((targetStrike: number | null) => {
+        const resolved = resolveNearestStrike(targetStrike, rowStrikes)
+        if (resolved == null) {
+            return
+        }
+        const node = rowNodeMapRef.current.get(resolved)
+        if (!node) {
+            return
+        }
+        lastManualNavAtRef.current = Date.now()
+        node.scrollIntoView({ behavior: 'auto', block: 'center' })
+        highlightStrike(resolved)
+    }, [highlightStrike, rowStrikes])
 
     useEffect(() => {
         if (spotRef.current) {
+            if (Date.now() - lastManualNavAtRef.current < 1200) {
+                return
+            }
             // Speed up scroll behavior to prevent 'fighting' with 1Hz updates
             spotRef.current.scrollIntoView({ behavior: 'auto', block: 'center' })
         }
     }, [currentSpot])
+
+    useEffect(() => {
+        const events: DepthProfileNavEvent[] = [
+            'l4:nav_spot',
+            'l4:nav_call_wall',
+            'l4:nav_put_wall',
+            'l4:nav_flip',
+        ]
+
+        const handlers = events.map((eventType) => {
+            const handler = () => {
+                const target = resolveNavigationTarget({
+                    eventType,
+                    spot,
+                    currentSpotStrike: currentSpot ?? null,
+                    callWall,
+                    putWall,
+                    flipLevel,
+                })
+                scrollToStrike(target)
+            }
+            window.addEventListener(eventType, handler)
+            return { eventType, handler }
+        })
+
+        return () => {
+            handlers.forEach(({ eventType, handler }) => {
+                window.removeEventListener(eventType, handler)
+            })
+        }
+    }, [callWall, currentSpot, flipLevel, putWall, scrollToStrike, spot])
+
+    useEffect(() => {
+        return () => {
+            if (navHighlightTimerRef.current != null) {
+                window.clearTimeout(navHighlightTimerRef.current)
+            }
+        }
+    }, [])
 
     const hasMinimap = Object.keys(macroVolumeMap).length > 0
     const { maxVol, sortedStrikes } = React.useMemo(() => {
@@ -151,6 +256,8 @@ export const DepthProfile: React.FC<Props> = memo(({ rows: propRows, macroVolume
                             maxCallPct={maxCallPct}
                             spot={spot}
                             spotRef={spotRef}
+                            registerRowRef={registerRowRef}
+                            isNavHighlighted={navHighlightStrike === row.strike}
                         />
                     ))}
                 </div>

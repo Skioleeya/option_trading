@@ -171,7 +171,13 @@ export interface AgentGResult {
 
 export interface DashboardPayload {
     type: 'dashboard_update' | 'dashboard_init' | 'dashboard_delta' | 'keepalive'
+    // Canonical UTC data timestamp from L0 source time (L3 aliases it to `timestamp`).
+    data_timestamp?: string
+    // UTC broadcast wall-clock timestamp stamped by L3 governor.
+    broadcast_timestamp?: string
+    // Legacy alias of `data_timestamp`, must remain UTC ISO8601.
     timestamp: string
+    // UTC heartbeat stamped at broadcast time.
     heartbeat_timestamp?: string
     spot: number | null
     agent_g: AgentGResult | null

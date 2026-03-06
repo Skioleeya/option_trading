@@ -85,6 +85,10 @@
 - **Vanna 阈值稳健性修复**：`vanna_grind_stable_threshold` 运行时执行负阈值守卫，阻断配置误设导致的状态漂移。
 - **SPY ATM IV 实时链路修复（版本契约）**：修复 `compute_loop` 传入 L1 的 `l0_version` 常量化问题，改为透传 L0 快照版本；`ChainStateStore` 提供单调 `version` 并由 `fetch_chain` 下发，保障 L2 `FeatureStore` 在新快照上强制失效 TTL 缓存，避免 `atm_iv/iv_velocity` 旧值滞留。
 - **ATM Decay 越界修复（拼接契约）**：将换锚拼接从“百分比加法”升级为“复利因子拼接”，并在 L1 强制 `-100%` 下界、16:00 后停更、跨日状态重置，阻断 `CALL <-100%` 的语义越界。
+- **跨层时间戳契约加固（P0 Debt Fix）**：`data_timestamp/timestamp` 统一绑定 L0 `as_of_utc`，L3 保持广播时钟独立，drift 统一以 `L2 computed_at - L0 source timestamp` 计算。
+- **ATM 冷存写放大修复（P0 Debt Fix）**：ATM 衰减冷存从全量 JSON 重写切换为 JSONL 增量追加；恢复优先 JSONL 并兼容历史 JSON 数组文件。
+- **P1 运行时观测探针（2026-03-06）**：在 compute loop 增加 `snapshot_version vs spy_atm_iv` 漂移探针，采用 3-tick confirm，输出开始/持续/恢复日志，并将诊断快照接入 `/debug/persistence_status`。
+- **P1 L4 交互与渲染修复（2026-03-06）**：`l4:nav_*` 命令链路在 DepthProfile 端实现监听与最近 strike 回退；ATM 图表写入改为增量优先（append 走 `update`，回灌/重排回退 `setData`）。
 
 ## 远期宏大迁移路线 (Updated 2026 Vision)
 

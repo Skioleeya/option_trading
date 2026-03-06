@@ -51,6 +51,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\test\run_pytest.ps1 l1_comput
 ## 会话上下文脚本（新增）
 
 - `new_session.ps1`: 创建一次改动的独立会话目录，并自动更新 `notes/context` 三文件指针。
+- `new_session.ps1 -NoPointerUpdate`: 创建会话目录但不改写 `notes/context` 指针（用于并行准备/预创建会话）。
 - `validate_session.ps1`: 校验会话四文件完整性（`project_state/open_tasks/handoff/meta`）以及 context 指针一致性。
 - `new_session.ps1 -UseTimeBucket`: 可选按分钟桶创建会话目录（`YYYY-MM-DD/HHMM/<task-id>`）。
 
@@ -70,6 +71,12 @@ powershell -ExecutionPolicy Bypass -File .\scripts\new_session.ps1 `
   -TaskId "1125_anchor_guard_refine" `
   -UseTimeBucket `
   -Title "anchor guard refine"
+
+# 创建会话但不更新 context 指针（可选）
+powershell -ExecutionPolicy Bypass -File .\scripts\new_session.ps1 `
+  -TaskId "1132_parallel_p1_prep" `
+  -Title "parallel prep only" `
+  -NoPointerUpdate
 
 # 校验当前 active session（默认）
 powershell -ExecutionPolicy Bypass -File .\scripts\validate_session.ps1

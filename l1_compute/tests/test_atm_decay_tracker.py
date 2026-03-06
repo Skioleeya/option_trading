@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
-import tempfile
+import uuid
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -48,9 +48,11 @@ class FakeRedis:
 
 
 def _mk_cold_dir() -> Path:
-    root = Path("tmp")
+    root = Path("tmp/pytest_cache/atm_decay_tests")
     root.mkdir(parents=True, exist_ok=True)
-    return Path(tempfile.mkdtemp(prefix="atm_decay_test_", dir=str(root)))
+    target = root / f"atm_decay_test_{uuid.uuid4().hex[:10]}"
+    target.mkdir(parents=True, exist_ok=True)
+    return target
 
 
 def _symbol(now: datetime, cp: str, strike: float) -> str:

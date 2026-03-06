@@ -1,4 +1,4 @@
-"""Persistence layer for ATM decay (Redis + cold JSON)."""
+"""Persistence layer for ATM decay (Redis + cold JSON/JSONL)."""
 
 from __future__ import annotations
 
@@ -43,8 +43,15 @@ class AtmDecayStorage:
     def _anchor_cold_path(self, date_str: str) -> Path:
         return self._cold_dir / f"atm_{date_str}.json"
 
-    def _series_cold_path(self, date_str: str) -> Path:
+    def _series_cold_json_path(self, date_str: str) -> Path:
         return self._cold_dir / f"atm_series_{date_str}.json"
+
+    def _series_cold_jsonl_path(self, date_str: str) -> Path:
+        return self._cold_dir / f"atm_series_{date_str}.jsonl"
+
+    # Backward-compatible alias kept for external diagnostics/tests.
+    def _series_cold_path(self, date_str: str) -> Path:
+        return self._series_cold_json_path(date_str)
 
     async def load_anchor_from_redis(self, date_str: str) -> dict[str, Any] | None:
         if not self._redis:
@@ -72,13 +79,10 @@ class AtmDecayStorage:
     async def recover_series_from_cold_if_needed(self, date_str: str, ttl_seconds: int) -> None:
         if not self._redis:
             return
-        cold_history_file = self._series_cold_path(date_str)
-        if not cold_history_file.exists():
-            return
 
         try:
-            history_points = json.loads(cold_history_file.read_text())
-            if not history_points or not isinstance(history_points, list):
+            history_points = self._load_cold_series_points(date_str)
+            if not history_points:
                 return
 
             series_key = self._series_key_tpl.format(date=date_str)
@@ -93,36 +97,98 @@ class AtmDecayStorage:
             await pipe.execute()
             logger.info(f"[AtmDecayStorage] Recovered {len(history_points)} cold tracking points into Redis.")
         except Exception as exc:
-            logger.error(f"[AtmDecayStorage] Cold JSON timeseries restore failed: {exc}")
+            logger.error(f"[AtmDecayStorage] Cold series restore failed: {exc}")
 
     async def get_history(self, date_str: str) -> list[dict[str, Any]]:
-        if not self._redis:
-            return []
-        key = self._series_key_tpl.format(date=date_str)
-        raw = await self._redis.lrange(key, 0, -1)
-        return [json.loads(r) for r in raw]
+        if self._redis:
+            key = self._series_key_tpl.format(date=date_str)
+            raw = await self._redis.lrange(key, 0, -1)
+            if raw:
+                return [json.loads(r) for r in raw]
+        return self._load_cold_series_points(date_str)
 
     async def flush_series(self, date_str: str) -> None:
         if self._redis:
             await self._redis.delete(self._series_key_tpl.format(date=date_str))
-        cold_history_file = self._series_cold_path(date_str)
-        if cold_history_file.exists():
-            try:
-                cold_history_file.unlink()
-            except Exception as exc:
-                logger.error(f"[AtmDecayStorage] Failed to flush cold JSON history: {exc}")
+        for cold_history_file in (
+            self._series_cold_jsonl_path(date_str),
+            self._series_cold_json_path(date_str),
+        ):
+            if cold_history_file.exists():
+                try:
+                    cold_history_file.unlink()
+                except Exception as exc:
+                    logger.error(f"[AtmDecayStorage] Failed to flush cold series history: {exc}")
 
     async def append_series(self, date_str: str, data: dict[str, Any]) -> None:
-        if not self._redis:
-            logger.warning("[AtmDecayStorage] CANNOT STORE SERIES: redis client is NONE")
-            return
-        key = self._series_key_tpl.format(date=date_str)
-        await self._redis.rpush(key, json.dumps(data))
+        payload = json.dumps(data)
+        if self._redis:
+            key = self._series_key_tpl.format(date=date_str)
+            await self._redis.rpush(key, payload)
+        else:
+            logger.warning("[AtmDecayStorage] Redis unavailable, writing cold JSONL mirror only.")
 
-        # Keep cold mirror updated asynchronously via caller fire-and-forget.
         try:
-            raw_history = await self._redis.lrange(key, 0, -1)
-            parsed_history = [json.loads(pt) for pt in raw_history]
-            self._series_cold_path(date_str).write_text(json.dumps(parsed_history))
+            with self._series_cold_jsonl_path(date_str).open("a", encoding="utf-8") as fh:
+                fh.write(payload)
+                fh.write("\n")
         except Exception as exc:
-            logger.error(f"[AtmDecayStorage] Async JSON flush fail: {exc}")
+            logger.error(f"[AtmDecayStorage] Cold JSONL append fail: {exc}")
+
+    def _load_cold_series_points(self, date_str: str) -> list[dict[str, Any]]:
+        """Load cold series, preferring JSONL and falling back to legacy JSON arrays."""
+        points = self._load_cold_series_points_jsonl(date_str)
+        if points:
+            return points
+
+        legacy_points = self._load_cold_series_points_legacy_json(date_str)
+        if legacy_points:
+            self._migrate_legacy_series_to_jsonl(date_str, legacy_points)
+        return legacy_points
+
+    def _load_cold_series_points_jsonl(self, date_str: str) -> list[dict[str, Any]]:
+        path = self._series_cold_jsonl_path(date_str)
+        if not path.exists():
+            return []
+
+        points: list[dict[str, Any]] = []
+        try:
+            with path.open("r", encoding="utf-8") as fh:
+                for line in fh:
+                    raw = line.strip()
+                    if not raw:
+                        continue
+                    obj = json.loads(raw)
+                    if isinstance(obj, dict):
+                        points.append(obj)
+        except Exception as exc:
+            logger.error(f"[AtmDecayStorage] Failed reading cold JSONL series: {exc}")
+            return []
+        return points
+
+    def _load_cold_series_points_legacy_json(self, date_str: str) -> list[dict[str, Any]]:
+        path = self._series_cold_json_path(date_str)
+        if not path.exists():
+            return []
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            logger.error(f"[AtmDecayStorage] Failed reading legacy cold JSON series: {exc}")
+            return []
+        if not isinstance(data, list):
+            return []
+        return [pt for pt in data if isinstance(pt, dict)]
+
+    def _migrate_legacy_series_to_jsonl(self, date_str: str, points: list[dict[str, Any]]) -> None:
+        """One-time compatibility bridge from legacy JSON array to JSONL."""
+        jsonl_path = self._series_cold_jsonl_path(date_str)
+        if jsonl_path.exists():
+            return
+        try:
+            with jsonl_path.open("w", encoding="utf-8") as fh:
+                for point in points:
+                    fh.write(json.dumps(point))
+                    fh.write("\n")
+            logger.info("[AtmDecayStorage] Migrated legacy cold JSON series to JSONL: %s", jsonl_path.name)
+        except Exception as exc:
+            logger.error(f"[AtmDecayStorage] Failed migrating legacy JSON series to JSONL: {exc}")

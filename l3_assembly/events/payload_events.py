@@ -422,7 +422,7 @@ class FrozenPayload:
     legacy SnapshotBuilder.build().
 
     Attributes:
-        data_timestamp:       ISO timestamp of the data's compute time.
+        data_timestamp:       ISO timestamp of L0 source market data time (UTC).
         broadcast_timestamp:  ISO timestamp of when the broadcast fires.
         spot:                 SPY spot price.
         version:              L0 MVCC snapshot version (for cache validation).

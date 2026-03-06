@@ -62,6 +62,11 @@
 - **来源一致性**：`spy_atm_iv` 必须来自当前 `EnrichedSnapshot.atm_iv`，不得缓存旧帧值或降级为静态默认值。
 - **版本一致性前提**：上游 `EnrichedSnapshot.version` 必须真实递增，确保 `spy_atm_iv` 对应当前快照而非 TTL 残留。
 
+### 2.4 数据时间戳与广播时间戳契约 (2026-03-06 P0 Debt Fix)
+- **`data_timestamp/timestamp`**：必须绑定 L0 源时间戳（`source_data_timestamp_utc`），禁止回退为 L1/L2 计算完成时间作为默认主路径。
+- **`broadcast_timestamp/heartbeat_timestamp`**：仅表示 L3 广播时刻（UTC ISO8601），用于链路存活与时效诊断。
+- **drift 语义**：`drift_ms` 统一定义为 `L2 computed_at - L0 source_data_timestamp_utc`。
+
 ### 2.1 MicroStats 状态契约补丁 (2026-03-06)
 
 - **`wall_dyn` 强制映射**：`PayloadAssemblerV2` 必须将 `ui_metrics.wall_migration_data` 归一化后显式映射为 `micro_stats.wall_dyn` 输入，禁止遗漏该桥接步骤。

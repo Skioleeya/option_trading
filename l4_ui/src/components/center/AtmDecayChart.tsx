@@ -25,6 +25,7 @@ import {
 import { useDashboardStore, selectAtmHistory } from '../../store/dashboardStore'
 import type { AtmDecay } from '../../types/dashboard'
 import { getHHMM, isMarketHours, toUnixSec } from './atmDecayTime'
+import { syncAtmSeriesData, type AtmSeriesPoint } from './atmDecayIncremental'
 
 // Extended AtmDecay to recognize the new L1 field gracefully
 type ExtendedAtmDecay = AtmDecay & { strike_changed?: boolean }
@@ -109,6 +110,8 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
     // Using any for series refs because v5 addSeries() generic variance is strict.
     const rawSeriesRef = useRef<any[]>([])
     const smoothSeriesRef = useRef<any[]>([])
+    const rawSeriesPointsRef = useRef<AtmSeriesPoint[][]>([])
+    const smoothSeriesPointsRef = useRef<AtmSeriesPoint[][]>([])
     const rawMarkersPluginRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null)
     const smoothMarkersPluginRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null)
     const markersRef = useRef<SeriesMarker<Time>[]>([])
@@ -230,6 +233,8 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
             chartRef.current = null
             rawSeriesRef.current = []
             smoothSeriesRef.current = []
+            rawSeriesPointsRef.current = []
+            smoothSeriesPointsRef.current = []
             rawMarkersPluginRef.current?.detach()
             smoothMarkersPluginRef.current?.detach()
             rawMarkersPluginRef.current = null
@@ -298,6 +303,8 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
             smoothSeries.forEach((s) => {
                 if (s && typeof s.setData === 'function') s.setData([])
             })
+            rawSeriesPointsRef.current = []
+            smoothSeriesPointsRef.current = []
             const rp = rawMarkersPluginRef.current
             const sp = smoothMarkersPluginRef.current
             if (rp && typeof rp.setMarkers === 'function') rp.setMarkers([])
@@ -310,19 +317,29 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
         let anyDataLoaded = false
         SERIES_CFG.forEach(({ key }, i) => {
             const rawPts = buildPoints(data, key)
-            if (!rawPts.length) return
-
             const smoothPts = buildSmoothedPoints(rawPts, SMOOTHING_ALPHA)
             const raw = rawSeries[i]
             const smooth = smoothSeries[i]
 
-            if (raw && typeof raw.setData === 'function') {
-                raw.setData(rawPts)
+            if (raw && typeof raw.setData === 'function' && typeof raw.update === 'function') {
+                syncAtmSeriesData(
+                    raw,
+                    rawSeriesPointsRef.current[i] ?? [],
+                    rawPts,
+                )
             }
-            if (smooth && typeof smooth.setData === 'function') {
-                smooth.setData(smoothPts)
+            if (smooth && typeof smooth.setData === 'function' && typeof smooth.update === 'function') {
+                syncAtmSeriesData(
+                    smooth,
+                    smoothSeriesPointsRef.current[i] ?? [],
+                    smoothPts,
+                )
             }
-            anyDataLoaded = true
+            rawSeriesPointsRef.current[i] = rawPts
+            smoothSeriesPointsRef.current[i] = smoothPts
+            if (rawPts.length) {
+                anyDataLoaded = true
+            }
         })
 
         const nextMarkers: SeriesMarker<Time>[] = []

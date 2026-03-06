@@ -57,6 +57,17 @@
 - **可见性守护 (Visibility Guard)**：`AtmDecayChart` 引入了 `document.visibilityState` 监听。当标签页处于后台时，自动暂停昂贵的 Canvas 绘制和 Canvas 数据构建，节省至少 15% 的闲置 CPU。
 - 只有触发 `patch` 才执行状态树写操作。
 
+### 2.4 时间戳消费契约 (2026-03-06 P0 Debt Fix)
+- 前端 `payload.timestamp`（及 `data_timestamp`）语义统一为 **L0 源数据 UTC 时间**，不得解释为本地渲染时间或广播时间。
+- `heartbeat_timestamp` 保持广播心跳语义，用于连接健康与时效显示。
+- 展示层继续按 `America/New_York` 渲染，不改变视觉行为，只明确数据时间来源。
+
+### 2.5 P1 命令导航与 ATM 图增量渲染契约 (2026-03-06)
+- **命令导航闭环**：`CommandRegistry` 派发的 `l4:nav_spot|l4:nav_call_wall|l4:nav_put_wall|l4:nav_flip` 必须由 `DepthProfile` 监听并执行滚动。
+- **回退策略**：目标 strike 不存在时，必须采用最近 strike 回退（nearest fallback），禁止静默无响应。
+- **渲染增量优先**：`AtmDecayChart` 正常 append 路径使用 `series.update(...)`，仅在历史回灌/重排/非前缀更新时回退全量 `setData(...)`。
+- **无行为回归**：保持现有显示模式切换、marker 逻辑与页面不可见时的绘制保护不变。
+
 ## 3. UI 微组件及面板
 
 UI 在保持原版 TradingView-style 的冷酷暗色调三栏版式同时（`lib/theme.ts` 标准化管理设计 Tokens），内部划分如下：

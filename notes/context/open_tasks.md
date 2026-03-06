@@ -1,12 +1,15 @@
-# Open Tasks (Index)
+﻿# Open Tasks (Index)
 
 ## Active Session Tasks
-- Path: notes/sessions/2026-03-06/1632/1830_debt_gate_agents_mod/open_tasks.md
+- Path: notes/sessions/2026-03-06/1908_p1_probe_nav_chart_hotfix_mod/open_tasks.md
 
 ## Global Backlog (Cross-Session)
-- [ ] P0: ATM decay storage append path still O(N^2) (`lrange + full-file rewrite`) and needs incremental persistence.
-- [ ] P1: L0-L4 timestamp contract hardening.
-- [ ] P2: ATM chart incremental render optimization at 5k history.
+- [x] P0: ATM decay storage append path O(N^2) fixed via JSONL append mirror (`SUPERSEDED-BY: 2026-03-06/1702/1702_p0_timestamp_atm_storage_hotfix_mod`).
+- [x] P0: L0-L4 timestamp contract hardened with L0 `as_of_utc` source-of-truth (`SUPERSEDED-BY: 2026-03-06/1702/1702_p0_timestamp_atm_storage_hotfix_mod`).
+- [x] P1: Add runtime observability probe for `snapshot_version` vs `spy_atm_iv` drift (`SUPERSEDED-BY: 2026-03-06/1908_p1_probe_nav_chart_hotfix_mod`).
+- [x] P1: Resolve dead `l4:nav_*` command path (registry wiring + integration test) (`SUPERSEDED-BY: 2026-03-06/1908_p1_probe_nav_chart_hotfix_mod`).
+- [x] P1: Add `new_session.ps1 -NoPointerUpdate` path for session bootstrap control (`SUPERSEDED-BY: 2026-03-06/1908_p1_probe_nav_chart_hotfix_mod`).
+- [x] P2: ATM chart incremental render optimization at 5k history (`SUPERSEDED-BY: 2026-03-06/1908_p1_probe_nav_chart_hotfix_mod`).
 
 ## Process
 - Task details and completion evidence belong in the session-local open_tasks.md.

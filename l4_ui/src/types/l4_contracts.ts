@@ -143,7 +143,7 @@ export interface L4UIState {
 export interface L4FrozenPayload {
     /** Monotonic broadcast version (from FieldDeltaEncoder). */
     version: number
-    /** ISO8601 timestamp of this payload. */
+    /** Legacy payload timestamp field; canonical value is UTC ISO8601 from L0 source data time. */
     as_of: string
     spot: number | null
     ui_state: L4UIState

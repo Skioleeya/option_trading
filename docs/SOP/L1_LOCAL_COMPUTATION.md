@@ -58,6 +58,7 @@ L1 层目前由 `L1ComputeReactor` 统一管理：
 - **Asyncio/Thread 混合模型**：`compute()` 接口为异步，但在内部通过 `asyncio.to_thread` 将沉重的浮点运算卸载至独立线程池，绝不阻塞主事件循环。
 - **元数据透传**：支持通过 `extra_metadata` 显式承载 L0 的诊断信息（如 `rust_active`），确保系统健康指标从感官层透传至展示层。
 - **版本保真契约 (2026-03-06 Hotfix)**：`compute(..., l0_version=...)` 必须使用 L0 快照真实版本，严禁常量占位；该字段直接驱动 L2 FeatureStore 的缓存失效与 ATM IV 实时更新。
+- **源时间戳透传 (2026-03-06 P0 Debt Fix)**：`extra_metadata` 必须承载 `source_data_timestamp_utc`（来自 L0 `as_of_utc`），供 L3 组装层生成统一 `data_timestamp` 与 drift 计算基准。
 
 ### 2.4 有状态深度追踪器 (Trackers)
 V3.1 已完成从 L2 (Agent B) 向 L1 的逻辑下沉：

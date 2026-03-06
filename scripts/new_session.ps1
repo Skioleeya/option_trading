@@ -5,7 +5,8 @@ param(
     [string]$Scope = "hotfix + modularization",
     [string]$Owner = "Codex",
     [string]$ParentSession = "",
-    [switch]$UseTimeBucket
+    [switch]$UseTimeBucket,
+    [switch]$NoPointerUpdate
 )
 
 $ErrorActionPreference = "Stop"
@@ -118,18 +119,19 @@ $contextProjectPath = Join-Path $repoRoot "notes/context/project_state.md"
 $contextTasksPath = Join-Path $repoRoot "notes/context/open_tasks.md"
 $contextHandoffPath = Join-Path $repoRoot "notes/context/handoff.md"
 
-$currentRecent = "- $sessionRel/"
-$recent = @($currentRecent)
-foreach ($line in (Get-RecentSessionLines -ContextProjectPath $contextProjectPath)) {
-    if ($line -ne $currentRecent) { $recent += $line }
-}
-$recent = $recent | Select-Object -Unique | Select-Object -First 5
-$recentText = ($recent -join [Environment]::NewLine)
+if (-not $NoPointerUpdate) {
+    $currentRecent = "- $sessionRel/"
+    $recent = @($currentRecent)
+    foreach ($line in (Get-RecentSessionLines -ContextProjectPath $contextProjectPath)) {
+        if ($line -ne $currentRecent) { $recent += $line }
+    }
+    $recent = $recent | Select-Object -Unique | Select-Object -First 5
+    $recentText = ($recent -join [Environment]::NewLine)
 
-$backlogLines = Get-GlobalBacklogLines -ContextTasksPath $contextTasksPath
-$backlogText = ($backlogLines -join [Environment]::NewLine)
+    $backlogLines = Get-GlobalBacklogLines -ContextTasksPath $contextTasksPath
+    $backlogText = ($backlogLines -join [Environment]::NewLine)
 
-$projectIndex = @"
+    $projectIndex = @"
 # Project State (Index)
 
 ## Active Session
@@ -146,7 +148,7 @@ $recentText
 - Keep this index file updated with the latest active session pointer.
 "@
 
-$tasksIndex = @"
+    $tasksIndex = @"
 # Open Tasks (Index)
 
 ## Active Session Tasks
@@ -156,11 +158,11 @@ $tasksIndex = @"
 $backlogText
 
 ## Process
-- Task details and completion evidence belong in the session-local `open_tasks.md`.
+- Task details and completion evidence belong in the session-local open_tasks.md.
 - Keep this file as the long-horizon queue and session pointer only.
 "@
 
-$handoffIndex = @"
+    $handoffIndex = @"
 # Handoff (Index)
 
 ## Active Handoff
@@ -173,16 +175,21 @@ $handoffIndex = @"
 
 ## Next Session Bootstrap
 1. Read this file.
-2. Read `notes/context/project_state.md` and `notes/context/open_tasks.md`.
+2. Read notes/context/project_state.md and notes/context/open_tasks.md.
 3. Open the active session folder and continue from its handoff.md.
 "@
 
-Set-Content -Path $contextProjectPath -Value $projectIndex -Encoding UTF8
-Set-Content -Path $contextTasksPath -Value $tasksIndex -Encoding UTF8
-Set-Content -Path $contextHandoffPath -Value $handoffIndex -Encoding UTF8
+    Set-Content -Path $contextProjectPath -Value $projectIndex -Encoding UTF8
+    Set-Content -Path $contextTasksPath -Value $tasksIndex -Encoding UTF8
+    Set-Content -Path $contextHandoffPath -Value $handoffIndex -Encoding UTF8
+}
 
 Write-Host "Session created: $sessionRel"
-Write-Host "Updated context pointers:"
-Write-Host " - notes/context/project_state.md"
-Write-Host " - notes/context/open_tasks.md"
-Write-Host " - notes/context/handoff.md"
+if ($NoPointerUpdate) {
+    Write-Host "Context pointer update: skipped (-NoPointerUpdate)"
+} else {
+    Write-Host "Updated context pointers:"
+    Write-Host " - notes/context/project_state.md"
+    Write-Host " - notes/context/open_tasks.md"
+    Write-Host " - notes/context/handoff.md"
+}

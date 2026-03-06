@@ -24,3 +24,4 @@
 ## Completed (Recent)
 - [x] Added AGENTS debt governance contract and validator gate wiring (2026-03-06 16:34 ET)
 - [x] Added debt record template and supersede marker guidance (2026-03-06 16:34 ET)
+- [x] Added root-level `TECH_DEBT_TASKLIST.md` with net-debt prioritization (2026-03-06 16:47 ET)

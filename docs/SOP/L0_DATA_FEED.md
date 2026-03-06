@@ -69,6 +69,11 @@
 - **强制透传**：`OptionChainBuilder.fetch_chain()` 返回 payload 必须包含 `version`，禁止仅传业务字段不传版本。
 - **失效触发语义**：下游 L1/L2 依赖该 `version` 触发缓存失效；若缺失或恒定（例如误传常量 `0`），将导致 `atm_iv` 与 `iv_velocity` 出现陈旧值滞留风险。
 
+### 2.7 源时间戳契约 (2026-03-06 P0 Debt Fix)
+- **单一数据时间源**：`fetch_chain()` 必须输出 `as_of_utc`（UTC ISO8601，带时区），作为 L0→L4 的唯一数据时刻。
+- **字段分工**：`as_of_utc` 表示市场数据源时间；广播时间由 L3 单独维护（`broadcast_timestamp/heartbeat_timestamp`）。
+- **兼容保留**：`as_of` 可继续保留给旧路径，但下游契约不得再以其作为主数据时间戳。
+
 ## 3. 分层订阅拉取架构
 
 - **Tier 1 (WebSocket/Dual-Stack)**：ATM 附近核心合约，由 Rust Gateway 实时捕捉（Fallback 至 Python）。

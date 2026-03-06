@@ -1,0 +1,54 @@
+﻿session_id: "2026-03-06/1908_p1_probe_nav_chart_hotfix_mod"
+title: "P1 probe nav chart session"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-06 17:41:38 -05:00"
+updated_at_et: "2026-03-06 17:52:00 -05:00"
+parent_session: null
+
+branch: "master"
+base_commit: "cc48066"
+head_commit: "cc48066"
+
+files_changed:
+  - "app/loops/compute_loop.py"
+  - "app/loops/shared_state.py"
+  - "app/loops/tests/test_compute_loop_helpers.py"
+  - "l4_ui/src/components/center/AtmDecayChart.tsx"
+  - "l4_ui/src/components/center/atmDecayIncremental.ts"
+  - "l4_ui/src/components/center/__tests__/atmDecayIncremental.test.ts"
+  - "l4_ui/src/components/left/DepthProfile.tsx"
+  - "l4_ui/src/components/left/depthProfileNav.ts"
+  - "l4_ui/src/components/left/__tests__/depthProfileNav.test.ts"
+  - "l4_ui/src/components/left/__tests__/depthProfileNav.integration.test.tsx"
+  - "scripts/new_session.ps1"
+  - "scripts/README.md"
+  - "docs/SOP/SYSTEM_OVERVIEW.md"
+  - "docs/SOP/L4_FRONTEND.md"
+  - "TECH_DEBT_TASKLIST.md"
+  - "notes/context/open_tasks.md"
+  - "notes/sessions/2026-03-06/1908_p1_probe_nav_chart_hotfix_mod/project_state.md"
+  - "notes/sessions/2026-03-06/1908_p1_probe_nav_chart_hotfix_mod/open_tasks.md"
+  - "notes/sessions/2026-03-06/1908_p1_probe_nav_chart_hotfix_mod/handoff.md"
+  - "notes/sessions/2026-03-06/1908_p1_probe_nav_chart_hotfix_mod/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File .\\scripts\\new_session.ps1 -TaskId \"1908_p1_probe_nav_chart_hotfix_mod\" -Title \"P1 probe nav chart session\" -Scope \"hotfix + modularization\" -Owner \"Codex\""
+  - "powershell -ExecutionPolicy Bypass -File .\\scripts\\test\\run_pytest.ps1 app/loops/tests/test_compute_loop_helpers.py -q"
+  - "npm --prefix l4_ui run test -- src/components/center/__tests__/atmDecayIncremental.test.ts src/components/left/__tests__/depthProfileNav.test.ts src/components/left/__tests__/depthProfileNav.integration.test.tsx src/components/__tests__/commandPaletteHotkeys.test.ts src/components/__tests__/commandPaletteSearch.test.ts"
+  - "npm --prefix l4_ui run build"
+  - "powershell -ExecutionPolicy Bypass -File .\\scripts\\new_session.ps1 -TaskId \"1951_no_pointer_smoke_hotfix\" -Title \"no pointer smoke\" -NoPointerUpdate"
+  - "C:\\Program Files\\PowerShell\\7\\pwsh.exe -Command \"Set-Location E:\\US.market\\Option_v3; .\\scripts\\validate_session.ps1\""
+tests_passed:
+  - "pytest app/loops/tests/test_compute_loop_helpers.py (7 passed)"
+  - "vitest targeted suite (14 passed)"
+  - "npm --prefix l4_ui run build passed"
+  - "validate_session.ps1 (active session) passed"
+tests_failed:
+  - "validate_session.ps1 via Windows PowerShell 5 failed parsing '??' operator (pwsh rerun passed)"
+  - "vitest non-escalated run failed with spawn EPERM (rerun passed)"
+blockers: []
+notes:
+  - "Smoke-tested -NoPointerUpdate; context pointer remained unchanged."
+
+

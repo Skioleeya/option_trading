@@ -172,6 +172,40 @@ class TestPayloadAssemblerV2:
         # Original unchanged
         assert result.heartbeat_timestamp == ""
 
+    def test_data_timestamp_prefers_l0_source_timestamp_typed_snapshot(self):
+        assembler = PayloadAssemblerV2()
+        snap = _MockSnapshot()
+        snap.extra_metadata = {"source_data_timestamp_utc": "2026-03-06T14:30:00+00:00"}
+        decision = _MockDecision()
+        decision.computed_at = datetime(2026, 3, 6, 14, 30, 1, tzinfo=timezone.utc)
+
+        result = assembler.assemble(decision, snap, None, ())
+        assert result.data_timestamp == "2026-03-06T14:30:00+00:00"
+        assert result.drift_ms == pytest.approx(1000.0, rel=0, abs=1e-6)
+        assert result.drift_warning is True
+
+    def test_data_timestamp_prefers_l0_source_timestamp_dict_snapshot(self):
+        assembler = PayloadAssemblerV2()
+        decision = _MockDecision()
+        decision.computed_at = datetime(2026, 3, 6, 14, 31, 0, tzinfo=timezone.utc)
+        snapshot = {"spot": 562.5, "chain": [], "as_of_utc": "2026-03-06T14:30:00+00:00"}
+
+        result = assembler.assemble(decision, snapshot, None, ())
+        assert result.data_timestamp == "2026-03-06T14:30:00+00:00"
+        assert result.drift_ms == pytest.approx(60000.0, rel=0, abs=1e-6)
+
+    def test_data_timestamp_falls_back_to_computed_at_when_source_invalid(self):
+        assembler = PayloadAssemblerV2()
+        snap = _MockSnapshot()
+        snap.extra_metadata = {"source_data_timestamp_utc": "bad-timestamp"}
+        decision = _MockDecision()
+        decision.computed_at = datetime(2026, 3, 6, 14, 30, 1, tzinfo=timezone.utc)
+
+        result = assembler.assemble(decision, snap, None, ())
+        assert result.data_timestamp == decision.computed_at.isoformat()
+        assert result.drift_ms == 0.0
+        assert result.drift_warning is False
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # FieldDeltaEncoder tests

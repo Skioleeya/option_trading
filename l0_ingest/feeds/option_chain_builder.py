@@ -221,9 +221,16 @@ class OptionChainBuilder:
     async def fetch_chain(self) -> dict[str, Any]:
         """Fetch current chain snapshot (Consumer Interface)."""
         if not self._initialized:
-            return {"spot": None, "chain": [], "as_of": None, "version": self._store.version}
+            return {
+                "spot": None,
+                "chain": [],
+                "as_of": None,
+                "as_of_utc": None,
+                "version": self._store.version,
+            }
 
         now = datetime.now(ZoneInfo("US/Eastern"))
+        now_utc = now.astimezone(ZoneInfo("UTC"))
         try:
             # 1. Get filtered snapshot (only target symbols)
             target_set = self._sub_mgr.target_symbols
@@ -246,6 +253,7 @@ class OptionChainBuilder:
                 "aggregate_greeks": agg,
                 "ttm_seconds": agg.get("ttm_seconds"),
                 "as_of": now,
+                "as_of_utc": now_utc.isoformat(),
                 "rust_active": self._rust_bridge.mm is not None,
                 "rust_shm_path": self._rust_bridge.mm_path if self._rust_bridge.mm else None,
                 "shm_stats": {
@@ -263,7 +271,13 @@ class OptionChainBuilder:
             return data
         except Exception as e:
             logger.error(f"[OptionChainBuilder] fetch_chain failure: {e}")
-            return {"spot": self._store.spot, "chain": [], "as_of": now, "version": self._store.version}
+            return {
+                "spot": self._store.spot,
+                "chain": [],
+                "as_of": now,
+                "as_of_utc": now_utc.isoformat(),
+                "version": self._store.version,
+            }
 
     def _get_shm_val(self, ptr: int) -> int:
         """Helper to read a uint64 from shm without moving internal pointers."""

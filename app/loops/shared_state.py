@@ -22,6 +22,7 @@ class SharedLoopState:
     total_computations: int = 0
     failed_computations: int = 0
     current_compute_interval: float = 1.0
+    snapshot_version_iv_probe: dict[str, Any] = field(default_factory=dict)
 
     def update(self, frozen: FrozenPayload, spot: float | None = None) -> None:
         """Atomically update the payload state."""
@@ -33,6 +34,10 @@ class SharedLoopState:
     def record_failure(self) -> None:
         """Record a computation loop failure."""
         self.failed_computations += 1
+
+    def update_snapshot_version_iv_probe(self, diagnostics: dict[str, Any]) -> None:
+        """Publish snapshot_version vs spy_atm_iv probe diagnostics."""
+        self.snapshot_version_iv_probe = diagnostics
 
     @property
     def is_running(self) -> bool:
@@ -49,4 +54,5 @@ class SharedLoopState:
             "success_rate": (self.total_computations / total * 100) if total > 0 else 100.0,
             "last_update_age_seconds": age,
             "is_running": self.is_running,
+            "snapshot_version_iv_probe": self.snapshot_version_iv_probe,
         }

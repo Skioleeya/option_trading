@@ -1,0 +1,55 @@
+﻿session_id: "2026-03-06/1702/1702_p0_timestamp_atm_storage_hotfix_mod"
+title: "p0 timestamp contract hardening and atm decay storage write amplification fix"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-06 17:02:45 -05:00"
+updated_at_et: "2026-03-06 17:14:36 -05:00"
+parent_session: "2026-03-06/1632/1830_debt_gate_agents_mod"
+
+branch: "master"
+base_commit: "cc48066"
+head_commit: "cc48066"
+
+files_changed:
+  - "app/loops/compute_loop.py"
+  - "app/tests/test_compute_loop_timestamp.py"
+  - "l0_ingest/feeds/option_chain_builder.py"
+  - "l1_compute/analysis/atm_decay/storage.py"
+  - "l1_compute/tests/test_atm_decay_modular.py"
+  - "l1_compute/tests/test_atm_decay_tracker.py"
+  - "l3_assembly/assembly/payload_assembler.py"
+  - "l3_assembly/events/payload_events.py"
+  - "l3_assembly/tests/test_assembly.py"
+  - "l4_ui/src/types/dashboard.ts"
+  - "l4_ui/src/types/l4_contracts.ts"
+  - "scripts/test/benchmark_atm_decay_storage.py"
+  - "docs/SOP/SYSTEM_OVERVIEW.md"
+  - "docs/SOP/L0_DATA_FEED.md"
+  - "docs/SOP/L1_LOCAL_COMPUTATION.md"
+  - "docs/SOP/L3_OUTPUT_ASSEMBLY.md"
+  - "docs/SOP/L4_FRONTEND.md"
+  - "notes/sessions/2026-03-06/1702/1702_p0_timestamp_atm_storage_hotfix_mod/project_state.md"
+  - "notes/sessions/2026-03-06/1702/1702_p0_timestamp_atm_storage_hotfix_mod/open_tasks.md"
+  - "notes/sessions/2026-03-06/1702/1702_p0_timestamp_atm_storage_hotfix_mod/handoff.md"
+  - "notes/sessions/2026-03-06/1702/1702_p0_timestamp_atm_storage_hotfix_mod/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File .\\scripts\\new_session.ps1 -TaskId \"1702_p0_timestamp_atm_storage_hotfix_mod\" -Title \"p0 timestamp contract hardening and atm decay storage write amplification fix\" -Scope \"hotfix + modularization\" -Owner \"Codex\" -ParentSession \"2026-03-06/1632/1830_debt_gate_agents_mod\" -UseTimeBucket"
+  - "powershell -ExecutionPolicy Bypass -File .\\scripts\\test\\run_pytest.ps1 app/tests/test_compute_loop_timestamp.py l3_assembly/tests/test_assembly.py l1_compute/tests/test_atm_decay_modular.py l1_compute/tests/test_atm_decay_tracker.py -q"
+  - "powershell -ExecutionPolicy Bypass -File .\\scripts\\test\\run_pytest.ps1 l3_assembly/tests/test_reactor.py -q"
+  - "$env:PYTHONPATH='.'; python -u scripts/test/benchmark_atm_decay_storage.py --ticks 2000"
+  - "& 'C:\\Program Files\\PowerShell\\7\\pwsh.exe' -File .\\scripts\\validate_session.ps1"
+tests_passed:
+  - "pytest targeted suite: 49 passed (timestamp + storage + tracker)"
+  - "pytest l3_assembly/tests/test_reactor.py: 12 passed"
+  - "benchmark_atm_decay_storage.py executed successfully"
+  - "validate_session.ps1: pass"
+tests_failed:
+  - "Not run: full e2e test_l0_l4_pipeline.py"
+blockers: []
+notes: []
+
+

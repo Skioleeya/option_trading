@@ -4,6 +4,8 @@ import asyncio
 import logging
 import math
 import time
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 from shared.config import settings
@@ -15,6 +17,10 @@ if TYPE_CHECKING:
     from app.container import AppContainer
 
 logger = logging.getLogger(__name__)
+
+_IV_EPSILON = 1e-6
+_IV_DRIFT_CONFIRM_TICKS = 3
+_IV_DRIFT_ONGOING_LOG_EVERY_TICKS = 5
 
 
 def _normalize_volume_map(raw: Any) -> dict[str, float]:
@@ -35,12 +41,41 @@ def _normalize_volume_map(raw: Any) -> dict[str, float]:
     return out
 
 
+def _normalize_source_timestamp_utc(snapshot: dict[str, Any]) -> str | None:
+    """Normalize L0 source timestamp to UTC ISO8601."""
+    raw = snapshot.get("as_of_utc")
+    if raw is None:
+        raw = snapshot.get("as_of")
+
+    if isinstance(raw, datetime):
+        dt = raw
+    elif isinstance(raw, str):
+        text = raw.strip()
+        if not text:
+            return None
+        if text.endswith("Z"):
+            text = f"{text[:-1]}+00:00"
+        try:
+            dt = datetime.fromisoformat(text)
+        except ValueError:
+            return None
+    else:
+        return None
+
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+    return dt.isoformat()
+
+
 def _build_l1_extra_metadata(snapshot: dict[str, Any]) -> dict[str, Any]:
     """Build the L0->L1 metadata pass-through contract."""
     return {
         "rust_active": snapshot.get("rust_active", False),
         "shm_stats": snapshot.get("shm_stats"),
         "volume_map": _normalize_volume_map(snapshot.get("volume_map")),
+        "source_data_timestamp_utc": _normalize_source_timestamp_utc(snapshot),
     }
 
 
@@ -66,12 +101,221 @@ def _extract_snapshot_version(snapshot: dict[str, Any]) -> int:
     return 0
 
 
+def _extract_runtime_spy_atm_iv(
+    l1_snapshot: Any,
+    decision: Any,
+    result: Any,
+) -> float | None:
+    """Best-effort extract current tick SPY ATM IV from runtime objects."""
+    aggregates = getattr(l1_snapshot, "aggregates", None)
+    if aggregates is not None:
+        value = getattr(aggregates, "atm_iv", None)
+        if isinstance(value, (int, float)) and math.isfinite(float(value)):
+            return float(value)
+
+    candidates: list[Any] = []
+    if isinstance(result, dict):
+        candidates.extend(
+            [
+                result.get("spy_atm_iv"),
+                result.get("atm_iv"),
+                (result.get("data") or {}).get("spy_atm_iv")
+                if isinstance(result.get("data"), dict)
+                else None,
+            ]
+        )
+    data_obj = getattr(result, "data", None)
+    if isinstance(data_obj, dict):
+        candidates.extend([data_obj.get("spy_atm_iv"), data_obj.get("atm_iv")])
+
+    decision_data = getattr(decision, "data", None)
+    if isinstance(decision_data, dict):
+        candidates.extend([decision_data.get("spy_atm_iv"), decision_data.get("atm_iv")])
+
+    for candidate in candidates:
+        if isinstance(candidate, (int, float)) and math.isfinite(float(candidate)):
+            return float(candidate)
+    return None
+
+
+@dataclass
+class _SnapshotVersionIvDriftProbe:
+    """Runtime probe for snapshot_version vs spy_atm_iv drift behavior."""
+
+    confirm_ticks: int = _IV_DRIFT_CONFIRM_TICKS
+    epsilon: float = _IV_EPSILON
+    last_version: int | None = None
+    last_iv: float | None = None
+    consecutive_drift_ticks: int = 0
+    mismatch_count: int = 0
+    drift_active: bool = False
+    lag_start_monotonic: float | None = None
+    current_lag_seconds: float = 0.0
+    last_completed_lag_seconds: float = 0.0
+    degraded_reason: str | None = None
+
+    def observe(
+        self,
+        snapshot_version: Any,
+        spy_atm_iv: Any,
+        now_monotonic: float,
+    ) -> dict[str, Any]:
+        """Observe one compute tick and update internal drift diagnostics."""
+        version = self._coerce_version(snapshot_version)
+        iv_value = self._coerce_iv(spy_atm_iv)
+        if version is None or iv_value is None:
+            self._mark_degraded(version, iv_value)
+            if self.drift_active and self.lag_start_monotonic is not None:
+                self.current_lag_seconds = max(0.0, now_monotonic - self.lag_start_monotonic)
+            return self.snapshot()
+
+        self.degraded_reason = None
+
+        if self.last_version is None or self.last_iv is None:
+            self.last_version = version
+            self.last_iv = iv_value
+            return self.snapshot()
+
+        if version <= self.last_version:
+            if self.drift_active and self.lag_start_monotonic is not None:
+                self.current_lag_seconds = max(0.0, now_monotonic - self.lag_start_monotonic)
+            self.last_version = version
+            self.last_iv = iv_value
+            return self.snapshot()
+
+        if abs(iv_value - self.last_iv) <= self.epsilon:
+            self._on_drift_tick(version, iv_value, now_monotonic)
+        else:
+            self._on_recovery(version, iv_value, now_monotonic)
+
+        return self.snapshot()
+
+    def snapshot(self) -> dict[str, Any]:
+        return {
+            "confirm_ticks": self.confirm_ticks,
+            "epsilon": self.epsilon,
+            "last_version": self.last_version,
+            "last_spy_atm_iv": self.last_iv,
+            "consecutive_drift_ticks": self.consecutive_drift_ticks,
+            "mismatch_count": self.mismatch_count,
+            "drift_active": self.drift_active,
+            "current_lag_seconds": round(self.current_lag_seconds, 3),
+            "last_completed_lag_seconds": round(self.last_completed_lag_seconds, 3),
+            "degraded_reason": self.degraded_reason,
+        }
+
+    def _on_drift_tick(self, version: int, iv_value: float, now_monotonic: float) -> None:
+        self.consecutive_drift_ticks += 1
+        if self.lag_start_monotonic is None:
+            self.lag_start_monotonic = now_monotonic
+
+        if self.consecutive_drift_ticks >= self.confirm_ticks and not self.drift_active:
+            self.drift_active = True
+            self.mismatch_count += 1
+            logger.warning(
+                "[OBS] snapshot_version_iv_drift_start version=%s spy_atm_iv=%.6f confirm_ticks=%s mismatch_count=%s",
+                version,
+                iv_value,
+                self.confirm_ticks,
+                self.mismatch_count,
+            )
+
+        if self.drift_active and self.lag_start_monotonic is not None:
+            self.current_lag_seconds = max(0.0, now_monotonic - self.lag_start_monotonic)
+            if self.consecutive_drift_ticks % _IV_DRIFT_ONGOING_LOG_EVERY_TICKS == 0:
+                logger.warning(
+                    "[OBS] snapshot_version_iv_drift_ongoing version=%s spy_atm_iv=%.6f drift_ticks=%s lag_seconds=%.3f",
+                    version,
+                    iv_value,
+                    self.consecutive_drift_ticks,
+                    self.current_lag_seconds,
+                )
+
+        self.last_version = version
+        self.last_iv = iv_value
+
+    def _on_recovery(self, version: int, iv_value: float, now_monotonic: float) -> None:
+        if self.drift_active and self.lag_start_monotonic is not None:
+            lag = max(0.0, now_monotonic - self.lag_start_monotonic)
+            self.last_completed_lag_seconds = lag
+            logger.warning(
+                "[OBS] snapshot_version_iv_drift_recovered version=%s spy_atm_iv=%.6f lag_seconds=%.3f drift_ticks=%s",
+                version,
+                iv_value,
+                lag,
+                self.consecutive_drift_ticks,
+            )
+
+        self.drift_active = False
+        self.consecutive_drift_ticks = 0
+        self.lag_start_monotonic = None
+        self.current_lag_seconds = 0.0
+        self.last_version = version
+        self.last_iv = iv_value
+
+    def _mark_degraded(self, version: int | None, iv_value: float | None) -> None:
+        if version is None and iv_value is None:
+            reason = "invalid_version_and_iv"
+        elif version is None:
+            reason = "invalid_version"
+        else:
+            reason = "invalid_spy_atm_iv"
+
+        if reason != self.degraded_reason:
+            logger.debug(
+                "[OBS] snapshot_version_iv_probe_degraded reason=%s raw_version=%r raw_spy_atm_iv=%r",
+                reason,
+                version,
+                iv_value,
+            )
+        self.degraded_reason = reason
+
+    @staticmethod
+    def _coerce_version(value: Any) -> int | None:
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            if not math.isfinite(value):
+                return None
+            return int(value)
+        if isinstance(value, str):
+            raw = value.strip()
+            if not raw:
+                return None
+            try:
+                return int(raw)
+            except ValueError:
+                return None
+        return None
+
+    @staticmethod
+    def _coerce_iv(value: Any) -> float | None:
+        if isinstance(value, bool) or value is None:
+            return None
+        if isinstance(value, (int, float)):
+            value_f = float(value)
+            return value_f if math.isfinite(value_f) else None
+        if isinstance(value, str):
+            raw = value.strip()
+            if not raw:
+                return None
+            try:
+                value_f = float(raw)
+            except ValueError:
+                return None
+            return value_f if math.isfinite(value_f) else None
+        return None
+
+
 async def run_compute_loop(ctr: 'AppContainer', state: SharedLoopState) -> None:
     """Compute loop: fetch data → run agents → build payload → save state.
 
     Runs at a constant cadence defined by websocket_update_interval.
     """
     next_tick = time.monotonic()
+    version_iv_probe = _SnapshotVersionIvDriftProbe()
 
     while True:
         try:
@@ -86,6 +330,7 @@ async def run_compute_loop(ctr: 'AppContainer', state: SharedLoopState) -> None:
             logger.info(f"[Debug] L0 Fetch: rust_active={snapshot.get('rust_active')} shm_stats={snapshot.get('shm_stats') is not None}")
 
             chain_size = len(snapshot.get("chain", []))
+            snapshot_version = _extract_snapshot_version(snapshot)
             iv_sync_obj = getattr(ctr.option_chain_builder, "_iv_sync", None)
             iv_cache_size = len(iv_sync_obj.iv_cache) if iv_sync_obj else 0
 
@@ -100,7 +345,7 @@ async def run_compute_loop(ctr: 'AppContainer', state: SharedLoopState) -> None:
                 l1_snap = await ctr.l1_reactor.compute(
                     chain_snapshot=snapshot.get("chain", []),
                     spot=snapshot.get("spot", 0.0),
-                    l0_version=_extract_snapshot_version(snapshot),
+                    l0_version=snapshot_version,
                     iv_cache=iv_cache,
                     spot_at_sync=spot_sync,
                     extra_metadata=_build_l1_extra_metadata(snapshot),
@@ -120,6 +365,13 @@ async def run_compute_loop(ctr: 'AppContainer', state: SharedLoopState) -> None:
                 target_snapshot = l1_snap.to_legacy_dict() if l1_snap else snapshot
                 result = await ctr.agent_g.run(target_snapshot)
                 decision = result
+
+            probe_diag = version_iv_probe.observe(
+                snapshot_version=snapshot_version,
+                spy_atm_iv=_extract_runtime_spy_atm_iv(l1_snap, decision, result),
+                now_monotonic=time.monotonic(),
+            )
+            state.update_snapshot_version_iv_probe(probe_diag)
 
             # 2.5 Calculate ATM Decay via Tracker
             atm_decay_payload = await ctr.atm_decay_tracker.update(

@@ -1,0 +1,21 @@
+﻿session_id: "2026-03-06/1951_no_pointer_smoke_hotfix"
+title: "no pointer smoke"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-06 17:50:01 -05:00"
+updated_at_et: "2026-03-06 17:50:01 -05:00"
+parent_session: null
+
+branch: "master"
+base_commit: "cc48066"
+head_commit: "cc48066"
+
+files_changed: []
+commands: []
+tests_passed: []
+tests_failed: []
+blockers: []
+notes: []
+
+
