@@ -1,0 +1,31 @@
+session_id: "2026-03-06/1130/timebucket_session_layout"
+title: "timebucket session layout"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-06 11:30:27 -05:00"
+updated_at_et: "2026-03-06 11:31:45 -05:00"
+parent_session: "2026-03-06/1113_session_tooling_mod"
+
+branch: "master"
+base_commit: "00789bd"
+head_commit: "00789bd"
+
+files_changed:
+  - "scripts/new_session.ps1"
+  - "scripts/README.md"
+  - "AGENTS.md"
+  - "notes/sessions/README.md"
+  - "notes/context/project_state.md"
+
+commands:
+  - "powershell -ExecutionPolicy Bypass -File .\\scripts\\new_session.ps1 -TaskId timebucket_session_layout -UseTimeBucket"
+  - "powershell -ExecutionPolicy Bypass -File .\\scripts\\validate_session.ps1"
+
+tests_passed:
+  - "validate_session: pass"
+tests_failed: []
+
+blockers: []
+notes:
+  - "Optional time-bucket path enabled for session creation."

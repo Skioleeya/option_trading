@@ -7,6 +7,7 @@ to detect wall retreat, reinforcement, or stability.
 from __future__ import annotations
 
 import logging
+import math
 import time
 from collections import deque
 from datetime import datetime
@@ -53,6 +54,24 @@ class WallMigrationTracker:
         """Inject shared Redis client."""
         self._redis = client
 
+    @staticmethod
+    def _normalize_wall_level(level: float | None) -> float | None:
+        """Normalize wall strike from upstream layers.
+
+        Upstream aggregation currently uses 0.0 as the "missing wall" sentinel.
+        Treat non-positive / non-finite values as unavailable so breach logic
+        cannot fire on invalid synthetic levels.
+        """
+        if level is None:
+            return None
+        try:
+            value = float(level)
+        except (TypeError, ValueError):
+            return None
+        if not math.isfinite(value) or value <= 0.0:
+            return None
+        return value
+
     def update(
         self,
         *,
@@ -67,6 +86,11 @@ class WallMigrationTracker:
         """Update tracker with current wall positions."""
         now_mono = sim_clock_mono if sim_clock_mono is not None else time.monotonic()
         now_real = datetime.now(ZoneInfo("US/Eastern"))
+
+        # Normalize sentinel/invalid levels early so all downstream branches
+        # (throttle path + standard path) share identical semantics.
+        call_wall = self._normalize_wall_level(call_wall)
+        put_wall = self._normalize_wall_level(put_wall)
 
         # --- Pre-compute cross-cutting states (highest priority) ---
         # DECAYING: Late-day charm/gamma decay renders walls irrelevant after 14:00 ET

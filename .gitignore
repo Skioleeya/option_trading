@@ -64,3 +64,4 @@ backend/nul
 
 # Local runtime temp data
 tmp/atm_decay_*/
+tmp/pytest_cache/

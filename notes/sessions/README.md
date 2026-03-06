@@ -6,6 +6,7 @@
 
 ## Directory Convention
 - `notes/sessions/YYYY-MM-DD/<task-id>/`
+- `notes/sessions/YYYY-MM-DD/HHMM/<task-id>/` (optional time-bucket mode)
 - Recommended `<task-id>`: `HHMM_<scope>_<hotfix|mod|feature>`
 
 ## Required Files Per Session
@@ -18,4 +19,3 @@
 1. Copy templates from `notes/sessions/_templates/`.
 2. Fill `meta.yaml` first (`branch`, `base_commit`, `parent_session`).
 3. Update `notes/context/*.md` pointers to the new active session.
-

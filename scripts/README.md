@@ -27,6 +27,7 @@
 - `test_assembler.py`: L3 消息组装器单元测试。
 - `test_ui_tracker.py`: 前端状态追踪器逻辑验证。
 - `test_presenter.py`: 简单 Presenter 数据转换测试。
+- `run_pytest.ps1`: 统一 `pytest` 入口，强制使用独立缓存目录 `tmp/pytest_cache`，并拒绝管理员上下文执行（防权限混用残留临时目录）。
 
 ## 运行建议
 
@@ -41,10 +42,17 @@ python scripts/test/test_depth_profile.py
 > [!TIP]
 > 每次执行重大重构（如 AppContainer 拆解）后，请至少运行一次 `scripts/test/test_depth_profile.py` 确保核心链路闭环。
 
+推荐统一入口：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\test\run_pytest.ps1 l1_compute/tests/test_reactor.py -q
+```
+
 ## 会话上下文脚本（新增）
 
 - `new_session.ps1`: 创建一次改动的独立会话目录，并自动更新 `notes/context` 三文件指针。
 - `validate_session.ps1`: 校验会话四文件完整性（`project_state/open_tasks/handoff/meta`）以及 context 指针一致性。
+- `new_session.ps1 -UseTimeBucket`: 可选按分钟桶创建会话目录（`YYYY-MM-DD/HHMM/<task-id>`）。
 
 示例：
 
@@ -56,6 +64,12 @@ powershell -ExecutionPolicy Bypass -File .\scripts\new_session.ps1 `
   -Scope "hotfix only" `
   -Owner "Quant Backend" `
   -ParentSession "2026-03-06/1106_atm_decay_hotfix_mod"
+
+# 按时间桶创建（可选）
+powershell -ExecutionPolicy Bypass -File .\scripts\new_session.ps1 `
+  -TaskId "1125_anchor_guard_refine" `
+  -UseTimeBucket `
+  -Title "anchor guard refine"
 
 # 校验当前 active session（默认）
 powershell -ExecutionPolicy Bypass -File .\scripts\validate_session.ps1

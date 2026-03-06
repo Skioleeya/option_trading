@@ -1,0 +1,17 @@
+ M AGENTS.md
+ M data/atm_decay/atm_series_20260306.json
+ D l4_ui/tsconfig.tsbuildinfo
+ D logs/perf_capture.json
+ D logs/uvicorn_log.txt
+ D logs/uvicorn_log_2.txt
+ D logs/uvicorn_log_3.txt
+ D logs/uvicorn_log_4.txt
+ D logs/uvicorn_log_5.txt
+ M notes/context/handoff.md
+ M notes/context/open_tasks.md
+ M notes/context/project_state.md
+ M notes/sessions/README.md
+ M scripts/README.md
+ M scripts/new_session.ps1
+?? notes/sessions/2026-03-06/1130/
+?? notes/sessions/2026-03-06/1145/

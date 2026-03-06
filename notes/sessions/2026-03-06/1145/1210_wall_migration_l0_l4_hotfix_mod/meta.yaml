@@ -1,0 +1,55 @@
+﻿session_id: "2026-03-06/1145/1210_wall_migration_l0_l4_hotfix_mod"
+title: "wall migration l0-l4 audit"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-06 11:45:26 -05:00"
+updated_at_et: "2026-03-06 12:13:49 -05:00"
+parent_session: "2026-03-06/1130/timebucket_session_layout"
+
+branch: "master"
+base_commit: "00789bd"
+head_commit: "00789bd"
+
+files_changed:
+  - "AGENTS.md"
+  - "pytest.ini"
+  - ".gitignore"
+  - "scripts/test/run_pytest.ps1"
+  - "scripts/README.md"
+  - "l1_compute/trackers/wall_migration_tracker.py"
+  - "l1_compute/tests/test_wall_migration_tracker.py"
+  - "l4_ui/src/components/left/WallMigration.tsx"
+  - "l4_ui/src/components/left/wallMigrationTheme.ts"
+  - "l4_ui/src/components/left/__tests__/wallMigrationTheme.test.ts"
+  - "notes/sessions/2026-03-06/1145/1210_wall_migration_l0_l4_hotfix_mod/project_state.md"
+  - "notes/sessions/2026-03-06/1145/1210_wall_migration_l0_l4_hotfix_mod/open_tasks.md"
+  - "notes/sessions/2026-03-06/1145/1210_wall_migration_l0_l4_hotfix_mod/handoff.md"
+  - "notes/sessions/2026-03-06/1145/1210_wall_migration_l0_l4_hotfix_mod/artifacts/status_before_cleanup.txt"
+  - "notes/sessions/2026-03-06/1145/1210_wall_migration_l0_l4_hotfix_mod/artifacts/tracked_before_cleanup.patch"
+  - "notes/sessions/2026-03-06/1145/1210_wall_migration_l0_l4_hotfix_mod/artifacts/atm_series_before_cleanup.patch"
+commands:
+  - "git status --short"
+  - "git diff --name-status"
+  - "git diff --binary (archived to artifacts/tracked_before_cleanup.patch)"
+  - "git diff --binary -- data/atm_decay/atm_series_20260306.json (archived)"
+  - "git restore -- l4_ui/tsconfig.tsbuildinfo logs/perf_capture.json logs/uvicorn_log.txt logs/uvicorn_log_2.txt logs/uvicorn_log_3.txt logs/uvicorn_log_4.txt logs/uvicorn_log_5.txt data/atm_decay/atm_series_20260306.json"
+  - "python - << reproducer for zero-wall false breach"
+  - "pytest -q l1_compute/tests/test_wall_migration_tracker.py"
+  - "npm --prefix l4_ui run test -- wallMigrationTheme"
+  - "npm --prefix l4_ui run build"
+  - "powershell -ExecutionPolicy Bypass -File .\\scripts\\test\\run_pytest.ps1 l1_compute/tests/test_wall_migration_tracker.py -q"
+tests_passed:
+  - "workspace_cleanup_sanity: pass (status no runtime deletions)"
+  - "l1 wall migration tracker tests: 2 passed"
+  - "l4 wallMigrationTheme tests: 3 passed"
+  - "l4_ui build: pass"
+  - "pytest cache policy: pass (tmp/pytest_cache used; no root .pytest_cache)"
+tests_failed: []
+blockers: []
+notes:
+  - "Major bug fixed: invalid wall sentinel (0.0) no longer triggers false BREACHED."
+  - "WallMigration color/token logic modularized and aligned with Asian-style market colors."
+  - "pytest cache and context policy hardened via root config + non-admin wrapper."
+
+

@@ -59,6 +59,12 @@ We have adopted **OpenSpec** for all spec-driven development tracking.
 4.  **Verify**: All fixes must pass the end-to-end `test_l0_l4_pipeline.py`.
 5.  **Archive (`/opsx-archive`)**: Merge specifications only after successful stress-test validation.
 
+### 4.1 Test Execution & Cache Isolation Mandate (2026-03-06)
+*   **Single Entry Rule**: All `pytest` runs MUST go through `scripts/test/run_pytest.ps1`.
+*   **Context Purity Rule**: Test execution in Administrator context is prohibited. Agents/operators MUST run tests in a normal user shell to avoid mixed-permission artifacts.
+*   **Cache Isolation Rule**: `pytest` cache MUST use the dedicated path `tmp/pytest_cache` (configured via `pytest.ini`), not repository-root default cache locations.
+*   **Artifact Hygiene Rule**: Any `pytest-cache-files-*` directories are treated as permission-failure residue and MUST be cleaned as operational artifacts, not committed as code/data changes.
+
 Failure to follow these SOPs puts institutional capital at risk. Code with the rigor of a Quant. Execute with the speed of Rust.
 
 ---
@@ -106,7 +112,9 @@ To enable reliable multi-agent continuity across conversations, every agent MUST
 *   **State Alignment**: If repository reality conflicts with session/context notes, the agent MUST reconcile notes first, then proceed.
 
 ### 6.2.1 Session Creation Rule (One Change Set, One Folder)
-*   **Dedicated Session Folder Is Mandatory**: Every substantive change set MUST create (or continue) a dedicated folder under `notes/sessions/YYYY-MM-DD/<task-id>/`.
+*   **Dedicated Session Folder Is Mandatory**: Every substantive change set MUST create (or continue) a dedicated folder under either:
+    *   `notes/sessions/YYYY-MM-DD/<task-id>/` (default)
+    *   `notes/sessions/YYYY-MM-DD/HHMM/<task-id>/` (time-bucket mode)
 *   **Task ID Convention**: `<task-id>` SHOULD follow `HHMM_<scope>_<hotfix|mod|feature>`.
 *   **No History Overwrite**: Completed session folders are immutable archives and MUST NOT be repurposed for unrelated work.
 

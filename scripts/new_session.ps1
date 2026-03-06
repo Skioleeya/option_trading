@@ -4,7 +4,8 @@ param(
     [string]$Title = "",
     [string]$Scope = "hotfix + modularization",
     [string]$Owner = "Codex",
-    [string]$ParentSession = ""
+    [string]$ParentSession = "",
+    [switch]$UseTimeBucket
 )
 
 $ErrorActionPreference = "Stop"
@@ -57,11 +58,16 @@ $repoRoot = Get-RepoRoot
 Set-Location $repoRoot
 
 $date = Get-Date -Format "yyyy-MM-dd"
+$hhmm = Get-Date -Format "HHmm"
 $timeStampEt = Get-Date -Format "yyyy-MM-dd HH:mm:ss zzz"
 
 $sessionsRoot = Join-Path $repoRoot "notes/sessions"
 $templatesRoot = Join-Path $sessionsRoot "_templates"
-$sessionRel = "notes/sessions/$date/$TaskId"
+$sessionRel = if ($UseTimeBucket) {
+    "notes/sessions/$date/$hhmm/$TaskId"
+} else {
+    "notes/sessions/$date/$TaskId"
+}
 $sessionDir = Join-Path $repoRoot $sessionRel
 
 $projectTemplate = Join-Path $templatesRoot "project_state.template.md"
@@ -93,7 +99,8 @@ if ([string]::IsNullOrWhiteSpace($Title)) {
 
 $metaPath = Join-Path $sessionDir "meta.yaml"
 $meta = Get-Content $metaPath -Raw
-$meta = $meta -replace 'session_id: "YYYY-MM-DD/HHMM_scope_hotfix_or_mod"', "session_id: `"$date/$TaskId`""
+$sessionId = if ($UseTimeBucket) { "$date/$hhmm/$TaskId" } else { "$date/$TaskId" }
+$meta = $meta -replace 'session_id: "YYYY-MM-DD/HHMM_scope_hotfix_or_mod"', "session_id: `"$sessionId`""
 $meta = $meta -replace 'title: ""', "title: `"$Title`""
 $meta = $meta -replace 'scope: "hotfix only \| hotfix \+ modularization \| feature"', "scope: `"$Scope`""
 $meta = $meta -replace 'owner: ""', "owner: `"$Owner`""
@@ -111,7 +118,7 @@ $contextProjectPath = Join-Path $repoRoot "notes/context/project_state.md"
 $contextTasksPath = Join-Path $repoRoot "notes/context/open_tasks.md"
 $contextHandoffPath = Join-Path $repoRoot "notes/context/handoff.md"
 
-$currentRecent = "- notes/sessions/$date/$TaskId/"
+$currentRecent = "- $sessionRel/"
 $recent = @($currentRecent)
 foreach ($line in (Get-RecentSessionLines -ContextProjectPath $contextProjectPath)) {
     if ($line -ne $currentRecent) { $recent += $line }
@@ -135,7 +142,7 @@ $recentText
 
 ## Global Rules
 - Session folders are immutable records; do not overwrite prior sessions.
-- New substantive work must create a new session folder under notes/sessions/YYYY-MM-DD/<task-id>/.
+- New substantive work must create a new session folder under notes/sessions/YYYY-MM-DD/<task-id>/ (or notes/sessions/YYYY-MM-DD/HHMM/<task-id>/ with time-bucket mode).
 - Keep this index file updated with the latest active session pointer.
 "@
 
