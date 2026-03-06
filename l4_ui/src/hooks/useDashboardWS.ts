@@ -21,6 +21,7 @@ import {
     selectPayload,
     selectConnectionStatus,
 } from '../store/dashboardStore'
+import { ConnectionMonitor } from '../observability/connectionMonitor'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Config (kept identical to original for easy comparison)
@@ -62,10 +63,12 @@ export function useDashboardWS() {
         adapter.setPayloadGetter(() => useDashboardStore.getState().payload)
 
         adapterRef.current = adapter
+        ConnectionMonitor.start()
         adapter.connect()
 
         return () => {
             adapter.disconnect()
+            ConnectionMonitor.stop()
             adapterRef.current = null
         }
     }, []) // mount once

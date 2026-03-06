@@ -63,6 +63,8 @@ V3.1 已完成从 L2 (Agent B) 向 L1 的逻辑下沉：
 - **VannaFlowAnalyzer**：跟踪 Delta 敞口与 IV 微分相乘的流追踪。
 - **WallMigrationTracker**：跟踪 Gamma Call/Put 墙面（以及 Flip Level）在不同 Strike 上的移动。
 - **Wall Sentinel Guard (2026-03-06 Hotfix)**：`call_wall/put_wall` 在进入 WallMigration 状态机前必须执行归一化；`<=0`、NaN、Inf 一律视为 unavailable，禁止触发 `BREACHED` 判定（防止 0.0 哨兵值导致误报）。
+- **Vanna 阈值符号守卫 (2026-03-06 Hotfix)**：`vanna_grind_stable_threshold` 在运行时必须按负阈值语义解释；若配置为正数，系统强制使用 `-abs(threshold)` 并记录告警，防止 `GRIND_STABLE` 误判扩大到 0 以上相关性区间。
+- **极端墙态传播要求**：`WallMigrationTracker` 产出的 `BREACHED/DECAYING/UNAVAILABLE` 必须向上游完整透传，禁止在 L1/L3 边界被折叠成 `STABLE`。
 - **GEX Notional Validation**：系统对 SPY 基准的 GEX 名义值计算与机构级基准 (VolLand/SpotGamma) 误差 < 1%。
 
 ### 2.4 Rust SIMD 微结构信号 (l1_rust)

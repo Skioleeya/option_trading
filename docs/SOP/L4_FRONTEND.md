@@ -71,6 +71,16 @@ UI 在保持原版 TradingView-style 的冷酷暗色调三栏版式同时（`lib
 - **亚洲风格一致性**：严格执行 `红涨绿跌`（Call/上涨=Red，Put/下行=Green），并与 `theme.ts`/`index.css` 变量保持一致。
 - **后端灯光透传优先**：`row.lights.current_*` 作为视觉主信号优先级高于本地 fallback，防止 L3→L4 状态语义偏移。
 - **健壮解析**：状态字符串与历史值渲染需容错（空值/非数值不崩溃），确保 WS 短暂缺帧时组件稳定。
+
+### 3.2 MicroStats 状态与配色契约 (2026-03-06)
+
+- **四卡数据源唯一**：`MicroStats` 仅从 `ui_state.micro_stats.{net_gex, wall_dyn, momentum, vanna}` 取值；L4 不自行重算状态。
+- **风险态直达显示**：当 `wall_dyn.label=BREACH/DECAY/WARM↑` 时，前端必须原样渲染，不允许本地 fallback 覆盖为 `STABLE`。
+- **亚洲风格语义保持**：
+  - `MOMENTUM`: `BULLISH -> LONG -> 红`, `BEARISH -> SHORT -> 绿`
+  - `WALL DYN`: `RETREAT -> 红`, `COLLAPSE -> 绿`, `PINCH -> 紫`, `BREACH -> 琥珀`
+  - `VANNA`: `DANGER -> 红`, `CMPRS -> 青色空心`, `FLIP -> 紫`
+- **Store 合并注意事项**：`micro_stats` 当前非 sticky key。若后端发送空对象，组件会回退 `—`。运维需优先确保 L3 持续输出完整 `micro_stats`。
 ## 4. 连接守护与告警系统 (Monitor & Alerts)
 
 - **ConnectionMonitor**: 接管 WS 心跳。实现状态五连跳 `DISCONNECTED → CONNECTING → AWAIT_STATE → RUNNING → STALLED`。

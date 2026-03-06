@@ -1,6 +1,6 @@
 // Types for all WebSocket dashboard data
 
-export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected'
+export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'stalled'
 
 export type GexRegime = 'SUPER_PIN' | 'DAMPING' | 'NEUTRAL' | 'ACCELERATION'
 export type IVVelocityState = 'PAID_MOVE' | 'ORGANIC_GRIND' | 'HOLLOW_RISE' | 'HOLLOW_DROP' | 'PAID_DROP' | 'VOL_EXPANSION' | 'EXHAUSTION' | 'UNAVAILABLE'
@@ -176,6 +176,8 @@ export interface DashboardPayload {
     spot: number | null
     agent_g: AgentGResult | null
     atm?: AtmDecay | null
+    rust_active?: boolean
+    shm_stats?: Record<string, unknown> | null
 }
 
 // ATM Decay

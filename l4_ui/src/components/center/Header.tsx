@@ -12,6 +12,12 @@ import {
     selectIvPct,
     selectConnectionStatus,
 } from '../../store/dashboardStore'
+import {
+    deriveMarketStatus,
+    getConnectionDotClass,
+    getConnectionLabel,
+    getRustIndicator,
+} from './headerState'
 
 interface Props {
     spot?: number | null
@@ -43,16 +49,16 @@ export const Header: React.FC<Props> = memo(({
     const status = storeStatus ?? propStatus ?? 'connecting'
     const as_of = timestamp ?? propAsOf ?? null
     const ivRegime = ivRegimeRaw ?? propIvRegime ?? 'NORMAL'
-    const marketStatus = propMarketStatus ?? (() => {
-        const now = new Date()
-        return now.getHours() >= 9 && now.getHours() < 16 ? 'OPEN' : 'CLOSE'
-    })()
+    const marketStatus = propMarketStatus ?? deriveMarketStatus()
+    const rustActive = useDashboardStore((s) => s.payload?.rust_active ?? null)
 
     const timeStr = as_of
         ? new Date(as_of).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'America/New_York' })
         : '--:--:--'
 
-    const connColor = status === 'connected' ? 'bg-[#10b981]' : status === 'connecting' ? 'bg-[#f59e0b]' : 'bg-[#ef4444]'
+    const connColor = getConnectionDotClass(status)
+    const connLabel = getConnectionLabel(status)
+    const rust = getRustIndicator(rustActive)
     const ivRegimeColor = (ivRegime === 'HIGH' || ivRegime === 'EXTREME') ? 'text-[#ef4444]' : ivRegime === 'ELEVATED' ? 'text-[#f59e0b]' : 'text-[#10b981]'
     const ivBadgeCls = (ivRegime === 'HIGH' || ivRegime === 'EXTREME') ? 'border-[#7f1d1d] text-[#ef4444] bg-[#450a0a]/50' : ivRegime === 'ELEVATED' ? 'border-[#92400e] text-[#f59e0b] bg-[#422006]/50' : 'border-[#065f46] text-[#10b981] bg-[#022c22]/50'
 
@@ -94,7 +100,7 @@ export const Header: React.FC<Props> = memo(({
                 <div className="w-[1px] h-[12px] bg-[#3f3f46]" />
                 <div className="flex items-center gap-1.5">
                     <div className={`w-1.5 h-1.5 rounded-full ${connColor} shadow-[0_0_6px_currentcolor]`} />
-                    <span className="text-[10px] font-bold text-[#71717a] tracking-widest">RDS LIVE</span>
+                    <span className="text-[10px] font-bold text-[#71717a] tracking-widest">{connLabel}</span>
                 </div>
             </div>
 
@@ -103,7 +109,8 @@ export const Header: React.FC<Props> = memo(({
                     <Zap size={10} className="fill-current shrink-0" />
                     <span className="text-[11px] font-black tracking-[0.2em] text-white/90 uppercase">TACTICAL OFFENSE</span>
                 </div>
-                <div className="w-2 h-2 rounded-full bg-[#10b981] shadow-[0_0_8px_rgba(16,185,129,0.6)] ml-1" />
+                <span className="text-[9px] font-bold tracking-widest text-[#71717a] ml-1">{rust.label}</span>
+                <div className={`w-2 h-2 rounded-full ${rust.dotClass}`} />
             </div>
         </header>
     )

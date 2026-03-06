@@ -1,0 +1,42 @@
+session_id: "2026-03-06/1327/1415_header_gex_l0_l4_hotfix_mod"
+title: "header gex l0-l4 audit and fix"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-06 13:27:34 -05:00"
+updated_at_et: "2026-03-06 13:33:01 -05:00"
+parent_session: "2026-03-06/1250/1251_microstats_l0_l4_hotfix_mod"
+
+branch: "master"
+base_commit: "6ea5f37"
+head_commit: "6ea5f37"
+
+files_changed:
+  - "l4_ui/src/components/App.tsx"
+  - "l4_ui/src/components/center/Header.tsx"
+  - "l4_ui/src/components/center/GexStatusBar.tsx"
+  - "l4_ui/src/components/center/headerState.ts"
+  - "l4_ui/src/components/center/gexStatus.ts"
+  - "l4_ui/src/components/center/__tests__/headerState.test.ts"
+  - "l4_ui/src/components/center/__tests__/gexStatus.test.ts"
+  - "l4_ui/src/hooks/useDashboardWS.ts"
+  - "l4_ui/src/observability/connectionMonitor.ts"
+  - "l4_ui/src/types/dashboard.ts"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-06/1327/1415_header_gex_l0_l4_hotfix_mod/project_state.md"
+  - "notes/sessions/2026-03-06/1327/1415_header_gex_l0_l4_hotfix_mod/open_tasks.md"
+  - "notes/sessions/2026-03-06/1327/1415_header_gex_l0_l4_hotfix_mod/handoff.md"
+  - "notes/sessions/2026-03-06/1327/1415_header_gex_l0_l4_hotfix_mod/meta.yaml"
+commands:
+  - "npm --prefix l4_ui run test -- src/components/center/__tests__/headerState.test.ts src/components/center/__tests__/gexStatus.test.ts"
+  - "npm --prefix l4_ui run build"
+  - "powershell -ExecutionPolicy Bypass -File .\\scripts\\validate_session.ps1"
+tests_passed:
+  - "vitest: src/components/center/__tests__/headerState.test.ts + gexStatus.test.ts (6 passed)"
+  - "npm --prefix l4_ui run build"
+tests_failed:
+  - "No failing tests in this session."
+blockers: []
+notes:
+  - "Severe risk fixed: Header no longer hides stalled stream and Rust fallback state."
+  - "Market session indicator now respects ET timezone and 09:30 opening boundary."

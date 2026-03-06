@@ -51,12 +51,24 @@
 - **兼容模式与扁平化设计**：提供 `to_dict()` 完美对齐老版本 `agent_g.data.*` 的 JSON Schema，同时在顶层注入 `rust_active` 状态位用于前端健康指示灯，保证 L4 终端无痛切换。
 - **微结构状态聚合**：由 `UIStateTracker` 直接从 L1 `EnrichedSnapshot` 提取并聚合所有微观信号（IV Velocity, Wall Migration, Vanna Flow 等），确保了 L3 广播负载的 100% 数据完整性。
 
+### 2.1 MicroStats 状态契约补丁 (2026-03-06)
+
+- **`wall_dyn` 强制映射**：`PayloadAssemblerV2` 必须将 `ui_metrics.wall_migration_data` 归一化后显式映射为 `micro_stats.wall_dyn` 输入，禁止遗漏该桥接步骤。
+- **极端状态不可吞噬**：`BREACHED / DECAYING / UNAVAILABLE` 不得被降级为 `STABLE`。L3 必须保持原始风险语义到前端。
+- **Badge Token 保真**：L3 `MetricCard.badge` 白名单已扩展到前端真实使用集合（含 `badge-red / badge-purple / badge-hollow-green / badge-red-dim` 等），避免语义颜色在序列化阶段被“中性化”。
+
 ## 3. 分化重构：Presenters V2
 
 负责把 L1/L2 的裸数据“梳妆打扮”为前台使用的 UI 部件（MetricCard 等）：
 - **DepthProfilePresenterV2**：最为复杂，接收 100 档全链 Greeks 数据。内嵌 EMA 2-Tier 收敛系统计算 Gamma Profile。利用 `STRIKE_COUNT` (14 档) 窗口进行裁剪平滑，阻断 NaN/Inf 无效数据。
 - **ActiveOptionsPresenter (v4.0 演进)**：全面采用 OFII 作为顶层排序权重。负责为前端生成包含 `impact_index` 和 `is_sweep` 字段的 UI 负载。实现跨行数据横向对比，将“最高绝对威胁”置顶，而非单纯的成交量。
 - **其它 Presenters**：含 `MicroStats`, `TacticalTriad`, `WallMigration`, `MTFFlow` 等。
+
+### 3.1 MicroStats 模块边界 (2026-03-06)
+
+- **状态机模块化**：`MicroStats` 的墙体复合态判定已拆分为独立模块（`wall_dynamics`），`presenter` 仅负责去抖与封装，禁止在渲染映射层混入判定逻辑。
+- **Urgent 状态直通**：`BREACH` 为一级风险状态，必须绕过去抖延迟，首 Tick 即提交。
+- **去抖仅用于常规态**：`PINCH / SIEGE / RETREAT / COLLAPSE / STABLE` 仍执行去抖，避免单 Tick 抖动造成徽标闪烁。
 
 ## 4. 增量更新 (Field Delta Encoding)
 

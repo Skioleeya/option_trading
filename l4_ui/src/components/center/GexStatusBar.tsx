@@ -11,6 +11,7 @@ import {
     selectGammaWalls,
     selectFlipLevel,
 } from '../../store/dashboardStore'
+import { normalizeGexStatus } from './gexStatus'
 
 interface Props {
     netGex?: number | null
@@ -29,10 +30,16 @@ export const GexStatusBar: React.FC<Props> = memo(({
     const storeGamma = useDashboardStore(selectGammaWalls)
     const storeFlipLevel = useDashboardStore(selectFlipLevel)
 
-    const netGex = storeNetGex ?? propNetGex ?? null
-    const callWall = storeGamma?.call_wall ?? propCallWall ?? null
-    const putWall = storeGamma?.put_wall ?? propPutWall ?? null
-    const flipLevel = storeFlipLevel ?? propFlipLevel ?? null
+    const normalized = normalizeGexStatus({
+        netGex: storeNetGex ?? propNetGex ?? null,
+        callWall: storeGamma?.call_wall ?? propCallWall ?? null,
+        putWall: storeGamma?.put_wall ?? propPutWall ?? null,
+        flipLevel: storeFlipLevel ?? propFlipLevel ?? null,
+    })
+    const netGex = normalized.netGex
+    const callWall = normalized.callWall
+    const putWall = normalized.putWall
+    const flipLevel = normalized.flipLevel
 
     const isGexPos = netGex != null && netGex > 0
     const gexColor = netGex == null ? 'text-[#71717a]' : isGexPos ? 'text-[#10b981]' : 'text-[#ef4444]'

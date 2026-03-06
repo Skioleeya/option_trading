@@ -39,6 +39,15 @@ WALL_COLLAPSE_STATES  = {"RETREATING_SUPPORT"}
 WALL_PINCH_CALL_STATES = {"REINFORCED_WALL"}
 WALL_PINCH_PUT_STATES  = {"REINFORCED_SUPPORT"}
 
+# 极端状态：墙体被突破（风险最高）
+WALL_BREACH_STATES = {"BREACHED"}
+
+# 衰减状态：14:00 ET 后 charm/gamma 衰减，墙体参考价值下降
+WALL_DECAY_STATES = {"DECAYING"}
+
+# 冷启动/缺数状态
+WALL_UNAVAILABLE_STATES = {"UNAVAILABLE", ""}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 3. MOMENTUM  (Agent A — VWAP 微信号)
 # ─────────────────────────────────────────────────────────────────────────────

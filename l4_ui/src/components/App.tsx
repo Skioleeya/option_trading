@@ -30,6 +30,7 @@ import { AlertEngine } from '../alerts/alertEngine'
 import { AlertToast } from './AlertToast'
 import { CommandPalette } from './CommandPalette'
 import { DebugOverlay } from './DebugOverlay'
+import { deriveMarketStatus } from './center/headerState'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // App
@@ -63,8 +64,7 @@ export const App: React.FC = () => {
         }
     }, [])
 
-    const now = new Date()
-    const marketStatus = now.getHours() >= 9 && now.getHours() < 16 ? 'OPEN' : 'CLOSE'
+    const marketStatus = deriveMarketStatus()
 
     return (
         <>

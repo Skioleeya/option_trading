@@ -4,18 +4,43 @@ scope: "hotfix + modularization"
 owner: "Codex"
 timezone: "America/New_York"
 started_at_et: "2026-03-06 12:50:29 -05:00"
-updated_at_et: "2026-03-06 12:50:29 -05:00"
+updated_at_et: "2026-03-06 13:18:22 -05:00"
 parent_session: "2026-03-06/1241/1338_depth_profile_l0_l4_hotfix_mod"
 
 branch: "master"
 base_commit: "5a88b76"
 head_commit: "5a88b76"
 
-files_changed: []
-commands: []
-tests_passed: []
-tests_failed: []
+files_changed:
+  - "docs/SOP/L1_LOCAL_COMPUTATION.md"
+  - "docs/SOP/L3_OUTPUT_ASSEMBLY.md"
+  - "docs/SOP/L4_FRONTEND.md"
+  - "docs/SOP/SYSTEM_OVERVIEW.md"
+  - "l3_assembly/presenters/ui/micro_stats/wall_dynamics.py"
+  - "l3_assembly/presenters/ui/micro_stats/presenter.py"
+  - "l3_assembly/presenters/ui/micro_stats/thresholds.py"
+  - "l3_assembly/presenters/ui/micro_stats/mappings.py"
+  - "l3_assembly/presenters/ui/micro_stats/palette.py"
+  - "l3_assembly/tests/test_micro_stats_wall_dynamics.py"
+  - "l3_assembly/tests/test_assembly.py"
+  - "l1_compute/tests/test_vanna_flow_analyzer.py"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-06/1250/1251_microstats_l0_l4_hotfix_mod/project_state.md"
+  - "notes/sessions/2026-03-06/1250/1251_microstats_l0_l4_hotfix_mod/open_tasks.md"
+  - "notes/sessions/2026-03-06/1250/1251_microstats_l0_l4_hotfix_mod/handoff.md"
+  - "notes/sessions/2026-03-06/1250/1251_microstats_l0_l4_hotfix_mod/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File .\\scripts\\test\\run_pytest.ps1 l3_assembly/tests/test_micro_stats_wall_dynamics.py l3_assembly/tests/test_assembly.py l1_compute/tests/test_vanna_flow_analyzer.py -q"
+  - "python repro: MicroStatsPresenterV2 wall_dyn BREACHED behavior"
+  - "powershell -ExecutionPolicy Bypass -File .\\scripts\\validate_session.ps1"
+tests_passed:
+  - "l3_assembly/tests/test_micro_stats_wall_dynamics.py + l3_assembly/tests/test_assembly.py + l1_compute/tests/test_vanna_flow_analyzer.py: 32 passed"
+tests_failed:
+  - "l3_assembly/tests/test_presenters.py has pre-existing unrelated failures (not run in this validation command)"
 blockers: []
-notes: []
+notes:
+  - "Severe bug fixed: WALL DYN no longer masks BREACHED/DECAYING/UNAVAILABLE as STABLE."
+  - "Modularized wall state machine into l3_assembly/presenters/ui/micro_stats/wall_dynamics.py."
+  - "Urgent BREACH state now bypasses debounce for first-tick visibility."
 
 

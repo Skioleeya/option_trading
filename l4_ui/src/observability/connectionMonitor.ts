@@ -55,6 +55,8 @@ class ConnectionMonitorImpl {
             useDashboardStore.getState().setConnectionStatus('connected')
         } else if (next === 'CONNECTING') {
             useDashboardStore.getState().setConnectionStatus('connecting')
+        } else if (next === 'STALLED') {
+            useDashboardStore.getState().setConnectionStatus('stalled')
         } else {
             useDashboardStore.getState().setConnectionStatus('disconnected')
         }

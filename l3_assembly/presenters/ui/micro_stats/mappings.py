@@ -33,6 +33,12 @@ GEX_REGIME_MAP: dict[str, dict] = {
 # 做市商视角：大 OI 的 strike 处会形成对冲集中带（墙体），其动态揭示主力意图
 # ─────────────────────────────────────────────────────────────────────────────
 WALL_DYNAMICS_MAP: dict[str, dict] = {
+    # 墙体被击穿（可能是向上 squeeze 或向下 cascade）→ 优先提示风险
+    "BREACH":             {"label": "BREACH",   "badge": palette.BADGE_WALL_BREACH},
+
+    # 14:00 ET 后衰减期，墙体参考价值下降
+    "DECAY":              {"label": "DECAY",    "badge": palette.BADGE_WALL_DECAY},
+
     # 正上方/正下方大 OI 加固 → 被大墙压制，需要强烈买盘或卖盘才能突破
     "SIEGE":              {"label": "SIEGE",    "badge": palette.BADGE_WALL_SIEGE},
 
@@ -48,11 +54,17 @@ WALL_DYNAMICS_MAP: dict[str, dict] = {
     # 无明显移动 → 做市商保持当前对冲仓位不变
     "STABLE":             {"label": "STABLE",   "badge": palette.BADGE_WALL_STABLE},
 
+    # 冷启动 / 缺数
+    "UNAVAILABLE":        {"label": "WARM↑",    "badge": palette.BADGE_WALL_UNAVAILABLE},
+
     # 兼容旧版字段名
     "REINFORCED_WALL":       {"label": "SIEGE",    "badge": palette.BADGE_WALL_SIEGE},
     "REINFORCED_SUPPORT":    {"label": "SIEGE",    "badge": palette.BADGE_WALL_SIEGE},
     "RETREATING_RESISTANCE": {"label": "RETREAT",  "badge": palette.BADGE_WALL_RETREAT},
     "RETREATING_SUPPORT":    {"label": "COLLAPSE", "badge": palette.BADGE_WALL_COLLAPSE},
+    "BREACHED":              {"label": "BREACH",   "badge": palette.BADGE_WALL_BREACH},
+    "DECAYING":              {"label": "DECAY",    "badge": palette.BADGE_WALL_DECAY},
+    "UNAVAILABLE":           {"label": "WARM↑",    "badge": palette.BADGE_WALL_UNAVAILABLE},
 }
 
 

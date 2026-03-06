@@ -5,7 +5,11 @@
 """
 
 from typing import Any
-from l3_assembly.presenters.ui.micro_stats import mappings, thresholds
+from l3_assembly.presenters.ui.micro_stats import mappings
+from l3_assembly.presenters.ui.micro_stats.wall_dynamics import (
+    URGENT_WALL_KEYS,
+    classify_wall_key,
+)
 
 
 # PP-L3C FIX: Debounce state for wall_key so a single-tick PINCH⇄SIEGE
@@ -48,37 +52,27 @@ class MicroStatsPresenter:
         if "." in momentum: momentum = momentum.split(".")[-1]
 
         # ─── 1. Wall dynamics composite key ─────────────────────────────────
-        # (priority: PINCH > SIEGE > RETREAT > COLLAPSE > STABLE)
+        # (priority handled in wall_dynamics.py, including BREACH/DECAY)
         global _last_committed_wall_key, _pending_wall_key, _pending_wall_key_count
         call_st = str(wall_dyn.get("call_wall_state", "") if wall_dyn else "")
-        put_st  = str(wall_dyn.get("put_wall_state",  "") if wall_dyn else "")
+        put_st = str(wall_dyn.get("put_wall_state", "") if wall_dyn else "")
+        candidate_key = classify_wall_key(call_st, put_st)
 
-        if "." in call_st: call_st = call_st.split(".")[-1]
-        if "." in put_st:  put_st  = put_st.split(".")[-1]
-
-
-        # 优先级：PINCH > SIEGE > RETREAT > COLLAPSE > STABLE
-        if (call_st in thresholds.WALL_PINCH_CALL_STATES and
-                put_st in thresholds.WALL_PINCH_PUT_STATES):
-            candidate_key = "PINCH"
-        elif call_st in thresholds.WALL_SIEGE_STATES or put_st in thresholds.WALL_SIEGE_STATES:
-            candidate_key = "SIEGE"
-        elif call_st in thresholds.WALL_RETREAT_STATES:
-            candidate_key = "RETREAT"
-        elif put_st in thresholds.WALL_COLLAPSE_STATES:
-            candidate_key = "COLLAPSE"
-        else:
-            candidate_key = "STABLE"
-
-        # PP-L3C: Debounce — only commit when candidate is stable for N ticks.
-        if candidate_key == _pending_wall_key:
-            _pending_wall_key_count += 1
-        else:
+        # PP-L3C+: Critical states must bypass debounce.
+        if candidate_key in URGENT_WALL_KEYS:
             _pending_wall_key = candidate_key
-            _pending_wall_key_count = 1  # reset counter, first observed tick
+            _pending_wall_key_count = _WALL_KEY_DEBOUNCE_TICKS
+            _last_committed_wall_key = candidate_key
+        else:
+            # PP-L3C: Debounce — only commit when candidate is stable for N ticks.
+            if candidate_key == _pending_wall_key:
+                _pending_wall_key_count += 1
+            else:
+                _pending_wall_key = candidate_key
+                _pending_wall_key_count = 1  # reset counter, first observed tick
 
-        if _pending_wall_key_count >= _WALL_KEY_DEBOUNCE_TICKS:
-            _last_committed_wall_key = _pending_wall_key
+            if _pending_wall_key_count >= _WALL_KEY_DEBOUNCE_TICKS:
+                _last_committed_wall_key = _pending_wall_key
 
         wall_key = _last_committed_wall_key
 

@@ -42,6 +42,15 @@ BADGE_WALL_PINCH       = "badge-purple"
 # STABLE: 无明显动态 → 中性灰
 BADGE_WALL_STABLE      = "badge-neutral"
 
+# BREACH: 墙体被击穿（方向未定但风险极高）→ 琥珀实心风险提示
+BADGE_WALL_BREACH      = "badge-amber"
+
+# DECAY: 尾盘衰减 → 中性灰
+BADGE_WALL_DECAY       = "badge-neutral"
+
+# UNAVAILABLE: 冷启动/缺数 → 中性灰
+BADGE_WALL_UNAVAILABLE = "badge-neutral"
+
 # ────────────────── MOMENTUM 专用 Badge ───────────────────────────────────────
 # BULLISH: 上方 VWAP+σ → 红色实心（亚洲龙：红色=涨）
 BADGE_MOM_BULLISH      = "badge-red"
