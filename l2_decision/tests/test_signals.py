@@ -174,6 +174,29 @@ class TestTrapDetector:
         sig = gen.generate(fv)
         assert sig.direction == "NEUTRAL"
 
+    def test_active_trap_respects_k_exit_hysteresis(self):
+        gen = TrapDetector(config={"parameters": {
+            "spot_entry_threshold": 0.001, "opt_fade_threshold": -0.0005,
+            "k_entry": 3, "k_exit": 2, "rocket_exit_pct": 0.05,
+            "iv_chaos_threshold": 0.60, "confidence_base": 0.70,
+            "confidence_decay_per_tick": 0.05,
+        }})
+        enter = _fv(spot_roc_1m=0.003, bbo_imbalance_ewma=0.4, atm_iv=0.18)
+        neutral = _fv(spot_roc_1m=0.0, bbo_imbalance_ewma=0.0, atm_iv=0.18)
+
+        for _ in range(3):
+            sig = gen.generate(enter)
+        assert gen.current_state == "ACTIVE_BULL"
+        assert sig.direction == "BEARISH"
+
+        sig = gen.generate(neutral)
+        assert gen.current_state == "ACTIVE_BULL"
+        assert sig.direction == "BEARISH"
+
+        sig = gen.generate(neutral)
+        assert gen.current_state == "IDLE"
+        assert sig.direction == "NEUTRAL"
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # IVRegimeEngine

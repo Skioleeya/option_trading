@@ -127,3 +127,25 @@ Every agent MUST follow the `notes/context` continuity contract.
 * **Bootstrap Script**: SHOULD use `scripts/new_session.ps1`.
 * **Validation Script**: SHOULD run `scripts/validate_session.ps1` before handoff/exit.
 * **Validation Scope**: Pointer consistency for active session; structural validity minimum for non-active sessions.
+
+---
+## 7. SOP Documentation Sync Contract (Mandatory)
+All agents MUST synchronize `docs/SOP` when behavior-level changes are delivered.
+
+### 7.1 Trigger Conditions (Any = Required)
+* Runtime or contract changes in `l0_ingest/`, `l1_compute/`, `l2_decision/`, `l3_assembly/`, `l4_ui/`, or `app/`.
+* Cross-layer field mapping/name/semantics changes (for example `atm_iv -> spy_atm_iv`, version/timestamp semantics).
+* Hotfixes that alter live behavior, fallback behavior, or diagnostics behavior.
+
+### 7.2 Definition of Done
+* At least one relevant file under `docs/SOP/*.md` MUST be updated in the same change set.
+* Session `handoff.md` MUST list the updated SOP files.
+* Without SOP sync (or explicit exemption), the task is NOT complete.
+
+### 7.3 Strict Exemption
+* Allowed only for non-behavioral changes (tests/comments/formatting/refactor with no runtime effect).
+* `handoff.md` MUST include `SOP-EXEMPT: <reason>` for exemption to be valid.
+
+### 7.4 Validation Gate
+* `scripts/validate_session.ps1` SHOULD enforce this contract using session `meta.yaml` + `handoff.md`.
+* If trigger conditions are met but no `docs/SOP` update and no `SOP-EXEMPT`, validation MUST fail.

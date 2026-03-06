@@ -90,7 +90,7 @@ class FeatureStore:
         self._cache: dict[str, float] = {}
         self._cache_ts: dict[str, float] = {}
         self._enable_cache = enable_cache
-        self._last_snapshot_version: int = -1
+        self._last_snapshot_version: int | None = None
 
     # ── Registry API ─────────────────────────────────────────────────────────
 
@@ -140,19 +140,14 @@ class FeatureStore:
         missing = 0
         now_mono = time.monotonic()
 
-        # Detect snapshot version for cache invalidation
-        snap_version = getattr(snapshot, "version", -1)
-        if snap_version != self._last_snapshot_version:
-            # New snapshot → invalidate all TTL caches
-            self._last_snapshot_version = snap_version
+        # New snapshot version means new market data. Recompute every feature.
+        self._invalidate_cache_on_snapshot_change(snapshot)
 
         for name, spec in self._registry.items():
             # Check TTL cache
-            if self._enable_cache and name in self._cache:
-                age = now_mono - self._cache_ts.get(name, 0.0)
-                if age < spec.ttl_seconds:
-                    features[name] = self._cache[name]
-                    continue
+            if self._is_cache_hit(name, spec, now_mono):
+                features[name] = self._cache[name]
+                continue
 
             # Compute fresh
             try:
@@ -197,7 +192,7 @@ class FeatureStore:
         """Flush the feature cache. Call at session boundary / day change."""
         self._cache.clear()
         self._cache_ts.clear()
-        self._last_snapshot_version = -1
+        self._last_snapshot_version = None
         logger.debug("FeatureStore: cache cleared")
 
     # ── Introspection ─────────────────────────────────────────────────────────
@@ -213,3 +208,46 @@ class FeatureStore:
             }
             for name, spec in self._registry.items()
         }
+
+    def _is_cache_hit(self, name: str, spec: FeatureSpec, now_mono: float) -> bool:
+        if not self._enable_cache or name not in self._cache:
+            return False
+        age = now_mono - self._cache_ts.get(name, 0.0)
+        return age < spec.ttl_seconds
+
+    def _invalidate_cache_on_snapshot_change(self, snapshot: Any) -> None:
+        if not self._enable_cache:
+            return
+
+        snap_version = self._extract_snapshot_version(snapshot)
+        if snap_version is None:
+            return
+
+        if snap_version != self._last_snapshot_version:
+            self._cache.clear()
+            self._cache_ts.clear()
+            self._last_snapshot_version = snap_version
+
+    @staticmethod
+    def _extract_snapshot_version(snapshot: Any) -> int | None:
+        raw_version = getattr(snapshot, "version", None)
+        if raw_version is None and isinstance(snapshot, dict):
+            raw_version = snapshot.get("version")
+
+        if isinstance(raw_version, bool):
+            return None
+        if isinstance(raw_version, int):
+            return raw_version
+        if isinstance(raw_version, float):
+            if not math.isfinite(raw_version):
+                return None
+            return int(raw_version)
+        if isinstance(raw_version, str):
+            raw = raw_version.strip()
+            if not raw:
+                return None
+            try:
+                return int(raw)
+            except ValueError:
+                return None
+        return None

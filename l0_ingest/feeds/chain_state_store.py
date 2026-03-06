@@ -48,19 +48,30 @@ class ChainStateStore:
         # Volume map: strike → total volume (from volume research scan)
         self._volume_map: dict[float, int] = {}
 
+        # Monotonic snapshot version for downstream cache invalidation.
+        self._version: int = 0
+
     # ── Spot ──────────────────────────────────────────────────────────────────
 
     @property
     def spot(self) -> float | None:
         return self._spot
 
+    @property
+    def version(self) -> int:
+        """Monotonic state version used by downstream reactors."""
+        return self._version
+
     def update_spot(self, price: float) -> None:
         """Update the SPY spot price."""
         import math
         if not math.isfinite(price) or price <= 0:
             return
+        if self._spot == price:
+            return
         self._spot = price
         self._last_spot_update = datetime.now(ZoneInfo("US/Eastern"))
+        self._bump_version()
 
     # ── Quote / Depth Events ──────────────────────────────────────────────────
 
@@ -83,6 +94,7 @@ class ChainStateStore:
             return False
 
         # Build or update the entry
+        created = False
         if symbol not in self._chain:
             self._chain[symbol] = {
                 "symbol":         symbol,
@@ -102,6 +114,7 @@ class ChainStateStore:
                 "current_volume": 0.0,
                 "turnover":       0.0,
             }
+            created = True
 
         entry = self._chain[symbol]
         changed = False
@@ -139,6 +152,9 @@ class ChainStateStore:
         entry["last_update"] = datetime.now(ZoneInfo("US/Eastern"))
         self._last_seq[symbol] = event.seq_no
 
+        if created or changed:
+            self._bump_version()
+
         return True
 
     def apply_depth(self, event: CleanDepthEvent) -> None:
@@ -146,10 +162,17 @@ class ChainStateStore:
         if event.symbol not in self._chain:
             return
         entry = self._chain[event.symbol]
+        changed = False
         if event.bid is not None and event.bid > 0:
-            entry["bid"] = event.bid
+            if entry.get("bid") != event.bid:
+                entry["bid"] = event.bid
+                changed = True
         if event.ask is not None and event.ask > 0:
-            entry["ask"] = event.ask
+            if entry.get("ask") != event.ask:
+                entry["ask"] = event.ask
+                changed = True
+        if changed:
+            self._bump_version()
 
     # ── Greeks patch (from GreeksEngine) ─────────────────────────────────────
 
@@ -157,7 +180,14 @@ class ChainStateStore:
         """Write BSM-computed Greeks back into the store."""
         if symbol not in self._chain:
             return
-        self._chain[symbol].update(greeks)
+        entry = self._chain[symbol]
+        changed = False
+        for key, value in greeks.items():
+            if entry.get(key) != value:
+                entry[key] = value
+                changed = True
+        if changed:
+            self._bump_version()
 
     # ── OI EMA smoothing (PP-4) ───────────────────────────────────────────────
 
@@ -168,14 +198,19 @@ class ChainStateStore:
         self._oi_smooth[symbol] = smoothed
         oi_int = int(smoothed)
         if symbol in self._chain:
-            self._chain[symbol]["open_interest"] = oi_int
+            if self._chain[symbol].get("open_interest") != oi_int:
+                self._chain[symbol]["open_interest"] = oi_int
+                self._bump_version()
         return oi_int
 
     # ── Volume map ────────────────────────────────────────────────────────────
 
     def update_volume_map(self, volume_map: dict[float, int]) -> None:
         """Replace the volume map (from volume research scan)."""
+        if self._volume_map == volume_map:
+            return
         self._volume_map = volume_map
+        self._bump_version()
 
     @property
     def volume_map(self) -> dict[float, int]:
@@ -209,8 +244,12 @@ class ChainStateStore:
     def diagnostics(self) -> dict[str, Any]:
         return {
             "chain_size":          len(self._chain),
+            "version":             self._version,
             "spot":                self._spot,
             "last_spot_update":    self._last_spot_update.isoformat() if self._last_spot_update else None,
             "volume_map_size":     len(self._volume_map),
             "oi_smooth_entries":   len(self._oi_smooth),
         }
+
+    def _bump_version(self) -> None:
+        self._version += 1

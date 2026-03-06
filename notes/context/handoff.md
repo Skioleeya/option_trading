@@ -1,12 +1,12 @@
-﻿# Handoff (Index)
+# Handoff (Index)
 
 ## Active Handoff
-- Path: notes/sessions/2026-03-06/1357/1355_alert_panel_l0_l4_hotfix_mod/handoff.md
-- Meta: notes/sessions/2026-03-06/1357/1355_alert_panel_l0_l4_hotfix_mod/meta.yaml
+- Path: notes/sessions/2026-03-06/1541/1646_spy_atm_iv_flow_hotfix_mod/handoff.md
+- Meta: notes/sessions/2026-03-06/1541/1646_spy_atm_iv_flow_hotfix_mod/meta.yaml
 
 ## Latest Outcome
-- Session: 2026-03-06/1357/1355_alert_panel_l0_l4_hotfix_mod
-- Summary: Completed L0-L4 audit + hotfix/modularization for Alert/Command/Debug UI path; fixed Ctrl/Cmd+D debug toggle and shm_stats overlay diagnostics; added helper tests.
+- Session: 2026-03-06/1541/1646_spy_atm_iv_flow_hotfix_mod
+- Summary: Fixed major SPY ATM IV dataflow bug (`l0_version=0` hardcode), synced related `docs/SOP` contracts, and added AGENTS+validator SOP sync enforcement (`docs/SOP` update or `SOP-EXEMPT` now required).
 
 ## Next Session Bootstrap
 1. Read this file.

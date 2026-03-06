@@ -17,6 +17,11 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
+from l2_decision.events.fused_signal_contract import (
+    normalize_signal_components,
+    resolve_iv_regime,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -166,6 +171,8 @@ class DecisionOutput:
     computed_at: datetime
     max_impact: float = 0.0                 # Peak OFII across the entire chain
     raw_telemetry: dict[str, float] = field(default_factory=dict)
+    iv_regime: str | None = None
+    gex_intensity: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -190,26 +197,12 @@ class DecisionOutput:
         The schema matches what the frontend `selectFused` selector expects:
           { direction, confidence, weights, components, regime, gex_intensity, explanation }
         """
-        # Ensure fallback to 0.0 if component dictionary doesn't have confidence
-        components = {}
-        for name, value in self.signal_summary.items():
-            if isinstance(value, dict):
-                direction = value.get("direction", "NEUTRAL")
-                
-                # Special translation for IV Regime which uses generic BULLISH/BEARISH enum 
-                # but semantically means LOW_VOL/HIGH_VOL in the Fusion Engine
-                if name == "iv_regime":
-                    if direction == "BULLISH":
-                        direction = "LOW_VOL"
-                    elif direction == "BEARISH":
-                        direction = "HIGH_VOL"
-
-                components[name] = {
-                    "direction": direction,
-                    "confidence": value.get("confidence", 0.0)
-                }
-            else:
-                components[name] = {"direction": value, "confidence": 0.0}
+        components = normalize_signal_components(self.signal_summary)
+        component_iv_regime = resolve_iv_regime(
+            components.get("iv_regime", {}).get("direction", "NORMAL")
+        )
+        iv_regime = resolve_iv_regime(self.iv_regime) if self.iv_regime else component_iv_regime
+        gex_intensity = str(self.gex_intensity or "NEUTRAL").strip().upper() or "NEUTRAL"
 
         return {
             "fused_signal": {
@@ -217,9 +210,9 @@ class DecisionOutput:
                 "confidence":   round(self.confidence, 4),
                 "weights":      {k: round(v, 4) for k, v in self.fusion_weights.items()},
                 "components":   components,
-                "regime":          "NORMAL",
-                "iv_regime":       components.get("iv_regime", {}).get("direction", "NORMAL"),
-                "gex_intensity":   "NEUTRAL",
+                "regime":          iv_regime,
+                "iv_regime":       iv_regime,
+                "gex_intensity":   gex_intensity,
                 "explanation":     f"Guard: {self.guard_actions[0]}" if self.guard_actions else "",
                 "raw_vpin":        self.raw_telemetry.get("vpin_composite", 0.0),
                 "raw_bbo_imb":     self.raw_telemetry.get("bbo_imbalance_raw", 0.0),

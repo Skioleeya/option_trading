@@ -221,7 +221,7 @@ class OptionChainBuilder:
     async def fetch_chain(self) -> dict[str, Any]:
         """Fetch current chain snapshot (Consumer Interface)."""
         if not self._initialized:
-            return {"spot": None, "chain": [], "as_of": None}
+            return {"spot": None, "chain": [], "as_of": None, "version": self._store.version}
 
         now = datetime.now(ZoneInfo("US/Eastern"))
         try:
@@ -239,6 +239,7 @@ class OptionChainBuilder:
             return {
                 "spot": self._store.spot,
                 "chain": snapshot,
+                "version": self._store.version,
                 "tier2_chain": self._tier2.cache,
                 "tier3_chain": self._tier3.cache,
                 "volume_map": self._store.volume_map,
@@ -262,7 +263,7 @@ class OptionChainBuilder:
             return data
         except Exception as e:
             logger.error(f"[OptionChainBuilder] fetch_chain failure: {e}")
-            return {"spot": self._store.spot, "chain": [], "as_of": now}
+            return {"spot": self._store.spot, "chain": [], "as_of": now, "version": self._store.version}
 
     def _get_shm_val(self, ptr: int) -> int:
         """Helper to read a uint64 from shm without moving internal pointers."""

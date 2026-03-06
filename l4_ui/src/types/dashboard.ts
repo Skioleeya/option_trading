@@ -7,14 +7,14 @@ export type IVVelocityState = 'PAID_MOVE' | 'ORGANIC_GRIND' | 'HOLLOW_RISE' | 'H
 export type VannaFlowState = 'DANGER_ZONE' | 'GRIND_STABLE' | 'NORMAL' | 'VANNA_FLIP' | 'UNAVAILABLE'
 
 export interface FusedSignal {
-    direction: 'BULLISH' | 'BEARISH' | 'NEUTRAL'
+    direction: 'BULLISH' | 'BEARISH' | 'NEUTRAL' | 'HALT'
     confidence: number
-    weights: { iv: number; wall: number; vanna: number; mtf: number; vib?: number }
+    weights: Record<string, number>
     regime: string
     iv_regime: string
     gex_intensity: string
     explanation: string
-    components: Record<string, { direction: string; confidence: number; weight: number }>
+    components: Record<string, { direction: string; confidence: number; weight?: number }>
     // Phase 23/25B: MTF alignment score
     alignment?: number
     align_label?: string

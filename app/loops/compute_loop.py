@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import math
 import time
 from typing import Any
 
@@ -43,6 +44,28 @@ def _build_l1_extra_metadata(snapshot: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _extract_snapshot_version(snapshot: dict[str, Any]) -> int:
+    """Best-effort parse of L0 snapshot version for L1/L2 cache invalidation."""
+    raw = snapshot.get("version")
+    if isinstance(raw, bool):
+        return 0
+    if isinstance(raw, int):
+        return raw
+    if isinstance(raw, float):
+        if not math.isfinite(raw):
+            return 0
+        return int(raw)
+    if isinstance(raw, str):
+        text = raw.strip()
+        if not text:
+            return 0
+        try:
+            return int(text)
+        except ValueError:
+            return 0
+    return 0
+
+
 async def run_compute_loop(ctr: 'AppContainer', state: SharedLoopState) -> None:
     """Compute loop: fetch data → run agents → build payload → save state.
 
@@ -77,7 +100,7 @@ async def run_compute_loop(ctr: 'AppContainer', state: SharedLoopState) -> None:
                 l1_snap = await ctr.l1_reactor.compute(
                     chain_snapshot=snapshot.get("chain", []),
                     spot=snapshot.get("spot", 0.0),
-                    l0_version=0,
+                    l0_version=_extract_snapshot_version(snapshot),
                     iv_cache=iv_cache,
                     spot_at_sync=spot_sync,
                     extra_metadata=_build_l1_extra_metadata(snapshot),

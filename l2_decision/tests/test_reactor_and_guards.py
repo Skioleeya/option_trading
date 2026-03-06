@@ -422,6 +422,15 @@ class TestL2DecisionReactor:
         # Should have at least momentum and flow signals
         assert len(output.signal_summary) > 0
 
+    def test_fused_signal_contract_uses_runtime_regime_and_gex_labels(self):
+        reactor = L2DecisionReactor(enable_audit_disk=False)
+        snap = _FakeSnap()
+        output = asyncio.get_event_loop().run_until_complete(reactor.decide(snap))
+        fused = output.data["fused_signal"]
+        assert fused["regime"] in {"LOW_VOL", "NORMAL", "HIGH_VOL"}
+        assert fused["iv_regime"] == fused["regime"]
+        assert fused["gex_intensity"] == "EXTREME_POSITIVE"
+
     def test_kill_switch_halts_all(self):
         reactor = L2DecisionReactor(enable_audit_disk=False)
         reactor.kill_switch.activate("unit_test_halt")

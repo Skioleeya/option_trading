@@ -46,6 +46,28 @@ function Require-Key {
     }
 }
 
+function Get-MetaQuotedListItems {
+    param(
+        [string]$MetaText,
+        [string]$Key
+    )
+    $pattern = '(?ms)^' + [regex]::Escape($Key) + ':\s*\r?\n(?<body>(?:\s*-\s*".*?"\s*\r?\n)*)'
+    $m = [regex]::Match($MetaText, $pattern)
+    if (-not $m.Success) {
+        return @()
+    }
+
+    $items = @()
+    $lines = $m.Groups['body'].Value -split '\r?\n'
+    foreach ($line in $lines) {
+        $t = $line.Trim()
+        if ($t -match '^\-\s*"(?<v>.*)"\s*$') {
+            $items += $Matches['v']
+        }
+    }
+    return $items
+}
+
 $script:HasError = $false
 $repoRoot = Get-RepoRoot
 Set-Location $repoRoot
@@ -109,6 +131,35 @@ if ($SessionPath -eq $activeSessionPath) {
     if (($handoffText -match [regex]::Escape($expectedMetaPtrA)) -or ($handoffText -match [regex]::Escape($expectedMetaPtrB))) { Pass "handoff meta pointer OK" } else { Fail "handoff meta pointer mismatch" }
 } else {
     Pass "Pointer checks skipped (validating non-active session)"
+}
+
+# SOP sync gate (AGENTS.md §7)
+$metaText = Get-Content $metaPath -Raw
+$changedFiles = @(Get-MetaQuotedListItems -MetaText $metaText -Key "files_changed")
+$runtimeRegex = '^(l0_ingest|l1_compute|l2_decision|l3_assembly|l4_ui|app)/'
+$runtimeChanged = @(
+    $changedFiles | Where-Object {
+        $_ -match $runtimeRegex -and
+        $_ -notmatch '/tests?/' -and
+        $_ -notmatch '^docs/' -and
+        $_ -notmatch '^notes/'
+    }
+)
+$sopChanged = @($changedFiles | Where-Object { $_ -match '^docs/SOP/' })
+$handoffPath = Join-Path $sessionDir "handoff.md"
+$handoffText = if (Test-Path $handoffPath) { Get-Content $handoffPath -Raw } else { "" }
+$hasSopExempt = [regex]::IsMatch($handoffText, '(?im)^\s*SOP-EXEMPT\s*:\s*.+$')
+
+if ($runtimeChanged.Count -gt 0) {
+    if ($sopChanged.Count -gt 0) {
+        Pass "SOP sync gate OK (docs/SOP updated)"
+    } elseif ($hasSopExempt) {
+        Pass "SOP sync gate OK (SOP-EXEMPT present in handoff.md)"
+    } else {
+        Fail "SOP sync gate failed: runtime files changed but no docs/SOP update and no SOP-EXEMPT in handoff.md"
+    }
+} else {
+    Pass "SOP sync gate skipped (no runtime-layer files changed)"
 }
 
 if ($script:HasError) {

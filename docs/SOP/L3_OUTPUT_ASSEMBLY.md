@@ -57,6 +57,11 @@
 - **类型约束**：`head/tail` 应保持数值或可安全转数值的字符串；`status` 应为稳定短字符串（如 `OK`, `DISCONNECTED`）。
 - **回退语义**：当 `shm_stats` 不可用时，L4 可回退读取 `rust_active` 显示 ONLINE/DISCONNECTED，但该回退仅用于可视化兜底，不替代 L3 正常透传职责。
 
+### 2.3 ATM IV 字段透传契约 (2026-03-06 Hotfix)
+- **字段命名桥接**：L1/L3 内部使用 `atm_iv`，对前端输出必须桥接为 `agent_g.data.spy_atm_iv`。
+- **来源一致性**：`spy_atm_iv` 必须来自当前 `EnrichedSnapshot.atm_iv`，不得缓存旧帧值或降级为静态默认值。
+- **版本一致性前提**：上游 `EnrichedSnapshot.version` 必须真实递增，确保 `spy_atm_iv` 对应当前快照而非 TTL 残留。
+
 ### 2.1 MicroStats 状态契约补丁 (2026-03-06)
 
 - **`wall_dyn` 强制映射**：`PayloadAssemblerV2` 必须将 `ui_metrics.wall_migration_data` 归一化后显式映射为 `micro_stats.wall_dyn` 输入，禁止遗漏该桥接步骤。

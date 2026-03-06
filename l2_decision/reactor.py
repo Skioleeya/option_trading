@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import time
 from datetime import datetime
 from typing import Any
@@ -37,6 +38,7 @@ from l2_decision.events.decision_events import (
     GuardedDecision,
     RawSignal,
 )
+from l2_decision.events.fused_signal_contract import classify_gex_intensity
 from l2_decision.feature_store.extractors import build_default_extractors, reset_all_default_extractors
 from l2_decision.feature_store.store import FeatureStore
 from l2_decision.fusion.attention_fusion import AttentionFusionEngine
@@ -211,6 +213,8 @@ class L2DecisionReactor:
             }
 
         peak_impact = features.get("peak_impact", 0.0)
+        net_gex_raw = self._extract_net_gex(snapshot, features)
+        gex_intensity = classify_gex_intensity(net_gex_raw)
 
         output = DecisionOutput(
             direction=guarded.direction,
@@ -227,6 +231,8 @@ class L2DecisionReactor:
             version=version,
             computed_at=datetime.now(_ET),
             raw_telemetry=raw_telemetry_dict,
+            iv_regime=iv_regime_str,
+            gex_intensity=gex_intensity,
         )
 
         # 7. Audit trail (non-blocking append)
@@ -304,3 +310,22 @@ class L2DecisionReactor:
     @property
     def feature_store(self) -> FeatureStore:
         return self._feature_store
+
+    @staticmethod
+    def _extract_net_gex(snapshot: Any, features: FeatureVector) -> float | None:
+        """Best-effort net_gex extraction for fused-signal intensity labeling."""
+        aggregates = getattr(snapshot, "aggregates", None)
+        if aggregates is not None:
+            value = getattr(aggregates, "net_gex", None)
+            if isinstance(value, (int, float)) and math.isfinite(float(value)):
+                return float(value)
+
+        if isinstance(snapshot, dict):
+            value = snapshot.get("net_gex")
+            if isinstance(value, (int, float)) and math.isfinite(float(value)):
+                return float(value)
+
+        normalized = features.get("net_gex_normalized", 0.0)
+        if math.isfinite(normalized):
+            return float(normalized) * 1e9
+        return None

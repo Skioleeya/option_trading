@@ -125,6 +125,7 @@ class TrapDetector(SignalGeneratorBase):
                 self._state_ticks += 1
                 if self._state_ticks >= self._k_entry:
                     self._state = _TrapState.ACTIVE_BULL
+                    self._state_ticks = 0
                     self._current_confidence = self._conf_base
             else:
                 self._state = _TrapState.IDLE
@@ -135,6 +136,7 @@ class TrapDetector(SignalGeneratorBase):
                 self._state_ticks += 1
                 if self._state_ticks >= self._k_entry:
                     self._state = _TrapState.ACTIVE_BEAR
+                    self._state_ticks = 0
                     self._current_confidence = self._conf_base
             else:
                 self._state = _TrapState.IDLE
@@ -142,7 +144,9 @@ class TrapDetector(SignalGeneratorBase):
 
         elif self._state == _TrapState.ACTIVE_BULL:
             # Count exit ticks
-            if not (spot_roc > self._spot_entry and opt_fade_proxy < self._opt_fade):
+            if spot_roc > self._spot_entry and opt_fade_proxy < self._opt_fade:
+                self._state_ticks = 0
+            else:
                 self._state_ticks += 1
                 self._current_confidence = max(0.0, self._current_confidence - self._conf_decay)
                 if self._state_ticks >= self._k_exit:
@@ -150,7 +154,9 @@ class TrapDetector(SignalGeneratorBase):
                     return self._make_neutral(metadata={"exiting_bull_trap": 1.0})
 
         elif self._state == _TrapState.ACTIVE_BEAR:
-            if not (spot_roc < -self._spot_entry and opt_fade_proxy < self._opt_fade):
+            if spot_roc < -self._spot_entry and opt_fade_proxy < self._opt_fade:
+                self._state_ticks = 0
+            else:
                 self._state_ticks += 1
                 self._current_confidence = max(0.0, self._current_confidence - self._conf_decay)
                 if self._state_ticks >= self._k_exit:

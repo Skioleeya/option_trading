@@ -63,6 +63,12 @@
 - **Rust Path (High-Perf)**：负责处理大批量的期权链 Depth/Trade 流，由 Rust 核心直接处理并写入 SPSC 零拷贝共享内存，绕过 Python GIL 限制。
 - **故障隔离与监控**：`OptionSubscriptionManager` 实现了自动双栈接力。系统现已打通全链路诊断，在 L4 仪表盘实时展现 `rust_active` 及 `shm_stats` (IPC Head/Tail) 健康指标。
 
+### 2.6 快照版本契约 (2026-03-06 Hotfix)
+为保证 SPY ATM IV 在 L1/L2 的实时一致性，L0 快照必须满足以下版本契约：
+- **单调版本号**：`ChainStateStore` 维护单调递增 `version`，仅在真实状态变更时递增（spot/quote/depth/greeks/OI/volume_map）。
+- **强制透传**：`OptionChainBuilder.fetch_chain()` 返回 payload 必须包含 `version`，禁止仅传业务字段不传版本。
+- **失效触发语义**：下游 L1/L2 依赖该 `version` 触发缓存失效；若缺失或恒定（例如误传常量 `0`），将导致 `atm_iv` 与 `iv_velocity` 出现陈旧值滞留风险。
+
 ## 3. 分层订阅拉取架构
 
 - **Tier 1 (WebSocket/Dual-Stack)**：ATM 附近核心合约，由 Rust Gateway 实时捕捉（Fallback 至 Python）。

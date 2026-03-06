@@ -1,7 +1,7 @@
-﻿# Open Tasks (Index)
+# Open Tasks (Index)
 
 ## Active Session Tasks
-- Path: notes/sessions/2026-03-06/1357/1355_alert_panel_l0_l4_hotfix_mod/open_tasks.md
+- Path: notes/sessions/2026-03-06/1541/1646_spy_atm_iv_flow_hotfix_mod/open_tasks.md
 
 ## Global Backlog (Cross-Session)
 - [ ] P0: Backend intraday cutoff parity for ATM decay tracker.

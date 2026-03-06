@@ -49,6 +49,11 @@
   - `SweepClustering`: 基于 L0 原生标记的离散扫单进行聚类分析。
   - 所有提取器已完成对 `EnrichedSnapshot` (Arrow RecordBatch 封装) 的全面适配。
 
+### 2.1 版本驱动失效契约 (2026-03-06 Hotfix)
+- **失效前提**：FeatureStore 的 TTL 缓存仅在 `snapshot.version` 变化时强制失效。
+- **关键依赖**：上游必须将 L0 快照版本透传到 `EnrichedSnapshot.version`；若版本缺失/恒定，将产生 `atm_iv`、`iv_velocity_1m` 等特征陈旧风险。
+- **运行规范**：`compute_loop -> L1ComputeReactor` 传参必须使用快照真实版本，不得使用常量占位。
+
 ## 3. 信号生成与融合 (Signals & Fusion)
 
 - **Institutional Upgrade (v4.5 核心逻辑)**：

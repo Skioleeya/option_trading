@@ -83,6 +83,7 @@
 - **MicroStats 墙体状态机模块化**：L3 将 `WALL DYN` 复合态判定拆分为独立状态机模块，`BREACH` 走 urgent 直通，其余状态保留去抖。
 - **跨层语义一致性修复**：修复了 `BREACHED/DECAYING/UNAVAILABLE -> STABLE` 的错误折叠，确保 L1 风险态在 L4 面板保持原始含义。
 - **Vanna 阈值稳健性修复**：`vanna_grind_stable_threshold` 运行时执行负阈值守卫，阻断配置误设导致的状态漂移。
+- **SPY ATM IV 实时链路修复（版本契约）**：修复 `compute_loop` 传入 L1 的 `l0_version` 常量化问题，改为透传 L0 快照版本；`ChainStateStore` 提供单调 `version` 并由 `fetch_chain` 下发，保障 L2 `FeatureStore` 在新快照上强制失效 TTL 缓存，避免 `atm_iv/iv_velocity` 旧值滞留。
 
 ## 远期宏大迁移路线 (Updated 2026 Vision)
 

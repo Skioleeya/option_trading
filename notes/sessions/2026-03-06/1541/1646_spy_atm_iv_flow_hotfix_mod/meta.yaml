@@ -1,0 +1,54 @@
+session_id: "2026-03-06/1541/1646_spy_atm_iv_flow_hotfix_mod"
+title: "spy atm iv realtime dataflow audit and hotfix modularization"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-06 15:41:20 -05:00"
+parent_session: "2026-03-06/1427/1500_decision_engine_l0_l4_hotfix_mod"
+
+branch: "master"
+base_commit: "f587b9d"
+head_commit: "f587b9d"
+
+updated_at_et: "2026-03-06 15:58:26 -05:00"
+
+files_changed:
+  - "l0_ingest/feeds/chain_state_store.py"
+  - "l0_ingest/feeds/option_chain_builder.py"
+  - "app/loops/compute_loop.py"
+  - "l0_ingest/tests/test_chain_state_store.py"
+  - "app/loops/tests/test_compute_loop_helpers.py"
+  - "docs/SOP/SYSTEM_OVERVIEW.md"
+  - "docs/SOP/L0_DATA_FEED.md"
+  - "docs/SOP/L1_LOCAL_COMPUTATION.md"
+  - "docs/SOP/L2_DECISION_ANALYSIS.md"
+  - "docs/SOP/L3_OUTPUT_ASSEMBLY.md"
+  - "AGENTS.md"
+  - "scripts/validate_session.ps1"
+  - "notes/sessions/2026-03-06/1541/1646_spy_atm_iv_flow_hotfix_mod/project_state.md"
+  - "notes/sessions/2026-03-06/1541/1646_spy_atm_iv_flow_hotfix_mod/open_tasks.md"
+  - "notes/sessions/2026-03-06/1541/1646_spy_atm_iv_flow_hotfix_mod/handoff.md"
+  - "notes/sessions/2026-03-06/1541/1646_spy_atm_iv_flow_hotfix_mod/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+commands:
+  - "git status --short --branch"
+  - "./scripts/new_session.ps1 -TaskId \"1646_spy_atm_iv_flow_hotfix_mod\" -Title \"spy atm iv realtime dataflow audit and hotfix modularization\" -Scope \"hotfix + modularization\" -Owner \"Codex\" -ParentSession \"2026-03-06/1427/1500_decision_engine_l0_l4_hotfix_mod\" -UseTimeBucket"
+  - "Get-Content/rg across docs/SOP + L0/L1/L2/L3/L4 files for SPY ATM IV contract tracing"
+  - "./scripts/test/run_pytest.ps1 l0_ingest/tests/test_chain_state_store.py app/loops/tests/test_compute_loop_helpers.py l2_decision/tests/test_feature_store.py::TestFeatureStore::test_cache_invalidated_when_snapshot_version_changes l2_decision/tests/test_feature_store.py::TestFeatureStore::test_atm_iv_updates_immediately_on_version_change -q"
+  - "Get-Content/rg across docs/SOP for version-contract documentation updates"
+  - "./scripts/validate_session.ps1"
+tests_passed:
+  - "pytest: l0_ingest/tests/test_chain_state_store.py"
+  - "pytest: app/loops/tests/test_compute_loop_helpers.py"
+  - "pytest: l2_decision/tests/test_feature_store.py::TestFeatureStore::test_cache_invalidated_when_snapshot_version_changes"
+  - "pytest: l2_decision/tests/test_feature_store.py::TestFeatureStore::test_atm_iv_updates_immediately_on_version_change"
+  - "aggregate: 11 passed"
+tests_failed:
+  - "Not run: scripts/test/test_l0_l4_pipeline.py"
+  - "Not run: full frontend test/build in this session"
+blockers: []
+notes: []
+
+

@@ -222,6 +222,41 @@ class TestFeatureStore:
         store.compute_all(snap)
         assert call_count[0] == 1  # second call used cache
 
+    def test_cache_invalidated_when_snapshot_version_changes(self):
+        call_count = [0]
+
+        def extractor(s):
+            call_count[0] += 1
+            return float(s.spot)
+
+        store = FeatureStore(enable_cache=True)
+        store.register(FeatureSpec("versioned", extractor, ttl_seconds=10.0))
+
+        snap_v1 = _make_snap(spot=100.0, version=1)
+        snap_v2 = _make_snap(spot=200.0, version=2)
+
+        first = store.compute_all(snap_v1)
+        second = store.compute_all(snap_v2)
+
+        assert first.get("versioned") == pytest.approx(100.0)
+        assert second.get("versioned") == pytest.approx(200.0)
+        assert call_count[0] == 2
+
+    def test_atm_iv_updates_immediately_on_version_change(self):
+        store = FeatureStore(enable_cache=True)
+        store.register(FeatureSpec("atm_iv", lambda s: s.aggregates.atm_iv, ttl_seconds=30.0))
+
+        snap_v1 = _make_snap(version=100)
+        snap_v1.aggregates.atm_iv = 0.15
+        snap_v2 = _make_snap(version=101)
+        snap_v2.aggregates.atm_iv = 0.45
+
+        first = store.compute_all(snap_v1)
+        second = store.compute_all(snap_v2)
+
+        assert first.get("atm_iv") == pytest.approx(0.15)
+        assert second.get("atm_iv") == pytest.approx(0.45)
+
     def test_cache_clear(self):
         store = FeatureStore(enable_cache=True)
         store.register(FeatureSpec("f", lambda s: 1.0, ttl_seconds=100.0))
