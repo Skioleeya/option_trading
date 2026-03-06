@@ -8,56 +8,55 @@ Welcome to the SPY 0DTE Options Dashboard project. As an autonomous AI agent wor
 
 ## 1. Architectural Mandates (The Non-Negotiables)
 
-### 1.1 Rust-First Performance
-Our system operates in a microsecond regime. Python is for orchestration and state management; **Rust is for math**.
-*   **Rule**: Any new indicator involving high-frequency data loops (e.g., tick-level processing, Greeks matrices, complex EWMA states) MUST be implemented in `backend/rust_kernel` via PyO3, or at minimum, JIT-compiled via Numba (`bsm_fast.py`).
-*   **Forbid**: Do not write pure Python `for` loops iterating over thousands of data points per tick.
+### 1.1 Rust-Python Hybrid Performance
+Python provides the business agility; **Rust provides the deterministic speed**. 
+*   **Zero-Copy IPC**: All data flow from L0 (Ingest) to L1 (Compute) MUST utilize Apache Arrow RecordBatches over Shared Memory (SHM). 
+*   **No Pure Python Loops**: Any logic iterating over full option chains (e.g., Greeks matrices, GEX aggregation) MUST be vectorized in Rust or CuPy.
+*   **GIL Sovereignty**: Heavy computational blocks within the Python layer MUST be offloaded using `asyncio.to_thread` to prevent blocking the main event loop.
 
-### 1.2 The "No-Ping-Pong" Doctrine
-Oscillations (Ping-Pong) in data flow destroy trader confidence. 
-*   **Rule**: All calculated state transitions MUST utilize hysteresis (dampening) or EWMA smoothing.
-*   **Check**: When adding a new rule to Agent B1 or Agent G, explicitly answer: *"How does this state exit? Will it flicker if the price moves by 0.01?"*
+### 1.2 Resilience & Self-Healing
+Our systems run in high-pressure environments where downtime equals financial loss.
+*   **SHM Handshake**: All shared resource initializations MUST follow the "Create-or-Open" pattern to survive process restarts without manual intervention (refer to `l0_rust/src/lib.rs`).
+*   **Error Silence is Prohibited**: No naked `unwrap()` in Rust; no silent `try-except` in Python. Every failure must be logged with context for the post-mortem.
+*   **Cascading Fallback**: If the High-Perf (Rust) path fails, the system MUST automatically 接力 (relay) to the Stable (Python) path without dropping the L4 broadcast.
 
-### 1.3 Zero-External-Dependency Greeks
-*   **Rule**: We do NOT trust broker Greeks. All Greeks (Delta, Gamma, Vanna, Charm) MUST be calculated locally using our internal BSM models. 
-*   **Why**: We require customized Sticky-Strike skew adjustments and precise Trading-Time-to-Maturity (TTM) calculations specific to 0DTE. Broker calculations are black boxes.
-
----
-
-## 2. Microstructure & Flow Rules
-
-When adding new analytical logic, adhere to these quant principles:
-
-### 2.1 Toxicity Trumps Volume
-Raw volume is meaningless; directionality is everything.
-*   We use **VPIN** (Volume-Synchronized Probability of Informed Trading) with **Dynamic Alpha**. Large institutional prints must disproportionately and instantly impact our models. 
-*   Neutral trades (cross-trades/block trades) must dilute toxicity, not be ignored.
-
-### 2.2 Squeeze Dynamics
-*   **Accelerations matter more than accumulations.** We look for tick-over-tick Volume Acceleration (Delta) to detect sudden bursts of activity against the 60-tick baseline.
-*   **GEX Context is King**: A volume burst is just noise unless combined with negative Net GEX. Negative GEX means dealers are short Gamma and MUST hedge aggressively in the direction of the trend (Dealer Squeeze).
+### 1.3 Schema & Data Contract Integrity
+*   **Strict Alignment**: Data contracts between Rust and Python are the spine of the system. Any modification to `CleanQuoteEvent` or `EnrichedSnapshot` MUST be updated syncronously across both languages to avoid L0-L4 data leaks.
+*   **Metadata Consistency**: Diagnostic metadata (e.g., `rust_active`, `shm_stats`) must be preserved through all layers from L0 to L4 to maintain full-stack observability.
 
 ---
 
-## 3. Data Feed and API Strictures (Longport)
+## 2. Microstructure & Quant Principles
 
-*   **Rate Limits**: Longport API imposes an 8 req/s limit. All REST API requests MUST pass through `longport_limiter` or use the dedicated Poller services.
-*   **Enum Safety**: Never assume API returns integer or string enums reliably. Always validate explicitly (e.g., `trade.direction == TradeDirection.Up or trade_dir == 2 or str(trade_dir) == "2"`).
-*   **Cumulative vs. Interval**: Quote objects return *daily cumulative* volume. You must compute the tick-to-tick delta to find real-time volume.
+### 2.1 Native Threat Pipeline
+*   **Early Bound**: Market impact (OFII) and Sweep detection MUST be computed as close to the wire as possible (L0 Rust Ingest) to provide L2/L3 with pre-filtered "High-Toxicity" signals.
+*   **Greeks Sovereignty**: We do NOT trust broker Greeks. All sensitivities (Delta, Gamma, Vanna, Charm) MUST be calculated locally using our internal BSM/SABR models.
+
+### 2.2 Anti-Oscillation (The No-Ping-Pong Doctrine)
+*   **State Damping**: Signals must utilize EWMA smoothing or threshold hysteresis. 
+*   **Audit**: Every new decision rule must include an exit strategy to prevent high-frequency state flickering (Ping-Pong).
+
+---
+
+## 3. Engineering Rigor & Observability
+
+### 3.1 Structured Observability
+*   **Reactor Logging**: All layer reactors (L0-L3) must implement standardized log markers (e.g., `[Debug] L0 Fetch`, `[L3 Assembler]`).
+*   **Performance Telemetry**: Monitor IPC Head/Tail pointer drift. If L1 falls behind L0 by > 5 ticks, the system is compromised and must trigger a `STALLED` state.
+
+### 3.2 Gold Context Initialization
+*   **SDK Safety**: Initialize Longport SDK explicitly in the PRE-FLIGHT stage to avoid C-level deadlocks with CUDA/Rust modules. Use the `AppContainer` DI pattern for all gateway injections.
 
 ---
 
 ## 4. Development Workflow (OpenSpec Mandate)
 
-We have adopted **OpenSpec** for all spec-driven development tracking. Do NOT use ad-hoc plan files or unstructured markdown for new features. All changes must be processed through the OpenSpec lifecycle.
+We have adopted **OpenSpec** for all spec-driven development tracking. 
 
-### The OpenSpec Lifecycle
-When handling a new task in this repository, you MUST follow these steps:
+1.  **Ideate (`/opsx-explore`)**: Deep-dive into HFT requirements before touching code.
+2.  **Propose (`/opsx-propose`)**: Define the architecture, data contract, and verification plan.
+3.  **Execute (`/opsx-apply`)**: TDD-first. Ensure Rust-first performance and async-safety.
+4.  **Verify**: All fixes must pass the end-to-end `test_l0_l4_pipeline.py`.
+5.  **Archive (`/opsx-archive`)**: Merge specifications only after successful stress-test validation.
 
-1.  **Read the Specs First**: Review `docs/SYSTEM_OVERVIEW.md` and any relevant specifications before brainstorming.
-2.  **Explore & Ideate (`/opsx-explore`)**: If the task is complex, use `/opsx-explore` to analyze the problem, read the codebase, and clarify requirements with the quantitative architect (user) *before* proposing code.
-3.  **Propose Changes (`/opsx-propose`)**: Once the approach is solid, use `/opsx-propose "description"`. This generates structured specifications, designs, and a task breakdown. Await user approval on the proposal.
-4.  **Execute (`/opsx-apply`)**: Once approved, use `/opsx-apply` to implement tasks meticulously. Remember our Rust-first and anti-ping-pong dogmas during execution.
-5.  **Archive (`/opsx-archive`)**: After implementation is complete, verified by test suites (`scripts/test_pingpong_fixes.py`), and approved by the user, use `/opsx-archive` to finalize the change and merge specs into the main documentation.
-
-If you deviate from these standards or attempt to bypass OpenSpec, the system will become unmaintainable under market stress. Code defensively. Operate quantitatively. Follow the spec.
+Failure to follow these SOPs puts institutional capital at risk. Code with the rigor of a Quant. Execute with the speed of Rust.
