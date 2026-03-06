@@ -54,9 +54,9 @@ class MarketDataGateway:
     NOT responsible for: parsing data, managing _chain, or scheduling REST polls.
     """
 
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Config, primary_ctx: QuoteContext | None = None) -> None:
         self._config = config
-        self._ctx: QuoteContext | None = None
+        self._ctx: QuoteContext | None = primary_ctx
         self._loop: asyncio.AbstractEventLoop | None = None
 
         # The single exit point for all WS market events
@@ -71,13 +71,21 @@ class MarketDataGateway:
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     async def connect(self) -> None:
-        """Create QuoteContext and register callbacks.
-
-        Must be called from within the running asyncio event loop so that
-        `asyncio.get_event_loop()` captures the correct loop reference.
-        """
+        """Create QuoteContext and register callbacks."""
         self._loop = asyncio.get_event_loop()
-        self._ctx = QuoteContext(self._config)
+        logger.info("[MarketDataGateway] Connecting to LongPort (Capturing Event Loop)...")
+        
+        if self._ctx is None:
+            try:
+                print("[MarketDataGateway] >>> QuoteContext(self._config) START <<<")
+                self._ctx = QuoteContext(self._config)
+                print("[MarketDataGateway] >>> QuoteContext(self._config) SUCCESS <<<")
+            except Exception as e:
+                print(f"[MarketDataGateway] !!! QuoteContext(self._config) FATAL ERROR: {e}")
+                logger.error(f"[MarketDataGateway] LongPort SDK Initialization Failed: {e}")
+                raise
+        else:
+            print("[MarketDataGateway] >>> Using ALREADY ESTABLISHED Context <<<")
 
         self._ctx.set_on_quote(self._on_quote_cb)
         self._ctx.set_on_depth(self._on_depth_cb)

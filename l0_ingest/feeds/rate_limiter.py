@@ -22,89 +22,108 @@ logger = logging.getLogger(__name__)
 
 
 class APIRateLimiter:
-    """Async Token Bucket Rate Limiter with concurrency cap.
-
-    Combines two controls:
-    1. Token Bucket: ensures average call rate stays ≤ `rate` calls/sec.
-    2. Semaphore: ensures at most `max_concurrent` calls are running at once.
-
-    Both must be satisfied before a call is allowed to proceed.
+    """Async Dual-Token Bucket Rate Limiter.
+    
+    Controls:
+    1. Request Frequency (Reqs/Sec): Max 10/s.
+    2. Symbol Volume (Symbols/Min): Max 400/min (to avoid 301607).
+    3. Concurrency (In-flight): Max 5.
     """
 
     def __init__(
         self,
-        rate: float = 8.0,         # calls/sec — using 8 to give Longport's 10/s a safety margin
-        burst: int = 8,             # max burst tokens available at any time
-        max_concurrent: int = 4,    # max in-flight — using 4 to respect the 5-concurrency limit
+        rate: float = 8.0,            # requests per second
+        burst: int = 10,              # max request burst
+        max_concurrent: int = 4,      # max in-flight
+        symbol_rate: float = 300.0,   # symbols per 60 seconds (conservative 300/min)
+        symbol_burst: int = 400       # max symbol burst
     ) -> None:
         self._rate = rate
         self._burst = burst
         self._tokens = float(burst)
+        
+        self._symbol_rate_per_sec = symbol_rate / 60.0
+        self._symbol_burst = symbol_burst
+        self._symbol_tokens = float(symbol_burst)
+        
         self._last_refill = time.monotonic()
         self._lock = asyncio.Lock()
         self._semaphore = asyncio.Semaphore(max_concurrent)
         self._cooldown_until = 0.0
 
+    @property
+    def tokens(self) -> float:
+        return self._tokens
+
+    @property
+    def symbol_tokens(self) -> float:
+        return self._symbol_tokens
+
+    @property
+    def cooldown_active(self) -> bool:
+        return time.monotonic() < self._cooldown_until
+
     def trigger_cooldown(self, seconds: int = 60) -> None:
-        """Triggers a global quiet period across all REST callers."""
+        """Triggers a global quiet period."""
         new_until = time.monotonic() + seconds
         if new_until > self._cooldown_until:
             self._cooldown_until = new_until
             logger.warning(f"[RateLimiter] Global Cooldown triggered for {seconds}s")
 
-    async def _wait_for_token(self) -> None:
-        """Block until a token is available, then consume one."""
+    async def _wait_for_tokens(self, num_symbols: int = 1) -> None:
+        """Block until both request and symbol tokens are available."""
         while True:
-            # Check global cooldown first
             now = time.monotonic()
             if now < self._cooldown_until:
                 wait_sec = self._cooldown_until - now
-                logger.debug(f"[RateLimiter] Enforcing cooldown, waiting {wait_sec:.1f}s")
+                logger.debug(f"[RateLimiter] Cooldown active, waiting {wait_sec:.1f}s")
                 await asyncio.sleep(wait_sec)
-                async with self._lock:  # BUG-4 FIX: 清空积压 token，防止 cooldown 解除后 burst 重触发 301607
-                    self._tokens = 1.0
+                async with self._lock:
+                    self._tokens = 1.0 # Reset to 1 to prevent burst after cooldown
+                    self._symbol_tokens = 0.0
                     self._last_refill = time.monotonic()
                 continue
 
             async with self._lock:
                 now = time.monotonic()
                 elapsed = now - self._last_refill
-                # Refill tokens based on elapsed time
-                self._tokens = min(
-                    float(self._burst),
-                    self._tokens + elapsed * self._rate,
-                )
+                
+                # Refill Req tokens
+                self._tokens = min(float(self._burst), self._tokens + elapsed * self._rate)
+                # Refill Symbol tokens
+                self._symbol_tokens = min(float(self._symbol_burst), 
+                                        self._symbol_tokens + elapsed * self._symbol_rate_per_sec)
                 self._last_refill = now
 
-                if self._tokens >= 1.0:
+                if self._tokens >= 1.0 and self._symbol_tokens >= num_symbols:
                     self._tokens -= 1.0
-                    return  # Token acquired
+                    self._symbol_tokens -= num_symbols
+                    return 
+                
+                # Calculate sleep time based on which token is missing
+                needed_req = 0.0 if self._tokens >= 1.0 else (1.0 - self._tokens) / self._rate
+                needed_sym = 0.0 if self._symbol_tokens >= num_symbols else (num_symbols - self._symbol_tokens) / self._symbol_rate_per_sec
+                sleep_time = max(needed_req, needed_sym, 0.1)
 
-            # No token available — sleep briefly and retry
-            # Sleep = 1 / rate seconds to wait for the next token
-            await asyncio.sleep(1.0 / self._rate)
+            logger.debug(f"[RateLimiter] Waiting {sleep_time:.2f}s for tokens (reqs={self._tokens:.1f}, syms={self._symbol_tokens:.1f})")
+            await asyncio.sleep(sleep_time)
 
     @asynccontextmanager
-    async def acquire(self):
-        """Context manager: waits for a token and acquires the semaphore.
-
-        Usage:
-            async with limiter.acquire():
-                result = ctx.calc_indexes(...)
-        """
-        await self._wait_for_token()
+    async def acquire(self, weight: int = 1):
+        """wait for tokens based on request weight (number of symbols)."""
+        await self._wait_for_tokens(weight)
         async with self._semaphore:
             yield
 
     def get_dynamic_interval(self) -> int:
-        """Force 1s interval to meet dashboard 1Hz requirement."""
         return 1
+
 from shared.config import settings
 
-# Module-level singleton — shared across all REST callers in the same process
-# Configured for 1Hz updates: Unified via global settings (default 8.0 req/s, 5 concurrency).
 longport_limiter = APIRateLimiter(
     rate=settings.longport_api_rate_limit,
     burst=settings.longport_api_burst,
-    max_concurrent=settings.longport_api_max_concurrent
+    max_concurrent=settings.longport_api_max_concurrent,
+    symbol_rate=400.0, # Target 400 symbols/min
+    symbol_burst=50    # Small burst to force cadence spreading
 )

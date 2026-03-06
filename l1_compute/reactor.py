@@ -136,6 +136,7 @@ class L1ComputeReactor:
         l0_version: int = 0,
         iv_cache: Optional[dict[str, float]] = None,
         spot_at_sync: Optional[dict[str, float]] = None,
+        extra_metadata: Optional[dict[str, Any]] = None,
     ) -> EnrichedSnapshot:
         """Execute the full L1 compute pipeline asynchronously.
 
@@ -164,6 +165,7 @@ class L1ComputeReactor:
                 l0_version,
                 iv_cache,
                 spot_at_sync,
+                extra_metadata or {},
             )
 
         return snapshot
@@ -199,6 +201,7 @@ class L1ComputeReactor:
         l0_version: int,
         iv_cache: dict[str, float],
         spot_at_sync: dict[str, float],
+        extra_metadata: dict[str, Any],
     ) -> EnrichedSnapshot:
         """Full pipeline (runs in thread pool via asyncio.to_thread)."""
         t_start = time.monotonic()
@@ -371,6 +374,7 @@ class L1ComputeReactor:
             ttm_seconds=ttm_seconds,
             version=l0_version,
             computed_at=now,
+            extra_metadata=extra_metadata,
         )
 
     def _build_micro_signals(
@@ -526,4 +530,5 @@ class L1ComputeReactor:
             ttm_seconds=0.0,
             version=l0_version,
             computed_at=now,
+            extra_metadata={},
         )

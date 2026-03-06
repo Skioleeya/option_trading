@@ -65,11 +65,15 @@ class FeedOrchestrator:
     async def run(self) -> None:
         """Main management loop — run as an asyncio Task."""
         self._running = True
+        print("[FeedOrchestrator] >>> MANAGEMENT LOOP STARTED <<<")
         logger.info("[FeedOrchestrator] Management loop started.")
         while self._running:
             try:
+                print("[FeedOrchestrator] >>> TICK START <<<")
                 await self._tick()
+                print("[FeedOrchestrator] >>> TICK SUCCESS <<<")
             except Exception as exc:
+                print(f"[FeedOrchestrator] !!! TICK ERROR: {exc}")
                 logger.error("[FeedOrchestrator] Management loop error: %s", exc)
 
             elapsed = (datetime.now(ZoneInfo("US/Eastern")) - self._start_time).total_seconds()
@@ -138,7 +142,7 @@ class FeedOrchestrator:
         if not needs_refresh:
             return spot
 
-        async with self._limiter.acquire():
+        async with self._limiter.acquire(weight=1):
             try:
                 quotes = ctx.quote(["SPY.US"])
                 if quotes:
@@ -193,7 +197,7 @@ class FeedOrchestrator:
             batch_size = 50
             for i in range(0, len(research_symbols), batch_size):
                 batch = research_symbols[i : i + batch_size]
-                async with self._limiter.acquire():
+                async with self._limiter.acquire(weight=len(batch)):
                     try:
                         quotes = ctx.option_quote(batch)
                         if quotes:

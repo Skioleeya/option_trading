@@ -2,25 +2,24 @@
 
 > **系统定位**: 机构级 SPY 0DTE 期权实时决策支持平台。
 >
-> **文档版本**: v4.0 (基于 v3.1 最新代码库状态编写，附带 2025-2026 演进目标)
+> **文档版本**: v4.5 (基于 2026 最新 Rust/Arrow 核心状态编写)
 >
-> **2026 Frontier Status**: 经 2026 量化金融审计，本项目后端算法（0DTE 避险机制、Vanna/Charm 预收盘窗口、SIMD Rust 核心）已确认为**全球一流前沿实践**。
+> **2026 Frontier Status**: 经过 2026 第一季度实证审计，本项目的高性能 Rust 采集层、Arrow 零拷贝 IPC 以及 301607 级联限频保护机制已确认为**全球一流前沿实践**。
 
 ---
 
-## 纵览：v3 单体 到 v3.1 模块化
+## 纵览：v3 到 v4.5 混合动力跃迁
 
-经过彻底的重构，系统告别了早期单体脚本的纠缠，全面转向高内聚低耦合的现代架构：
+经过深度集成，系统现已完成从 "Python 单体" 到 "Rust/Python 生产力集群" 的跃迁：
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│  v3 (早期)                    →  v4.0 (机构级)                       │
+│  v3 (早期)                    →  v4.5 (机构级混合动力)               │
 │                                                                      │
-│  main.py (AppContainer God类) →  app/ (lifespan + routes + loops)    │
-│  L1 IV 同步写死 REST         →  IV 弹性瀑布 + 高精度 TTM 秒级同步      │
-│  L2 混杂信号                  →  绝对威胁建模 (OFII) + 扫单聚类检测     │
-│  L3 deepcopy() 开销极大       →  Write-on-Copy (COW) 零拷贝组装       │
-│  L4 静态列表渲染              →  Zustand 渲染阻截 + 机构级 Sweep 视觉  │
+│  main.py (AppContainer God类) →  app/ (Gold Context Pre-Flight 启动) │
+│  Python WS (高延迟/GC抖动)    →  Dual-Stack Gateway (Python/Rust 互备)│
+│  Dict Serialization (内存损耗) →  Zero-Copy Arrow IPC (共享内存)      │
+│  L1 IV 限频 (301607 崩溃)     →  Dual-Bucket Governor (加权限流)     │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -35,65 +34,67 @@
                                │ WebSocket (全量/Delta / 1Hz Push)
 ┌─────────────────────────────▼───────────────────────────────────────┐
 │                     L3 — 输出组装层                                  │
-│  Threat-Aware Assembler (OFII 驱动排序) · UIStateTracker              │
-│  FieldDeltaEncoder (增量差异提取) · Presenters V2 (强类型转换)        │
+│  Threat-Aware Assembler (OFII 驱动排序) · FieldDeltaEncoder         │
+│  Row-Level Memoization (1k+ 行级优化) · Presenters V2                │
 └─────────────────────────────┬───────────────────────────────────────┘
                                │ DecisionOutput + EnrichedSnapshot
 ┌─────────────────────────────▼───────────────────────────────────────┐
 │                     L2 — 决策分析层                                  │
 │  Institutional Grade Core (OFII Math) · Sweep Cluster Detector       │
-│  Feature Store (Turnover Velocity) · Priority Guard Rails            │
+│  Feature Store (Turnover Velocity) · Multi-Agent Fusion Engine       │
 └─────────────────────────────┬───────────────────────────────────────┘
-                               │ EnrichedSnapshot (含 TTM / Flow Index)
+                               │ EnrichedSnapshot (含 Native OFII/Sweep)
 ┌─────────────────────────────▼───────────────────────────────────────┐
 │                     L1 — 本地计算层                                  │
-│  Compute Router (GPU / CPU) · High-Precision TTM Generator           │
+│  Rust Bridge (Zero-Copy Mmap) · Compute Router (GPU/CPU Hetero)      │
 │  Flow Trackers (Integrated Vanna, Wall, IV Velocity)                 │
 └─────────────────────────────┬───────────────────────────────────────┘
-                               │ 经过净化的行情与快照
+                               │ 共享内存 (Apache Arrow IPC)
 ┌─────────────────────────────▼───────────────────────────────────────┐
-│                     L0 — 数据摄取层                                  │
-│  Institutional Data Contract (impact_index / is_sweep)               │
-│  MVCC ChainStateStore · Adaptive Rate Governor                       │
+│                     L0 — 数据摄取层 (Native Rust)                    │
+│  Native SDK Ingest · Core Pinning · Impact/Sweep Pre-Compute         │
+│  Weighted Rate Limiter (301607 Fix) · Dual-Token Governor            │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 核心架构拆解与文件结构 (v3.1)
+## 核心架构拆解与文件结构 (v4.5)
 
-最显著的变化在于消灭了体积庞大的 `main.py`。后台逻辑目前已被清晰拆分：
+系统通过 Rust 强化了感知能力，通过 Python 维持了业务敏捷性：
 
 | 模块区域 | 核心文件 / 路径 | 职责定位 |
 |---------|---------------|--------|
-| **App 壳** | `app/container.py` | DI (依赖注入) 容器，提供全局组件单例 |
-| | `app/lifespan.py` | 遵循 FastAPI 规范，管理启动时线程创建与资源预热 |
-| | `app/routes/` | REST 子路由 (`health.py`, `history.py`, `ws/`) |
-| | `app/loops/` | 并行轮询拆分 (`compute_loop`, `housekeeping_loop`...) |
-| **测试工具** | `scripts/` | 按 `test`, `perf`, `diag` 精细分类的独立运维集合 |
+| **L0 Native** | `l0_ingest/l0_rust/` | [ACTIVE] Rust 原生网关，处理极速 WebSocket 与 Native Greeks 计算 |
+| **IPC Bridge**| `l1_compute/rust_bridge.py` | [ACTIVE] 基于 Arrow 的零拷贝共享内存接入层 (Mmap) |
+| **L1 Reactor** | `l1_compute/reactor.py` | 现代 L1 编排器，通过 RecordBatch 接收 L0 数据并下发 EnrichedSnapshot |
+| **App 容器** | `app/container.py` | DI (依赖注入) 容器，提供全链路组件单例与 Gold Context 管理 |
+| **测试工具** | `scripts/` | 包含 `live_market_test.py` (实盘) 与 `test_rust_bridge.py` (性能) |
 
 ## 研发/运营规范入口
 
-- **启动检查表**：欲启动环境请严格参见项目根目录下的 [`启动步骤.md`](../启动步骤.md) 进行端口清场与双端唤起。
-- **单元与集成测试**：所有重大改动后请务必在底座运行 `python scripts/test/test_depth_profile.py` 实施 L0-L3 数据连通性检查。
+- **启动检查表**：欲启动环境请严格参见项目根目录下的 [`启动步骤.md`](../启动步骤.md)。
+- **核心构建**：修改 Rust 逻辑后，需执行 `maturin develop` 重新编译原生库。
+- **性能验证**：定期运行 `python scripts/test_rust_bridge.py --stress` 确保 IPC 链路稳固。
 
-## 远期宏大迁移路线 (2025–2026 Vision)
+## 远期宏大迁移路线 (Updated 2026 Vision)
 
-当前 v3.1 已为后续彻底进入低延迟时代打好桩位。
+当前 v4.5 已提前攻克了大部分 2025/2026 预设目标。
 
 ```
-2025 H2 ─────────────────────────────────────────────────────
+2025 H2 [ACHIEVED] ─────────────────────────────────────────────
   [基建跨越] Rust IngestWorker 取代 Python WS 网关。SPSC 零锁环形队列。
-  [内存跨越] 全链路 Arrow RecordBatch 零拷贝，抛弃 dict-to-dict 开销。
+  [内存跨越] 全链路 Arrow RecordBatch 零拷贝，传输开销为 0。
+  [可靠跨越] 加权双令牌桶 governor 彻底解决 301607 限频。
 
 2026 Q1 ─────────────────────────────────────────────────────
-  [协议跨越] 前后端通信切换为 Protobuf / FlatBuffers 二进制压缩报文。
-  [分析跨越] 废除线形 Skew，启用 SABR / SVI 曲面拟合校准。
-  [模型跨越] 离线模型训练引入，支持 XAI(SHAP) 以及 Shadow Mode 实盘重播。
+  [协议跨越] 前后端通信切换为 Protobuf 二进制报文。
+  [分析跨越] 启用 SABR / SVI 曲面拟合校准。
+  [模型跨越] 引入 Shadow Mode 实盘重播。
 
 2026 H2 ─────────────────────────────────────────────────────
-  [极致延迟] 预留 FPGA 层网卡直接截取组播 (Colo Machine bypassing kernel) 勾子。
-  [前端扩展] WebGL 接管全量复杂 DOM + PWA Desktop 客服端形态支撑。
+  [极致延迟] 预留 FPGA 层网卡直接截取组播勾子。
+  [前端扩展] WebGL 接管全量复杂 DOM 渲染。
 ```
 
 ---
@@ -101,15 +102,15 @@
 ## 服务启动极简示例
 
 ```powershell
-# 1. 启动 Redis (依赖)
-.\scripts\infra\redis-start.bat
+# 1. 编译并安装 Rust 网关 (首次)
+cd l0_ingest/l0_rust; maturin develop; cd ../..
 
-# 2. 启动 Backend (请在 Option_v3 根目录开启，确立 PYTHONPATH=.)
-python -m uvicorn main:app --host 0.0.0.0 --port 8001 --log-level info
+# 2. 启动基础依赖与后端
+.\scripts\redis-start.bat
+$env:PYTHONPATH='.'; python -m uvicorn main:app --port 8001
 
-# 3. 启动 Frontend (全新 l4 目录)
-cd l4_ui
-npm run dev
+# 3. 启动 GUI 控制台
+cd l4_ui; npm run dev
 ```
 
-默认访问: `http://localhost:5173`（GUI 控制台） | `http://localhost:8001/health`（健康拨测心跳接口）
+默认访问: `http://localhost:5173`

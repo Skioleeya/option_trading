@@ -68,6 +68,8 @@ UI 在保持原版 TradingView-style 的冷酷暗色调三栏版式同时（`lib
 ## 4. 连接守护与告警系统 (Monitor & Alerts)
 
 - **ConnectionMonitor**: 接管 WS 心跳。实现状态五连跳 `DISCONNECTED → CONNECTING → AWAIT_STATE → RUNNING → STALLED`。
+- **后端健康指示灯**: L4 `Header` 组件利用 `rust_active` 状态位实时展示 **Rust Ingest Gateway** 是否在线。
+- **IPC 深度诊断**: `DebugOverlay` 现在能够解析并展现共享内存的读写指针 (Head/Tail) 差值，供极端场景下的延迟排查。
 - **AlertEngine**: 纯粹由状态发生位移被动触发。实现了：信号方向翻转防抖告警、GEX 面板正负穿越警告、Spot 刺穿 Call/Put Wall 致命警报。配备 `cooldown` 冷却防打扰。
 - **前端可观测 (L4Rum)**：使用浏览器原生的 `Performance API` 记录首字节至挂载延迟，帧率跌落以及堆内存快照。
 

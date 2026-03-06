@@ -128,6 +128,8 @@ class PayloadAssemblerV2:
             gamma_flip_level=snap_data.flip_level,
             fused_signal=fused_signal_dict,
             micro_structure=micro_structure_dict,
+            rust_active=snap_data.rust_active,
+            shm_stats=snap_data.shm_stats,
         )
 
         logger.debug(
@@ -154,6 +156,11 @@ class PayloadAssemblerV2:
             data.net_gex = float(snapshot.aggregates.net_gex or 0.0)
             data.call_wall = float(snapshot.aggregates.call_wall or 0.0)
             data.put_wall = float(snapshot.aggregates.put_wall or 0.0)
+            
+            # Metadata support (Phase 1 fix: Rust status)
+            metadata = getattr(snapshot, "extra_metadata", {})
+            data.rust_active = bool(metadata.get("rust_active", False))
+            data.shm_stats = metadata.get("shm_stats")
 
         # Legacy dict (from OptionChainBuilder.fetch_chain())
         elif isinstance(snapshot, dict):
@@ -165,6 +172,8 @@ class PayloadAssemblerV2:
             data.call_wall = float(snapshot.get("call_wall", 0.0) or 0.0)
             data.put_wall = float(snapshot.get("put_wall", 0.0) or 0.0)
             data.flip_level = float(snapshot.get("flip_level", 0.0) or 0.0)
+            data.rust_active = bool(snapshot.get("rust_active", False))
+            data.shm_stats = snapshot.get("shm_stats")
 
         # Supplement from L2 decision's data block if available
         if decision is not None:
@@ -336,6 +345,7 @@ class _SnapshotData:
         "fused_signal_direction", "wall_dyn", "wall_migration_data",
         "per_strike_gex", "mtf_consensus", "skew_dynamics", "volume_map",
         "net_gex", "call_wall", "put_wall", "iv_velocity",
+        "rust_active", "shm_stats",
     )
 
     def __init__(self) -> None:
@@ -362,6 +372,8 @@ class _SnapshotData:
         self.call_wall: float = 0.0
         self.put_wall: float = 0.0
         self.iv_velocity: dict | None = None
+        self.rust_active: bool = False
+        self.shm_stats: dict | None = None
 
 
 def _convert_active_option(d: dict) -> Any:

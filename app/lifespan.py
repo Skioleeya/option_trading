@@ -20,8 +20,9 @@ async def lifespan(app: FastAPI):
     """Orchestrates application startup and shutdown via AppContainer."""
     print("[DEBUG] ========== LIFESPAN START ==========")
     
-    # 1. Build Container (No I/O logic, just dependency injection)
-    ctr = build_container()
+    # 1. Build Container (Injecting Early-Bound institutional context)
+    primary_ctx = getattr(app.state, "primary_ctx", None)
+    ctr = build_container(primary_ctx=primary_ctx)
     
     # 2. Sequential I/O Initialization
     await ctr.redis_service.start()

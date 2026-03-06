@@ -134,7 +134,7 @@ class IVBaselineSync:
             for i in range(0, len(symbols), batch_size):
                 batch = symbols[i:i + batch_size]
                 logger.warning(f"[IVSync] Warm-up batch {i//batch_size + 1} STARTING (batch size {len(batch)})...")
-                async with self._limiter.acquire():
+                async with self._limiter.acquire(weight=len(batch)):
                     try:
                         results = self._ctx.calc_indexes(
                             batch, [CalcIndex.ImpliedVolatility, CalcIndex.OpenInterest]
@@ -167,6 +167,7 @@ class IVBaselineSync:
                     except Exception as e:
                         logger.warning(f"[IVSync] Warm-up batch failed: {e}")
                         if "301607" in str(e):
+                            self._limiter.trigger_cooldown(seconds=60)
                             await asyncio.sleep(10.0)
                 
                 # Removed redundant 1.1s sleep: pacing is now handled solely by self._limiter.acquire()
@@ -244,7 +245,7 @@ class IVBaselineSync:
                 # PP-3 FIX: capture spot immediately before each REST call so
                 # each batch's symbols get the most precise spot reference.
                 spot_ref_now = self._get_spot()
-                async with self._limiter.acquire():
+                async with self._limiter.acquire(weight=len(batch)):
                     try:
                         results = self._ctx.calc_indexes(
                             batch, [CalcIndex.ImpliedVolatility, CalcIndex.OpenInterest]

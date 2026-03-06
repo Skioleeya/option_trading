@@ -30,6 +30,8 @@ async def run_compute_loop(ctr: 'AppContainer', state: SharedLoopState) -> None:
             # 1. Fetch snapshot
             snapshot = await ctr.option_chain_builder.fetch_chain()
             snapshot_time = time.monotonic() - start
+            
+            logger.info(f"[Debug] L0 Fetch: rust_active={snapshot.get('rust_active')} shm_stats={snapshot.get('shm_stats') is not None}")
 
             chain_size = len(snapshot.get("chain", []))
             iv_sync_obj = getattr(ctr.option_chain_builder, "_iv_sync", None)
@@ -49,6 +51,10 @@ async def run_compute_loop(ctr: 'AppContainer', state: SharedLoopState) -> None:
                     l0_version=0,
                     iv_cache=iv_cache,
                     spot_at_sync=spot_sync,
+                    extra_metadata={
+                        "rust_active": snapshot.get("rust_active", False),
+                        "shm_stats": snapshot.get("shm_stats")
+                    }
                 )
 
             if l1_snap and ctr.l2_reactor:

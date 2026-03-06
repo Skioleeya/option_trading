@@ -126,6 +126,7 @@ class EnrichedSnapshot:
     ttm_seconds: float
     version: int
     computed_at: datetime
+    extra_metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def atm_iv(self) -> float:
@@ -184,4 +185,6 @@ class EnrichedSnapshot:
             "spot":           self.spot,
             # Refactor: Phase 1 microstructure outputs
             "microstructure": self.microstructure,
+            # Extra metadata (e.g. rust_active)
+            **self.extra_metadata,
         }

@@ -87,7 +87,7 @@ class Tier2Poller:
         valid_dates = []
         for i in range(14):
             check_date = now_date + timedelta(days=i)
-            async with self._limiter.acquire():
+            async with self._limiter.acquire(weight=1):
                 try:
                     chain_info = self._ctx.option_chain_info_by_date("SPY.US", check_date)
                 except Exception as e:
@@ -158,7 +158,7 @@ class Tier2Poller:
             batch_size = 50
             for i in range(0, len(symbols), batch_size):
                 batch = symbols[i:i + batch_size]
-                async with self._limiter.acquire():
+                async with self._limiter.acquire(weight=len(batch)):
                     try:
                         results = self._ctx.calc_indexes(
                             batch, [CalcIndex.Volume, CalcIndex.OpenInterest,

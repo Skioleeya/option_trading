@@ -26,44 +26,25 @@ import numpy as np
 from longport.openapi import QuoteContext, Config, SubType
 from shared.config import settings, convert_to_market_time
 from shared.system.persistent_oi_store import PersistentOIStore
-from l1_compute.analysis.bsm import get_trading_time_to_maturity, skew_adjust_iv
-from l1_compute.analysis.bsm_fast import compute_greeks_batch, warmup as bsm_warmup
 
-from l0_ingest.feeds.subscription_manager import SubscriptionManager
-from l0_ingest.feeds.iv_baseline_sync import IVBaselineSync
-from l0_ingest.feeds.tier2_poller import Tier2Poller
-from l0_ingest.feeds.tier3_poller import Tier3Poller
-from l0_ingest.feeds.rate_limiter import APIRateLimiter
-from l1_compute.analysis.depth_engine import DepthEngine
-from l1_compute.analysis.entropy_filter import EntropyFilter
-
-logger = logging.getLogger(__name__)
-
-
-
-import asyncio
-import logging
-import time
-from datetime import datetime
-from typing import Any
-from zoneinfo import ZoneInfo
-
-from longport.openapi import Config
-
-from shared.config import settings
 from l0_ingest.feeds.market_data_gateway import MarketDataGateway
 from l0_ingest.feeds.sanitization import (
     SanitizationPipeline, RawMarketEvent, CleanQuoteEvent, EventType, _infer_opt_type
 )
 from l0_ingest.feeds.chain_state_store import ChainStateStore
 from l0_ingest.feeds.feed_orchestrator import FeedOrchestrator
-from l1_compute.analysis.greeks_engine import GreeksEngine
-from l0_ingest.feeds.subscription_manager import SubscriptionManager
 from l0_ingest.feeds.iv_baseline_sync import IVBaselineSync
 from l0_ingest.feeds.tier2_poller import Tier2Poller
 from l0_ingest.feeds.tier3_poller import Tier3Poller
+from l0_ingest.feeds.rate_limiter import APIRateLimiter
+from l0_ingest.subscription_manager import OptionSubscriptionManager
+
+from l1_compute.analysis.bsm import get_trading_time_to_maturity, skew_adjust_iv
+from l1_compute.analysis.bsm_fast import compute_greeks_batch, warmup as bsm_warmup
 from l1_compute.analysis.depth_engine import DepthEngine
 from l1_compute.analysis.entropy_filter import EntropyFilter
+from l1_compute.analysis.greeks_engine import GreeksEngine
+from l1_compute.rust_bridge import RustBridge
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +59,8 @@ class OptionChainBuilder:
     - GreeksEngine: Off-thread BSM Compute (Non-blocking)
     """
 
-    def __init__(self) -> None:
+    def __init__(self, primary_ctx: Any = None) -> None:
+        """Initialize all ingestion components with unified rate control."""
         # 1. State Store (The Single Source of Truth)
         self._store = ChainStateStore()
 
@@ -87,28 +69,31 @@ class OptionChainBuilder:
         self._entropy_filter = EntropyFilter(min_entropy=0.05)
         self._sanitizer = SanitizationPipeline()
 
-        # 3. Connectivity Layer (L0)
+        # 3. Connectivity & Metadata Infrastructure (L0)
+        # 1. Configuration & Key Loading
         config = Config(
             app_key=settings.longport_app_key,
             app_secret=settings.longport_app_secret,
             access_token=settings.longport_access_token,
         )
-        self._gateway = MarketDataGateway(config)
-
-        # 4. Polling & Metadata Infrastructure
-        # (Preserved shared rate limiter for REST calls)
-        from l0_ingest.feeds.rate_limiter import APIRateLimiter
+        
+        # 2. Shared Rate Limiter (Institutional Safeguard: 10/s, 5 concurrent)
         self._rate_limiter = APIRateLimiter(
             rate=settings.longport_api_rate_limit,
             burst=settings.longport_api_burst,
             max_concurrent=settings.longport_api_max_concurrent
         )
-        self._sub_mgr = SubscriptionManager(self._rate_limiter)
+
+        # 3. Component Instantiation
+        self._sub_mgr = OptionSubscriptionManager(config, rate_limiter=self._rate_limiter, primary_ctx=primary_ctx)
+        self._gateway = self._sub_mgr.py_gateway
+        self._rust_bridge = RustBridge(self._sub_mgr.shm_path)
+
         self._iv_sync = IVBaselineSync(self._rate_limiter)
         self._tier2 = Tier2Poller(self._rate_limiter)
         self._tier3 = Tier3Poller(self._rate_limiter)
 
-        # 5. Domain Engines
+        # 4. Domain Engines
         self._greeks_engine = GreeksEngine(self._store, self._iv_sync)
         self._orchestrator = FeedOrchestrator(
             self._gateway, self._store, self._sub_mgr, self._iv_sync, self._rate_limiter
@@ -124,13 +109,24 @@ class OptionChainBuilder:
             return
 
         try:
+            print("[OptionChainBuilder] >>> INITIALIZE START <<<")
             # Connect Gateway (captures loop and registers callbacks)
-            await self._gateway.connect()
+            print("[OptionChainBuilder] Connecting SubMgr...")
+            await self._sub_mgr.connect()
+            print("[OptionChainBuilder] Connecting RustBridge...")
+            self._rust_bridge.connect()
 
             # Shared loop config for IV sync hot-start
             self._iv_sync.set_event_loop(asyncio.get_event_loop())
             
+            # Start Pipeline Consumers
+            print("[OptionChainBuilder] Starting Event Consumer Loop...")
+            self._consumer_task = asyncio.create_task(self._event_consumer_loop())
+            print("[OptionChainBuilder] Starting Rust Consumer Loop...")
+            self._rust_consumer_task = asyncio.create_task(self._rust_consumer_loop())
+
             # OI hot-start from disk
+            print("[OptionChainBuilder] Preloading OI...")
             today_str = datetime.now(ZoneInfo("US/Eastern")).strftime("%Y%m%d")
             preloaded_count = self._iv_sync.preload_oi_from_disk(today_str)
             logger.info(f"[OptionChainBuilder] OI preloaded: {preloaded_count} symbols")
@@ -164,9 +160,6 @@ class OptionChainBuilder:
             if settings.enable_tier3_polling:
                 self._tier3.start(self._gateway.quote_ctx, get_spot_fn=lambda: self._store.spot)
 
-            # Start Pipeline Consumer (Processes the Queue)
-            self._consumer_task = asyncio.create_task(self._event_consumer_loop())
-
             # Start Orchestrator Task
             self._mgmt_task = asyncio.create_task(self._orchestrator.run())
 
@@ -174,10 +167,56 @@ class OptionChainBuilder:
             warmup()
 
             self._initialized = True
-            logger.info("[OptionChainBuilder] Modular Pipeline INITIALIZED")
+            logger.info("[OptionChainBuilder] Modular Pipeline INITIALIZED & READY")
+            print("[OptionChainBuilder] >>> ALL CONSUMER LOOPS READY <<<")
         except Exception as e:
             logger.error(f"[OptionChainBuilder] Initialization disaster: {e}")
             raise
+
+    async def _rust_consumer_loop(self) -> None:
+        """The High-Perf Consumer: Shared Memory → RustBridge → Store."""
+        logger.info("[OptionChainBuilder] Rust Consumer Loop ACTIVE")
+        while self._initialized:
+            try:
+                if not self._rust_bridge.mm:
+                    self._rust_bridge.connect()
+                
+                if not self._rust_bridge.mm:
+                    await asyncio.sleep(0.5) # Try again later
+                    continue
+
+                events = list(self._rust_bridge.poll())
+                if events:
+                    # Convert to Arrow for high-speed enrichment (future enhancement)
+                    # batch = self._rust_bridge.to_arrow_batch(events)
+                    
+                    for ev in events:
+                        # Map Rust struct to CleanQuoteEvent
+                        strike = self._sub_mgr.symbol_to_strike.get(ev["symbol"])
+                        if strike is None: continue
+                        
+                        clean = CleanQuoteEvent(
+                            seq_no=ev["seq_no"],
+                            event_type=EventType(ev["event_type"]),
+                            symbol=ev["symbol"],
+                            strike=strike,
+                            opt_type=_infer_opt_type(ev["symbol"]),
+                            bid=ev["bid"] if ev["bid"] > 0 else None,
+                            ask=ev["ask"] if ev["ask"] > 0 else None,
+                            last_price=ev["last_price"] if ev["last_price"] > 0 else None,
+                            volume=ev["volume"],
+                            open_interest=None, # Pulled from REST
+                            implied_volatility=None,
+                            arrival_mono=ev["arrival_mono_ns"] / 1e9,
+                            impact_index=ev["impact_index"],
+                            is_sweep=ev["is_sweep"]
+                        )
+                        self._store.apply_event(clean)
+                
+                await asyncio.sleep(0.001) # Ultra-fast poll
+            except Exception as e:
+                logger.error(f"[OptionChainBuilder] Rust Consumer Loop Error: {e}")
+                await asyncio.sleep(0.1)
 
     async def fetch_chain(self) -> dict[str, Any]:
         """Fetch current chain snapshot (Consumer Interface)."""
@@ -206,10 +245,30 @@ class OptionChainBuilder:
                 "aggregate_greeks": agg,
                 "ttm_seconds": agg.get("ttm_seconds"),
                 "as_of": now,
+                "rust_active": self._rust_bridge.mm is not None,
+                "rust_shm_path": self._rust_bridge.mm_path if self._rust_bridge.mm else None,
+                "shm_stats": {
+                    "head": self._get_shm_val(self._rust_bridge.head_ptr),
+                    "tail": self._get_shm_val(self._rust_bridge.tail_ptr),
+                    "status": "OK" if self._rust_bridge.mm else "DISCONNECTED"
+                },
+                "governor_telemetry": {
+                    "symbols_per_min": self._rate_limiter.symbol_tokens,
+                    "cooldown_active": self._rate_limiter.cooldown_active
+                }
             }
+            if not data["rust_active"]:
+                logger.warning(f"[OptionChainBuilder] fetch_chain status: rust_active=FALSE (self._rust_bridge.mm={self._rust_bridge.mm})")
+            return data
         except Exception as e:
             logger.error(f"[OptionChainBuilder] fetch_chain failure: {e}")
             return {"spot": self._store.spot, "chain": [], "as_of": now}
+
+    def _get_shm_val(self, ptr: int) -> int:
+        """Helper to read a uint64 from shm without moving internal pointers."""
+        if not self._rust_bridge.mm: return 0
+        import struct
+        return struct.unpack("Q", self._rust_bridge.mm[ptr:ptr+8])[0]
 
     def _handle_rest_update(self, symbol: str, item: Any) -> None:
         """Update store from REST-fetched metadata (IV/OI)."""

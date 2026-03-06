@@ -1,8 +1,8 @@
 # L0 — 数据摄取层 (Data Ingestion Layer)
 
-> **定位**: L0 是系统的感官神经元——负责以亚毫秒延迟从市场数据源（Longport WS/REST）采集报价流，经过**数据清洗 → 动态限流 → IV 基准提取 → MVCC 版本化存储**四阶段处理后，输出强类型的 `CleanQuoteEvent` / 链快照供 L1 消费。
+> **定位**: L0 是系统的感官神经元——负责以亚毫秒延迟从市场数据源（Longport WS/REST）采集报价流，通过 **Rust Native Ingest → Zero-Copy IPC → 动态限流 → IV 修复** 四阶段处理后，输出强类型的 `CleanQuoteEvent` / 链快照供 L1 消费。
 >
-> **架构状态 (v4.0)**: 已在 v3.1 基础上完成**机构级升级 (Institutional Upgrade)**。全面支持 0DTE 高精度 $\tau$ (TTM) 传递，并对 `FlowEngineOutput` 契约进行了扩展，支持存储绝对威胁指标 (OFII)。
+> **架构状态 (v4.5)**: 已完成 **Rust 混合动力升级 (Hybrid Core)**。引入了高性能 Rust Ingest Gateway 替代原生 Python WS 接收，并通过 Apache Arrow 格式实现进程间零拷贝数据传输。
 
 ---
 
@@ -13,10 +13,10 @@
                     │               L0 Data Ingestion Mesh             │
                     │                                                  │
   ┌──────────┐      │  ┌──────────────┐   ┌────────────────┐          │
-  │ Longport │──WS──│─▶│ MarketData   │──▶│ SanitizePipeV2 │          │
-  │ WebSockets      │  │   Gateway    │   │ (Type+Stat)    │          │
+  │ Longport │──WS──│─▶│ Rust Ingest  │──▶│ Zero-Copy IPC  │          │
+  │ WebSockets      │  │   Gateway    │   │ (Arrow Shm)    │          │
   └──────────┘      │  └──────────────┘   └───────┬────────┘          │
-                    │                             │                   │
+                    │      (Native)               │                   │
   ┌──────────┐      │                     ┌───────▼────────┐          │
   │ Longport │─REST─│─▶ Tier2/3 Poller ──▶│ ChainStateStore│──▶ L1    │
   │ OpenAPI  │      │                     │ (MVCC / Protect)│          │
@@ -30,40 +30,50 @@
 
 ## 2. 关键组件与机制 (当前已实现)
 
-### 2.1 数据清洗管道 (SanitizePipeV2)
-从简单的 NaN/Inf 过滤升级为严密的多维断路器检测：
-- **无套利条件检测**：拦截 `call_iv > put_iv + X` 同行使价穿透报价。
-- **报价时效 TTL 丢弃**：拦截滞后超过预设阈值（如 300s）的延期 Tick。
-- **Bid/Ask 合理性检测**：丢弃 Bid > Ask 的倒挂脏数据。
-- **OI 突变护栏**：基于 `StatisticalBreaker` 拦截大于 5σ 的极端持仓量跳变。
+### 2.1 Rust Ingest Gateway (Native)
+系统高性能入口，由 Rust 编写并导出 PyO3 绑定：
+- **CPU 核心绑定**：通过 `affinity` 库将采集线程硬绑定至特定物理核心，消除 OS 上下文切换抖动。
+- **并发异步抓取**：利用 `tokio` 运行时并行接收 WebSocket 报文。
+- **原生 Threat 计算**：在接收层面直接计算 `impact_index` (OFII) 和 `is_sweep` (扫单检测)，无需通过 Python。
 
-### 2.2 链状态存储与并发保护 (MVCCChainStateStore)
-当前在 `chain_state_store.py` 内部实现了针对多数据源（WS 高频 + REST 低频）的融合保护机制：
-- **读写快照隔离**：保证 L1 读取时拿到点对点数据一致性（写入复制）。
-- **REST 数据降权防护**：REST 轮询接口仅能补充缺失的次要期权状态，无法覆盖由 WS 创建的活跃价格字段（Bid/Ask/Spot 等）。
+### 2.2 Zero-Copy IPC (Arrow Shared Memory)
+解决了 L0 (Rust) 到 L1 (Python) 的传输瓶颈：
+- **内存映射 (mmap)**：Python 直接访问由 Rust 预分配的 100MB 共享内存环形缓冲区。
+- **SPSC Lock-Free**：单生产者单消费者模式，通过原子 head/tail 指针实现无锁同步。
 
-### 2.3 IV 基线与降级瀑布 (IV Baseline Sync)
+### 2.3 多层限流器 (Dual-Token Bucket Rate Limiter)
+针对 Longport 机构级 API 限制（错误码 301607）进行了深度重构：
+- **频率限流 (Requests/sec)**：限制 REST 调用频率（默认 8/s），防止 SDK 触发惩罚。
+- **容量限流 (Symbols/min)**：新增标的数量维度追踪。每分钟请求的期权标的总数严格限制在 400 个以内。
+- **权重感知**：`IVSync` 批量请求 IV 时，根据 batch size 消耗对应权重的令牌，从根本上杜绝了 301607 限频错误。
+
+### 2.4 IV 基线与降级瀑布 (IV Baseline Sync)
 在 0DTE 高频交易中，IV 是定价锚点。当出现流动性枯竭时，将使用以下级联降级策略求根：
 1. **WS 实时 IV**（满足 TTL 有效期）
 2. **REST 基线 IV**（在 `spot_at_sync` 价格有效偏离阈值内）
 3. **链内中位 IV**（基于前后档推算）
 4. **SABR 外推计算**（交由 L1 层计算）
 
-### 2.4 多层限流器 (Singleton Rate Limiter)
-防止在开盘、剧烈波动导致 REST 轮询雪崩：
-- **Token Bucket + Semaphore**：双轨并发频控（默认 `max_calls=10/s`, `max_concurrent=5`）。
-- **冷却期 (Cooldown) 阻断**：触发死锁或全局限流时进入 60s 冷却禁止访问。
+### 2.5 Gold Context (Early-Bound SDK Initialization)
+针对 LongPort OpenAPI C-Core 的底层库冲突问题（当先于高性能计算库或 Rust 模块加载时会触发进程级死锁），系统实施了 **Gold Context** 初始化方案：
+- **Pre-Flight 优先级**：在 `main.py` 的最早期（PRE-FLIGHT 阶段）直接初始化 `QuoteContext`，抢占全局资源位。
+- **Context Injection**：初始化的 `primary_ctx` 会通过 FastAPI 的 `app.state` 缓存，并在 `AppContainer` 构建时注入到 `MarketDataGateway` 中。
+- **稳定性保障**：该模式彻底解决了 GPU 负载与 SDK 连接之间的资源竞争导致的启动卡死问题。
+
+- **Rust Path (High-Perf)**：负责处理大批量的期权链 Depth/Trade 流，由 Rust 核心直接处理并写入 SPSC 零拷贝共享内存，绕过 Python GIL 限制。
+- **故障隔离与监控**：`OptionSubscriptionManager` 实现了自动双栈接力。系统现已打通全链路诊断，在 L4 仪表盘实时展现 `rust_active` 及 `shm_stats` (IPC Head/Tail) 健康指标。
 
 ## 3. 分层订阅拉取架构
 
-- **Tier 1 (WebSocket)**：ATM 附近 ±N 档位核心合约。自动断线重连、心跳检测。
+- **Tier 1 (WebSocket/Dual-Stack)**：ATM 附近核心合约，由 Rust Gateway 实时捕捉（Fallback 至 Python）。
 - **Tier 2 (次 ATM 轮询)**：用作 Tier1 滑动时的接力池，防踏空。
 - **Tier 3 (远端 OI 轮询)**：深度 OTM 合约每 10 分钟检测，用于宏观支撑位探测。
 
-## 4. 迁移与升级路线图 (2025-2026 Vision)
+## 4. 迁移与升级路线图 (Updated 2026 Vision)
 
-- [x] **Phase 1 (v3.1)**：SanitizePipeline V2 统计断路器 + L0 模块化拆分 + 安全限流。
-- [x] **Phase 2 (v4.0)**：**机构级数据增强**。高精度 `ttm_seconds` 透传；`FlowEngineOutput` 契约加入 `impact_index` (OFII) 与 `is_sweep` 标识。
-- [ ] **Phase 3 (2025 H2)**：Rust IngestWorker (tokio WS) 替代 Python 网关；引入 SPSC Ring Buffer + `rkyv` 零拷贝解码。
-- [ ] **Phase 4 (2026 Q1)**：Arrow RecordBatch 完全接管字典，L0→L1 内存全透明。
-- [ ] **Phase 5 (2026 H2)**：底层针对未来 FPGA/Kernel Bypass 预留协议插槽。
+- [x] **Phase 1 (v3.1)**：L0 模块化拆分 + 安全限流。
+- [x] **Phase 2 (v4.0)**：机构级数据增强。高精度 `ttm_seconds` 透传。
+- [x] **Phase 3 (v4.5)**：**Rust Ingest Gateway (v1.0)**。引入 Native WS 网关 + SPSC 零锁环形队列。
+- [x] **Phase 4 (v4.5)**：**301607 限频攻克**。实现加权双桶限流保护。
+- [ ] **Phase 5 (2026 Q1)**：Arrow RecordBatch 完全接管字典，L0→L1 内存全透明。
+- [ ] **Phase 6 (2026 H2)**：底层针对未来 FPGA/Kernel Bypass 预留协议插槽。

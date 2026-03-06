@@ -43,12 +43,13 @@
                WebSocket / HTTP Client (L4)
 ```
 
-## 2. 写时复制组装 (PayloadAssembler & Target COW)
+## 2. 写时复制组装 (PayloadAssembler V2)
 
+- **写时复制组装 (COW Assembler)**：已升级为 `PayloadAssemblerV2`，支持双向解包（L1 `EnrichedSnapshot` 与 L0 Legacy Dict）。
+- **元数据智能提取**：组装器现具备显式提取 `EnrichedSnapshot.extra_metadata` 的能力。这保证了 L0 生产的诊断信号（如 `rust_active`, `shm_stats`）能无缝进入 `FrozenPayload` 广播路径。
 - **废除 Deepcopy**：新的 `FrozenPayload` 对全链路不可变 (Immutable)。各模块状态组装利用引用传递（尤其是 `active_options` 这种超大会话结构）；一旦生成不可篡改。
-- **兼容模式与微结构聚合**：提供 `to_dict()` 完美对齐老版本 `agent_g.data.*` 的扁平化 JSON Schema，保证 L4 终端无痛切换。
-- **微结构单源化 (v3.1 Refine)**：已废除从 L2 `AgentResult` 提取微观结构指标的不可靠路径。现由 `UIStateTracker` 直接从 L1 `EnrichedSnapshot` 深度提取并聚合所有微观信号（IV Velocity, Wall Migration, Vanna Flow 等），确保了 L3 广播负载的 100% 数据完整性。
-- **异常短路/清零机制**：内部包裹了健壮的 Error Path，一旦某微结构遭遇 NaN 生成错误，返回 `neutral/zero-state` 而非把错误数据推到前台。
+- **兼容模式与扁平化设计**：提供 `to_dict()` 完美对齐老版本 `agent_g.data.*` 的 JSON Schema，同时在顶层注入 `rust_active` 状态位用于前端健康指示灯，保证 L4 终端无痛切换。
+- **微结构状态聚合**：由 `UIStateTracker` 直接从 L1 `EnrichedSnapshot` 提取并聚合所有微观信号（IV Velocity, Wall Migration, Vanna Flow 等），确保了 L3 广播负载的 100% 数据完整性。
 
 ## 3. 分化重构：Presenters V2
 

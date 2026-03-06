@@ -441,6 +441,10 @@ class FrozenPayload:
     # Microstructure: Consolidated state from AgentB via AgentG (Phase 1 Refactor compatibility)
     micro_structure: dict[str, Any] | None = None
 
+    # Rust Ingest Gateway Diagnostics
+    rust_active: bool = False
+    shm_stats: dict[str, Any] | None = None
+
     # Broadcast-layer fields (set by BroadcastGovernor, not PayloadAssembler)
     heartbeat_timestamp: str = ""
     is_stale: bool = False
@@ -481,8 +485,11 @@ class FrozenPayload:
                     "fused_signal":     self.fused_signal,
                     # Microstructure: Phase 1 Refactor support
                     "micro_structure":  self.micro_structure,
-                }
+                },
             },
+            # Top-level Diagnostics
+            "rust_active": self.rust_active,
+            "shm_stats":   self.shm_stats,
         }
 
     def with_broadcast_fields(

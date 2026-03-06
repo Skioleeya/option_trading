@@ -41,10 +41,10 @@ class AppContainer:
     l3_reactor: L3AssemblyReactor | None
 
 
-def build_container() -> AppContainer:
+def build_container(primary_ctx: Any = None) -> AppContainer:
     """Factory function to build the AppContainer without running I/O bindings."""
     # Data layer
-    option_chain_builder = OptionChainBuilder()
+    option_chain_builder = OptionChainBuilder(primary_ctx=primary_ctx)
     redis_service = RedisService()
     historical_store = HistoricalStore(redis_service)
     

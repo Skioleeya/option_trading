@@ -1,0 +1,23 @@
+[package]
+name = "l0_rust"
+version = "0.1.0"
+edition = "2024"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "l0_rust"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.23", features = ["extension-module", "abi3-py310"] }
+longport = "1.0.0"
+arrow = { version = "53.0", features = ["ipc"] }
+tokio = { version = "1.0", features = ["full"] }
+affinity = "0.1"
+crossbeam-utils = "0.8"
+shared_memory = "0.12"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+rkyv = { version = "0.7", features = ["validation"] }
+lazy_static = "1.4"
+num-traits = "0.2"

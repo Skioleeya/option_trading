@@ -2,95 +2,81 @@
 
 > **定位**: L2 是系统的决策中枢——消费 L1 的 Greeks 快照与微观结构信号，运行特征提取与融合引擎，随后通过护栏链（Guard Rails）输出机构级可执行交易信号。
 >
-> **架构状态 (v4.0)**: 已从 "独立信号引擎" 演进为**绝对威胁建模引擎**。新增 `DEGComposer` v4.0 支持绝对威胁指数 (OFII)、空间档位聚类 (Institutional Sweep Detector) 以及动态资金流速特征提取。
->
-> **2026 Frontier Audit**: 经 2026 实证审计，L2 的 Agent 融合权重模型与 0DTE 避险决策链被评定为**全球一流前沿实践**，具备极高的时效性与机构级博弈鲁棒性。
+> **架构状态 (v4.5)**: 决策引擎现已全面对接 **Native Threat Pipeline**。绝对威胁指数 (OFII) 与机构扫单检测已下沉至 L0 (Rust) 原生层计算，L2 负责对这些高频特征进行时序融合、Agent 权重分配以及最终的风险准入控制。
 
 ---
 
 ## 1. 核心决策架构 (当前状态)
 
 ```
-                    L1 EnrichedSnapshot
+                    L1 EnrichedSnapshot (含 Native OFII/Sweep)
                            │
-              ┌────────────▼────────────────┐
-              │     L2DecisionReactor       │ (主决策引擎编排器)
-              │                             │
-              │  ┌───────────────────────┐  │
-              │  │     Feature Store     │  │  ← 统一所有信号特征 (12项指标)
-              │  │   (TTL State Cache)   │  │
-              │  └──────────┬────────────┘  │
-              │             │               │
-              │  ┌──────────▼────────────┐  │  (6 路独立信号生成器)
-              │  │  Signal Generators    │  │  ├─ Momentum    ├─ TrapDetector
-              │  │                       │  │  ├─ IVRegime    ├─ FlowAnalyzer
-              │  │                       │  │  └─ MicroFlow   └─ JumpSentinel
-              │  └──────────┬────────────┘  │
-              │             │               │
-              │  ┌──────────▼────────────┐  │
-              │  │    Fusion Engine      │  │  ← [RuleFusion / AttentionFusion]
-              │  │                       │  │     IV Regime 控制的分支权重融合
-              │  └──────────┬────────────┘  │
-              │             │               │
-              │  ┌──────────▼────────────┐  │
-              │  │   Risk Guard Rails    │  │  ← P0.0 ~ P0.9 优先级秩序短路护栏
-              │  │ (Priority Rail Engine)│  │
-              │  └──────────┬────────────┘  │
-              │             │               │
-              └─────────────┼───────────────┘
-                            │
-            DecisionOutput (不可变 Frozen Dataclass)
+               ┌────────────▼────────────────┐
+               │     L2DecisionReactor       │ (主决策引擎编排器)
+               │                             │
+               │  ┌───────────────────────┐  │
+               │  │     Feature Store     │  │  ← 接收 Native 指标并进行时序平滑
+               │  │   (TTL State Cache)   │  │
+               │  └──────────┬────────────┘  │
+               │             │               │
+               │  ┌──────────▼────────────┐  │  (6 路独立信号生成器)
+               │  │  Signal Generators    │  │  ├─ Momentum    ├─ TrapDetector
+               │  │                       │  │  ├─ IVRegime    ├─ FlowAnalyzer
+               │  │                       │  │  └─ MicroFlow   └─ JumpSentinel
+               │  └──────────┬────────────┘  │
+               │             │               │
+               │  ┌──────────▼────────────┐  │
+               │  │    Fusion Engine      │  │  ← [RuleFusion / AttentionFusion]
+               │  │                       │  │     IV Regime 控制的分支权重融合
+               │  └──────────┬────────────┘  │
+               │             │               │
+               │  ┌──────────▼────────────┐  │
+               │  │   Risk Guard Rails    │  │  ← P0.0 ~ P0.9 优先级秩序短路护栏
+               │  │ (Priority Rail Engine)│  │
+               │  └──────────┬────────────┘  │
+               │             │               │
+               └─────────────┼───────────────┘
+                             │
+             DecisionOutput (不可变 Frozen Dataclass)
 ```
 
 ## 2. 特征存储中心 (Feature Store)
 
 彻底解决了特征提取的散乱问题，将状态化数据的维护隔离在 `feature_store/` 内：
-- **TTL Cache**：管理历史状态与差分（例如计算 1min ROC 需要前序 Tick）。支持 `FeatureSpec` 声明式注册。
-- **内置特征与提取 (v4.0 增强)**：包括动量 ROC、IV 及其速度、VPIN 毒性、Wall 距离、多时间流强度等。
-  - `TurnoverVelocityExtractor`: 实时测量机构资金的秒级流入流出速率 ($/sec)。
-  - `MaxImpactExtractor`: 抓取全链最高绝对威胁点（OFII 代理值）。
-  - 所有提取器已实现对 `EnrichedSnapshot` 对象与 `dict` 的双重兼容。
+- **TTL Cache**：管理历史状态与差分。
+- **内置特征与提取 (v4.5 增强)**：
+  - `NativeOFIIEmitter`: 提取由 Rust 实时计算的绝对威胁点。
+  - `SweepClustering`: 基于 L0 原生标记的离散扫单进行聚类分析。
+  - 所有提取器已完成对 `EnrichedSnapshot` (Arrow RecordBatch 封装) 的全面适配。
 
 ## 3. 信号生成与融合 (Signals & Fusion)
 
-- **Institutional Upgrade (v4.0 核心逻辑)**：
-  - `OFII 算法`: 实现 $OFII = (|Flow_{USD}| \times |\Gamma| \times e^{-\tau}) / MarketDepth$，将相对信号转化为物理威胁规模。
-  - `空间极向聚类 (Sweeps)`: `InstitutionalSweepDetector` 通过扫描 $\pm 2$ 档位活跃度，识别机构多行扫单行为。
+- **Institutional Upgrade (v4.5 核心逻辑)**：
+  - `OFII 算法`: $OFII = (|Flow_{USD}| \times |\Gamma| \times e^{-\tau}) / MarketDepth$。该逻辑现已由 Rust 在接收 Tick 的亚微秒内计算完成。
+  - `Institutional Sweep Detector`: 识别机构跨行扫单行为，其原始标记由 L0 产出，L2 负责多 Tick 聚合验证。
 
-- **信号生成器**：所有模块遵循 `SignalGeneratorBase` 协议，输出纯净的 `[-1.0, 1.0]` 区间 `RawSignal`：
-  - `MomentumSignal`: VWAP 锚定 spot 动量
-  - `TrapDetector`: Bull/bear trap FSM 状态机检测。从 `AgentB1` 逻辑剥离。
-  - `IVRegimeEngine`: ATM IV 环境划分 (Low/Normal/High/Spike)
-  - `FlowAnalyzer` / `MicroFlow`: 整合 L1 推送的 `iv_velocity` 与 `vanna_flow` 聚合结论。
-  - `JumpSentinel`: 波动率突破监控，映射自 L1 `JumpDetector`。
+- **Agent 瘦身 (v4.5 Refine)**：已彻底剥离所有表现层逻辑。L2 Agent 现专注于纯净的决策逻辑。
 
-- **Agent 瘦身 (v3.1/v4.0 Refine)**：已彻底剥离 `AgentB1` 与 `AgentG` 内冗余的 UI 表现层逻辑。L2 Agent 现在仅负责输出核心决策信号，所有 UI 渲染所需的微观结构指标由 L3 层通过 L1 `EnrichedSnapshot` 直接提取，确保了决策层的纯净度。
-
-- **Fusion Engine**：通过 `IVRegime` （波动率制度）判定当前环境，调用对应的融合查表。
-- **Attention Fusion** (储备库): 支持基于 Numpy Softmax 的动态权重机制以及 Platt Scaling 置信度校准。
-
-> **Telemetry Pass-Through (v3.1 特性)**: 在 `L2DecisionReactor` 输出组装 `DecisionOutput` 时，直接内联穿透保留了 L1 算出的底层流指标存至 `raw_telemetry`，并在提取 `.data["fused_signal"]` 时将这些值映射为了 (`raw_vpin`, `raw_bbo_imb`, `raw_vol_accel`)。当局部 Strike 聚合由于无成交触发空值时，内置兜底机制保证了数值能够正确到达前端不受阻断。
+- **Fusion Engine**：通过 `IVRegime` 判定环境并分配权重。
 
 ## 4. 优先级护栏链 (Risk Guard Rails)
 
-融合后的盲目信号必须穿越以下审查（一旦阻断即判定为 HALT 或降级）：
+融合后的信号必须穿越以下护栏链：
 | 优先级 | 护栏名称 | 触发条件 | 动作 |
 |--------|---------|---------|------|
-| **P0.0** | `KillSwitch` | 手动大闸（磁盘持久化 `kill_switch_state.json`） | `HALT_ALL` |
-| **P0.1** | `JumpGate` | 市场剧变 JumpSentinel 触发高阶警报 | 强制转为 `HALT`，冻结信号 |
-| **P0.5** | `VRPVeto` | 波动率溢价倒挂 | 削弱或否决做多信号 |
-| **P0.7** | `Drawdown` | 预留接口：日内回撤限制 | - |
-| **P0.9** | `Session` | 开盘/收盘 15min 流动性荒漠 | 将 Confidence 折扣降低 |
+| **P0.0** | `KillSwitch` | 手动大闸 | `HALT_ALL` |
+| **P0.1** | `JumpGate` | 市场剧变警报 | 强制 `HALT` |
+| **P0.3** | `FrequencyGuard` | 响应 L0 分布式限速状态 | 自动平滑交易频率 |
+| **P0.5** | `VRPVeto` | 波动率溢价倒挂 | 否决多头信号 |
 
 ## 5. 审计记录与 Shadow 验证 (Audit & Shadow)
-- **JSONL 落盘审计**：`DecisionAuditEntry` 会将 12 项特征、6 路原始信号、融合结果和干预护栏状态记入环形队列并写入磁盘。
-- **Shadow Mode 对比**：可通过启用 `shadow_mode=True`，在一侧并行运行被淘汰的 `AgentG` 以持续对比新老引擎的输出重合度（Mismatch rate 监控）。
+- **JSONL 落盘审计**：记录 12 项特征、6 路原始信号、融合结果和护栏干预。
 
 ---
 
-## 6. 迁移与升级路线图 (2025-2026 Vision)
+## 6. 迁移与升级路线图 (Updated 2026 Vision)
 
-- **Phase 1 (v3.1，已完成)**：Feature Store 基础设施 + 6 路信号抽象 + 断路器护栏链。
-- **Phase 2 (2025 H2/Q4)**：Attention Fusion 模型离线训练导出权重加载，替代 Rule 基于经验的权重表。
-- **Phase 3 (2026 Q1)**：SHAP (SHapley Additive exPlanations) 信号可解释性归因，向终端透出“为何做多”。
-- **Phase 4 (2026 Q2)**：历史 Parquet 离线回测框架（直接接入同样代码库的 Signal Generators）。
+- [x] **Phase 1 (v3.1)**：Feature Store 基础设施 + 6 路信号抽象 + 断路器护栏链。
+- [ ] **Phase 2 (2025 H2)**：Attention Fusion 模型离线训练导出权重加载。
+- [ ] **Phase 3 (2026 Q1)**：SHAP 信号可解释性归因。
+- [ ] **Phase 4 (2026 Q2)**：历史 Parquet 离线回测框架（直接接入 L0/L1 仿真流）。

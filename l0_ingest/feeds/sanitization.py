@@ -70,33 +70,38 @@ class CleanQuoteEvent:
     seq_no is globally monotonically increasing, used by ChainStateStore
     to prevent stale REST data from overwriting fresh WS data.
     """
+    # Core Fields (Must come before fields with defaults)
     seq_no: int
     event_type: EventType
     symbol: str
     strike: float
     opt_type: Literal["CALL", "PUT"]
+    arrival_mono: float
 
     # Price / flow
-    bid: float | None
-    ask: float | None
-    last_price: float | None
-    volume: int | None
-    open_interest: int | None
+    bid: float | None = None
+    ask: float | None = None
+    last_price: float | None = None
+    volume: int | None = None
+    open_interest: int | None = None
 
     # Volatility (already scaled to decimal, e.g. 0.18 for 18% IV)
-    implied_volatility: float | None
-    iv_timestamp: float | None          # time.monotonic() at which IV arrived
+    implied_volatility: float | None = None
+    iv_timestamp: float | None = None          # time.monotonic() at which IV arrived
 
     # Greeks from LongPort (rarely populated on WS pushes)
-    delta: float | None
-    gamma: float | None
-    theta: float | None
-    vega: float | None
+    delta: float | None = None
+    gamma: float | None = None
+    theta: float | None = None
+    vega: float | None = None
 
     # Misc
-    current_volume: float | None
-    turnover: float | None
-    arrival_mono: float
+    current_volume: float | None = None
+    turnover: float | None = None
+
+    # High-Perf Extensions (Native Rust Path)
+    impact_index: float | None = 0.0
+    is_sweep: bool | None = False
 
 
 @dataclass(frozen=True)
@@ -280,6 +285,8 @@ class SanitizationPipeline:
             current_volume     = cv,
             turnover           = turnover,
             arrival_mono       = raw.arrival_mono,
+            impact_index       = 0.0,
+            is_sweep           = False,
         )
 
     def parse_depth(self, raw: RawMarketEvent) -> CleanDepthEvent | None:
