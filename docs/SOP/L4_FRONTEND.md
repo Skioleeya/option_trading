@@ -66,6 +66,13 @@ UI 在保持原版 TradingView-style 的冷酷暗色调三栏版式同时（`lib
 - **右栏**：多重决策融合器 (`DecisionEngine`), 核心博弈极向 (`TacticalTriad`), Skew 曲率 (`SkewDynamics`), 资金流 (`MtfFlow`), 活跃榜 (`ActiveOptions` - **v4.0 增强**: 支持 Impact 排序与 Sweep 呼吸灯)
 - **隐藏诊断面 (v3.1)**: 引入了名为 **Hack Matrix** 的底层 L1 SIMD 数据诊断大屏（`DebugOverlay.tsx`），通过 `Ctrl+D` 热键或 `CommandPalette` (`Ctrl+K`) 唤出，供量化研究员核对底层算力。另外 `DecisionEngine` 组件内也会将微观值以 `[7px]` 极小字体暗化挂载展示（注：严格使用 `??` 和 `!== undefined` 来确保合法空值 `0.0` 正确渲染，防止被 JS 弱类型逻辑隐藏）。
 
+### 3.3 DebugOverlay / CommandPalette 热修契约 (2026-03-06)
+
+- **全局热键契约**：`Ctrl/Cmd + D` 必须在运行时直接触发 `l4:toggle_debug_overlay` 事件（DEV 模式），不能仅停留在命令面板文案或命令项定义。
+- **Hook 顺序安全**：`DebugOverlay` 中所有 Hooks（含 `useMemo`）必须在任何早返回（`if (!open) return null`）之前调用，禁止条件化 Hook，避免 React Hook 顺序错误。
+- **诊断字段契约**：`DebugOverlay` 必须消费 `payload.shm_stats.status/head/tail` 并派生 `head-tail`，用于 IPC 堵塞排查；`shm_stats` 缺失时可回退到 `rust_active` 推断状态。
+- **模块边界**：搜索、热键、诊断数据归一化应拆为独立模块（`commandPaletteSearch`、`commandPaletteHotkeys`、`debugOverlayModel`），组件层仅负责展示与事件绑定。
+
 ### 3.1 WallMigration 颜色与状态治理 (2026-03-06)
 - **Token 单一来源**：`WallMigration` 必须通过专用主题模块统一管理颜色/边框/阴影 token，禁止组件内散落硬编码状态色。
 - **亚洲风格一致性**：严格执行 `红涨绿跌`（Call/上涨=Red，Put/下行=Green），并与 `theme.ts`/`index.css` 变量保持一致。
@@ -86,6 +93,7 @@ UI 在保持原版 TradingView-style 的冷酷暗色调三栏版式同时（`lib
 - **ConnectionMonitor**: 接管 WS 心跳。实现状态五连跳 `DISCONNECTED → CONNECTING → AWAIT_STATE → RUNNING → STALLED`。
 - **后端健康指示灯**: L4 `Header` 组件利用 `rust_active` 状态位实时展示 **Rust Ingest Gateway** 是否在线。
 - **IPC 深度诊断**: `DebugOverlay` 现在能够解析并展现共享内存的读写指针 (Head/Tail) 差值，供极端场景下的延迟排查。
+- **前后端排障边界**: 若出现 Hook 顺序报错（如 `Rendered more hooks than during the previous render`），属于 L4 前端渲染错误，不应通过重启后端解决；优先重启前端 dev server 并检查组件 Hook 调用顺序。
 - **AlertEngine**: 纯粹由状态发生位移被动触发。实现了：信号方向翻转防抖告警、GEX 面板正负穿越警告、Spot 刺穿 Call/Put Wall 致命警报。配备 `cooldown` 冷却防打扰。
 - **前端可观测 (L4Rum)**：使用浏览器原生的 `Performance API` 记录首字节至挂载延迟，帧率跌落以及堆内存快照。
 

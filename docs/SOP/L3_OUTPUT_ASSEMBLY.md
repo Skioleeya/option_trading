@@ -51,6 +51,12 @@
 - **兼容模式与扁平化设计**：提供 `to_dict()` 完美对齐老版本 `agent_g.data.*` 的 JSON Schema，同时在顶层注入 `rust_active` 状态位用于前端健康指示灯，保证 L4 终端无痛切换。
 - **微结构状态聚合**：由 `UIStateTracker` 直接从 L1 `EnrichedSnapshot` 提取并聚合所有微观信号（IV Velocity, Wall Migration, Vanna Flow 等），确保了 L3 广播负载的 100% 数据完整性。
 
+### 2.2 IPC 诊断元数据契约 (2026-03-06)
+
+- **字段完整性**：L3 透传到 L4 的 `shm_stats` 至少包含 `status`, `head`, `tail` 三个键；缺失任一关键键会削弱 DebugOverlay 的堵塞诊断能力。
+- **类型约束**：`head/tail` 应保持数值或可安全转数值的字符串；`status` 应为稳定短字符串（如 `OK`, `DISCONNECTED`）。
+- **回退语义**：当 `shm_stats` 不可用时，L4 可回退读取 `rust_active` 显示 ONLINE/DISCONNECTED，但该回退仅用于可视化兜底，不替代 L3 正常透传职责。
+
 ### 2.1 MicroStats 状态契约补丁 (2026-03-06)
 
 - **`wall_dyn` 强制映射**：`PayloadAssemblerV2` 必须将 `ui_metrics.wall_migration_data` 归一化后显式映射为 `micro_stats.wall_dyn` 输入，禁止遗漏该桥接步骤。
