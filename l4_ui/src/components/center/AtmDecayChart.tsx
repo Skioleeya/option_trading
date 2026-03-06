@@ -8,7 +8,7 @@
  *   import { createChart, LineSeries } from 'lightweight-charts'
  *   const series = chart.addSeries(LineSeries, { color: 'red' })
  */
-import React, { useEffect, useRef, memo } from 'react'
+import React, { useEffect, useRef, memo, useState } from 'react'
 import {
     createChart,
     ColorType,
@@ -32,12 +32,21 @@ interface Props {
     data?: AtmDecay[]
 }
 
+type DisplayMode = 'smoothed' | 'raw' | 'both'
+
 // ── Theme ──────────────────────────────────────────────────────────────────────
 const BG = '#060606'
 const GRID = 'rgba(255,255,255,0.04)'
 const HAIR = '#52525b'
 const TEXT = '#71717a'
 const BORDER = '#27272a'
+const STORAGE_KEY = 'l4.atm_decay_display_mode'
+const SMOOTHING_ALPHA = 0.24
+const MODE_ITEMS: { key: DisplayMode; label: string }[] = [
+    { key: 'smoothed', label: 'SMTH' },
+    { key: 'raw', label: 'RAW' },
+    { key: 'both', label: 'BOTH' },
+]
 
 const SERIES_CFG = [
     { key: 'straddle_pct' as const, label: 'STRADDLE', color: '#f59e0b' },
@@ -48,6 +57,14 @@ const SERIES_CFG = [
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const toUnixSec = (ts: string) => Math.floor(new Date(ts).getTime() / 1000)
 
+function hexToRgba(hex: string, alpha: number): string {
+    const h = hex.replace('#', '')
+    if (h.length !== 6) return hex
+    const r = parseInt(h.slice(0, 2), 16)
+    const g = parseInt(h.slice(2, 4), 16)
+    const b = parseInt(h.slice(4, 6), 16)
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
 
 /**
  * Gate: keep only intraday ticks.
@@ -77,22 +94,41 @@ function buildPoints(data: ExtendedAtmDecay[], key: keyof AtmDecay) {
         .sort((a, b) => (a.time as number) - (b.time as number))
 }
 
+function buildSmoothedPoints(points: { time: Time; value: number }[], alpha: number) {
+    if (!points.length) return points
+    let ewma = points[0].value
+    return points.map((p, idx) => {
+        if (idx === 0) return p
+        ewma = alpha * p.value + (1 - alpha) * ewma
+        return { time: p.time, value: ewma }
+    })
+}
+
+function getInitialDisplayMode(): DisplayMode {
+    if (typeof window === 'undefined') return 'smoothed'
+    try {
+        const v = window.localStorage.getItem(STORAGE_KEY)
+        if (v === 'smoothed' || v === 'raw' || v === 'both') return v
+    } catch {
+        // no-op
+    }
+    return 'smoothed'
+}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
     const storeData = useDashboardStore(selectAtmHistory) as ExtendedAtmDecay[]
     const data = storeData.length > 0 ? storeData : (propData as ExtendedAtmDecay[] ?? [])
+    const [displayMode, setDisplayMode] = useState<DisplayMode>(getInitialDisplayMode)
     const containerRef = useRef<HTMLDivElement>(null)
     const chartRef = useRef<IChartApi | null>(null)
-    // Using any for the series reference since the types for addSeries in v5 
-    // vs the ISeriesApi interface have some strict generic variance
-    const seriesRef = useRef<any[]>([])
-    const markersPluginRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null)
+    // Using any for series refs because v5 addSeries() generic variance is strict.
+    const rawSeriesRef = useRef<any[]>([])
+    const smoothSeriesRef = useRef<any[]>([])
+    const rawMarkersPluginRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null)
+    const smoothMarkersPluginRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null)
     const markersRef = useRef<SeriesMarker<Time>[]>([])
     const initialised = useRef(false)
-    const prevLen = useRef(0)
-    const firstTimeRef = useRef<string | null>(null)
-    const lastTimeRef = useRef<number>(0)
     const hasAddedCliff = useRef(false)
 
     // ── Chart init (mount only) ──────────────────────────────────────────────
@@ -140,13 +176,27 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
             },
         })
 
-        // Official v5 API: chart.addSeries(LineSeries, options)
-        // Returns ISeriesApi<"Line", Time, SeriesDataItemTypeMap<Time>["Line"], ...>
-        const srs = SERIES_CFG.map(({ color }) =>
+        const rawSeries = SERIES_CFG.map(({ color }) =>
             chart.addSeries(LineSeries, {
                 color,
-                lineWidth: 1, // Adjusted to 1px width
-                lineType: LineType.WithSteps,
+                lineWidth: 1,
+                lineType: LineType.Simple,
+                priceLineVisible: false,
+                lastValueVisible: false,
+                crosshairMarkerVisible: false,
+                priceFormat: {
+                    type: 'custom',
+                    formatter: (p: number) => `${p > 0 ? '+' : ''}${p.toFixed(1)}%`,
+                    minMove: 0.1,
+                },
+            })
+        )
+
+        const smoothSeries = SERIES_CFG.map(({ color }) =>
+            chart.addSeries(LineSeries, {
+                color,
+                lineWidth: 2,
+                lineType: LineType.Simple,
                 priceLineVisible: true,
                 priceLineStyle: LineStyle.Dashed,
                 priceLineWidth: 1,
@@ -162,7 +212,7 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
         )
 
         // Zero-axis reference price line
-        srs[0]?.createPriceLine({
+        smoothSeries[0]?.createPriceLine({
             price: 0,
             color: 'rgba(255,255,255,0.18)',
             lineWidth: 1,
@@ -171,11 +221,14 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
         })
 
         chartRef.current = chart
-        seriesRef.current = srs
+        rawSeriesRef.current = rawSeries
+        smoothSeriesRef.current = smoothSeries
 
-        // Initialize markers plugin on the primary series
-        if (srs[0]) {
-            markersPluginRef.current = createSeriesMarkers(srs[0])
+        if (rawSeries[0]) {
+            rawMarkersPluginRef.current = createSeriesMarkers(rawSeries[0])
+        }
+        if (smoothSeries[0]) {
+            smoothMarkersPluginRef.current = createSeriesMarkers(smoothSeries[0])
         }
 
         // Responsive resize via ResizeObserver
@@ -191,167 +244,127 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
             ro.disconnect()
             chart.remove()
             chartRef.current = null
-            seriesRef.current = []
-            markersPluginRef.current?.detach()
-            markersPluginRef.current = null
+            rawSeriesRef.current = []
+            smoothSeriesRef.current = []
+            rawMarkersPluginRef.current?.detach()
+            smoothMarkersPluginRef.current?.detach()
+            rawMarkersPluginRef.current = null
+            smoothMarkersPluginRef.current = null
             markersRef.current = []
             initialised.current = false
-            prevLen.current = 0
-            lastTimeRef.current = 0
         }
     }, [])
+
+    // Persist display mode preference
+    useEffect(() => {
+        try {
+            window.localStorage.setItem(STORAGE_KEY, displayMode)
+        } catch {
+            // no-op
+        }
+    }, [displayMode])
+
+    // Display mode controls visibility and styling only (data remains raw in store/backend)
+    useEffect(() => {
+        const rawSeries = rawSeriesRef.current
+        const smoothSeries = smoothSeriesRef.current
+        if (!rawSeries.length || !smoothSeries.length) return
+
+        const rawVisible = displayMode === 'raw' || displayMode === 'both'
+        const smoothVisible = displayMode === 'smoothed' || displayMode === 'both'
+
+        SERIES_CFG.forEach(({ color }, i) => {
+            const raw = rawSeries[i]
+            const smooth = smoothSeries[i]
+            if (raw && typeof raw.applyOptions === 'function') {
+                raw.applyOptions({
+                    visible: rawVisible,
+                    color: displayMode === 'both' ? hexToRgba(color, 0.35) : color,
+                    priceLineVisible: displayMode === 'raw',
+                    lastValueVisible: displayMode === 'raw',
+                })
+            }
+            if (smooth && typeof smooth.applyOptions === 'function') {
+                smooth.applyOptions({
+                    visible: smoothVisible,
+                    color,
+                    priceLineVisible: displayMode !== 'raw',
+                    lastValueVisible: displayMode !== 'raw',
+                })
+            }
+        })
+    }, [displayMode])
 
     // ── Data sync ─────────────────────────────────────────────────────────────
     useEffect(() => {
         const chart = chartRef.current
-        const srs = seriesRef.current
-        if (!chart || !srs.length || !data.length) return
+        const rawSeries = rawSeriesRef.current
+        const smoothSeries = smoothSeriesRef.current
+        if (!chart || !rawSeries.length || !smoothSeries.length || !data.length) return
 
         // OPTIMIZATION: Skip chart updates if tab is hidden
         if (document.visibilityState === 'hidden') {
-            prevLen.current = data.length
             return
         }
 
-        // Determine if we need a full reload vs incremental update.
-        // Re-run full load if:
-        // 1. Not initialized
-        // 2. Data size jumped significantly (e.g. history arrived)
-        // 3. The first data point changed (e.g. history prepended)
-        const isJump = data.length > prevLen.current + 5
-        const isFirstPointChanged = data[0]?.timestamp !== firstTimeRef.current
+        let anyDataLoaded = false
+        SERIES_CFG.forEach(({ key }, i) => {
+            const rawPts = buildPoints(data, key)
+            if (!rawPts.length) return
 
-        if (!initialised.current || isJump || isFirstPointChanged) {
-            let anyDataLoaded = false
-            const nextMarkers: SeriesMarker<Time>[] = []
+            const smoothPts = buildSmoothedPoints(rawPts, SMOOTHING_ALPHA)
+            const raw = rawSeries[i]
+            const smooth = smoothSeries[i]
 
-            // Reset state for full reload
-            lastTimeRef.current = 0
-            hasAddedCliff.current = false
-            firstTimeRef.current = data[0]?.timestamp ?? null
-
-            SERIES_CFG.forEach(({ key }, i) => {
-                const pts = buildPoints(data, key)
-                if (pts.length) {
-                    const series = srs[i];
-                    if (series && typeof series.setData === 'function') {
-                        series.setData(pts)
-                    } else {
-                        console.warn(`[AtmDecayChart] series[${i}] has no setData method`, series);
-                    }
-                    const lastPt = pts[pts.length - 1]
-                    if (lastPt) {
-                        lastTimeRef.current = Math.max(lastTimeRef.current, lastPt.time as number)
-                    }
-                    anyDataLoaded = true
-                }
-            })
-
-            data.forEach(d => {
-                if (!d.timestamp || !isMarketHours(d.timestamp)) return
-
-                const t = toUnixSec(d.timestamp) as Time
-                const hhmm = getHHMM(d.timestamp)
-
-                if (d.strike_changed) {
-                    nextMarkers.push({
-                        time: t,
-                        position: 'aboveBar',
-                        color: '#fbbf24',
-                        shape: 'arrowDown',
-                        text: `Strike Switch`,
-                    })
-                }
-
-                if (!hasAddedCliff.current && hhmm >= 1530 && hhmm < 1600) {
-                    nextMarkers.push({
-                        time: t,
-                        position: 'aboveBar',
-                        color: '#ef4444',
-                        shape: 'arrowDown',
-                        text: `15:30 CLIFF`,
-                    })
-                    hasAddedCliff.current = true
-                }
-            })
-
-            if (anyDataLoaded) {
-                if (nextMarkers.length > 0) {
-                    const plugin = markersPluginRef.current;
-                    if (plugin && typeof plugin.setMarkers === 'function') {
-                        plugin.setMarkers(nextMarkers)
-                        markersRef.current = nextMarkers
-                    } else {
-                        console.error('[AtmDecayChart] setMarkers failed on mount: markers plugin missing', plugin);
-                    }
-                }
-                chart.timeScale().fitContent()
-                initialised.current = true
-                prevLen.current = data.length
+            if (raw && typeof raw.setData === 'function') {
+                raw.setData(rawPts)
             }
-            // If no data yet, leave initialised=false so we retry on next tick
-        } else {
-            // Incremental tick append
-            const delta = data.length - prevLen.current
-            if (delta <= 0) return
-            const newTicks = data.slice(-delta)
+            if (smooth && typeof smooth.setData === 'function') {
+                smooth.setData(smoothPts)
+            }
+            anyDataLoaded = true
+        })
 
-            let updatedMarkers = false
-            const nextMarkers = [...markersRef.current]
+        const nextMarkers: SeriesMarker<Time>[] = []
+        hasAddedCliff.current = false
+        data.forEach(d => {
+            if (!d.timestamp || !isMarketHours(d.timestamp)) return
+            const t = toUnixSec(d.timestamp) as Time
+            const hhmm = getHHMM(d.timestamp)
 
-            newTicks.forEach(tick => {
-                if (!tick.timestamp || !isMarketHours(tick.timestamp)) return
-                const t = toUnixSec(tick.timestamp)
-                if (t <= lastTimeRef.current) return // CHRONOLOGICAL GUARD
-
-                SERIES_CFG.forEach(({ key }, i) => {
-                    const v = tick[key]
-                    if (v != null) {
-                        const series = srs[i];
-                        if (series && typeof series.update === 'function') {
-                            series.update({ time: t as Time, value: (v as number) * 100 })
-                        }
-                    }
+            if (d.strike_changed) {
+                nextMarkers.push({
+                    time: t,
+                    position: 'aboveBar',
+                    color: '#fbbf24',
+                    shape: 'arrowDown',
+                    text: `Strike Switch`,
                 })
-
-                if (tick.strike_changed) {
-                    nextMarkers.push({
-                        time: t as Time,
-                        position: 'aboveBar',
-                        color: '#fbbf24',
-                        shape: 'arrowDown',
-                        text: `Strike Switch`,
-                    })
-                    updatedMarkers = true
-                }
-
-                const hhmm = getHHMM(tick.timestamp)
-                if (!hasAddedCliff.current && hhmm >= 1530 && hhmm < 1600) {
-                    nextMarkers.push({
-                        time: t as Time,
-                        position: 'aboveBar',
-                        color: '#ef4444',
-                        shape: 'arrowDown',
-                        text: `15:30 CLIFF`,
-                    })
-                    hasAddedCliff.current = true
-                    updatedMarkers = true
-                }
-
-                lastTimeRef.current = t
-            })
-
-            if (updatedMarkers) {
-                const plugin = markersPluginRef.current;
-                if (plugin && typeof plugin.setMarkers === 'function') {
-                    plugin.setMarkers(nextMarkers)
-                    markersRef.current = nextMarkers
-                } else {
-                    console.error('[AtmDecayChart] setMarkers failed on update: markers plugin missing', plugin);
-                }
             }
 
-            prevLen.current = data.length
+            if (!hasAddedCliff.current && hhmm >= 1530 && hhmm < 1600) {
+                nextMarkers.push({
+                    time: t,
+                    position: 'aboveBar',
+                    color: '#ef4444',
+                    shape: 'arrowDown',
+                    text: `15:30 CLIFF`,
+                })
+                hasAddedCliff.current = true
+            }
+        })
+
+        if (nextMarkers.length > 0) {
+            const rp = rawMarkersPluginRef.current
+            const sp = smoothMarkersPluginRef.current
+            if (rp && typeof rp.setMarkers === 'function') rp.setMarkers(nextMarkers)
+            if (sp && typeof sp.setMarkers === 'function') sp.setMarkers(nextMarkers)
+            markersRef.current = nextMarkers
+        }
+
+        if (anyDataLoaded && !initialised.current) {
+            chart.timeScale().fitContent()
+            initialised.current = true
         }
     }, [data])
 
@@ -360,6 +373,26 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
     return (
         <div className="relative w-full h-full">
             <div ref={containerRef} className="w-full h-full" style={{ touchAction: 'none' }} />
+            <div className="absolute top-4 right-4 z-20 pointer-events-auto">
+                <div className="inline-flex items-center rounded-md border border-[#27272a] bg-[#0b0c0f]/90 p-0.5">
+                    {MODE_ITEMS.map((m) => {
+                        const active = displayMode === m.key
+                        return (
+                            <button
+                                key={m.key}
+                                type="button"
+                                onClick={() => setDisplayMode(m.key)}
+                                className={`px-2 py-1 text-[10px] font-bold tracking-wider transition-colors ${active
+                                    ? 'bg-[#18181b] text-[#e4e4e7]'
+                                    : 'text-[#71717a] hover:text-[#d4d4d8]'
+                                    }`}
+                            >
+                                {m.label}
+                            </button>
+                        )
+                    })}
+                </div>
+            </div>
         </div>
     )
 })
