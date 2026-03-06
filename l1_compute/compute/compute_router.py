@@ -1,10 +1,9 @@
 """Compute Router — Adaptive GPU/CPU tier selection.
 
 Routing decision rules (evaluated in order):
-    1. chain_size ≥ 100  → GPU (CuPy CUDA)       — amortise kernel launch cost
-    2. chain_size < 100  → NumPy vectorized        — lower latency for small chains
-    3. GPU unavailable   → Numba JIT (if present)  — CPU-parallel
-    4. Numba unavailable → NumPy vectorized         — guaranteed fallback
+    1. GPU available     → GPU (CuPy CUDA)       — Institutional mandate for all recomputations
+    2. GPU unavailable   → Numba JIT (if present)  — CPU-parallel fallback
+    3. Numba unavailable → NumPy vectorized         — guaranteed last resort
 
 Tier override: set `force_tier` to bypass auto-routing (useful for testing).
 
@@ -111,18 +110,13 @@ class ComputeRouter:
         if self._force is not None:
             return self._force, f"forced:{self._force.value}"
 
-        if chain_size >= settings.gpu_offload_threshold:
-            if self._kernel.gpu_available:
-                return ComputeTier.GPU, f"chain_size={chain_size} >= {settings.gpu_offload_threshold} (offload threshold)"
-            # GPU needed but unavailable
-            if _NUMBA_AVAILABLE:
-                return ComputeTier.NUMBA, f"gpu_unavailable, chain_size={chain_size} >= {settings.gpu_offload_threshold}"
-            return ComputeTier.NUMPY, "gpu_unavailable+numba_unavailable"
-        else:
-            # Small chain — CPU is faster (no kernel launch overhead)
-            if _NUMBA_AVAILABLE:
-                return ComputeTier.NUMBA, f"chain_size={chain_size} < {settings.gpu_offload_threshold}"
-            return ComputeTier.NUMPY, f"chain_size={chain_size} < {settings.gpu_offload_threshold}, numba_unavailable"
+        if self._kernel.gpu_available:
+            return ComputeTier.GPU, "GPU mandate: all recomputations must offload to CUDA"
+        
+        # GPU physically unavailable — use Cascading Fallback (AGENTS.md 1.2)
+        if _NUMBA_AVAILABLE:
+            return ComputeTier.NUMBA, "gpu_unavailable, falling back to Numba"
+        return ComputeTier.NUMPY, "gpu_unavailable+numba_unavailable"
 
     def _execute(
         self,

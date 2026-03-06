@@ -4,7 +4,7 @@
 
 ---
 
-## 1. 升级决策融合算法 (DecisionEngine 2.0)
+## 1. 升级决策融合算法 (DecisionEngine 2.0) `[Phase 26 PROPOSED]`
 
 > **当前逻辑**：基于静态映射和动态权重的加权平均（Paper 1 & 4）。
 > **升级方向**：寻找基于 Transformer 或神经网络的实时多模态融合方案。
@@ -27,7 +27,7 @@
 
 ---
 
-## 2. 增强战术指标精度 (TacticalTriad 升级)
+## 2. 增强战术指标精度 (TacticalTriad 升级) `[L1 STABILITY RESTORED]`
 
 > **当前逻辑**：跟踪 VRP (Veto), Charm (Dynamic), S-VOL (Regime)。
 > **升级方向**：引入“隐式风险估值”与“二阶希腊值微观联动”。
@@ -50,7 +50,7 @@
 
 ---
 
-## 3. 优化流量强度识别 (ActiveOptions 3.0)
+## 3. 优化流量强度识别 (ActiveOptions 3.0) `[GPU MANDATE ENFORCED]`
 
 > **当前逻辑**：D+E+G 复合得分排序。
 > **升级方向**：利用卷积网络 (CNN) 或路径图 (Graph) 识别大单路径。
@@ -71,7 +71,7 @@
 
 ---
 
-## 4. 预测 IV 突发漂移 (SkewDynamics 升级)
+## 4. 预测 IV 突发漂移 (SkewDynamics 升级) `[ARROW IPC VERIFIED]`
 
 > **当前逻辑**：基于 `IVVelocityTracker` 的线性状态映射。
 > **升级方向**：非参数化 IV 表面跳跃检测。

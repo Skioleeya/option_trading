@@ -31,7 +31,7 @@ import asyncio
 import logging
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, cast
 from zoneinfo import ZoneInfo
 
 import numpy as np
@@ -201,9 +201,10 @@ class L1ComputeReactor:
         l0_version: int,
         iv_cache: dict[str, float],
         spot_at_sync: dict[str, float],
-        extra_metadata: dict[str, Any],
+        extra_metadata: Optional[dict[str, Any]] = None,
     ) -> EnrichedSnapshot:
         """Full pipeline (runs in thread pool via asyncio.to_thread)."""
+        extra_metadata = extra_metadata or {}
         t_start = time.monotonic()
         now = datetime.now(_ET)
 

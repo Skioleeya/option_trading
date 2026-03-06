@@ -57,7 +57,7 @@ class TestReactorArrowIntegration:
         assert isinstance(snap.chain, pa.RecordBatch)
         # Ensure extra column 'computed_iv' was added by the reactor
         assert "computed_iv" in snap.chain.schema.names
-        assert snap.chain.num_columns == 10  # 9 base columns + computed_iv
+        assert snap.chain.num_columns == 13  # 9 base columns + computed_iv, gex, call_gex, put_gex
         
     @pytest.mark.asyncio
     async def test_to_legacy_dict_from_record_batch(self):

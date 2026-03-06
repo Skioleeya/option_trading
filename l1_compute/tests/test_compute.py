@@ -133,16 +133,19 @@ class TestComputeRouter:
         m, decision = router.compute(spots, strikes, ivs, 0.002, is_call, ois=ois, mults=mults)
         assert decision.tier == ComputeTier.NUMPY
 
-    def test_small_chain_routes_cpu(self):
-        """Chain size < 100 should prefer CPU path (NUMBA or NUMPY)."""
+    def test_small_chain_routes_gpu_if_available(self):
+        """Mandate: All recomputations must go through GPU if available, regardless of size."""
         router = ComputeRouter()
         n = 50
         spots, strikes, ivs, is_call, ois, mults = _make_chain(n)
         m, decision = router.compute(spots, strikes, ivs, 0.002, is_call, ois=ois, mults=mults)
-        assert decision.tier in (ComputeTier.NUMBA, ComputeTier.NUMPY)
+        if router.gpu_available:
+            assert decision.tier == ComputeTier.GPU
+        else:
+            assert decision.tier in (ComputeTier.NUMBA, ComputeTier.NUMPY)
 
-    def test_large_chain_routes_gpu_when_available(self):
-        """Chain size >= 100 should route to GPU if available, else CPU."""
+    def test_large_chain_routes_gpu_if_available(self):
+        """Chain size >= 100 should route to GPU if available."""
         router = ComputeRouter()
         n = 200
         spots, strikes, ivs, is_call, ois, mults = _make_chain(n)
