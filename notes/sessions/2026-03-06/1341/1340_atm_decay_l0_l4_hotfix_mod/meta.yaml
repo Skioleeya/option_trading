@@ -1,0 +1,38 @@
+session_id: "2026-03-06/1341/1340_atm_decay_l0_l4_hotfix_mod"
+title: "atm decay l0-l4 audit and fix"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-06 13:41:47 -05:00"
+updated_at_et: "2026-03-06 13:48:36 -05:00"
+parent_session: "2026-03-06/1327/1415_header_gex_l0_l4_hotfix_mod"
+
+branch: "master"
+base_commit: "c82621a"
+head_commit: "c82621a"
+
+files_changed:
+  - "l4_ui/src/components/center/AtmDecayChart.tsx"
+  - "l4_ui/src/components/center/AtmDecayOverlay.tsx"
+  - "l4_ui/src/components/center/atmDecayTime.ts"
+  - "l4_ui/src/components/center/atmDecayDisplay.ts"
+  - "l4_ui/src/components/center/__tests__/atmDecayTime.test.ts"
+  - "l4_ui/src/components/center/__tests__/atmDecayDisplay.test.ts"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-06/1341/1340_atm_decay_l0_l4_hotfix_mod/project_state.md"
+  - "notes/sessions/2026-03-06/1341/1340_atm_decay_l0_l4_hotfix_mod/open_tasks.md"
+  - "notes/sessions/2026-03-06/1341/1340_atm_decay_l0_l4_hotfix_mod/handoff.md"
+  - "notes/sessions/2026-03-06/1341/1340_atm_decay_l0_l4_hotfix_mod/meta.yaml"
+commands:
+  - "npm --prefix l4_ui run test -- src/components/center/__tests__/atmDecayTime.test.ts src/components/center/__tests__/atmDecayDisplay.test.ts"
+  - "npm --prefix l4_ui run build"
+  - "powershell -ExecutionPolicy Bypass -File .\\scripts\\validate_session.ps1"
+tests_passed:
+  - "vitest: atmDecayTime + atmDecayDisplay tests (6 passed)"
+  - "npm --prefix l4_ui run build"
+tests_failed:
+  - "No failing tests in this session."
+blockers: []
+notes:
+  - "Severe mismatch fixed: overlay no longer updates with after-hours ticks while chart is session-filtered."
+  - "ATM time parsing now uses ET conversion instead of brittle string clock extraction."

@@ -284,10 +284,26 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
         const chart = chartRef.current
         const rawSeries = rawSeriesRef.current
         const smoothSeries = smoothSeriesRef.current
-        if (!chart || !rawSeries.length || !smoothSeries.length || !data.length) return
+        if (!chart || !rawSeries.length || !smoothSeries.length) return
 
         // OPTIMIZATION: Skip chart updates if tab is hidden
         if (document.visibilityState === 'hidden') {
+            return
+        }
+
+        if (!data.length) {
+            rawSeries.forEach((s) => {
+                if (s && typeof s.setData === 'function') s.setData([])
+            })
+            smoothSeries.forEach((s) => {
+                if (s && typeof s.setData === 'function') s.setData([])
+            })
+            const rp = rawMarkersPluginRef.current
+            const sp = smoothMarkersPluginRef.current
+            if (rp && typeof rp.setMarkers === 'function') rp.setMarkers([])
+            if (sp && typeof sp.setMarkers === 'function') sp.setMarkers([])
+            markersRef.current = []
+            initialised.current = false
             return
         }
 
@@ -340,13 +356,11 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
             }
         })
 
-        if (nextMarkers.length > 0) {
-            const rp = rawMarkersPluginRef.current
-            const sp = smoothMarkersPluginRef.current
-            if (rp && typeof rp.setMarkers === 'function') rp.setMarkers(nextMarkers)
-            if (sp && typeof sp.setMarkers === 'function') sp.setMarkers(nextMarkers)
-            markersRef.current = nextMarkers
-        }
+        const rp = rawMarkersPluginRef.current
+        const sp = smoothMarkersPluginRef.current
+        if (rp && typeof rp.setMarkers === 'function') rp.setMarkers(nextMarkers)
+        if (sp && typeof sp.setMarkers === 'function') sp.setMarkers(nextMarkers)
+        markersRef.current = nextMarkers
 
         if (anyDataLoaded && !initialised.current) {
             chart.timeScale().fitContent()

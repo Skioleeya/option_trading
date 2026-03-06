@@ -6,7 +6,8 @@ import React, { memo } from 'react'
 import type { AtmDecay } from '../../types/dashboard'
 import { fmtPct, fmtPrice } from '../../lib/utils'
 import { LineChart } from 'lucide-react'
-import { useDashboardStore, selectAtm } from '../../store/dashboardStore'
+import { useDashboardStore, selectAtm, selectAtmHistory } from '../../store/dashboardStore'
+import { resolveDisplayAtm } from './atmDecayDisplay'
 
 interface Props {
     atm?: AtmDecay | null
@@ -14,9 +15,13 @@ interface Props {
     history?: AtmDecay[]
 }
 
-export const AtmDecayOverlay: React.FC<Props> = memo(({ atm: propAtm }) => {
+export const AtmDecayOverlay: React.FC<Props> = memo(({ atm: propAtm, history: propHistory }) => {
     const storeAtm = useDashboardStore(selectAtm) as AtmDecay | null
-    const atm = storeAtm ?? propAtm ?? null
+    const storeHistory = useDashboardStore(selectAtmHistory) as AtmDecay[]
+    const atm = resolveDisplayAtm(
+        storeAtm ?? propAtm ?? null,
+        storeHistory.length > 0 ? storeHistory : (propHistory ?? [])
+    )
 
     const baseLockPrice = atm?.base_strike ?? atm?.strike ?? null
     const currentStrike = atm?.strike ?? null

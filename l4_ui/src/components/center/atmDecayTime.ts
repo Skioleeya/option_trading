@@ -5,31 +5,60 @@
  * from chart rendering.
  */
 
-const MARKET_OPEN_SEC = 9 * 3600 + 25 * 60
+const ET_TIME_ZONE = 'America/New_York'
+const MARKET_OPEN_SEC = 9 * 3600 + 30 * 60
 const MARKET_CLOSE_SEC = 16 * 3600
 
-export function getHHMM(ts: string): number | null {
-    const m = ts.match(/T(\d{2}):(\d{2})/)
-    if (!m) return null
-    return parseInt(m[1], 10) * 100 + parseInt(m[2], 10)
+const ET_HMS_FORMATTER = new Intl.DateTimeFormat('en-US', {
+    timeZone: ET_TIME_ZONE,
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+})
+
+function toDate(ts: string): Date | null {
+    const d = new Date(ts)
+    if (Number.isNaN(d.getTime())) return null
+    return d
 }
 
-function getSecondsFromMidnight(ts: string): number | null {
-    const m = ts.match(/T(\d{2}):(\d{2})(?::(\d{2}))?/)
-    if (!m) return null
-    const hh = parseInt(m[1], 10)
-    const mm = parseInt(m[2], 10)
-    const ss = m[3] ? parseInt(m[3], 10) : 0
-    return hh * 3600 + mm * 60 + ss
+function getEtHms(date: Date): { hh: number; mm: number; ss: number } | null {
+    const parts = ET_HMS_FORMATTER.formatToParts(date)
+    const hh = Number(parts.find((p) => p.type === 'hour')?.value)
+    const mm = Number(parts.find((p) => p.type === 'minute')?.value)
+    const ss = Number(parts.find((p) => p.type === 'second')?.value)
+    if (!Number.isFinite(hh) || !Number.isFinite(mm) || !Number.isFinite(ss)) {
+        return null
+    }
+    return { hh, mm, ss }
+}
+
+function getSecondsFromEtMidnight(ts: string): number | null {
+    const d = toDate(ts)
+    if (!d) return null
+    const hms = getEtHms(d)
+    if (!hms) return null
+    return hms.hh * 3600 + hms.mm * 60 + hms.ss
+}
+
+export function getHHMM(ts: string): number | null {
+    const d = toDate(ts)
+    if (!d) return null
+    const hms = getEtHms(d)
+    if (!hms) return null
+    return hms.hh * 100 + hms.mm
 }
 
 export function isMarketHours(ts: string): boolean {
-    const t = getSecondsFromMidnight(ts)
+    const t = getSecondsFromEtMidnight(ts)
     return t !== null && t >= MARKET_OPEN_SEC && t <= MARKET_CLOSE_SEC
 }
 
 export function toUnixSec(ts: string): number | null {
-    const ms = new Date(ts).getTime()
+    const d = toDate(ts)
+    if (!d) return null
+    const ms = d.getTime()
     if (!Number.isFinite(ms)) return null
     return Math.floor(ms / 1000)
 }
