@@ -1,0 +1,34 @@
+session_id: "2026-03-06/1113_session_tooling_mod"
+title: "session tooling scripts"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-06 11:13:00 -05:00"
+updated_at_et: "2026-03-06 11:23:25 -05:00"
+parent_session: "2026-03-06/1106_atm_decay_hotfix_mod"
+
+branch: "master"
+base_commit: "e616ba2"
+head_commit: "e616ba2"
+
+files_changed:
+  - "AGENTS.md"
+  - "scripts/new_session.ps1"
+  - "scripts/validate_session.ps1"
+  - "scripts/README.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+
+commands:
+  - "powershell -ExecutionPolicy Bypass -File .\\scripts\\new_session.ps1 -TaskId 1113_session_tooling_mod"
+  - "powershell -ExecutionPolicy Bypass -File .\\scripts\\validate_session.ps1"
+  - "AGENTS.md section 6 updated for sessionized handoff contract"
+
+tests_passed:
+  - "validate_session: pass"
+tests_failed: []
+
+blockers: []
+notes:
+  - "Session indexing moved to pointer mode in notes/context." 

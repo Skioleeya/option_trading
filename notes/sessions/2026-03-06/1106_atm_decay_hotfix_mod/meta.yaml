@@ -1,0 +1,34 @@
+session_id: "2026-03-06/1106_atm_decay_hotfix_mod"
+title: "atm decay chart hotfix + modularization"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-06 11:06:00 -05:00"
+updated_at_et: "2026-03-06 11:12:15 -05:00"
+parent_session: null
+
+branch: "master"
+base_commit: "e616ba2"
+head_commit: "e616ba2"
+
+files_changed:
+  - "l3_assembly/assembly/payload_assembler.py"
+  - "l4_ui/src/components/center/AtmDecayChart.tsx"
+  - "l4_ui/src/components/center/atmDecayTime.ts"
+  - "l4_ui/src/components/center/__tests__/atmDecayTime.test.ts"
+
+commands:
+  - "pytest l3_assembly/tests/test_reactor.py l1_compute/tests/test_atm_decay_tracker.py l1_compute/tests/test_atm_decay_modular.py -q"
+  - "npm --prefix l4_ui run test -- src/components/center/__tests__/atmDecayTime.test.ts src/store/__tests__/dashboardStore.test.ts"
+  - "npm --prefix l4_ui run build"
+
+tests_passed:
+  - "pytest: 21 passed"
+  - "vitest: 18 passed"
+  - "vite build: success"
+tests_failed: []
+
+blockers: []
+notes:
+  - "Backend post-market cutoff parity remains a P0 follow-up."
+

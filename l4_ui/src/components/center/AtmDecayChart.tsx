@@ -24,6 +24,7 @@ import {
 } from 'lightweight-charts'
 import { useDashboardStore, selectAtmHistory } from '../../store/dashboardStore'
 import type { AtmDecay } from '../../types/dashboard'
+import { getHHMM, isMarketHours, toUnixSec } from './atmDecayTime'
 
 // Extended AtmDecay to recognize the new L1 field gracefully
 type ExtendedAtmDecay = AtmDecay & { strike_changed?: boolean }
@@ -55,8 +56,6 @@ const SERIES_CFG = [
 ] as const
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
-const toUnixSec = (ts: string) => Math.floor(new Date(ts).getTime() / 1000)
-
 function hexToRgba(hex: string, alpha: number): string {
     const h = hex.replace('#', '')
     if (h.length !== 6) return hex
@@ -66,28 +65,13 @@ function hexToRgba(hex: string, alpha: number): string {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
-/**
- * Gate: keep only intraday ticks.
- * Optimized for performance: parse time directly from the ISO string
- * assuming backend emits NY local time or UTC string like "...T09:30...-05:00"
- */
-function getHHMM(ts: string): number {
-    const m = ts.match(/T(\d{2}):(\d{2})/)
-    if (!m) return 0
-    return parseInt(m[1], 10) * 100 + parseInt(m[2], 10)
-}
-
-function isMarketHours(ts: string): boolean {
-    const t = getHHMM(ts)
-    return t >= 925
-}
-
 function buildPoints(data: ExtendedAtmDecay[], key: keyof AtmDecay) {
     const seen = new Set<number>()
     return data
         .filter(d => d.timestamp && d[key] != null && isMarketHours(d.timestamp))
         .reduce<{ time: Time; value: number }[]>((acc, d) => {
             const t = toUnixSec(d.timestamp!)
+            if (t === null) return acc
             if (!seen.has(t)) { seen.add(t); acc.push({ time: t as Time, value: (d[key] as number) * 100 }) }
             return acc
         }, [])
@@ -329,7 +313,9 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
         hasAddedCliff.current = false
         data.forEach(d => {
             if (!d.timestamp || !isMarketHours(d.timestamp)) return
-            const t = toUnixSec(d.timestamp) as Time
+            const ts = toUnixSec(d.timestamp)
+            if (ts === null) return
+            const t = ts as Time
             const hhmm = getHHMM(d.timestamp)
 
             if (d.strike_changed) {
@@ -342,7 +328,7 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
                 })
             }
 
-            if (!hasAddedCliff.current && hhmm >= 1530 && hhmm < 1600) {
+            if (!hasAddedCliff.current && hhmm !== null && hhmm >= 1530 && hhmm < 1600) {
                 nextMarkers.push({
                     time: t,
                     position: 'aboveBar',

@@ -40,3 +40,27 @@ python scripts/test/test_depth_profile.py
 
 > [!TIP]
 > 每次执行重大重构（如 AppContainer 拆解）后，请至少运行一次 `scripts/test/test_depth_profile.py` 确保核心链路闭环。
+
+## 会话上下文脚本（新增）
+
+- `new_session.ps1`: 创建一次改动的独立会话目录，并自动更新 `notes/context` 三文件指针。
+- `validate_session.ps1`: 校验会话四文件完整性（`project_state/open_tasks/handoff/meta`）以及 context 指针一致性。
+
+示例：
+
+```powershell
+# 创建新会话
+powershell -ExecutionPolicy Bypass -File .\scripts\new_session.ps1 `
+  -TaskId "1118_backend_cutoff_hotfix" `
+  -Title "backend atm cutoff parity" `
+  -Scope "hotfix only" `
+  -Owner "Quant Backend" `
+  -ParentSession "2026-03-06/1106_atm_decay_hotfix_mod"
+
+# 校验当前 active session（默认）
+powershell -ExecutionPolicy Bypass -File .\scripts\validate_session.ps1
+
+# 校验指定 session
+powershell -ExecutionPolicy Bypass -File .\scripts\validate_session.ps1 `
+  -SessionPath "notes/sessions/2026-03-06/1118_backend_cutoff_hotfix"
+```

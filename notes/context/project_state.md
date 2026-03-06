@@ -1,28 +1,15 @@
-# Project State
+# Project State (Index)
 
-## Snapshot
-- DateTime (ET):
-- Branch:
-- Last Commit:
-- Environment:
-  - Market: `OPEN/CLOSED`
-  - Data Feed: `OK/DEGRADED/DOWN`
-  - L0-L4 Pipeline: `OK/DEGRADED/DOWN`
+## Active Session
+- Path: notes/sessions/2026-03-06/1113_session_tooling_mod/project_state.md
+- Meta: notes/sessions/2026-03-06/1113_session_tooling_mod/meta.yaml
+- Status: ACTIVE
 
-## Current Focus
-- Primary Goal:
-- Scope In:
-- Scope Out:
+## Recent Sessions
+- notes/sessions/2026-03-06/1113_session_tooling_mod/
+- notes/sessions/2026-03-06/1106_atm_decay_hotfix_mod/
 
-## What Changed (Latest Session)
-- Files:
-- Behavior:
-- Verification:
-
-## Risks / Constraints
-- Risk 1:
-- Risk 2:
-
-## Next Action
-- Immediate Next Step:
-- Owner:
+## Global Rules
+- Session folders are immutable records; do not overwrite prior sessions.
+- New substantive work must create a new session folder under notes/sessions/YYYY-MM-DD/<task-id>/.
+- Keep this index file updated with the latest active session pointer.

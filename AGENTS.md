@@ -95,25 +95,46 @@ To enable reliable multi-agent continuity across conversations, every agent MUST
 *   `notes/context/project_state.md`
 *   `notes/context/open_tasks.md`
 *   `notes/context/handoff.md`
+*   `notes/sessions/YYYY-MM-DD/<task-id>/project_state.md`
+*   `notes/sessions/YYYY-MM-DD/<task-id>/open_tasks.md`
+*   `notes/sessions/YYYY-MM-DD/<task-id>/handoff.md`
+*   `notes/sessions/YYYY-MM-DD/<task-id>/meta.yaml`
 
 ### 6.2 Start-of-Session Rule (Read First)
-*   **Read Before Any Change**: Before coding, each agent MUST read the three files above.
-*   **State Alignment**: If repository reality conflicts with context notes, the agent MUST reconcile notes first, then proceed.
+*   **Read Before Any Change**: Before coding, each agent MUST read the three `notes/context` index files.
+*   **Follow Active Pointer**: Agent MUST open the active session folder referenced by the index files and continue from there.
+*   **State Alignment**: If repository reality conflicts with session/context notes, the agent MUST reconcile notes first, then proceed.
+
+### 6.2.1 Session Creation Rule (One Change Set, One Folder)
+*   **Dedicated Session Folder Is Mandatory**: Every substantive change set MUST create (or continue) a dedicated folder under `notes/sessions/YYYY-MM-DD/<task-id>/`.
+*   **Task ID Convention**: `<task-id>` SHOULD follow `HHMM_<scope>_<hotfix|mod|feature>`.
+*   **No History Overwrite**: Completed session folders are immutable archives and MUST NOT be repurposed for unrelated work.
 
 ### 6.3 End-of-Session Rule (Write Back)
-*   **project_state.md MUST update**:
+*   **Session-local `project_state.md` MUST update**:
     *   current branch / commit
     *   latest scope and what changed
     *   current risks and immediate next action
-*   **open_tasks.md MUST update**:
+*   **Session-local `open_tasks.md` MUST update**:
     *   task status (`P0/P1/P2`)
     *   owner and definition of done
     *   current blockers
-*   **handoff.md MUST update**:
+*   **Session-local `handoff.md` MUST update**:
     *   session goal/outcome
     *   files changed and commands run
     *   verification result and exact next step
+*   **Session-local `meta.yaml` MUST update**:
+    *   `branch` / `base_commit` / `head_commit`
+    *   `commands`
+    *   `tests_passed` / `tests_failed`
+*   **Context Index MUST update**:
+    *   `notes/context/*.md` MUST point to the current active session paths.
 
 ### 6.4 Commit Discipline for Context
-*   **Context Is Source of Truth**: Changes to these three files SHOULD be committed with task delivery whenever feasible.
+*   **Context Is Source of Truth**: Changes to session files + context index files SHOULD be committed with task delivery whenever feasible.
 *   **No Silent Exit**: An agent MUST NOT end a substantive work session without updating this handoff contract state.
+
+### 6.5 Scripted Enforcement (Operational)
+*   **Session Bootstrap Script**: Agents SHOULD use `scripts/new_session.ps1` to initialize a new session folder and context pointers.
+*   **Validation Script**: Agents SHOULD run `scripts/validate_session.ps1` before ending session to ensure handoff integrity.
+*   **Active vs Non-Active Validation**: Pointer consistency checks apply to active session; non-active sessions require structural validity at minimum.

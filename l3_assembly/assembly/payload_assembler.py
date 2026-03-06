@@ -146,16 +146,17 @@ class PayloadAssemblerV2:
 
         # L1 EnrichedSnapshot (typed)
         if hasattr(snapshot, "spot") and hasattr(snapshot, "aggregates"):
+            aggregates = getattr(snapshot, "aggregates", None)
             data.spot = float(snapshot.spot or 0.0)
-            data.atm_iv = float(snapshot.aggregates.atm_iv or 0.0)
-            data.flip_level = float(snapshot.aggregates.flip_level or 0.0)
+            data.atm_iv = float(getattr(aggregates, "atm_iv", 0.0) or 0.0)
+            data.flip_level = float(getattr(aggregates, "flip_level", 0.0) or 0.0)
             data.snapshot_time = getattr(snapshot, "computed_at", None)
             # Aggregated GEX per strike (legacy presenters expect list[dict])
-            data.per_strike_gex = getattr(snapshot.aggregates, "per_strike_gex", [])
-            
-            data.net_gex = float(snapshot.aggregates.net_gex or 0.0)
-            data.call_wall = float(snapshot.aggregates.call_wall or 0.0)
-            data.put_wall = float(snapshot.aggregates.put_wall or 0.0)
+            data.per_strike_gex = getattr(aggregates, "per_strike_gex", [])
+
+            data.net_gex = float(getattr(aggregates, "net_gex", 0.0) or 0.0)
+            data.call_wall = float(getattr(aggregates, "call_wall", 0.0) or 0.0)
+            data.put_wall = float(getattr(aggregates, "put_wall", 0.0) or 0.0)
             
             # Metadata support (Phase 1 fix: Rust status)
             metadata = getattr(snapshot, "extra_metadata", {})

@@ -1,0 +1,20 @@
+session_id: "YYYY-MM-DD/HHMM_scope_hotfix_or_mod"
+title: ""
+scope: "hotfix only | hotfix + modularization | feature"
+owner: ""
+timezone: "America/New_York"
+started_at_et: ""
+updated_at_et: ""
+parent_session: null
+
+branch: ""
+base_commit: ""
+head_commit: ""
+
+files_changed: []
+commands: []
+tests_passed: []
+tests_failed: []
+blockers: []
+notes: []
+
