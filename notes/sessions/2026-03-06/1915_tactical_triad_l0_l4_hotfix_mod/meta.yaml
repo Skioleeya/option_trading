@@ -1,0 +1,53 @@
+session_id: "2026-03-06/1915_tactical_triad_l0_l4_hotfix_mod"
+title: "tactical triad l0-l4 audit and hotfix"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-06 19:15:39 -05:00"
+updated_at_et: "2026-03-06 19:28:49 -05:00"
+parent_session: "2026-03-06/1818_p2_process_tooling_followup_mod"
+
+branch: "master"
+base_commit: "f3978da"
+head_commit: "f3978da"
+
+files_changed:
+  - "docs/SOP/L3_OUTPUT_ASSEMBLY.md"
+  - "l2_decision/agents/agent_g.py"
+  - "l3_assembly/assembly/ui_state_tracker.py"
+  - "l3_assembly/presenters/ui/tactical_triad/mappings.py"
+  - "l3_assembly/tests/test_ui_state_tracker.py"
+  - "l4_ui/src/components/right/TacticalTriad.tsx"
+  - "l4_ui/src/components/right/tacticalTriadModel.ts"
+  - "l4_ui/src/components/__tests__/tacticalTriad.model.test.ts"
+  - "shared/system/tactical_triad_logic.py"
+  - "notes/sessions/2026-03-06/1915_tactical_triad_l0_l4_hotfix_mod/project_state.md"
+  - "notes/sessions/2026-03-06/1915_tactical_triad_l0_l4_hotfix_mod/open_tasks.md"
+  - "notes/sessions/2026-03-06/1915_tactical_triad_l0_l4_hotfix_mod/handoff.md"
+  - "notes/sessions/2026-03-06/1915_tactical_triad_l0_l4_hotfix_mod/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File .\\scripts\\new_session.ps1 -TaskId \"1915_tactical_triad_l0_l4_hotfix_mod\" -Title \"tactical triad l0-l4 audit and hotfix\" -Scope \"hotfix + modularization\" -Owner \"Codex\" -ParentSession \"2026-03-06/1818_p2_process_tooling_followup_mod\" (PowerShell 5 failed)"
+  - "C:\\Program Files\\PowerShell\\7\\pwsh.exe -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\new_session.ps1 -TaskId \"1915_tactical_triad_l0_l4_hotfix_mod\" -Title \"tactical triad l0-l4 audit and hotfix\" -Scope \"hotfix + modularization\" -Owner \"Codex\" -ParentSession \"2026-03-06/1818_p2_process_tooling_followup_mod\""
+  - "powershell -ExecutionPolicy Bypass -File .\\scripts\\test\\run_pytest.ps1 l3_assembly/tests/test_ui_state_tracker.py"
+  - "powershell -ExecutionPolicy Bypass -File .\\scripts\\test\\run_pytest.ps1 l3_assembly/tests/test_presenters.py l3_assembly/tests/test_assembly.py"
+  - "powershell -ExecutionPolicy Bypass -File .\\scripts\\test\\run_pytest.ps1 l3_assembly/tests/test_presenters.py -k TacticalTriadPresenterV2"
+  - "powershell -ExecutionPolicy Bypass -File .\\scripts\\test\\run_pytest.ps1 l2_decision/tests/test_fused_signal_contract.py l2_decision/tests/test_reactor_and_guards.py"
+  - "npm --prefix l4_ui run test -- tacticalTriad.model"
+  - "powershell -ExecutionPolicy Bypass -File .\\scripts\\test\\run_pytest.ps1 scripts/test/test_l0_l4_pipeline.py"
+tests_passed:
+  - "powershell -ExecutionPolicy Bypass -File .\\scripts\\test\\run_pytest.ps1 l3_assembly/tests/test_ui_state_tracker.py"
+  - "powershell -ExecutionPolicy Bypass -File .\\scripts\\test\\run_pytest.ps1 l3_assembly/tests/test_presenters.py -k TacticalTriadPresenterV2"
+  - "npm --prefix l4_ui run test -- tacticalTriad.model (escalated run)"
+tests_failed:
+  - "powershell -ExecutionPolicy Bypass -File .\\scripts\\new_session.ps1 -TaskId \"1915_tactical_triad_l0_l4_hotfix_mod\" ... (PowerShell 5: missing TryConvertIanaIdToWindowsId)"
+  - "powershell -ExecutionPolicy Bypass -File .\\scripts\\test\\run_pytest.ps1 l3_assembly/tests/test_presenters.py l3_assembly/tests/test_assembly.py (unrelated existing presenter assertions)"
+  - "powershell -ExecutionPolicy Bypass -File .\\scripts\\test\\run_pytest.ps1 l2_decision/tests/test_fused_signal_contract.py l2_decision/tests/test_reactor_and_guards.py (temp-file permission failures unrelated to patch)"
+  - "npm --prefix l4_ui run test -- tacticalTriad.model (sandbox EPERM before escalated rerun)"
+  - "powershell -ExecutionPolicy Bypass -File .\\scripts\\test\\run_pytest.ps1 scripts/test/test_l0_l4_pipeline.py (existing async test/plugin wiring issue)"
+blockers: []
+notes: []
+
+

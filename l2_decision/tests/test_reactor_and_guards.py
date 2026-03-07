@@ -422,6 +422,13 @@ class TestL2DecisionReactor:
         # Should have at least momentum and flow signals
         assert len(output.signal_summary) > 0
 
+    def test_output_feature_vector_propagated(self):
+        reactor = L2DecisionReactor(enable_audit_disk=False)
+        snap = _FakeSnap()
+        output = asyncio.get_event_loop().run_until_complete(reactor.decide(snap))
+        assert isinstance(output.feature_vector, dict)
+        assert "skew_25d_normalized" in output.feature_vector
+
     def test_fused_signal_contract_uses_runtime_regime_and_gex_labels(self):
         reactor = L2DecisionReactor(enable_audit_disk=False)
         snap = _FakeSnap()

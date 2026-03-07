@@ -67,6 +67,17 @@
 - **`broadcast_timestamp/heartbeat_timestamp`**：仅表示 L3 广播时刻（UTC ISO8601），用于链路存活与时效诊断。
 - **drift 语义**：`drift_ms` 统一定义为 `L2 computed_at - L0 source_data_timestamp_utc`。
 
+### 2.5 TacticalTriad 阈值与状态透传契约 (2026-03-06 Hotfix)
+- **VRP 基线单位守卫**：`vrp_baseline_hv` 若以小数形式误入（`<= 1.0`），必须在组装链路按百分比解释（`x100`）后再参与 `VRP = ATM_IV% - baseline_hv%`。
+- **S-VOL 状态保真**：`DANGER_ZONE / GRIND_STABLE / VANNA_FLIP / UNAVAILABLE` 必须完整透传到 `ui_state.tactical_triad.svol_state`，禁止折叠为单一 `NORMAL`。
+- **缺失值语义**：当相关性缺失或不可计算时，`svol_corr` 必须为 `null`，并将 `svol_state` 标记为 `UNAVAILABLE`，避免伪造 `0.00 STBL`。
+
+### 2.6 SkewDynamics 状态契约 (2026-03-06 Hotfix)
+- **输入来源唯一**：`UIStateTracker` 只从 `decision.feature_vector.skew_25d_normalized` 读取 skew 值，不从前端或 presenter 反推。
+- **阈值判定**：`skew < skew_speculative_max => SPECULATIVE`，`skew > skew_defensive_min => DEFENSIVE`，其余为 `NEUTRAL`。
+- **稳定回退**：`SkewDynamicsPresenterV2` 在空输入/异常时必须返回完整 `NEUTRAL` 结构，不得返回空字典 `{}`。
+- **色彩语义**：延续亚洲盘语义，`SPECULATIVE -> 红`，`DEFENSIVE -> 绿`，`NEUTRAL -> theme neutral`。
+
 ### 2.1 MicroStats 状态契约补丁 (2026-03-06)
 
 - **`wall_dyn` 强制映射**：`PayloadAssemblerV2` 必须将 `ui_metrics.wall_migration_data` 归一化后显式映射为 `micro_stats.wall_dyn` 输入，禁止遗漏该桥接步骤。

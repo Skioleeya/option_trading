@@ -260,12 +260,14 @@ class TestSkewDynamicsPresenterV2:
         result = SkewDynamicsPresenterV2.build({"skew": 0.5})
         assert isinstance(result, dict)
 
-    def test_empty_returns_empty_dict(self):
+    def test_empty_returns_neutral_state(self):
         result = SkewDynamicsPresenterV2.build({})
-        assert result == {}
+        assert result["state_label"] == "NEUTRAL"
+        assert result["value"] == "0.00"
+        assert result["badge"] == "badge-neutral"
 
-    def test_passthrough(self):
-        data = {"skew_slope": -0.3, "rr_25d": 5.2}
+    def test_builds_from_skew_fields(self):
+        data = {"skew_value": -0.3, "skew_state": "SPECULATIVE"}
         result = SkewDynamicsPresenterV2.build(data)
-        # Data is passed through (legacy presenter may return same or enriched)
-        assert isinstance(result, dict)
+        assert result["value"] == "-0.30"
+        assert result["state_label"] == "SPECULATIVE"

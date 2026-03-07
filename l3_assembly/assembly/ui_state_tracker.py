@@ -10,6 +10,12 @@ import time
 from typing import Any
 
 from shared.config import settings
+from shared.system.tactical_triad_logic import (
+    classify_vrp_state,
+    compute_vrp,
+    normalize_svol_state,
+    resolve_svol_fields,
+)
 from l1_compute.trackers.vanna_flow_analyzer import VannaFlowAnalyzer
 from l1_compute.trackers.wall_migration_tracker import WallMigrationTracker
 from l1_compute.analysis.mtf_iv_engine import MTFIVEngine
@@ -113,23 +119,19 @@ class UIStateTracker:
         })
         
         # 4. Tactical Triad (VRP)
-        atm_iv_pct = atm_iv * 100.0
-        baseline_hv = getattr(settings, 'vrp_baseline_hv', 13.5)
-        vrp = atm_iv_pct - baseline_hv
-        
-        vrp_state = "FAIR"
-        if vrp > getattr(settings, 'vrp_trap_threshold', 5.0):
-            vrp_state = "TRAP"
-        elif vrp > getattr(settings, 'vrp_expensive_threshold', 2.0):
-            vrp_state = "EXPENSIVE"
-        elif vrp < getattr(settings, 'vrp_cheap_threshold', -2.0) * 3:
-            vrp_state = "BARGAIN"
-        elif vrp < getattr(settings, 'vrp_cheap_threshold', -2.0):
-            vrp_state = "CHEAP"
+        vrp = compute_vrp(atm_iv, getattr(settings, "vrp_baseline_hv", 13.5))
+        vrp_state = classify_vrp_state(
+            vrp,
+            getattr(settings, "vrp_cheap_threshold", -2.0),
+            getattr(settings, "vrp_expensive_threshold", 2.0),
+            getattr(settings, "vrp_trap_threshold", 5.0),
+        )
 
         # Extract regime from vanna
-        vanna_state_str = vanna_result.state.value if vanna_result and hasattr(vanna_result.state, "value") else "NORMAL"
+        vanna_state_raw = vanna_result.state.value if vanna_result and hasattr(vanna_result.state, "value") else "UNAVAILABLE"
+        vanna_state_str = normalize_svol_state(vanna_state_raw)
         gex_regime_str = vanna_result.gex_regime.value if vanna_result and hasattr(vanna_result.gex_regime, "value") else "NEUTRAL"
+        svol_corr, svol_state = resolve_svol_fields(vanna_result)
         
         # Skew Dynamics (approx 25d skew)
         skew_dynamics = {}
@@ -196,7 +198,7 @@ class UIStateTracker:
             "net_charm": net_charm,
             "skew_dynamics": skew_dynamics,
             "momentum": momentum_direction,
-            "svol_corr": (vanna_result.correlation if vanna_result and vanna_result.correlation is not None else 0.0),
-            "svol_state": "DANGER_ZONE" if vanna_state_str == "DANGER_ZONE" else "NORMAL",
+            "svol_corr": svol_corr,
+            "svol_state": svol_state,
             "micro_structure": {"micro_structure_state": ms_out}
         }

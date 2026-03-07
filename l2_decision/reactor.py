@@ -233,6 +233,7 @@ class L2DecisionReactor:
             raw_telemetry=raw_telemetry_dict,
             iv_regime=iv_regime_str,
             gex_intensity=gex_intensity,
+            feature_vector=dict(features.features),
         )
 
         # 7. Audit trail (non-blocking append)

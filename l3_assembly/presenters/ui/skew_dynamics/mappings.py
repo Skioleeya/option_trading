@@ -23,7 +23,7 @@ SKEW_STATES = {
         "label": "NEUTRAL",
         "color_class": "text-text-primary",
         "border_class": "border-bg-border",
-        "bg_class": "bg-[#1e1e1e]",
+        "bg_class": "bg-bg-card",
         "shadow_class": "shadow-none",
         "badge": "badge-neutral"
     }

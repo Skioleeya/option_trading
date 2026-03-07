@@ -173,6 +173,8 @@ class DecisionOutput:
     raw_telemetry: dict[str, float] = field(default_factory=dict)
     iv_regime: str | None = None
     gex_intensity: str | None = None
+    # L3 UIStateTracker consumes this for skew_dynamics classification.
+    feature_vector: dict[str, float] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {

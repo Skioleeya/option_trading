@@ -26,7 +26,7 @@ def get_vrp_style(vrp: float | None, premium_state: str | None) -> dict[str, Any
             "state_label": "VRP",
             "color_class": "text-text-secondary",
             "border_class": "border-bg-border",
-            "bg_class": "bg-[#1e1e1e]",
+            "bg_class": "bg-bg-card",
             "shadow_class": "shadow-none",
             "animation": ""
         }
@@ -86,7 +86,7 @@ def get_vrp_style(vrp: float | None, premium_state: str | None) -> dict[str, Any
             "state_label": label,
             "color_class": "text-text-primary",
             "border_class": "border-bg-border",
-            "bg_class": "bg-[#1e1e1e]",
+            "bg_class": "bg-bg-card",
             "shadow_class": "shadow-none",
             "animation": ""
         }
@@ -101,7 +101,7 @@ def get_charm_style(net_charm: float | None, is_pre_close: bool = False) -> dict
             "state_label": "STABLE",
             "color_class": "text-text-secondary",
             "border_class": "border-bg-border",
-            "bg_class": "bg-[#1e1e1e]",
+            "bg_class": "bg-bg-card",
             "shadow_class": "shadow-none",
             "multiplier": None
         }
@@ -135,7 +135,7 @@ def get_charm_style(net_charm: float | None, is_pre_close: bool = False) -> dict
             "state_label": "STABLE",
             "color_class": "text-text-primary",
             "border_class": "border-bg-border",
-            "bg_class": "bg-[#1e1e1e]",
+            "bg_class": "bg-bg-card",
             "shadow_class": "shadow-none",
             "multiplier": "8x" if is_pre_close else None
         }
@@ -157,7 +157,7 @@ def get_svol_style(correlation: float | None, state: str | None) -> dict[str, An
             "state_label": "S-VOL",
             "color_class": "text-text-secondary",
             "border_class": "border-bg-border",
-            "bg_class": "bg-[#1e1e1e]",
+            "bg_class": "bg-bg-card",
             "shadow_class": "shadow-none",
             "animation": ""
         }
@@ -179,10 +179,10 @@ def get_svol_style(correlation: float | None, state: str | None) -> dict[str, An
         return {
             "value": val_str,
             "state_label": label,
-            "color_class": "text-[#22d3ee]",    # Asian: Slow grind -> Cyan/Blue
-            "border_class": "border-[#22d3ee]/40",
-            "bg_class": "bg-[#22d3ee]/5",
-            "shadow_class": "shadow-[0_0_8px_rgba(34,211,238,0.15)]",
+            "color_class": "text-accent-cyan",    # Asian: Slow grind -> Cyan/Blue
+            "border_class": "border-accent-cyan/40",
+            "bg_class": "bg-accent-cyan/5",
+            "shadow_class": "shadow-[0_0_8px_rgba(6,182,212,0.15)]",
             "animation": ""
         }
     elif state == "VANNA_FLIP":
@@ -201,7 +201,7 @@ def get_svol_style(correlation: float | None, state: str | None) -> dict[str, An
             "state_label": label,
             "color_class": "text-text-primary",
             "border_class": "border-bg-border",
-            "bg_class": "bg-[#1e1e1e]",
+            "bg_class": "bg-bg-card",
             "shadow_class": "shadow-none",
             "animation": ""
         }

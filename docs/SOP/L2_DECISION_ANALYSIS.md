@@ -54,6 +54,11 @@
 - **关键依赖**：上游必须将 L0 快照版本透传到 `EnrichedSnapshot.version`；若版本缺失/恒定，将产生 `atm_iv`、`iv_velocity_1m` 等特征陈旧风险。
 - **运行规范**：`compute_loop -> L1ComputeReactor` 传参必须使用快照真实版本，不得使用常量占位。
 
+### 2.2 L2→L3 特征透传契约 (2026-03-06 Hotfix)
+- **DecisionOutput 必带 `feature_vector`**：`L2DecisionReactor.decide()` 在构建 `DecisionOutput` 时必须填充 `dict(features.features)`。
+- **Skew 关键字段**：`feature_vector.skew_25d_normalized` 为 L3 `UIStateTracker` 的 `skew_dynamics` 状态输入，缺失将导致前端长期显示 `NEUTRAL/0.00`。
+- **容错边界**：`feature_vector` 仅作为跨层观察快照，不替代 L2 护栏与融合主链路。
+
 ## 3. 信号生成与融合 (Signals & Fusion)
 
 - **Institutional Upgrade (v4.5 核心逻辑)**：

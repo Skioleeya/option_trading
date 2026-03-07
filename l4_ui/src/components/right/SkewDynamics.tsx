@@ -5,17 +5,17 @@
 import React, { memo } from 'react'
 import { AlertCircle } from 'lucide-react'
 import { useDashboardStore } from '../../store/dashboardStore'
+import { normalizeSkewDynamicsState } from './skewDynamicsModel'
 
 const selectSkewDynamics = (s: ReturnType<typeof useDashboardStore.getState>) =>
     s.payload?.agent_g?.data?.ui_state?.skew_dynamics ?? null
 
 interface Props { uiState?: any }
 
-const ZERO = { value: '—', state_label: 'NEUTRAL', color_class: 'text-text-secondary', border_class: 'border-bg-border', bg_class: 'bg-[#1e1e1e]', shadow_class: 'shadow-none', badge: 'badge-neutral' }
-
 export const SkewDynamics: React.FC<Props> = memo(({ uiState: propState }) => {
     const storeState = useDashboardStore(selectSkewDynamics)
-    const state = storeState ?? propState ?? ZERO
+    const preferStore = !!(storeState && typeof storeState === 'object' && Object.keys(storeState).length > 0)
+    const state = normalizeSkewDynamicsState(preferStore ? storeState : propState)
 
     return (
         <div className="border-t border-bg-border p-2">
@@ -25,12 +25,12 @@ export const SkewDynamics: React.FC<Props> = memo(({ uiState: propState }) => {
             </div>
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
-                    <div className="w-5 h-5 rounded flex items-center justify-center bg-[#1e1e1e] border border-bg-border">
+                    <div className={`w-5 h-5 rounded flex items-center justify-center border ${state.border_class} ${state.bg_class} ${state.shadow_class}`}>
                         <AlertCircle size={10} className="text-text-secondary" />
                     </div>
                     <div>
                         <div className="section-header">IV SKEW</div>
-                        <div className={`badge ${state.badge} text-[9px] px-1 py-0! tracking-wider bg-[#1e1e1e]`}>
+                        <div className={`badge ${state.badge} text-[9px] px-1 py-0! tracking-wider`}>
                             {state.state_label}
                         </div>
                     </div>

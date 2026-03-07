@@ -7,6 +7,7 @@ from l2_decision.agents.agent_a import AgentA
 from l2_decision.agents.agent_b import AgentB1, DivergenceState
 from l2_decision.agents.base import AgentResult
 from shared.config import settings
+from shared.system.tactical_triad_logic import classify_vrp_state, compute_vrp
 from shared.models.agent_output import AgentB1Output
 from l2_decision.signals.fusion.dynamic_weight_engine import DynamicWeightEngine
 from l3_assembly.presenters.ui.active_options.presenter import ActiveOptionsPresenter
@@ -225,21 +226,16 @@ class AgentG:
         vrp = b_hv.get("vrp")
         premium_state = b_hv.get("premium_state", "FAIR")
 
-        # Fallback for direct calculation (Fix: decimal * 100 for PCT conversion)
+        # Fallback for direct calculation with baseline-unit normalization.
         if vrp is None and spy_atm_iv is not None:
-             baseline_hv = settings.vrp_baseline_hv
-             vrp = (spy_atm_iv * 100.0 - baseline_hv)
-        
-        premium_state = "FAIR"
-        if vrp is not None:
-            if vrp > settings.vrp_trap_threshold:
-                premium_state = "TRAP"
-            elif vrp > settings.vrp_expensive_threshold:
-                premium_state = "EXPENSIVE"
-            elif vrp < (settings.vrp_cheap_threshold * 3):
-                premium_state = "BARGAIN"
-            elif vrp < settings.vrp_cheap_threshold:
-                premium_state = "CHEAP"
+            vrp = compute_vrp(spy_atm_iv, settings.vrp_baseline_hv)
+
+        premium_state = classify_vrp_state(
+            vrp,
+            settings.vrp_cheap_threshold,
+            settings.vrp_expensive_threshold,
+            settings.vrp_trap_threshold,
+        )
 
         # Helper for L1 Object/Dict parity
         def _get_val(obj, key, default=None):

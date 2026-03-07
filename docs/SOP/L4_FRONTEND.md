@@ -99,6 +99,12 @@ UI 在保持原版 TradingView-style 的冷酷暗色调三栏版式同时（`lib
   - `WALL DYN`: `RETREAT -> 红`, `COLLAPSE -> 绿`, `PINCH -> 紫`, `BREACH -> 琥珀`
   - `VANNA`: `DANGER -> 红`, `CMPRS -> 青色空心`, `FLIP -> 紫`
 - **Store 合并注意事项**：`micro_stats` 当前非 sticky key。若后端发送空对象，组件会回退 `—`。运维需优先确保 L3 持续输出完整 `micro_stats`。
+
+### 3.4 SkewDynamics 归一化与配色契约 (2026-03-06 Hotfix)
+- **模型归一化强制**：`SkewDynamics` 必须先通过 `skewDynamicsModel.normalizeSkewDynamicsState()` 再渲染，禁止直接消费 `ui_state.skew_dynamics` 原始对象。
+- **空态安全**：当 store 收到 `{}` 或字段缺失时，组件必须回退到完整 `NEUTRAL`（含 `value/state_label/class/badge`），避免空 class 导致视觉失真。
+- **样式 token 一致性**：中性背景统一使用 `bg-bg-card`，禁止硬编码 `bg-[#1e1e1e]`；badge 颜色由后端状态 token 决定，不再由组件覆盖。
+- **亚洲风格保持**：`SPECULATIVE` 显示红系（投机/上行偏好），`DEFENSIVE` 显示绿系（防御/下行对冲）。
 ## 4. 连接守护与告警系统 (Monitor & Alerts)
 
 - **ConnectionMonitor**: 接管 WS 心跳。实现状态五连跳 `DISCONNECTED → CONNECTING → AWAIT_STATE → RUNNING → STALLED`。

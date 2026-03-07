@@ -1,0 +1,49 @@
+session_id: "2026-03-06/1936_skew_dynamics_l0_l4_hotfix_mod"
+title: "skew dynamics l0-l4 audit and hotfix"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-06 19:36:36 -05:00"
+updated_at_et: "2026-03-06 19:48:05 -05:00"
+parent_session: "2026-03-06/1915_tactical_triad_l0_l4_hotfix_mod"
+
+branch: "master"
+base_commit: "f3978da"
+head_commit: "f3978da"
+
+files_changed:
+  - "l2_decision/events/decision_events.py"
+  - "l2_decision/reactor.py"
+  - "l2_decision/tests/test_reactor_and_guards.py"
+  - "l3_assembly/presenters/skew_dynamics.py"
+  - "l3_assembly/presenters/ui/skew_dynamics/mappings.py"
+  - "l3_assembly/tests/test_presenters.py"
+  - "l3_assembly/tests/test_ui_state_tracker.py"
+  - "l4_ui/src/components/right/SkewDynamics.tsx"
+  - "l4_ui/src/components/right/skewDynamicsModel.ts"
+  - "l4_ui/src/components/__tests__/skewDynamics.model.test.ts"
+  - "docs/SOP/L2_DECISION_ANALYSIS.md"
+  - "docs/SOP/L3_OUTPUT_ASSEMBLY.md"
+  - "docs/SOP/L4_FRONTEND.md"
+  - "notes/sessions/2026-03-06/1936_skew_dynamics_l0_l4_hotfix_mod/project_state.md"
+  - "notes/sessions/2026-03-06/1936_skew_dynamics_l0_l4_hotfix_mod/open_tasks.md"
+  - "notes/sessions/2026-03-06/1936_skew_dynamics_l0_l4_hotfix_mod/handoff.md"
+  - "notes/sessions/2026-03-06/1936_skew_dynamics_l0_l4_hotfix_mod/meta.yaml"
+
+commands:
+  - "git status --short"
+  - "./scripts/test/run_pytest.ps1 l2_decision/tests/test_reactor_and_guards.py l3_assembly/tests/test_presenters.py l3_assembly/tests/test_ui_state_tracker.py"
+  - "./scripts/test/run_pytest.ps1 l2_decision/tests/test_reactor_and_guards.py::TestL2DecisionReactor::test_output_feature_vector_propagated l3_assembly/tests/test_presenters.py::TestSkewDynamicsPresenterV2 l3_assembly/tests/test_ui_state_tracker.py::test_tick_marks_skew_speculative_when_below_threshold l3_assembly/tests/test_ui_state_tracker.py::test_tick_marks_skew_defensive_when_above_threshold"
+  - "npm --prefix l4_ui run test -- skewDynamics.model tacticalTriad.model"
+
+tests_passed:
+  - "focused pytest node set (6 passed)"
+  - "vitest skew/tactical model tests (4 passed)"
+
+tests_failed:
+  - "broad pytest target had pre-existing unrelated failures in l2_decision/tests/test_reactor_and_guards.py and l3_assembly/tests/test_presenters.py"
+
+blockers: []
+notes:
+  - "Major bug fixed: DecisionOutput now propagates feature_vector for skew classification"
+  - "SkewDynamics presenter/UI empty-state fallback stabilized"

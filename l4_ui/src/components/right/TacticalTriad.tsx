@@ -5,21 +5,16 @@
 import React, { memo } from 'react'
 import { Activity, Clock, Triangle, Activity as Pulse } from 'lucide-react'
 import { useDashboardStore } from '../../store/dashboardStore'
+import { normalizeTacticalTriadState } from './tacticalTriadModel'
 
 const selectTacticalTriad = (s: ReturnType<typeof useDashboardStore.getState>) =>
     s.payload?.agent_g?.data?.ui_state?.tactical_triad ?? null
 
 interface Props { uiState?: any }
 
-const ZERO = {
-    vrp: { value: '—', state_label: 'VRP', color_class: 'text-text-secondary', border_class: 'border-bg-border', bg_class: 'bg-[#1e1e1e]', shadow_class: 'shadow-none', animation: '', sub_intensity: 'LOW', sub_label: 'NEUTRAL' },
-    charm: { value: '—', state_label: 'STABLE', color_class: 'text-text-secondary', border_class: 'border-bg-border', bg_class: 'bg-[#1e1e1e]', shadow_class: 'shadow-none', multiplier: null, sub_intensity: 'LOW', sub_label: 'STABLE' },
-    svol: { value: '—', state_label: 'S-VOL', color_class: 'text-text-secondary', border_class: 'border-bg-border', bg_class: 'bg-[#1e1e1e]', shadow_class: 'shadow-none', animation: '', sub_intensity: 'LOW', sub_label: 'NEUTRAL' },
-}
-
 export const TacticalTriad: React.FC<Props> = memo(({ uiState: propState }) => {
     const storeState = useDashboardStore(selectTacticalTriad)
-    const state = storeState ?? propState ?? ZERO
+    const state = normalizeTacticalTriadState(storeState ?? propState)
     const { vrp, charm, svol } = state
 
     return (
