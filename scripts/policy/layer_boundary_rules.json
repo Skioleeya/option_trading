@@ -38,6 +38,20 @@
       "message": "L3 UI presenters must not import L1 analysis/tracker implementations."
     },
     {
+      "id": "L3_ASSEMBLY_NO_IMPORT_L1_ANALYSIS_TRACKERS",
+      "enabled": true,
+      "glob": "l3_assembly/assembly/*.py",
+      "regex": "^\\s*(from|import)\\s+l1_compute\\.(analysis|trackers)\\b",
+      "message": "L3 assembly modules must consume L1 contracts, not L1 analysis/tracker implementations."
+    },
+    {
+      "id": "L2_SERVICES_NO_IMPORT_L1_ANALYSIS",
+      "enabled": true,
+      "glob": "l2_decision/agents/services/*.py",
+      "regex": "^\\s*(from|import)\\s+l1_compute\\.analysis\\b",
+      "message": "L2 service modules must not import L1 analysis implementations."
+    },
+    {
       "id": "APP_LOOPS_NO_PRIVATE_CROSS_LAYER_ACCESS",
       "enabled": true,
       "glob": "app/loops/*.py",

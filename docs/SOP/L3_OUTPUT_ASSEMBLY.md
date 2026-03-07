@@ -91,6 +91,7 @@
 ### 2.9 防耦合边界契约 (2026-03-06 Guardrail)
 - **L2 契约导入白名单**：L3 允许导入 `l2_decision.events/*` 契约；禁止导入 `l2_decision.signals/*`、`l2_decision.agents/*` 等实现模块。
 - **Presenter 纯度要求**：`l3_assembly/presenters/ui/*` 禁止直接导入 `l1_compute.analysis/*` 与 `l1_compute.trackers/*`；输入必须来自 `EnrichedSnapshot` 或组装层注入参数。
+- **Assembly 契约消费要求（2026-03-06 P1）**：`l3_assembly/assembly/ui_state_tracker.py` 等组装模块禁止直接导入 `l1_compute.analysis/*` 与 `l1_compute.trackers/*`，必须仅消费 `EnrichedSnapshot.microstructure/aggregates` 与 L2 `DecisionOutput`。
 - **ActiveOptions 中立层要求（2026-03-06 P0）**：`ActiveOptions` 计算内核（FlowEngineD/E/G + DEGComposer）必须位于 `shared/services/active_options/*`，L3 仅通过该中立服务访问，禁止回连 L2 实现目录。
 - **前端边界**：L3 禁止导入 `l4_ui/*`（包括类型或实现），L4 只通过协议负载消费 L3。
 - **校验方式**：上述规则由 `scripts/policy/layer_boundary_rules.json` 提供，`validate_session.ps1 -Strict` 命中即失败。

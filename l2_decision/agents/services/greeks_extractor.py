@@ -1,36 +1,28 @@
-"""Greeks Extractor — BSM Greeks computation and chain processing.
+"""Greeks Extractor — L2 qualitative bridge over L1 quantitative contracts.
 
-Extracts and computes Greeks for the option chain:
-- Processes raw option chain data from Longport API
-- Computes Net GEX via GammaAnalyzer
-- Aggregates Charm and Vanna exposures
-- Determines ATM IV and gamma walls
+Design contract:
+- L1 is the source of truth for gamma/greeks quantitative computation.
+- L2 consumes L1 aggregate output and only performs qualitative mapping/bridging.
 """
 
 from __future__ import annotations
 
 import logging
-import math
 from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from l2_decision.agents.services.gamma_analyzer import GammaAnalyzer
-from shared.config import settings
+from l2_decision.agents.services.gamma_qual_analyzer import GammaQualAnalyzer
 
 
 logger = logging.getLogger(__name__)
 
 
 class GreeksExtractor:
-    """Extracts and computes Greeks from option chain data.
-
-    Orchestrates GammaAnalyzer for GEX computations and provides
-    aggregated metrics for the decision agents.
-    """
+    """Maps L1 aggregate greeks to L2-compatible payload fields."""
 
     def __init__(self) -> None:
-        self._gamma_analyzer = GammaAnalyzer()
+        self._gamma_qual_analyzer = GammaQualAnalyzer()
         self._last_result: dict[str, Any] | None = None
 
     def compute(
@@ -40,114 +32,52 @@ class GreeksExtractor:
         as_of: datetime | None = None,
         aggregate_greeks: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Compute all Greeks metrics from option chain.
-
-        Args:
-            chain: List of option dicts with greeks data
-            spot: Current spot price
-            as_of: Timestamp of the data
-
-        Returns:
-            Dict with net_gex, gamma_walls, atm_iv, charm_exposure,
-            vanna_exposure, gamma_profile, etc.
-        """
+        """Build L2-facing greeks payload from L1 aggregate contract."""
         if as_of is None:
             as_of = datetime.now(ZoneInfo("US/Eastern"))
 
-        if not chain or spot <= 0:
-            logger.warning("[GreeksExtractor] Empty chain or invalid spot")
+        if spot <= 0:
+            logger.warning("[GreeksExtractor] Invalid spot <= 0")
             return self._empty_result()
 
-        # BUG-2 FIX: Removed redundant compute_net_gex() call here.
-        # The original log line caused a full O(N) GEX traversal purely for
-        # the log message—before the authoritative call at line 104 below.
-        # Net GEX is logged AFTER the fast path resolves it from aggregate_greeks.
-        logger.info(
-            f"[GreeksExtractor] Chain length={len(chain)}, spot={spot:.2f}, "
-            f"has_aggregate={aggregate_greeks is not None}"
-        )
+        if not aggregate_greeks:
+            logger.warning("[GreeksExtractor] Missing aggregate_greeks; returning degraded qualitative payload")
+            degraded = self._empty_result()
+            degraded["atm_iv"] = self._extract_atm_iv(chain, spot)
+            degraded["spy_atm_iv"] = degraded["atm_iv"]
+            degraded["skew_25d"] = self._extract_skew_ivs(chain)
+            degraded["as_of"] = as_of.isoformat()
+            self._last_result = degraded
+            return degraded
 
-        # Log sample call for diagnostics
-        if chain:
-            logger.debug(f"[GreeksExtractor] Sample Raw Option keys: {chain[0].keys()}")
-            logger.debug(f"[GreeksExtractor] Sample Raw Option: {chain[0]}")
-        else:
-            logger.info("[GreeksExtractor] Chain is empty")
+        summary = self._gamma_qual_analyzer.summarize(aggregate_greeks, spot)
+        per_strike_gex = summary.get("per_strike_gex", [])
+        gamma_profile = self._gamma_qual_analyzer.build_gamma_profile(per_strike_gex, spot)
 
-        if aggregate_greeks:
-            # OPTIMIZATION: Use pre-computed aggregates from OptionChainBuilder
-            agg = aggregate_greeks
-            net_gex = agg.get("net_gex", 0.0)
-            # FIX A: gamma_flip is derived from the SAME source as net_gex (aggregate BSM)
-            # Do NOT use profile_result["gamma_flip"] which re-runs on raw WS chain[].gamma
-            # and can produce a contradictory sign vs net_gex.
-            gamma_flip = net_gex < 0
-            gamma_walls = {
-                "call_wall": agg.get("call_wall"),
-                "put_wall": agg.get("put_wall"),
-            }
-            charm_exposure = agg.get("net_charm", 0.0)
-            vanna_exposure = agg.get("net_vanna", 0.0)
-            total_call_gex = agg.get("total_call_gex", 0.0)
-            total_put_gex = agg.get("total_put_gex", 0.0)
-            
-            otm_call_vol = agg.get("otm_call_vol", 0)
-            otm_put_vol = agg.get("otm_put_vol", 0)
-            total_chain_vol = agg.get("total_chain_vol", 0)
-            
-            # Fix B: Prioritize skew-adjusted ATM IV from L1 aggregate
-            # This ensures consistency with GEX/Greeks computation path.
-            l1_atm_iv = agg.get("atm_iv", 0.0)
-            if l1_atm_iv > 0:
-                atm_iv = l1_atm_iv
-            else:
-                atm_iv = self._extract_atm_iv(chain, spot)
-
-            # Still need flip-level interpolation and per-strike profile for UI.
-            # Use profile_result ONLY for those two fields — never its net_gex/gamma_flip.
-            profile_result = self._gamma_analyzer.compute_net_gex(chain, spot)
-            gamma_flip_level = profile_result.get("gamma_flip_level")
-            per_strike_gex   = profile_result.get("per_strike_gex", [])
-        else:
-            # Fallback: full BSM computation (O(N))
-            profile_result = self._gamma_analyzer.compute_net_gex(chain, spot)
-            net_gex = profile_result["net_gex"]
-            gamma_flip = profile_result["gamma_flip"]
-            gamma_flip_level = profile_result.get("gamma_flip_level")
-            per_strike_gex   = profile_result.get("per_strike_gex", [])
-            gamma_walls = {
-                "call_wall": profile_result["call_wall"],
-                "put_wall": profile_result["put_wall"],
-            }
-            charm_exposure = self._gamma_analyzer.compute_net_charm(chain)
-            vanna_exposure = self._gamma_analyzer.compute_net_vanna(chain, spot)
-            total_call_gex = profile_result.get("total_call_gex", 0)
-            total_put_gex  = profile_result.get("total_put_gex", 0)
-            otm_call_vol = 0
-            otm_put_vol = 0
-            total_chain_vol = 0
-
-
-        # 3. Gamma profile (DYNAMIC simulation - Fixed math)
-        gamma_profile = self._gamma_analyzer.compute_gamma_profile(chain, spot)
+        atm_iv = summary.get("atm_iv")
+        if atm_iv is None or atm_iv <= 0:
+            atm_iv = self._extract_atm_iv(chain, spot)
 
         result = {
-            "net_gex": net_gex,
-            "gamma_walls": gamma_walls,
-            "gamma_flip_level": gamma_flip_level,  # from profile_result (UI only)
-            "gamma_flip": gamma_flip,               # FIX A: always consistent with net_gex
+            "net_gex": summary.get("net_gex", 0.0),
+            "gamma_walls": {
+                "call_wall": summary.get("call_wall"),
+                "put_wall": summary.get("put_wall"),
+            },
+            "gamma_flip_level": summary.get("gamma_flip_level"),
+            "gamma_flip": summary.get("gamma_flip", False),
             "atm_iv": atm_iv,
-            "spy_atm_iv": atm_iv,  # Alias for pure SPY IV architecture
+            "spy_atm_iv": atm_iv,
             "skew_25d": self._extract_skew_ivs(chain),
-            "charm_exposure": charm_exposure,
-            "vanna_exposure": vanna_exposure,
+            "charm_exposure": summary.get("net_charm", 0.0),
+            "vanna_exposure": summary.get("net_vanna", 0.0),
             "gamma_profile": gamma_profile,
-            "per_strike_gex": per_strike_gex,       # from profile_result (UI only)
-            "total_call_gex": total_call_gex,
-            "total_put_gex": total_put_gex,
-            "otm_call_vol": otm_call_vol,
-            "otm_put_vol": otm_put_vol,
-            "total_chain_vol": total_chain_vol,
+            "per_strike_gex": per_strike_gex,
+            "total_call_gex": summary.get("total_call_gex", 0.0),
+            "total_put_gex": summary.get("total_put_gex", 0.0),
+            "otm_call_vol": aggregate_greeks.get("otm_call_vol", 0),
+            "otm_put_vol": aggregate_greeks.get("otm_put_vol", 0),
+            "total_chain_vol": aggregate_greeks.get("total_chain_vol", 0),
             "as_of": as_of.isoformat(),
         }
 
@@ -159,15 +89,12 @@ class GreeksExtractor:
         chain: list[dict[str, Any]],
         spot: float,
     ) -> float | None:
-        """Extract ATM implied volatility.
-
-        Finds the call option closest to spot and returns its IV.
-        """
+        """Extract ATM implied volatility from the nearest call option."""
         best_call_iv = None
         min_distance = float("inf")
 
         for opt in chain:
-            opt_type = opt.get("option_type", opt.get("type", "")).upper()
+            opt_type = str(opt.get("option_type", opt.get("type", ""))).upper()
             if opt_type not in ("CALL", "C"):
                 continue
 
@@ -182,17 +109,13 @@ class GreeksExtractor:
                 min_distance = distance
                 best_call_iv = iv
 
-        # Keep as fractional decimal for system consistency
         return best_call_iv
 
     def _extract_skew_ivs(self, chain: list[dict[str, Any]]) -> dict[str, float | None]:
-        """Extract IVs for 25-delta Put and Call.
-        
-        Used for Skew Dynamic analysis: (PutIV - CallIV) / ATM_IV.
-        """
+        """Extract IVs for 25-delta put and call for skew diagnostics."""
         put_25d_iv = None
         call_25d_iv = None
-        
+
         min_put_delta_diff = float("inf")
         min_call_delta_diff = float("inf")
 
@@ -200,13 +123,13 @@ class GreeksExtractor:
             try:
                 delta = abs(float(opt.get("delta", 0) or 0))
                 iv = float(opt.get("implied_volatility", 0) or 0)
-                opt_type = opt.get("option_type", opt.get("type", "")).upper()
+                opt_type = str(opt.get("option_type", opt.get("type", ""))).upper()
 
                 if iv <= 0 or delta <= 0:
                     continue
 
                 diff = abs(delta - 0.25)
-                
+
                 if opt_type in ("PUT", "P"):
                     if diff < min_put_delta_diff:
                         min_put_delta_diff = diff
@@ -218,11 +141,9 @@ class GreeksExtractor:
             except (ValueError, TypeError):
                 continue
 
-        # Normalized to fractions for system consistency
-
         return {
             "put_25d_iv": put_25d_iv,
-            "call_25d_iv": call_25d_iv
+            "call_25d_iv": call_25d_iv,
         }
 
     def _empty_result(self) -> dict[str, Any]:
@@ -240,6 +161,10 @@ class GreeksExtractor:
             "per_strike_gex": [],
             "total_call_gex": 0.0,
             "total_put_gex": 0.0,
+            "otm_call_vol": 0,
+            "otm_put_vol": 0,
+            "total_chain_vol": 0,
+            "skew_25d": {"put_25d_iv": None, "call_25d_iv": None},
             "as_of": None,
         }
 
