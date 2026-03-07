@@ -89,6 +89,12 @@
 - **ATM 冷存写放大修复（P0 Debt Fix）**：ATM 衰减冷存从全量 JSON 重写切换为 JSONL 增量追加；恢复优先 JSONL 并兼容历史 JSON 数组文件。
 - **P1 运行时观测探针（2026-03-06）**：在 compute loop 增加 `snapshot_version vs spy_atm_iv` 漂移探针，采用 3-tick confirm，输出开始/持续/恢复日志，并将诊断快照接入 `/debug/persistence_status`。
 - **P1 L4 交互与渲染修复（2026-03-06）**：`l4:nav_*` 命令链路在 DepthProfile 端实现监听与最近 strike 回退；ATM 图表写入改为增量优先（append 走 `update`，回灌/重排回退 `setData`）。
+- **P2 会话工具链收口（2026-03-06）**：
+  - `scripts/new_session.ps1` 新增 `-Timezone`（IANA/Windows）并统一影响 session 路径时间与 `meta.yaml` 时间字段。
+  - `scripts/validate_session.ps1` 新增 `-Strict` 硬门禁，要求 `commands/files_changed/tests_passed` 非空，并在严格模式下对目标 session 执行债务门禁。
+  - 新增 `.github/workflows/session-validation.yml`，在 `pull_request + workflow_dispatch` 执行严格会话校验。
+  - 严格模式增加运行产物卫生规则：`logs/*` 与 `data/atm_decay/atm*.json` 命中时需 `RUNTIME-ARTIFACT-EXEMPT` 才允许通过。
+- **P2 L4 连接稳定性修复（2026-03-06）**：`ProtocolAdapter` 对全量/增量/keepalive 帧统一刷新连接心跳，修复前端误判 `RDS STALLED` 的黄灯假阳性。
 
 ## 远期宏大迁移路线 (Updated 2026 Vision)
 

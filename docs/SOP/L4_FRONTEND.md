@@ -102,6 +102,8 @@ UI 在保持原版 TradingView-style 的冷酷暗色调三栏版式同时（`lib
 ## 4. 连接守护与告警系统 (Monitor & Alerts)
 
 - **ConnectionMonitor**: 接管 WS 心跳。实现状态五连跳 `DISCONNECTED → CONNECTING → AWAIT_STATE → RUNNING → STALLED`。
+- **RDS 黄灯修复契约（2026-03-06）**：`ProtocolAdapter` 必须在每条有效文本帧（`dashboard_update/dashboard_init/dashboard_delta/keepalive`）到达时调用 `ConnectionMonitor.onKeepalive()`，禁止只依赖后端 30s keepalive，避免 3s stall 阈值导致误报 `RDS STALLED`。
+- **健康判定语义**：`RDS STALLED` 仅表示心跳超时，不等同于 WS 断连；若数据帧持续到达则应保持 `RDS LIVE`。
 - **后端健康指示灯**: L4 `Header` 组件利用 `rust_active` 状态位实时展示 **Rust Ingest Gateway** 是否在线。
 - **IPC 深度诊断**: `DebugOverlay` 现在能够解析并展现共享内存的读写指针 (Head/Tail) 差值，供极端场景下的延迟排查。
 - **前后端排障边界**: 若出现 Hook 顺序报错（如 `Rendered more hooks than during the previous render`），属于 L4 前端渲染错误，不应通过重启后端解决；优先重启前端 dev server 并检查组件 Hook 调用顺序。
