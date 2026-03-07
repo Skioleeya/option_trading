@@ -210,12 +210,14 @@ class ActiveOptionRow:
     Represents a single option contract ranked by DEG composite flow.
     """
     symbol: str
-    option_type: str            # "C" | "P"
+    option_type: str            # "CALL" | "PUT"
     strike: float
     implied_volatility: float
     volume: int
     turnover: float
     flow: float
+    impact_index: float
+    is_sweep: bool
     flow_deg_formatted: str
     flow_volume_label: str
     flow_color: str
@@ -235,6 +237,8 @@ class ActiveOptionRow:
             "volume":             self.volume,
             "turnover":           round(self.turnover, 2),
             "flow":               round(self.flow, 2),
+            "impact_index":       round(self.impact_index, 4),
+            "is_sweep":           self.is_sweep,
             "flow_deg_formatted": self.flow_deg_formatted,
             "flow_volume_label":  self.flow_volume_label,
             "flow_color":         self.flow_color,

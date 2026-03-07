@@ -1,0 +1,46 @@
+session_id: "2026-03-06/1954_active_options_l0_l4_hotfix_mod"
+title: "1954 active options l0 l4 hotfix mod"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-06 19:54:43 -05:00"
+updated_at_et: "2026-03-06 20:00:33 -05:00"
+parent_session: "2026-03-06/1936_skew_dynamics_l0_l4_hotfix_mod"
+
+branch: "master"
+base_commit: "0b6bb9b"
+head_commit: "0b6bb9b"
+
+files_changed:
+  - "l3_assembly/events/payload_events.py"
+  - "l3_assembly/presenters/active_options.py"
+  - "l3_assembly/assembly/payload_assembler.py"
+  - "l3_assembly/tests/test_presenters.py"
+  - "l3_assembly/tests/test_reactor.py"
+  - "l4_ui/src/components/right/ActiveOptions.tsx"
+  - "l4_ui/src/components/right/activeOptionsModel.ts"
+  - "l4_ui/src/components/__tests__/activeOptions.model.test.ts"
+  - "docs/SOP/L3_OUTPUT_ASSEMBLY.md"
+  - "docs/SOP/L4_FRONTEND.md"
+  - "notes/sessions/2026-03-06/1954_active_options_l0_l4_hotfix_mod/project_state.md"
+  - "notes/sessions/2026-03-06/1954_active_options_l0_l4_hotfix_mod/open_tasks.md"
+  - "notes/sessions/2026-03-06/1954_active_options_l0_l4_hotfix_mod/handoff.md"
+  - "notes/sessions/2026-03-06/1954_active_options_l0_l4_hotfix_mod/meta.yaml"
+
+commands:
+  - "./scripts/new_session.ps1 -TaskId \"1954_active_options_l0_l4_hotfix_mod\" -ParentSession \"2026-03-06/1936_skew_dynamics_l0_l4_hotfix_mod\""
+  - "rg -n \"active_options|ActiveOptions|impact_index|is_sweep\" l0_ingest l1_compute l2_decision l3_assembly l4_ui app"
+  - "./scripts/test/run_pytest.ps1 l3_assembly/tests/test_presenters.py::TestActiveOptionsPresenterV2 l3_assembly/tests/test_reactor.py::TestL3AssemblyReactor::test_active_options_contract_preserves_impact_and_sweep"
+  - "npm --prefix l4_ui run test -- activeOptions.model"
+
+tests_passed:
+  - "focused pytest for ActiveOptions contract path (5 passed)"
+  - "vitest activeOptions.model (3 passed)"
+tests_failed:
+  - "none"
+blockers: []
+notes:
+  - "Root cause: ActiveOptions typed dataclass/adapter dropped impact_index and is_sweep."
+  - "L4 ActiveOptions now uses activeOptionsModel normalization before render."
+
+

@@ -39,14 +39,18 @@ class ActiveOptionsPresenterV2:
 
     @staticmethod
     def _row_from_dict(d: dict[str, Any]) -> ActiveOptionRow:
+        option_type_raw = str(d.get("option_type", "CALL")).upper()
+        option_type = "CALL" if option_type_raw in ("CALL", "C") else "PUT"
         return ActiveOptionRow(
             symbol=str(d.get("symbol", "SPY")),
-            option_type=str(d.get("option_type", "C")),
+            option_type=option_type,
             strike=float(d.get("strike", 0.0) or 0.0),
             implied_volatility=float(d.get("implied_volatility", 0.0) or 0.0),
             volume=int(d.get("volume", 0) or 0),
             turnover=float(d.get("turnover", 0.0) or 0.0),
             flow=float(d.get("flow", 0.0) or 0.0),
+            impact_index=float(d.get("impact_index", 0.0) or 0.0),
+            is_sweep=bool(d.get("is_sweep", False)),
             flow_deg_formatted=str(d.get("flow_deg_formatted", "$0")),
             flow_volume_label=str(d.get("flow_volume_label", "0")),
             flow_color=str(d.get("flow_color", "text-text-secondary")),

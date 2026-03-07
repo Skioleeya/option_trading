@@ -1,7 +1,7 @@
 # Open Tasks (Index)
 
 ## Active Session Tasks
-- Path: notes/sessions/2026-03-06/1936_skew_dynamics_l0_l4_hotfix_mod/open_tasks.md
+- Path: notes/sessions/2026-03-06/1954_active_options_l0_l4_hotfix_mod/open_tasks.md
 
 ## Global Backlog (Cross-Session)
 - [x] P0: ATM decay storage append path O(N^2) fixed via JSONL append mirror (`SUPERSEDED-BY: 2026-03-06/1702/1702_p0_timestamp_atm_storage_hotfix_mod`).

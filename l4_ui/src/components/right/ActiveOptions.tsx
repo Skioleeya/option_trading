@@ -6,6 +6,7 @@ import React, { memo } from 'react'
 import { fmtVolume, fmtFlow } from '../../lib/utils'
 import type { ActiveOption } from '../../types/dashboard'
 import { useDashboardStore } from '../../store/dashboardStore'
+import { normalizeActiveOptions } from './activeOptionsModel'
 
 const selectActiveOptions = (s: ReturnType<typeof useDashboardStore.getState>) =>
     (s.payload?.agent_g?.data?.ui_state?.active_options ?? null) as ActiveOption[] | null
@@ -14,11 +15,11 @@ interface Props { options?: ActiveOption[] }
 
 export const ActiveOptions: React.FC<Props> = memo(({ options: propOptions }) => {
     const storeOptions = useDashboardStore(selectActiveOptions)
-    const options: ActiveOption[] = storeOptions ?? propOptions ?? []
+    const options: ActiveOption[] = normalizeActiveOptions(storeOptions ?? propOptions ?? [], 5)
 
     // THE BACKEND ALREADY SORTS BY IMPACT_INDEX. 
     // We preserve the order provided by the L3 Presenter.
-    const sorted = options.slice(0, 5)
+    const sorted = options
 
     return (
         <div className="p-2">
@@ -46,6 +47,7 @@ export const ActiveOptions: React.FC<Props> = memo(({ options: propOptions }) =>
                     {sorted.map((opt, i) => {
                         const isCall = opt.option_type === 'CALL'
                         const flowNeg = opt.flow < 0
+                        const impactValue = typeof opt.impact_index === 'number' ? opt.impact_index : 0
                         // Use the sweep glow if provided by backend
                         const rowGlow = opt.flow_glow || ''
 
@@ -62,7 +64,7 @@ export const ActiveOptions: React.FC<Props> = memo(({ options: propOptions }) =>
                                 </td>
                                 <td className="py-1 text-right text-text-primary font-bold">{opt.strike.toFixed(2)}</td>
                                 <td className="py-1 text-right font-bold text-white/90">
-                                    {opt.impact_index ? opt.impact_index.toFixed(2) : '0.00'}
+                                    {impactValue.toFixed(2)}
                                 </td>
                                 <td className="py-1 text-right">
                                     <span className="px-1.5 py-0.5 rounded-[4px] text-[10px] font-bold bg-white/5 border border-white/10">

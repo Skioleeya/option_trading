@@ -177,7 +177,8 @@ class TestActiveOptionsPresenterV2:
             return [{
                 "symbol": "SPY", "option_type": "C", "strike": 560.0,
                 "implied_volatility": 0.12, "volume": 50000, "turnover": 1e7,
-                "flow": 2.5, "flow_deg_formatted": "$1.0M", "flow_volume_label": "50K",
+                "flow": 2.5, "impact_index": 123.456, "is_sweep": True,
+                "flow_deg_formatted": "$1.0M", "flow_volume_label": "50K",
                 "flow_color": "text-accent-red", "flow_glow": "", "flow_intensity": "HIGH",
                 "flow_direction": "BULLISH", "flow_d_z": 1.2, "flow_e_z": 0.8, "flow_g_z": 0.5,
             }]
@@ -196,8 +197,10 @@ class TestActiveOptionsPresenterV2:
         presenter = ActiveOptionsPresenterV2(self._MockLegacy())
         row = presenter.get_latest()[0]
         assert row.symbol == "SPY"
-        assert row.option_type == "C"
+        assert row.option_type == "CALL"
         assert row.strike == 560.0
+        assert row.impact_index == 123.456
+        assert row.is_sweep is True
 
     def test_empty_legacy_returns_empty_tuple(self):
         class EmptyLegacy:

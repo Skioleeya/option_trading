@@ -105,6 +105,12 @@ UI 在保持原版 TradingView-style 的冷酷暗色调三栏版式同时（`lib
 - **空态安全**：当 store 收到 `{}` 或字段缺失时，组件必须回退到完整 `NEUTRAL`（含 `value/state_label/class/badge`），避免空 class 导致视觉失真。
 - **样式 token 一致性**：中性背景统一使用 `bg-bg-card`，禁止硬编码 `bg-[#1e1e1e]`；badge 颜色由后端状态 token 决定，不再由组件覆盖。
 - **亚洲风格保持**：`SPECULATIVE` 显示红系（投机/上行偏好），`DEFENSIVE` 显示绿系（防御/下行对冲）。
+
+### 3.5 ActiveOptions 归一化契约 (2026-03-06 Hotfix)
+- **模型归一化强制**：`ActiveOptions` 必须先通过 `activeOptionsModel.normalizeActiveOptions()` 后再渲染，禁止直接消费原始 `ui_state.active_options`。
+- **类型兼容**：模型层必须兼容 `option_type` 的 `CALL|PUT|C|P` 输入并统一为 `CALL|PUT`，避免颜色语义错误（CALL 红 / PUT 绿）。
+- **扫单可视兜底**：当 `is_sweep=true` 且后端未显式下发 `flow_glow` 时，前端需使用默认 sweep glow 回退，确保扫单高亮不丢失。
+- **数值安全**：`impact_index/strike/flow/volume` 必须做 finite 校验与回退，禁止渲染阶段直接对不可信值调用 `.toFixed()`。
 ## 4. 连接守护与告警系统 (Monitor & Alerts)
 
 - **ConnectionMonitor**: 接管 WS 心跳。实现状态五连跳 `DISCONNECTED → CONNECTING → AWAIT_STATE → RUNNING → STALLED`。

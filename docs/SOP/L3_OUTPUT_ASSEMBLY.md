@@ -78,6 +78,11 @@
 - **稳定回退**：`SkewDynamicsPresenterV2` 在空输入/异常时必须返回完整 `NEUTRAL` 结构，不得返回空字典 `{}`。
 - **色彩语义**：延续亚洲盘语义，`SPECULATIVE -> 红`，`DEFENSIVE -> 绿`，`NEUTRAL -> theme neutral`。
 
+### 2.7 ActiveOptions 字段保真契约 (2026-03-06 Hotfix)
+- **字段不可丢失**：`ActiveOptionRow`/`ui_state.active_options[*]` 必须保留 `impact_index` 与 `is_sweep`，禁止在 typed adapter/serializer 阶段被截断。
+- **类型归一化**：`option_type` 在 L3 输出必须归一化为 `CALL|PUT`；允许输入兼容 `C|P`，但不得原样透传到 L4。
+- **排序语义保真**：L3 保持后台 Presenter 输出顺序（已按 `impact_index` 排序），前端不得在无明确策略时重排。
+
 ### 2.1 MicroStats 状态契约补丁 (2026-03-06)
 
 - **`wall_dyn` 强制映射**：`PayloadAssemblerV2` 必须将 `ui_metrics.wall_migration_data` 归一化后显式映射为 `micro_stats.wall_dyn` 输入，禁止遗漏该桥接步骤。

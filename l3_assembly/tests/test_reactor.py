@@ -132,3 +132,33 @@ class TestL3AssemblyReactor:
         dict_snap = {"spot": 562.5, "chain": [], "as_of": datetime.now(timezone.utc).isoformat()}
         result = asyncio.run(reactor.tick(_MockDecision(), dict_snap))
         assert result.spot == 562.5
+
+    def test_active_options_contract_preserves_impact_and_sweep(self):
+        reactor = L3AssemblyReactor()
+        active_options = [{
+            "symbol": "SPY",
+            "option_type": "C",
+            "strike": 560.0,
+            "implied_volatility": 0.12,
+            "volume": 50000,
+            "turnover": 1e7,
+            "flow": 2.5,
+            "impact_index": 88.1234,
+            "is_sweep": True,
+            "flow_deg_formatted": "$1.0M",
+            "flow_volume_label": "50K",
+            "flow_color": "text-accent-red",
+            "flow_glow": "",
+            "flow_intensity": "HIGH",
+            "flow_direction": "BULLISH",
+            "flow_d_z": 1.2,
+            "flow_e_z": 0.8,
+            "flow_g_z": 0.5,
+        }]
+        result = asyncio.run(
+            reactor.tick(_MockDecision(), _MockSnapshot(), active_options=active_options)
+        )
+        row = result.to_dict()["agent_g"]["data"]["ui_state"]["active_options"][0]
+        assert row["impact_index"] == pytest.approx(88.1234)
+        assert row["is_sweep"] is True
+        assert row["option_type"] == "CALL"
