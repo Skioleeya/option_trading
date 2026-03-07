@@ -83,6 +83,11 @@
 - **类型归一化**：`option_type` 在 L3 输出必须归一化为 `CALL|PUT`；允许输入兼容 `C|P`，但不得原样透传到 L4。
 - **排序语义保真**：L3 保持后台 Presenter 输出顺序（已按 `impact_index` 排序），前端不得在无明确策略时重排。
 
+### 2.8 MTF 共识源一致性契约 (2026-03-06 Hotfix)
+- **单一优先源**：`UIStateTracker` 生成 `ui_state.mtf_flow` 时，必须优先采用 L1 `snapshot.microstructure.mtf_consensus`，禁止无条件本地重算覆盖。
+- **回退策略**：仅当 L1 `mtf_consensus` 缺失或结构非法时，才允许回退到 L3 本地 `MTFIVEngine` 估算值。
+- **一致性目标**：L2 决策使用的 `mtf_consensus` 与 L4 `MtfFlow` 展示语义必须同源，避免“信号看涨但面板中性”的跨层漂移。
+
 ### 2.1 MicroStats 状态契约补丁 (2026-03-06)
 
 - **`wall_dyn` 强制映射**：`PayloadAssemblerV2` 必须将 `ui_metrics.wall_migration_data` 归一化后显式映射为 `micro_stats.wall_dyn` 输入，禁止遗漏该桥接步骤。

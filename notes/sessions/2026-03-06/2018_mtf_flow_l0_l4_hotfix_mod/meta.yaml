@@ -1,0 +1,42 @@
+session_id: "2026-03-06/2018_mtf_flow_l0_l4_hotfix_mod"
+title: "2018 mtf flow l0 l4 hotfix mod"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-06 20:18:06 -05:00"
+updated_at_et: "2026-03-06 20:25:50 -05:00"
+parent_session: "2026-03-06/1954_active_options_l0_l4_hotfix_mod"
+
+branch: "master"
+base_commit: "cbf228a"
+head_commit: "cbf228a"
+
+files_changed:
+  - "l3_assembly/assembly/ui_state_tracker.py"
+  - "l3_assembly/tests/test_ui_state_tracker.py"
+  - "l4_ui/src/components/right/MtfFlow.tsx"
+  - "l4_ui/src/components/right/mtfFlowModel.ts"
+  - "l4_ui/src/components/__tests__/mtfFlow.model.test.ts"
+  - "docs/SOP/L3_OUTPUT_ASSEMBLY.md"
+  - "docs/SOP/L4_FRONTEND.md"
+  - "notes/sessions/2026-03-06/2018_mtf_flow_l0_l4_hotfix_mod/project_state.md"
+  - "notes/sessions/2026-03-06/2018_mtf_flow_l0_l4_hotfix_mod/open_tasks.md"
+  - "notes/sessions/2026-03-06/2018_mtf_flow_l0_l4_hotfix_mod/handoff.md"
+  - "notes/sessions/2026-03-06/2018_mtf_flow_l0_l4_hotfix_mod/meta.yaml"
+
+commands:
+  - "rg -n \"MtfFlow|mtf_flow|mtf_consensus|MTFFlow\" l4_ui l3_assembly l2_decision l1_compute app"
+  - "./scripts/test/run_pytest.ps1 l3_assembly/tests/test_ui_state_tracker.py::test_tick_prefers_snapshot_mtf_consensus_when_available l3_assembly/tests/test_ui_state_tracker.py::test_tick_preserves_grind_stable_for_svol_state"
+  - "npm --prefix l4_ui run test -- mtfFlow.model"
+
+tests_passed:
+  - "focused pytest for UIStateTracker mtf source consistency (2 passed)"
+  - "vitest mtfFlow.model (3 passed)"
+tests_failed:
+  - "none"
+blockers: []
+notes:
+  - "Major bug fixed: L3 MTF UI path now prefers L1 snapshot microstructure mtf_consensus to prevent decision/UI drift."
+  - "MtfFlow rendering modularized with mtfFlowModel finite/clamp normalization."
+
+

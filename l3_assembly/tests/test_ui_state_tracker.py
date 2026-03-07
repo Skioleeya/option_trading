@@ -42,7 +42,11 @@ class _FakeMTFEngine:
         return {"consensus": "NEUTRAL", "alignment": 0.5}
 
 
-def _make_snapshot(atm_iv: float = 0.15, net_charm: float = 10.0) -> SimpleNamespace:
+def _make_snapshot(
+    atm_iv: float = 0.15,
+    net_charm: float = 10.0,
+    mtf_consensus: dict[str, object] | None = None,
+) -> SimpleNamespace:
     aggregates = SimpleNamespace(
         atm_iv=atm_iv,
         net_gex=1000.0,
@@ -50,7 +54,10 @@ def _make_snapshot(atm_iv: float = 0.15, net_charm: float = 10.0) -> SimpleNames
         put_wall=590.0,
         net_charm=net_charm,
     )
-    return SimpleNamespace(spot=595.0, aggregates=aggregates)
+    microstructure = (
+        SimpleNamespace(mtf_consensus=mtf_consensus) if mtf_consensus is not None else None
+    )
+    return SimpleNamespace(spot=595.0, aggregates=aggregates, microstructure=microstructure)
 
 
 def _make_tracker(vanna_result: _FakeVannaResult) -> UIStateTracker:
@@ -108,3 +115,22 @@ def test_tick_marks_skew_defensive_when_above_threshold(monkeypatch: pytest.Monk
     out = tracker.tick(_make_snapshot(), decision=decision)
 
     assert out["skew_dynamics"]["skew_state"] == "DEFENSIVE"
+
+
+def test_tick_prefers_snapshot_mtf_consensus_when_available() -> None:
+    tracker = _make_tracker(_FakeVannaResult(state="NORMAL", correlation=-0.2))
+    out = tracker.tick(
+        _make_snapshot(
+            mtf_consensus={
+                "timeframes": {"1m": {"direction": "BULLISH"}},
+                "consensus": "BULLISH",
+                "strength": 0.88,
+                "alignment": 1.0,
+            }
+        ),
+        decision=None,
+    )
+
+    assert out["mtf_consensus"]["consensus"] == "BULLISH"
+    assert out["mtf_consensus"]["strength"] == pytest.approx(0.88)
+    assert out["mtf_consensus"]["alignment"] == pytest.approx(1.0)

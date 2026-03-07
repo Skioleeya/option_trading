@@ -111,6 +111,12 @@ UI 在保持原版 TradingView-style 的冷酷暗色调三栏版式同时（`lib
 - **类型兼容**：模型层必须兼容 `option_type` 的 `CALL|PUT|C|P` 输入并统一为 `CALL|PUT`，避免颜色语义错误（CALL 红 / PUT 绿）。
 - **扫单可视兜底**：当 `is_sweep=true` 且后端未显式下发 `flow_glow` 时，前端需使用默认 sweep glow 回退，确保扫单高亮不丢失。
 - **数值安全**：`impact_index/strike/flow/volume` 必须做 finite 校验与回退，禁止渲染阶段直接对不可信值调用 `.toFixed()`。
+
+### 3.6 MtfFlow 归一化契约 (2026-03-06 Hotfix)
+- **模型归一化强制**：`MtfFlow` 必须先通过 `mtfFlowModel.normalizeMtfFlowState()` 再渲染，禁止直接消费 `ui_state.mtf_flow` 原始对象。
+- **结构健壮性**：`m1/m5/m15` 任一缺失时必须回退默认 TF 结构，禁止组件层出现 `undefined.strength/border`。
+- **数值安全**：`strength/alignment/z` 必须转换为 finite 数值并做区间约束（`strength/alignment` 限制到 `[0,1]`），禁止出现 `NaN%` 进度条。
+- **语义保持**：`align_label/align_color` 在缺失时由模型按 `alignment + consensus` 推导，保证视觉语义稳定。
 ## 4. 连接守护与告警系统 (Monitor & Alerts)
 
 - **ConnectionMonitor**: 接管 WS 心跳。实现状态五连跳 `DISCONNECTED → CONNECTING → AWAIT_STATE → RUNNING → STALLED`。

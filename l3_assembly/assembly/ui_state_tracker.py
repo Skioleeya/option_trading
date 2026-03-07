@@ -6,6 +6,7 @@ but omitted from the stateless L1/L2 numerical pipeline.
 
 from __future__ import annotations
 
+import math
 import time
 from typing import Any
 
@@ -188,6 +189,10 @@ class UIStateTracker:
             if isinstance(ms_raw, dict):
                 ms_out = ms_raw
 
+        snapshot_mtf_consensus = self._extract_snapshot_mtf_consensus(ms_out)
+        if snapshot_mtf_consensus is not None:
+            mtf_consensus = snapshot_mtf_consensus
+
         return {
             "wall_migration_data": wall_result.model_dump() if wall_result else {},
             "mtf_consensus": mtf_consensus,
@@ -202,3 +207,34 @@ class UIStateTracker:
             "svol_state": svol_state,
             "micro_structure": {"micro_structure_state": ms_out}
         }
+
+    @staticmethod
+    def _extract_snapshot_mtf_consensus(micro_state: Any) -> dict[str, Any] | None:
+        """Prefer L1 microstructure mtf_consensus when available and structurally valid."""
+        if not isinstance(micro_state, dict):
+            return None
+        candidate = micro_state.get("mtf_consensus")
+        if not isinstance(candidate, dict):
+            return None
+
+        timeframes = candidate.get("timeframes")
+        if not isinstance(timeframes, dict):
+            return None
+
+        consensus = str(candidate.get("consensus", "NEUTRAL"))
+        strength_raw = candidate.get("strength", 0.0)
+        alignment_raw = candidate.get("alignment", 0.0)
+        try:
+            strength = float(strength_raw)
+            alignment = float(alignment_raw)
+        except (TypeError, ValueError):
+            return None
+        if not math.isfinite(strength) or not math.isfinite(alignment):
+            return None
+
+        out = dict(candidate)
+        out["consensus"] = consensus
+        out["strength"] = strength
+        out["alignment"] = alignment
+        out["timeframes"] = dict(timeframes)
+        return out

@@ -4,26 +4,16 @@
  */
 import React, { memo } from 'react'
 import { useDashboardStore } from '../../store/dashboardStore'
+import { normalizeMtfFlowState } from './mtfFlowModel'
 
 const selectMtfFlow = (s: ReturnType<typeof useDashboardStore.getState>) =>
     s.payload?.agent_g?.data?.ui_state?.mtf_flow ?? null
 
-interface TFState {
-    direction: string; regime: string; regime_label: string
-    z: number; strength: number; tier: string
-    dot_color: string; text_color: string; shadow: string; border: string; animate: string
-}
-
-type MtfState = { m1: TFState; m5: TFState; m15: TFState; consensus: string; strength: number; alignment: number; align_label: string; align_color: string } | null
-
-interface Props { uiState?: MtfState }
-
-const DEFAULT_TF: TFState = { direction: 'NEUTRAL', regime: 'NOISE', regime_label: '—', z: 0, strength: 0, tier: 'WEAK', dot_color: 'bg-zinc-700', text_color: 'text-text-secondary', shadow: 'shadow-none', border: 'border-bg-border', animate: '' }
-const DEFAULT_STATE: NonNullable<MtfState> = { m1: DEFAULT_TF, m5: DEFAULT_TF, m15: DEFAULT_TF, consensus: 'NEUTRAL', strength: 0, alignment: 0, align_label: 'DIVERGE', align_color: 'text-text-secondary' }
+interface Props { uiState?: unknown }
 
 export const MtfFlow: React.FC<Props> = memo(({ uiState: propState }) => {
     const storeState = useDashboardStore(selectMtfFlow)
-    const s = (storeState ?? propState ?? DEFAULT_STATE) as NonNullable<MtfState>
+    const s = normalizeMtfFlowState(storeState ?? propState)
 
     const timeframes = [
         { label: '1M', data: s.m1 },
