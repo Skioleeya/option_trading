@@ -1,0 +1,34 @@
+session_id: "2026-03-07/0845_p0_sop_full_refresh_mod"
+title: "0845 p0 sop full refresh mod"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-07 08:46:34 -05:00"
+updated_at_et: "2026-03-07 08:47:12 -05:00"
+parent_session: "2026-03-07/0840_p0_layer_direction_full_audit_hotfix"
+
+branch: "master"
+base_commit: "c7389f3"
+head_commit: "c7389f3"
+
+files_changed:
+  - "docs/SOP/SYSTEM_OVERVIEW.md"
+  - "docs/SOP/L0_DATA_FEED.md"
+  - "docs/SOP/L1_LOCAL_COMPUTATION.md"
+  - "docs/SOP/L2_DECISION_ANALYSIS.md"
+  - "docs/SOP/L3_OUTPUT_ASSEMBLY.md"
+  - "docs/SOP/L4_FRONTEND.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-07/0845_p0_sop_full_refresh_mod/project_state.md"
+  - "notes/sessions/2026-03-07/0845_p0_sop_full_refresh_mod/open_tasks.md"
+  - "notes/sessions/2026-03-07/0845_p0_sop_full_refresh_mod/handoff.md"
+  - "notes/sessions/2026-03-07/0845_p0_sop_full_refresh_mod/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId 0845_p0_sop_full_refresh_mod -Timezone \"Eastern Standard Time\" -ParentSession \"2026-03-07/0840_p0_layer_direction_full_audit_hotfix\""
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 scripts/test/test_l0_l4_pipeline.py"
+tests_passed:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 scripts/test/test_l0_l4_pipeline.py"
+tests_failed: []
+blockers: []
+notes:
+  - "Full refresh of docs/SOP completed, including architecture diagrams and normalized layer contracts."

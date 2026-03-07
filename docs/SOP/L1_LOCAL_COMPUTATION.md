@@ -1,107 +1,72 @@
-# L1 — 本地计算层 (Local Computation Layer)
+# L1 SOP — LOCAL COMPUTATION
 
-> **定位**: L1 是系统的量化内核——将 L0 提供的原始报单和期权链转为完整的 Greeks 矩阵、聚合风险流数据和高频微观结构信号。
->
-> **架构状态 (v4.5)**: 已实现基于 **Apache Arrow 的零拷贝进程间通信 (Zero-Copy IPC)**。L1ComputeReactor 通过 `RustBridge` 直接内存映射 L0 输出，完全消除了 Python 层的数据序列化开销，为 0DTE 高频计算提供了极致的吞吐量。
+> Version: 2026-03-07
+> Layer: L1 Local Computation
 
----
+## 1. Responsibility
 
-## 1. 计算核心与数据流
+L1 将 L0 快照转化为 `EnrichedSnapshot`，负责 Greeks、本地风险指标和微结构信号计算。
 
-```
-                    ┌────────────────────────────┐
-             L0 ──▶ │  Rust Bridge (Mmap / Arrow)│  (Zero-Copy Active)
-                    └────────────┬───────────────┘
-                                 │
-                    ┌────────────▼───────────────┐
-                    │      L1ComputeReactor      │ (主编排器, asyncio 驱动)
-                    │                            │
-                    │  ┌───── ComputeRouter ──┐  │ 
-                    │  │ GPU (CuPy)  < 1ms    │  │ ← 全链一次性向量化解析
-                    │  │ Numba JIT   < 5ms    │  │ ← Fallback 1
-                    │  │ NumPy       < 15ms   │  │ ← Fallback 2
-                    │  └──────────┬───────────┘  │
-                    │             │              │
-                    │  ┌──────────▼───────────┐  │
-                    │  │  Trackers Subsystem  │  │ ← 跨 Tick 的有状态流式分析
-                    │  │  - VannaFlowAnalyzer │  │
-                    │  │  - WallMigration     │  │
-                    │  │  - IVVelocityTracker │  │
-                    │  │  - JumpDetector      │  │
-                    │  │  - DynamicThresholds │  │
-                    │  └──────────┬───────────┘  │
-                    │             │              │
-                    │  ┌──────────▼───────────┐  │
-                    │  │MicrostructureCore(Rust)│← Rust SIMD: VPINv2 + BBOv2
-                    │  └──────────┬───────────┘  │
-                    └─────────────┼──────────────┘
-                                  │
-                                  ▼
-                    EnrichedSnapshot (Frozen Dataclass)
-                                  │
-                    L2 Decision Layer / L3 Assembly Layer
+## 2. Architecture
+
+```mermaid
+flowchart LR
+  A[L0 fetch_chain] --> B[RustBridge / SHM]
+  B --> C[L1ComputeReactor]
+  C --> D[ComputeRouter GPU/Numba/NumPy]
+  C --> E[Trackers]
+  C --> F[Microstructure engines]
+  D --> G[EnrichedSnapshot]
+  E --> G
+  F --> G
+  G --> H[L2]
+  G --> I[L3]
 ```
 
-## 2. 关键计算组件 (当前已实现)
+## 3. Core Contract
 
-### 2.1 RustBridge (Zero-Copy 接入)
-替代了传统的 Socket/Queue 传输模式：
-- **RecordBatch 构建**：从共享内存数据直接物理映射为 `pyarrow.RecordBatch`。
-- **内存对齐**：使用 `#[repr(C)]` 确保 Rust 与 Python 结构体在内存中的二进制对齐。
-- **性能**：即便在 100k+ TPS 的极高压力下，数据从 L0 到 L1 的流转延迟仍低于 5ms。
+`EnrichedSnapshot` 关键字段:
 
-- **确定性执行 (Core Pinning)**：结合 L0 的核心绑定，计算任务高度并行化。
-- **异构计算分发**：根据期权链规模，自动切换至 CuPy GPU 路径（适用于大批量全链计算）或 Numba JIT (针对极低延迟单档计算)。
+- `spot`
+- `aggregates`
+- `microstructure`
+- `version`
+- `computed_at`
+- `extra_metadata`
 
-### 2.3 自动编排与异步卸载 (L1ComputeReactor)
-L1 层目前由 `L1ComputeReactor` 统一管理：
-- **Asyncio/Thread 混合模型**：`compute()` 接口为异步，但在内部通过 `asyncio.to_thread` 将沉重的浮点运算卸载至独立线程池，绝不阻塞主事件循环。
-- **元数据透传**：支持通过 `extra_metadata` 显式承载 L0 的诊断信息（如 `rust_active`），确保系统健康指标从感官层透传至展示层。
-- **版本保真契约 (2026-03-06 Hotfix)**：`compute(..., l0_version=...)` 必须使用 L0 快照真实版本，严禁常量占位；该字段直接驱动 L2 FeatureStore 的缓存失效与 ATM IV 实时更新。
-- **源时间戳透传 (2026-03-06 P0 Debt Fix)**：`extra_metadata` 必须承载 `source_data_timestamp_utc`（来自 L0 `as_of_utc`），供 L3 组装层生成统一 `data_timestamp` 与 drift 计算基准。
+语义要求:
 
-### 2.4 有状态深度追踪器 (Trackers)
-V3.1 已完成从 L2 (Agent B) 向 L1 的逻辑下沉：
-- **VannaFlowAnalyzer**：跟踪 Delta 敞口与 IV 微分相乘的流追踪。
-- **WallMigrationTracker**：跟踪 Gamma Call/Put 墙面（以及 Flip Level）在不同 Strike 上的移动。
-- **Wall Sentinel Guard (2026-03-06 Hotfix)**：`call_wall/put_wall` 在进入 WallMigration 状态机前必须执行归一化；`<=0`、NaN、Inf 一律视为 unavailable，禁止触发 `BREACHED` 判定（防止 0.0 哨兵值导致误报）。
-- **Vanna 阈值符号守卫 (2026-03-06 Hotfix)**：`vanna_grind_stable_threshold` 在运行时必须按负阈值语义解释；若配置为正数，系统强制使用 `-abs(threshold)` 并记录告警，防止 `GRIND_STABLE` 误判扩大到 0 以上相关性区间。
-- **极端墙态传播要求**：`WallMigrationTracker` 产出的 `BREACHED/DECAYING/UNAVAILABLE` 必须向上游完整透传，禁止在 L1/L3 边界被折叠成 `STABLE`。
-- **GEX Notional Validation**：系统对 SPY 基准的 GEX 名义值计算与机构级基准 (VolLand/SpotGamma) 误差 < 1%。
+- `version` 必须透传 L0 真实版本
+- `extra_metadata.source_data_timestamp_utc` 必须绑定 L0 `as_of_utc`
 
-### 2.4 Rust SIMD 微结构信号 (l1_rust)
-通过 PyO3 原生扩展调用 Rust `l1_rust` 组件：
-- **VPIN v2**：多频桶（1m/5m/15m）同时运行。利用 SIMD 数据并行加载多档买卖价。
-- **BBO Imbalance v2 (订单簿失衡)**：抛弃单一 L1 盘口，采集 Top-5 L2 深度价位作加权失衡（EWMA 衰减机制阻尼毛刺信号）。
-- **Volume Acceleration**：衡量瞬间脉冲成交加速比。
+## 4. Performance Contract
 
-### 2.5 ATM Decay 拼接契约 (2026-03-06 Hotfix)
-- **复利拼接替代加法拼接**：跨 Strike 换锚时，`call/put/straddle` 的连续收益必须采用 multiplicative factor（`Π(1+r_i)-1`）而非简单 `r_i` 累加，避免出现 `CALL <-100%` 语义越界。
-- **硬下界约束**：`call_pct/put_pct/straddle_pct` 在计算层强制满足 `>= -1.0`（即不低于 `-100%`）。
-- **盘后停更**：ATM Decay 仅在常规交易时段（09:30:00-16:00:00 ET）输出，16:00:01 以后禁止继续写入序列。
-- **跨日内存重置**：当交易日切换时，Tracker 必须清空内存锚点与拼接状态，防止旧日偏移污染新交易日。
+- 重计算路径必须可异步卸载（`asyncio.to_thread`）
+- 避免 GIL 阻塞主循环
+- 大规模链路优先 GPU / 向量化
 
-## 3. 输出契约 (Output Contract)
+## 5. Boundary Rules
 
-产生冻结的 `EnrichedSnapshot` 向前传递：
-```python
-@dataclass(frozen=True)
-class EnrichedSnapshot:
-    spot: float
-    chain: pa.RecordBatch          # 含 Greeks 的完整合约表 
-    aggregates: AggregateGreeks    # 聚合风险敞口 (NetGEX/Walls/per_strike_gex 列表等)
-    microstructure: MicroSignals   # 全局 VPIN + BBO + Volume Accel 聚合值
-    quality: ComputeQualityReport  # 计算诊断质量信息
-    ttm_seconds: float             # 精确剩余交易秒数 (支持 PM/AM)
-    version: int                   # 对应 L0 快照单调版本（必须真实透传）
-    computed_at: datetime
-    extra_metadata: dict[str, Any] # 容纳诊断信息 (如 rust_active, shm_stats)
+- L1 不得依赖 L3/L4。
+- L1 输出通过 `EnrichedSnapshot` 契约，不让上游实现细节泄漏。
+
+## 6. Reliability Rules
+
+- NaN/Inf 输入必须被清洗或隔离
+- 越界衰减值需约束（例如不低于 -100%）
+- 盘后策略按交易时段停更
+
+## 7. Observability
+
+建议日志:
+
+- `[L1ComputeReactor]`
+- `[PERF]`
+- Trackers 状态流转日志
+
+## 8. Verification
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests
+powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 scripts/test/test_l0_l4_pipeline.py
 ```
-
-## 4. 迁移与升级路线图 (Updated 2026 Vision)
-
-- [x] **Phase 1 (v3.1)**：Python 异构计算路由 + Numba/GPU Fallback 机制 + Tracker 子系统。
-- [x] **Phase 2 (v3.1)**：Rust SIMD (`l1_rust`) 扩展接入微观结构指标计算。
-- [x] **Phase 3 (v4.5)**：**全链路 Zero-Copy IPC (RustBridge)**。实现了严格的内存对齐映射，传输开销几乎为 0。
-- [ ] **Phase 4 (2026 Q1)**：SABR 校准计算流（替代当前的线性 Skew）。
-- [ ] **Phase 5 (2026 Q2)**：流式聚合器 (`StreamingAggregator`) 实现按 Tick 的 O(ΔN) 更新.

@@ -1,0 +1,35 @@
+session_id: "2026-03-07/0840_p0_layer_direction_full_audit_hotfix"
+title: "0840 p0 layer direction full audit hotfix"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-07 08:37:33 -05:00"
+updated_at_et: "2026-03-07 08:40:33 -05:00"
+parent_session: "2026-03-07/0908_startup_runtime_debug_hotfix"
+
+branch: "master"
+base_commit: "c7389f3"
+head_commit: "c7389f3"
+
+files_changed:
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-07/0840_p0_layer_direction_full_audit_hotfix/project_state.md"
+  - "notes/sessions/2026-03-07/0840_p0_layer_direction_full_audit_hotfix/open_tasks.md"
+  - "notes/sessions/2026-03-07/0840_p0_layer_direction_full_audit_hotfix/handoff.md"
+  - "notes/sessions/2026-03-07/0840_p0_layer_direction_full_audit_hotfix/meta.yaml"
+commands:
+  - "rg -n --glob \"l2_decision/**/*.py\" \"^\\s*(from|import)\\s+l3_assembly\\b|^\\s*(from|import)\\s+l4_ui\\b\""
+  - "rg -n --glob \"l3_assembly/**/*.py\" \"^\\s*(from|import)\\s+l4_ui\\b\""
+  - "rg --pcre2 -n --glob \"l3_assembly/**/*.py\" \"^\\s*(from|import)\\s+l2_decision\\.(?!events\\b)\""
+  - "rg -n --glob \"l3_assembly/presenters/ui/**/*.py\" \"^\\s*(from|import)\\s+l1_compute\\.(analysis|trackers)\\b|^\\s*(from|import)\\s+l2_decision\\.(signals|agents)\\b\""
+  - "rg -n --glob \"l3_assembly/assembly/**/*.py\" \"^\\s*(from|import)\\s+l1_compute\\.(analysis|trackers)\\b\""
+  - "rg -n --glob \"l2_decision/agents/services/**/*.py\" \"^\\s*(from|import)\\s+l1_compute\\.analysis\\b\""
+  - "rg -n --glob \"app/loops/**/*.py\" \"\\b(?:ctr|container)\\.[A-Za-z]\\w*\\._[a-zA-Z]\\w*\""
+  - "rg -n --glob \"l3_assembly/**/*.py\" \"^\\s*(from|import)\\s+l2_decision\\.\""
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 scripts/test/test_l0_l4_pipeline.py"
+tests_passed:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 scripts/test/test_l0_l4_pipeline.py"
+tests_failed: []
+blockers: []
+notes:
+  - "Full-repo layer-boundary audit reported zero hits (NO_MATCH) for all P0 forbidden dependency patterns."

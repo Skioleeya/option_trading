@@ -81,11 +81,23 @@ class MarketDataGateway:
                 self._ctx = QuoteContext(self._config)
                 print("[MarketDataGateway] >>> QuoteContext(self._config) SUCCESS <<<")
             except Exception as e:
-                print(f"[MarketDataGateway] !!! QuoteContext(self._config) FATAL ERROR: {e}")
-                logger.error(f"[MarketDataGateway] LongPort SDK Initialization Failed: {e}")
-                raise
+                print(f"[MarketDataGateway] !!! QuoteContext(self._config) INIT FAILED: {e}")
+                logger.error(
+                    "[MarketDataGateway] LongPort SDK initialization failed. "
+                    "Entering degraded mode without quote_ctx.",
+                    exc_info=True,
+                )
+                self._ctx = None
+                return
         else:
             print("[MarketDataGateway] >>> Using ALREADY ESTABLISHED Context <<<")
+
+        if self._ctx is None:
+            logger.warning(
+                "[MarketDataGateway] quote_ctx unavailable after connect(). "
+                "WS callbacks not registered; feed remains paused."
+            )
+            return
 
         self._ctx.set_on_quote(self._on_quote_cb)
         self._ctx.set_on_depth(self._on_depth_cb)

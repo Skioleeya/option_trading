@@ -86,6 +86,60 @@ export interface ActiveOption {
     flow_direction?: 'BULLISH' | 'BEARISH' | 'NEUTRAL'
 }
 
+export interface TacticalTriadCard {
+    value: string
+    state_label: string
+    color_class: string
+    border_class: string
+    bg_class: string
+    shadow_class: string
+    animation?: string
+    multiplier?: string | null
+    sub_intensity: string
+    sub_label: string
+}
+
+export interface TacticalTriadState {
+    vrp: TacticalTriadCard
+    charm: TacticalTriadCard
+    svol: TacticalTriadCard
+}
+
+export interface SkewDynamicsState {
+    value: string
+    state_label: string
+    color_class: string
+    border_class: string
+    bg_class: string
+    shadow_class: string
+    badge: string
+}
+
+export interface MtfTfState {
+    direction: string
+    regime: string
+    regime_label: string
+    z: number
+    strength: number
+    tier: string
+    dot_color: string
+    text_color: string
+    shadow: string
+    border: string
+    animate: string
+}
+
+export interface MtfFlowState {
+    m1: MtfTfState
+    m5: MtfTfState
+    m15: MtfTfState
+    consensus: 'BULLISH' | 'BEARISH' | 'NEUTRAL'
+    strength: number
+    alignment: number
+    align_label: string
+    align_color: string
+}
+
 export interface AgentBData {
     net_gex: number | null
     spy_atm_iv: number | null
@@ -161,10 +215,10 @@ export interface AgentGResult {
             }>
             macro_volume_map: Record<string, number>
             atm: AtmDecay | null
-            active_options?: Partial<ActiveOption>[] | null
-            tactical_triad?: any
-            skew_dynamics?: any
-            mtf_flow?: any
+            active_options?: ActiveOption[] | null
+            tactical_triad?: TacticalTriadState | null
+            skew_dynamics?: SkewDynamicsState | null
+            mtf_flow?: MtfFlowState | null
         }
     }
 }

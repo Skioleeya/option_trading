@@ -147,26 +147,62 @@ class TestMicroStatsState:
 
 class TestDepthProfileRow:
     def test_valid(self):
-        row = DepthProfileRow(strike=560.0, call_gex=1e9, put_gex=-2e9,
-                              is_atm=True, is_flip=False, pct_max=0.75)
+        row = DepthProfileRow(
+            strike=560.0,
+            call_pct=0.75,
+            put_pct=0.25,
+            is_spot=True,
+            is_flip=False,
+            is_dominant_put=False,
+            is_dominant_call=True,
+        )
         assert row.strike == 560.0
 
     def test_nan_call_gex_raises(self):
         import math
         with pytest.raises(ValueError, match="finite"):
-            DepthProfileRow(strike=560.0, call_gex=float("nan"), put_gex=0.0,
-                            is_atm=False, is_flip=False, pct_max=0.0)
+            DepthProfileRow(
+                strike=560.0,
+                call_pct=float("nan"),
+                put_pct=0.0,
+                is_spot=False,
+                is_flip=False,
+                is_dominant_put=False,
+                is_dominant_call=False,
+            )
 
     def test_inf_put_gex_raises(self):
         with pytest.raises(ValueError, match="finite"):
-            DepthProfileRow(strike=560.0, call_gex=0.0, put_gex=float("inf"),
-                            is_atm=False, is_flip=False, pct_max=0.0)
+            DepthProfileRow(
+                strike=560.0,
+                call_pct=0.0,
+                put_pct=float("inf"),
+                is_spot=False,
+                is_flip=False,
+                is_dominant_put=False,
+                is_dominant_call=False,
+            )
 
     def test_to_dict_keys(self):
-        row = DepthProfileRow(strike=560.0, call_gex=1e9, put_gex=-2e9,
-                              is_atm=True, is_flip=False, pct_max=0.75)
+        row = DepthProfileRow(
+            strike=560.0,
+            call_pct=0.75,
+            put_pct=0.25,
+            is_spot=True,
+            is_flip=False,
+            is_dominant_put=False,
+            is_dominant_call=True,
+        )
         d = row.to_dict()
-        assert set(d.keys()) == {"strike", "call_gex", "put_gex", "is_atm", "is_flip", "pct_max"}
+        assert set(d.keys()) == {
+            "strike",
+            "call_pct",
+            "put_pct",
+            "is_spot",
+            "is_flip",
+            "is_dominant_put",
+            "is_dominant_call",
+        }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -188,7 +224,7 @@ class TestUIState:
         d = UIState.zero_state().to_dict()
         expected = {"micro_stats", "tactical_triad", "wall_migration",
                     "depth_profile", "active_options", "mtf_flow",
-                    "skew_dynamics", "macro_volume_map"}
+                    "skew_dynamics", "macro_volume_map", "iv_velocity"}
         assert set(d.keys()) == expected
 
     def test_frozen(self):

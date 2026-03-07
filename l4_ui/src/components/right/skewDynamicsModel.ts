@@ -1,12 +1,4 @@
-export interface SkewDynamicsState {
-    value: string
-    state_label: string
-    color_class: string
-    border_class: string
-    bg_class: string
-    shadow_class: string
-    badge: string
-}
+import type { SkewDynamicsState } from '../../types/dashboard'
 
 export const SKEW_DYNAMICS_ZERO: SkewDynamicsState = {
     value: '—',

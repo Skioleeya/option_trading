@@ -5,12 +5,13 @@
 import React, { memo } from 'react'
 import { Activity, Clock, Triangle, Activity as Pulse } from 'lucide-react'
 import { useDashboardStore } from '../../store/dashboardStore'
+import type { TacticalTriadState } from '../../types/dashboard'
 import { normalizeTacticalTriadState } from './tacticalTriadModel'
 
 const selectTacticalTriad = (s: ReturnType<typeof useDashboardStore.getState>) =>
     s.payload?.agent_g?.data?.ui_state?.tactical_triad ?? null
 
-interface Props { uiState?: any }
+interface Props { uiState?: TacticalTriadState | null }
 
 export const TacticalTriad: React.FC<Props> = memo(({ uiState: propState }) => {
     const storeState = useDashboardStore(selectTacticalTriad)

@@ -9,7 +9,7 @@ import { useDashboardStore } from '../../store/dashboardStore'
 import { normalizeActiveOptions } from './activeOptionsModel'
 
 const selectActiveOptions = (s: ReturnType<typeof useDashboardStore.getState>) =>
-    (s.payload?.agent_g?.data?.ui_state?.active_options ?? null) as ActiveOption[] | null
+    s.payload?.agent_g?.data?.ui_state?.active_options ?? null
 
 interface Props { options?: ActiveOption[] }
 
@@ -68,11 +68,11 @@ export const ActiveOptions: React.FC<Props> = memo(({ options: propOptions }) =>
                                 </td>
                                 <td className="py-1 text-right">
                                     <span className="px-1.5 py-0.5 rounded-[4px] text-[10px] font-bold bg-white/5 border border-white/10">
-                                        {(opt as any).flow_volume_label || fmtVolume(opt.volume)}
+                                        {opt.flow_volume_label || fmtVolume(opt.volume)}
                                     </span>
                                 </td>
-                                <td className={`py-1 text-right font-bold transition-all duration-500 pr-1 ${(opt as any).flow_color || (flowNeg ? 'text-accent-green' : 'text-accent-red')}`}>
-                                    {(opt as any).flow_deg_formatted || fmtFlow(opt.flow)}
+                                <td className={`py-1 text-right font-bold transition-all duration-500 pr-1 ${opt.flow_color || (flowNeg ? 'text-accent-green' : 'text-accent-red')}`}>
+                                    {opt.flow_deg_formatted || fmtFlow(opt.flow)}
                                 </td>
                             </tr>
                         )

@@ -133,6 +133,124 @@ function Get-ArchitectureBoundaryHits {
     return $hits
 }
 
+function Get-RuntimeSourceTargets {
+    param([string]$RepoRoot)
+
+    $roots = @("l0_ingest", "l1_compute", "l2_decision", "l3_assembly", "l4_ui", "app", "shared")
+    $targets = @()
+    $extAllow = @(".py", ".ts", ".tsx", ".rs")
+
+    foreach ($root in $roots) {
+        $fullRoot = Join-Path $RepoRoot $root
+        if (-not (Test-Path $fullRoot)) {
+            continue
+        }
+
+        $files = Get-ChildItem -Path $fullRoot -Recurse -File -ErrorAction SilentlyContinue
+        foreach ($f in $files) {
+            $ext = [System.IO.Path]::GetExtension($f.Name).ToLowerInvariant()
+            if ($extAllow -notcontains $ext) {
+                continue
+            }
+
+            $norm = Normalize-RepoPath -Path $f.FullName.Substring($RepoRoot.Length + 1)
+            if ($norm -match '/tests?/' -or
+                $norm -match '/__tests__/' -or
+                $norm -match '/__pycache__/' -or
+                $norm -match '/node_modules/' -or
+                $norm -match '/dist/' -or
+                $norm -match '/build/') {
+                continue
+            }
+
+            $targets += $norm
+        }
+    }
+
+    return @($targets | Select-Object -Unique)
+}
+
+function Get-AntiPatternHits {
+    param(
+        [string]$RepoRoot,
+        [string[]]$TargetPaths
+    )
+
+    $hits = @()
+    foreach ($target in ($TargetPaths | Select-Object -Unique)) {
+        $normTarget = Normalize-RepoPath -Path $target
+        if ([string]::IsNullOrWhiteSpace($normTarget)) {
+            continue
+        }
+
+        $fullPath = Join-Path $RepoRoot $normTarget
+        if (-not (Test-Path $fullPath)) {
+            continue
+        }
+
+        $ext = [System.IO.Path]::GetExtension($normTarget).ToLowerInvariant()
+        $lines = Get-Content $fullPath
+        $lineNo = 0
+        foreach ($line in $lines) {
+            $lineNo += 1
+            $trim = $line.Trim()
+
+            if ($ext -eq ".rs") {
+                if ($trim -match '\bunwrap\s*\(') {
+                    $hits += [pscustomobject]@{
+                        id = "RUST_RUNTIME_UNWRAP"
+                        path = $normTarget
+                        line = $lineNo
+                        excerpt = $trim
+                        message = "Rust runtime path must not introduce unwrap()."
+                    }
+                }
+            }
+
+            if ($ext -eq ".py") {
+                if ($trim -match '^except\s*:\s*$' -or $trim -match '^except\s+Exception\s*:\s*$') {
+                    $hits += [pscustomobject]@{
+                        id = "PY_SILENT_EXCEPT"
+                        path = $normTarget
+                        line = $lineNo
+                        excerpt = $trim
+                        message = "Silent/bare Python except in runtime source is forbidden."
+                    }
+                }
+            }
+        }
+    }
+
+    return $hits
+}
+
+function Report-Hits {
+    param(
+        [object[]]$Hits,
+        [string]$Header,
+        [int]$MaxReport = 20
+    )
+
+    if ($Hits.Count -le 0) {
+        return
+    }
+
+    Fail ($Header + " (" + $Hits.Count + " hit(s))")
+    $reported = 0
+    foreach ($hit in $Hits) {
+        if ($reported -ge $MaxReport) {
+            break
+        }
+        $id = if ([string]::IsNullOrWhiteSpace($hit.id)) { "RULE" } else { $hit.id }
+        $msg = if ([string]::IsNullOrWhiteSpace($hit.message)) { "Violation" } else { $hit.message }
+        Fail ("  " + $id + " @ " + $hit.path + ":" + $hit.line + " -> " + $msg + " | " + $hit.excerpt)
+        $reported += 1
+    }
+    if ($Hits.Count -gt $MaxReport) {
+        Fail ("  ... " + ($Hits.Count - $MaxReport) + " more violation(s) not shown")
+    }
+}
+
 function Read-ActiveSessionPath {
     param([string]$ContextProjectFile)
     if (-not (Test-Path $ContextProjectFile)) {
@@ -309,6 +427,22 @@ if ($Strict) {
     if ($changedFiles.Count -gt 0) { Pass "Strict gate: files_changed is non-empty" } else { Fail "Strict gate: files_changed must be non-empty" }
     if ($commands.Count -gt 0) { Pass "Strict gate: commands is non-empty" } else { Fail "Strict gate: commands must be non-empty" }
     if ($testsPassed.Count -gt 0) { Pass "Strict gate: tests_passed is non-empty" } else { Fail "Strict gate: tests_passed must be non-empty" }
+
+    $hasStrictValidateCommand = @(
+        $commands | Where-Object { $_ -match '(?i)validate_session\.ps1\s+-Strict' }
+    ).Count -gt 0
+    if ($hasStrictValidateCommand) {
+        Pass "Strict gate: commands include validate_session.ps1 -Strict evidence"
+    } else {
+        Fail "Strict gate: commands must include validate_session.ps1 -Strict evidence"
+    }
+
+    $handoffMentionsStrict = [regex]::IsMatch($handoffText, '(?im)validate_session\.ps1\s+-Strict')
+    if ($handoffMentionsStrict) {
+        Pass "Strict gate: handoff includes validate_session.ps1 -Strict record"
+    } else {
+        Fail "Strict gate: handoff must include validate_session.ps1 -Strict record"
+    }
 }
 
 if ($isActiveSession) {
@@ -363,36 +497,52 @@ if ($runtimeChanged.Count -gt 0) {
 
 # Architecture anti-coupling gate (strict only)
 if ($Strict) {
+    $policyPath = Join-Path $repoRoot "scripts/policy/layer_boundary_rules.json"
+
     $architectureTargets = @(
         $runtimeChanged | Where-Object {
             $norm = Normalize-RepoPath -Path $_
-            $norm -match '\.(py|ts|tsx)$'
+            $norm -match '\.(py|ts|tsx|rs)$'
         }
     )
     if ($architectureTargets.Count -gt 0) {
-        $policyPath = Join-Path $repoRoot "scripts/policy/layer_boundary_rules.json"
         $boundaryHits = @(Get-ArchitectureBoundaryHits -RepoRoot $repoRoot -TargetPaths $architectureTargets -PolicyPath $policyPath)
         if ($boundaryHits.Count -gt 0) {
-            Fail ("Strict gate: architecture anti-coupling violations detected (" + $boundaryHits.Count + " hit(s))")
-            $maxReport = 20
-            $reported = 0
-            foreach ($hit in $boundaryHits) {
-                if ($reported -ge $maxReport) {
-                    break
-                }
-                $id = if ([string]::IsNullOrWhiteSpace($hit.id)) { "RULE" } else { $hit.id }
-                $msg = if ([string]::IsNullOrWhiteSpace($hit.message)) { "Layer boundary violation" } else { $hit.message }
-                Fail ("  " + $id + " @ " + $hit.path + ":" + $hit.line + " -> " + $msg + " | " + $hit.excerpt)
-                $reported += 1
-            }
-            if ($boundaryHits.Count -gt $maxReport) {
-                Fail ("  ... " + ($boundaryHits.Count - $maxReport) + " more violation(s) not shown")
-            }
+            Report-Hits -Hits $boundaryHits -Header "Strict gate: architecture anti-coupling violations detected in changed files"
         } else {
-            Pass "Strict gate: architecture anti-coupling scan passed"
+            Pass "Strict gate: architecture anti-coupling scan passed (changed files)"
         }
     } else {
-        Pass "Strict gate: architecture anti-coupling scan skipped (no changed runtime source files)"
+        Pass "Strict gate: architecture anti-coupling scan skipped for changed files (none)"
+    }
+
+    $fullArchitectureTargets = @(Get-RuntimeSourceTargets -RepoRoot $repoRoot)
+    if ($fullArchitectureTargets.Count -gt 0) {
+        $fullBoundaryHits = @(Get-ArchitectureBoundaryHits -RepoRoot $repoRoot -TargetPaths $fullArchitectureTargets -PolicyPath $policyPath)
+        if ($fullBoundaryHits.Count -gt 0) {
+            Report-Hits -Hits $fullBoundaryHits -Header "Strict gate: full-repo architecture anti-coupling violations detected" -MaxReport 40
+        } else {
+            Pass "Strict gate: full-repo architecture anti-coupling scan passed"
+        }
+    } else {
+        Pass "Strict gate: full-repo architecture scan skipped (no runtime source files found)"
+    }
+
+    $antiPatternTargets = @(
+        $runtimeChanged | Where-Object {
+            $norm = Normalize-RepoPath -Path $_
+            $norm -match '\.(py|rs)$'
+        }
+    )
+    if ($antiPatternTargets.Count -gt 0) {
+        $antiPatternHits = @(Get-AntiPatternHits -RepoRoot $repoRoot -TargetPaths $antiPatternTargets)
+        if ($antiPatternHits.Count -gt 0) {
+            Report-Hits -Hits $antiPatternHits -Header "Strict gate: anti-pattern violations detected in changed runtime files"
+        } else {
+            Pass "Strict gate: anti-pattern scan passed (changed runtime files)"
+        }
+    } else {
+        Pass "Strict gate: anti-pattern scan skipped (no changed .py/.rs runtime files)"
     }
 } else {
     Pass "Architecture anti-coupling gate skipped (run with -Strict)"

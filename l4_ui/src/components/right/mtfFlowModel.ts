@@ -1,27 +1,4 @@
-export interface MtfTfState {
-    direction: string
-    regime: string
-    regime_label: string
-    z: number
-    strength: number
-    tier: string
-    dot_color: string
-    text_color: string
-    shadow: string
-    border: string
-    animate: string
-}
-
-export interface MtfFlowState {
-    m1: MtfTfState
-    m5: MtfTfState
-    m15: MtfTfState
-    consensus: 'BULLISH' | 'BEARISH' | 'NEUTRAL'
-    strength: number
-    alignment: number
-    align_label: string
-    align_color: string
-}
+import type { MtfFlowState, MtfTfState } from '../../types/dashboard'
 
 export const DEFAULT_TF: MtfTfState = {
     direction: 'NEUTRAL',
@@ -118,4 +95,3 @@ export function normalizeMtfFlowState(input: unknown): MtfFlowState {
         align_color,
     }
 }
-

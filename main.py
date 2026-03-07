@@ -4,8 +4,7 @@ import os
 # --- Hyper-Early SDK Guard (Institutional Priority) ---
 print("[PRE-FLIGHT] Initializing LongPort SDK C-Core...")
 from longport.openapi import QuoteContext, Config
-import os
-def _load_env_keys():
+def _load_env_keys() -> None:
     if os.path.exists(".env"):
         with open(".env", "r") as f:
             for line in f:
@@ -13,15 +12,27 @@ def _load_env_keys():
                     k, v = line.split("=", 1)
                     os.environ[k.strip()] = v.strip()
 
-_load_env_keys()
-_early_config = Config(
-    app_key=os.environ.get("LONGPORT_APP_KEY", ""),
-    app_secret=os.environ.get("LONGPORT_APP_SECRET", ""),
-    access_token=os.environ.get("LONGPORT_ACCESS_TOKEN", ""),
-)
-# This MUST happen before CuPy/Numba/CUDA imports
-PRIMARY_CTX = QuoteContext(_early_config)
-print("[PRE-FLIGHT] SDK Primary Context READY.")
+def _init_primary_ctx() -> QuoteContext | None:
+    _load_env_keys()
+    early_config = Config(
+        app_key=os.environ.get("LONGPORT_APP_KEY", ""),
+        app_secret=os.environ.get("LONGPORT_APP_SECRET", ""),
+        access_token=os.environ.get("LONGPORT_ACCESS_TOKEN", ""),
+    )
+    # This MUST happen before CuPy/Numba/CUDA imports
+    try:
+        ctx = QuoteContext(early_config)
+        print("[PRE-FLIGHT] SDK Primary Context READY.")
+        return ctx
+    except Exception as exc:
+        print(
+            "[PRE-FLIGHT] SDK Primary Context FAILED. "
+            f"Entering degraded mode (primary_ctx=None). reason={exc}"
+        )
+        return None
+
+
+PRIMARY_CTX = _init_primary_ctx()
 # --------------------------------------------------
 
 # --- Hardware Optimization: Set thread limits before NumPy/SciPy imports ---

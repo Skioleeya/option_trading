@@ -12,6 +12,12 @@
  *   L4UIState      ↔  UIState        (payload_events.py)
  *   L4FrozenPayload ↔ FrozenPayload  (payload_events.py)
  */
+import type {
+    ActiveOption,
+    MtfFlowState,
+    SkewDynamicsState,
+    TacticalTriadState,
+} from './dashboard'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Atomic types
@@ -122,11 +128,10 @@ export interface L4UIState {
     macro_volume_map: Record<string, number>
     atm: L4AtmDecay | null
 
-    // Intentionally loosely typed (matching legacy presenter output)
-    tactical_triad: Record<string, unknown> | null
-    skew_dynamics: Record<string, unknown> | null
-    active_options: unknown[]
-    mtf_flow: Record<string, unknown> | null
+    tactical_triad: TacticalTriadState | null
+    skew_dynamics: SkewDynamicsState | null
+    active_options: ActiveOption[] | null
+    mtf_flow: MtfFlowState | null
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

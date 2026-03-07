@@ -1,0 +1,41 @@
+session_id: "2026-03-07/0908_startup_runtime_debug_hotfix"
+title: "0908 startup runtime debug hotfix"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-07 08:19:32 -05:00"
+updated_at_et: "2026-03-07 08:33:58 -05:00"
+parent_session: "2026-03-07/0725_p2_l4_typed_contract_regression_mod"
+
+branch: "master"
+base_commit: "c7389f3"
+head_commit: "c7389f3"
+
+files_changed:
+  - "docs/SOP/L0_DATA_FEED.md"
+  - "docs/SOP/SYSTEM_OVERVIEW.md"
+  - "l0_ingest/feeds/market_data_gateway.py"
+  - "l0_ingest/tests/test_market_data_gateway.py"
+  - "main.py"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-07/0908_startup_runtime_debug_hotfix/project_state.md"
+  - "notes/sessions/2026-03-07/0908_startup_runtime_debug_hotfix/open_tasks.md"
+  - "notes/sessions/2026-03-07/0908_startup_runtime_debug_hotfix/handoff.md"
+  - "notes/sessions/2026-03-07/0908_startup_runtime_debug_hotfix/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId 0908_startup_runtime_debug_hotfix -Timezone \"Eastern Standard Time\" -ParentSession \"2026-03-07/0725_p2_l4_typed_contract_regression_mod\""
+  - "$env:PYTHONPATH='.'; python -m uvicorn main:app --host 0.0.0.0 --port 8001"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/test_market_data_gateway.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 scripts/test/test_l0_l4_pipeline.py"
+  - "Start-Process python -m uvicorn main:app ; Invoke-WebRequest http://127.0.0.1:8001/health ; Stop-Process"
+  - "Start-Process python -m uvicorn main:app --host 0.0.0.0 --port 8001"
+  - "npm --prefix l4_ui run dev -- --host 0.0.0.0 --port 5173"
+  - "Invoke-WebRequest http://127.0.0.1:8001/health ; Invoke-WebRequest http://127.0.0.1:5173"
+tests_passed:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/test_market_data_gateway.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 scripts/test/test_l0_l4_pipeline.py"
+tests_failed: []
+blockers: []
+notes:
+  - "Root cause: PRE-FLIGHT QuoteContext creation raised OpenApiException(connect) and aborted app import."
+  - "Hotfix: preflight + gateway connect now degrade explicitly and keep service startup alive."

@@ -1,9 +1,10 @@
 ﻿# Open Tasks (Index)
 
 ## Active Session Tasks
-- Path: notes/sessions/2026-03-06/0015_p1_gamma_l1_quant_l2_qual_mod/open_tasks.md
+- Path: notes/sessions/2026-03-07/0855_p0_agents_machine_directive_mod/open_tasks.md
 
 ## Global Backlog (Cross-Session)
+- [ ] P2: Stage2 remove `DecisionOutput.to_legacy_agent_result` and migrate compute-loop/L3 to typed-contract direct path (Owner: Codex, DUE: 2026-03-12).
 - [x] P0: ATM decay storage append path O(N^2) fixed via JSONL append mirror (`SUPERSEDED-BY: 2026-03-06/1702/1702_p0_timestamp_atm_storage_hotfix_mod`).
 - [x] P0: L0-L4 timestamp contract hardened with L0 `as_of_utc` source-of-truth (`SUPERSEDED-BY: 2026-03-06/1702/1702_p0_timestamp_atm_storage_hotfix_mod`).
 - [x] P1: Add runtime observability probe for `snapshot_version` vs `spy_atm_iv` drift (`SUPERSEDED-BY: 2026-03-06/1908_p1_probe_nav_chart_hotfix_mod`).

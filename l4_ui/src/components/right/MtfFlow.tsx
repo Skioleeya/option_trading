@@ -4,12 +4,13 @@
  */
 import React, { memo } from 'react'
 import { useDashboardStore } from '../../store/dashboardStore'
+import type { MtfFlowState } from '../../types/dashboard'
 import { normalizeMtfFlowState } from './mtfFlowModel'
 
 const selectMtfFlow = (s: ReturnType<typeof useDashboardStore.getState>) =>
     s.payload?.agent_g?.data?.ui_state?.mtf_flow ?? null
 
-interface Props { uiState?: unknown }
+interface Props { uiState?: MtfFlowState | null }
 
 export const MtfFlow: React.FC<Props> = memo(({ uiState: propState }) => {
     const storeState = useDashboardStore(selectMtfFlow)

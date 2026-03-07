@@ -1,0 +1,35 @@
+session_id: "2026-03-07/0855_p0_agents_machine_directive_mod"
+title: "0855 p0 agents machine directive mod"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-07 08:49:08 -05:00"
+updated_at_et: "2026-03-07 09:06:07 -05:00"
+parent_session: "2026-03-07/0845_p0_sop_full_refresh_mod"
+
+branch: "master"
+base_commit: "c7389f3"
+head_commit: "c7389f3"
+
+files_changed:
+  - "AGENTS.md"
+  - "notes/context/handoff.md"
+  - "scripts/validate_session.ps1"
+  - "notes/sessions/2026-03-07/0855_p0_agents_machine_directive_mod/project_state.md"
+  - "notes/sessions/2026-03-07/0855_p0_agents_machine_directive_mod/open_tasks.md"
+  - "notes/sessions/2026-03-07/0855_p0_agents_machine_directive_mod/handoff.md"
+  - "notes/sessions/2026-03-07/0855_p0_agents_machine_directive_mod/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId 0855_p0_agents_machine_directive_mod -Timezone \"Eastern Standard Time\" -ParentSession \"2026-03-07/0845_p0_sop_full_refresh_mod\""
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 scripts/test/test_l0_l4_pipeline.py"
+  - "rg -n \"Strict gate|architecture anti-coupling|files_changed|commands|tests_passed|SOP sync|Debt gate|RUNTIME-ARTIFACT\" scripts/validate_session.ps1"
+  - "rg -n \"MANDATORY_HOOK|ANTI_PATTERN|MANDATORY_ARCH|thinking|validate_session\\.ps1 -Strict|unwrap|silent\" AGENTS.md"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 scripts/test/test_l0_l4_pipeline.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_failed: []
+blockers: []
+notes:
+  - "AGENTS.md upgraded to machine-enforced directive style with XML mandatory/anti-pattern blocks and hard handoff hooks."
+  - "Gate upgrade implemented in scripts/validate_session.ps1: strict command evidence, full-repo architecture scan, runtime anti-pattern scan."

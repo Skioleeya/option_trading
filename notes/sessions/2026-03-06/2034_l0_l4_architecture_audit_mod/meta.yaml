@@ -1,0 +1,39 @@
+session_id: "2026-03-06/2034_l0_l4_architecture_audit_mod"
+title: "2034 l0 l4 architecture audit mod"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-06 20:34:43 -05:00"
+updated_at_et: "2026-03-06 20:44:58 -05:00"
+parent_session: "2026-03-06/2018_mtf_flow_l0_l4_hotfix_mod"
+
+branch: "master"
+base_commit: "e716c69"
+head_commit: "e716c69"
+
+files_changed:
+  - "清单.md"
+  - "notes/sessions/2026-03-06/2034_l0_l4_architecture_audit_mod/project_state.md"
+  - "notes/sessions/2026-03-06/2034_l0_l4_architecture_audit_mod/open_tasks.md"
+  - "notes/sessions/2026-03-06/2034_l0_l4_architecture_audit_mod/handoff.md"
+  - "notes/sessions/2026-03-06/2034_l0_l4_architecture_audit_mod/meta.yaml"
+
+commands:
+  - "rg -n \"from l2_decision|import l2_decision|from l3_assembly|import l3_assembly|from l4_ui|import l4_ui\" l0_ingest l1_compute"
+  - "rg -n \"from l3_assembly|import l3_assembly|from l4_ui|import l4_ui\" l2_decision"
+  - "rg -n \"from l2_decision|import l2_decision\" l3_assembly"
+  - "rg -n \"from l1_compute.analysis|from l1_compute.trackers\" l2_decision l3_assembly"
+  - "apply_patch create 清单.md at repository root"
+  - "read code with line numbers: agent_g.py, ui_state_tracker.py, active_options presenter, compute_loop.py, housekeeping_loop.py"
+
+tests_passed:
+  - "N/A (analysis-only; no runtime/code change)"
+tests_failed:
+  - "none"
+blockers: []
+notes:
+  - "Macro chain clarity is acceptable, but strict decoupling is not achieved."
+  - "Key couplings: L2->L3 import, L3->L2 import, L3->L1 tracker dependency, app private-member orchestration."
+  - "Added root checklist for decoupling execution plan."
+
+

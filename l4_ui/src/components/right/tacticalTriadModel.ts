@@ -1,21 +1,4 @@
-export interface TacticalTriadCard {
-    value: string
-    state_label: string
-    color_class: string
-    border_class: string
-    bg_class: string
-    shadow_class: string
-    animation?: string
-    multiplier?: string | null
-    sub_intensity: string
-    sub_label: string
-}
-
-export interface TacticalTriadState {
-    vrp: TacticalTriadCard
-    charm: TacticalTriadCard
-    svol: TacticalTriadCard
-}
+import type { TacticalTriadCard, TacticalTriadState } from '../../types/dashboard'
 
 const CARD_BASE = {
     color_class: 'text-text-secondary',

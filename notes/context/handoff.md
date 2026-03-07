@@ -1,12 +1,12 @@
 ﻿# Handoff (Index)
 
 ## Active Handoff
-- Path: notes/sessions/2026-03-06/0015_p1_gamma_l1_quant_l2_qual_mod/handoff.md
-- Meta: notes/sessions/2026-03-06/0015_p1_gamma_l1_quant_l2_qual_mod/meta.yaml
+- Path: notes/sessions/2026-03-07/0855_p0_agents_machine_directive_mod/handoff.md
+- Meta: notes/sessions/2026-03-07/0855_p0_agents_machine_directive_mod/meta.yaml
 
 ## Latest Outcome
-- Session: 2026-03-06/0015_p1_gamma_l1_quant_l2_qual_mod
-- Summary: Completed P1 contract-boundary hardening: L2 gamma path is qualitative-only, L3 UIStateTracker now consumes contracts only, and CI now enforces full-repository import-boundary checks.
+- Session: 2026-03-07/0855_p0_agents_machine_directive_mod
+- Summary: Rewrote AGENTS.md into machine-enforced directive format and completed validate_session gate upgrade implementation (strict command evidence + full-repo boundary scan + anti-pattern scan); strict validation loop rerun and passed.
 
 ## Next Session Bootstrap
 1. Read this file.

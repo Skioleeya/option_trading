@@ -1,144 +1,205 @@
-# SPY 0DTE Dashboard — 架构重构总览
+# SPY 0DTE Dashboard SOP — SYSTEM OVERVIEW
 
-> **系统定位**: 机构级 SPY 0DTE 期权实时决策支持平台。
->
-> **文档版本**: v4.5 (基于 2026 最新 Rust/Arrow 核心状态编写)
->
-> **2026 Frontier Status**: 经过 2026 第一季度实证审计，本项目的高性能 Rust 采集层、Arrow 零拷贝 IPC 以及 301607 级联限频保护机制已确认为**全球一流前沿实践**。
+> Version: 2026-03-07
+> Scope: L0/L1/L2/L3/L4 + app orchestration + shared services
 
----
+## 1. Mission
 
-## 纵览：v3 到 v4.5 混合动力跃迁
+系统目标是以机构级时效处理 SPY 0DTE 期权链路，要求在高噪声、高频环境下保持：
 
-经过深度集成，系统现已完成从 "Python 单体" 到 "Rust/Python 生产力集群" 的跃迁：
+- 低延迟: L0 到 L4 连续链路稳定
+- 强契约: 跨层字段与语义一致
+- 可降级: 外部依赖失效时服务不中断
+- 可审计: 每层有明确日志、指标和回归门禁
 
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│  v3 (早期)                    →  v4.5 (机构级混合动力)               │
-│                                                                      │
-│  main.py (AppContainer God类) →  app/ (Gold Context Pre-Flight 启动) │
-│  Python WS (高延迟/GC抖动)    →  Dual-Stack Gateway (Python/Rust 互备)│
-│  Dict Serialization (内存损耗) →  Zero-Copy Arrow IPC (共享内存)      │
-│  L1 IV 限频 (301607 崩溃)     →  Dual-Bucket Governor (加权限流)     │
-└──────────────────────────────────────────────────────────────────────┘
-```
+## 2. Runtime Architecture
 
-## 全局重构架构分层
+```mermaid
+flowchart LR
+  subgraph L0["L0 Data Ingest"]
+    L0A[LongPort WS/REST]
+    L0B[Rust Ingest Gateway]
+    L0C[MarketDataGateway]
+    L0D[ChainStateStore]
+    L0E[IV/Tier2/Tier3 Pollers]
+  end
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                     L4 — 前端展示层 (l4_ui/)                         │
-│  Zustand Store (Selector精准渲染) · Institutional Sweep Visuals      │
-│  ActiveOptions (Impact Index 排序) · 0DTE 高频呼吸动画                │
-└─────────────────────────────┬───────────────────────────────────────┘
-                               │ WebSocket (全量/Delta / 1Hz Push)
-┌─────────────────────────────▼───────────────────────────────────────┐
-│                     L3 — 输出组装层                                  │
-│  Threat-Aware Assembler (OFII 驱动排序) · FieldDeltaEncoder         │
-│  Row-Level Memoization (1k+ 行级优化) · Presenters V2                │
-└─────────────────────────────┬───────────────────────────────────────┘
-                               │ DecisionOutput + EnrichedSnapshot
-┌─────────────────────────────▼───────────────────────────────────────┐
-│                     L2 — 决策分析层                                  │
-│  Institutional Grade Core (OFII Math) · Sweep Cluster Detector       │
-│  Feature Store (Turnover Velocity) · Multi-Agent Fusion Engine       │
-└─────────────────────────────┬───────────────────────────────────────┘
-                               │ EnrichedSnapshot (含 Native OFII/Sweep)
-┌─────────────────────────────▼───────────────────────────────────────┐
-│                     L1 — 本地计算层                                  │
-│  Rust Bridge (Zero-Copy Mmap) · Compute Router (GPU/CPU Hetero)      │
-│  Flow Trackers (Integrated Vanna, Wall, IV Velocity)                 │
-└─────────────────────────────┬───────────────────────────────────────┘
-                               │ 共享内存 (Apache Arrow IPC)
-┌─────────────────────────────▼───────────────────────────────────────┐
-│                     L0 — 数据摄取层 (Native Rust)                    │
-│  Native SDK Ingest · Core Pinning · Impact/Sweep Pre-Compute         │
-│  Weighted Rate Limiter (301607 Fix) · Dual-Token Governor            │
-└─────────────────────────────────────────────────────────────────────┘
-```
+  subgraph L1["L1 Local Computation"]
+    L1A[RustBridge SHM/Arrow]
+    L1B[L1ComputeReactor]
+    L1C[Greeks + Trackers]
+    L1D[EnrichedSnapshot]
+  end
 
-## 分层依赖方向硬约束 (2026-03-06 Guardrail)
+  subgraph L2["L2 Decision Analysis"]
+    L2A[FeatureStore]
+    L2B[Signals]
+    L2C[Fusion]
+    L2D[GuardRails]
+    L2E[DecisionOutput]
+  end
 
-- **唯一方向**：运行时依赖只允许 `L0 -> L1 -> L2 -> L3 -> L4`；`app/` 仅做组装编排。
-- **禁止反向耦合**：低层不得导入高层实现（例如 `l2_decision -> l3_assembly`、`l3_assembly -> l4_ui`）。
-- **契约层白名单**：跨层复用仅允许通过 `events/contracts` 等稳定接口模块，禁止直接依赖上游实现细节（signals/agents/presenter internals）。
-- **中立服务复用**：跨层共享计算能力（如 ActiveOptions Flow/DEG）必须下沉到 `shared/services/*`，禁止通过 `l2_decision/*` 实现目录被 L3 复用。
-- **编排私有成员禁令**：`app/loops/*` 禁止访问跨层私有属性（`._xxx`）；必须通过容器公开 API 或适配器服务。
-- **校验落地**：严格校验由 `scripts/validate_session.ps1 -Strict` + `scripts/policy/layer_boundary_rules.json` 执行，命中即失败。
+  subgraph L3["L3 Output Assembly"]
+    L3A[PayloadAssembler]
+    L3B[UIStateTracker]
+    L3C[Presenters]
+    L3D[FieldDeltaEncoder]
+    L3E[BroadcastGovernor]
+  end
 
----
+  subgraph L4["L4 Frontend"]
+    L4A[ProtocolAdapter]
+    L4B[DeltaDecoder]
+    L4C[DashboardStore]
+    L4D[Panels + DebugOverlay]
+  end
 
-## 核心架构拆解与文件结构 (v4.5)
+  APP["app/* orchestration"]
+  SHARED["shared/services/* neutral services"]
 
-系统通过 Rust 强化了感知能力，通过 Python 维持了业务敏捷性：
-
-| 模块区域 | 核心文件 / 路径 | 职责定位 |
-|---------|---------------|--------|
-| **L0 Native** | `l0_ingest/l0_rust/` | [ACTIVE] Rust 原生网关，处理极速 WebSocket 与 Native Greeks 计算 |
-| **IPC Bridge**| `l1_compute/rust_bridge.py` | [ACTIVE] 基于 Arrow 的零拷贝共享内存接入层 (Mmap) |
-| **L1 Reactor** | `l1_compute/reactor.py` | 现代 L1 编排器，通过 RecordBatch 接收 L0 数据并下发 EnrichedSnapshot |
-| **App 容器** | `app/container.py` | DI (依赖注入) 容器，提供全链路组件单例与 Gold Context 管理 |
-| **测试工具** | `scripts/` | 包含 `live_market_test.py` (实盘) 与 `test_rust_bridge.py` (性能) |
-
-## 研发/运营规范入口
-
-- **启动检查表**：欲启动环境请严格参见项目根目录下的 [`启动步骤.md`](../启动步骤.md)。
-- **核心构建**：修改 Rust 逻辑后，需执行 `maturin develop` 重新编译原生库。
-- **性能验证**：定期运行 `python scripts/test_rust_bridge.py --stress` 确保 IPC 链路稳固。
-- **测试入口统一 (2026-03-06)**：`pytest` 统一走 `scripts/test/run_pytest.ps1`，缓存目录固定 `tmp/pytest_cache`，禁止管理员上下文混跑（防止 `pytest-cache-files-*` 权限残留污染仓库根目录）。
-
-## 关键变更记录 (2026-03-06)
-
-- **MicroStats 墙体状态机模块化**：L3 将 `WALL DYN` 复合态判定拆分为独立状态机模块，`BREACH` 走 urgent 直通，其余状态保留去抖。
-- **跨层语义一致性修复**：修复了 `BREACHED/DECAYING/UNAVAILABLE -> STABLE` 的错误折叠，确保 L1 风险态在 L4 面板保持原始含义。
-- **Vanna 阈值稳健性修复**：`vanna_grind_stable_threshold` 运行时执行负阈值守卫，阻断配置误设导致的状态漂移。
-- **SPY ATM IV 实时链路修复（版本契约）**：修复 `compute_loop` 传入 L1 的 `l0_version` 常量化问题，改为透传 L0 快照版本；`ChainStateStore` 提供单调 `version` 并由 `fetch_chain` 下发，保障 L2 `FeatureStore` 在新快照上强制失效 TTL 缓存，避免 `atm_iv/iv_velocity` 旧值滞留。
-- **ATM Decay 越界修复（拼接契约）**：将换锚拼接从“百分比加法”升级为“复利因子拼接”，并在 L1 强制 `-100%` 下界、16:00 后停更、跨日状态重置，阻断 `CALL <-100%` 的语义越界。
-- **跨层时间戳契约加固（P0 Debt Fix）**：`data_timestamp/timestamp` 统一绑定 L0 `as_of_utc`，L3 保持广播时钟独立，drift 统一以 `L2 computed_at - L0 source timestamp` 计算。
-- **ATM 冷存写放大修复（P0 Debt Fix）**：ATM 衰减冷存从全量 JSON 重写切换为 JSONL 增量追加；恢复优先 JSONL 并兼容历史 JSON 数组文件。
-- **P1 运行时观测探针（2026-03-06）**：在 compute loop 增加 `snapshot_version vs spy_atm_iv` 漂移探针，采用 3-tick confirm，输出开始/持续/恢复日志，并将诊断快照接入 `/debug/persistence_status`。
-- **P1 L4 交互与渲染修复（2026-03-06）**：`l4:nav_*` 命令链路在 DepthProfile 端实现监听与最近 strike 回退；ATM 图表写入改为增量优先（append 走 `update`，回灌/重排回退 `setData`）。
-- **P2 会话工具链收口（2026-03-06）**：
-  - `scripts/new_session.ps1` 新增 `-Timezone`（IANA/Windows）并统一影响 session 路径时间与 `meta.yaml` 时间字段。
-  - `scripts/validate_session.ps1` 新增 `-Strict` 硬门禁，要求 `commands/files_changed/tests_passed` 非空，并在严格模式下对目标 session 执行债务门禁。
-  - 新增 `.github/workflows/session-validation.yml`，在 `pull_request + workflow_dispatch` 执行严格会话校验。
-  - 严格模式增加运行产物卫生规则：`logs/*` 与 `data/atm_decay/atm*.json` 命中时需 `RUNTIME-ARTIFACT-EXEMPT` 才允许通过。
-- **P2 L4 连接稳定性修复（2026-03-06）**：`ProtocolAdapter` 对全量/增量/keepalive 帧统一刷新连接心跳，修复前端误判 `RDS STALLED` 的黄灯假阳性。
-
-## 远期宏大迁移路线 (Updated 2026 Vision)
-
-当前 v4.5 已提前攻克了大部分 2025/2026 预设目标。
-
-```
-2025 H2 [ACHIEVED] ─────────────────────────────────────────────
-  [基建跨越] Rust IngestWorker 取代 Python WS 网关。SPSC 零锁环形队列。
-  [内存跨越] 全链路 Arrow RecordBatch 零拷贝，传输开销为 0。
-  [可靠跨越] 加权双令牌桶 governor 彻底解决 301607 限频。
-
-2026 Q1 ─────────────────────────────────────────────────────
-  [协议跨越] 前后端通信切换为 Protobuf 二进制报文。
-  [分析跨越] 启用 SABR / SVI 曲面拟合校准。
-  [模型跨越] 引入 Shadow Mode 实盘重播。
-
-2026 H2 ─────────────────────────────────────────────────────
-  [极致延迟] 预留 FPGA 层网卡直接截取组播勾子。
-  [前端扩展] WebGL 接管全量复杂 DOM 渲染。
+  L0 --> L1 --> L2 --> L3 --> L4
+  APP -. wiring only .-> L0
+  APP -. wiring only .-> L1
+  APP -. wiring only .-> L2
+  APP -. wiring only .-> L3
+  SHARED -. reusable contracts/services .-> L2
+  SHARED -. reusable contracts/services .-> L3
 ```
 
----
+## 3. Hard Dependency Law
 
-## 服务启动极简示例
+只允许单向依赖: `L0 -> L1 -> L2 -> L3 -> L4`。
+
+### 3.1 Forbidden Reverse Imports
+
+- `l2_decision` 禁止导入 `l3_assembly`、`l4_ui`
+- `l3_assembly` 禁止导入 `l4_ui`
+- `l3_assembly` 仅允许导入 `l2_decision.events/*`，禁止 `signals/*`、`agents/*`
+- `l3_assembly/presenters/ui/*` 禁止导入 `l1_compute.analysis/*` 与 `l1_compute.trackers/*`
+- `app/loops/*` 禁止跨层私有成员访问 (`obj._xxx`)
+
+### 3.2 Enforcement
+
+- Policy: `scripts/policy/layer_boundary_rules.json`
+- Gate: `scripts/validate_session.ps1 -Strict`
+- P0 审计要求: 必须支持全仓扫描，不仅扫描 `files_changed`
+
+## 4. Contracts Across Layers
+
+### 4.1 L0 -> L1
+
+最小关键字段:
+
+- `spot`
+- `chain`
+- `version` (单调递增)
+- `as_of_utc` (L0 数据源时间)
+- `rust_active`
+- `shm_stats.status/head/tail`
+
+### 4.2 L1 -> L2
+
+`EnrichedSnapshot` 核心语义:
+
+- `version` 必须透传 L0 快照版本
+- `computed_at` 为计算时钟
+- `extra_metadata.source_data_timestamp_utc` 绑定 L0 `as_of_utc`
+
+### 4.3 L2 -> L3
+
+`DecisionOutput` 核心语义:
+
+- 决策信号 + 护栏结果
+- `feature_vector` 必须包含关键 UI 消费字段（如 `skew_25d_normalized`）
+
+### 4.4 L3 -> L4
+
+Payload 核心语义:
+
+- `timestamp/data_timestamp`: L0 源数据时间
+- `broadcast_timestamp/heartbeat_timestamp`: L3 广播时钟
+- `ui_state`: 前端唯一消费状态源
+- `rust_active/shm_stats`: 诊断链路连续透传
+
+## 5. Startup and Degraded Mode
+
+```mermaid
+sequenceDiagram
+  participant U as Uvicorn
+  participant M as main.py PRE-FLIGHT
+  participant A as app.lifespan
+  participant G as MarketDataGateway
+
+  U->>M: import main
+  M->>M: init QuoteContext
+  alt success
+    M->>A: app.state.primary_ctx=ctx
+  else failure
+    M->>A: app.state.primary_ctx=None (degraded)
+  end
+
+  A->>G: connect()
+  alt connect success
+    G-->>A: quote_ctx ready
+  else connect failure
+    G-->>A: feed paused (non-fatal)
+  end
+```
+
+关键要求:
+
+- PRE-FLIGHT 失败不能导致进程崩溃
+- Gateway 二次建连失败不能中断生命周期
+- 降级模式必须有明确日志
+
+## 6. Observability
+
+推荐标准标记:
+
+- `[Debug] L0 Fetch`
+- `[L3 Assembler]`
+- `[IVSync]`
+- `shm_stats.status/head/tail`
+
+关键诊断端点:
+
+- `/health`
+- `/debug/persistence_status`
+
+## 7. Verification Standard
+
+### 7.1 Test Entry
+
+- 所有 pytest 必须通过 `scripts/test/run_pytest.ps1`
+- 缓存目录必须是 `tmp/pytest_cache`
+- 禁止管理员上下文混跑
+
+### 7.2 Minimum Regression Set
+
+- `scripts/test/test_l0_l4_pipeline.py`
+- 层间契约与 Presenter 相关回归
+- 会话结束前 `scripts/validate_session.ps1 -Strict`
+
+## 8. SOP Pack
+
+本文档与以下文档共同构成强制 fast-load pack:
+
+- `docs/SOP/L0_DATA_FEED.md`
+- `docs/SOP/L1_LOCAL_COMPUTATION.md`
+- `docs/SOP/L2_DECISION_ANALYSIS.md`
+- `docs/SOP/L3_OUTPUT_ASSEMBLY.md`
+- `docs/SOP/L4_FRONTEND.md`
+
+## 9. Runtime Commands
 
 ```powershell
-# 1. 编译并安装 Rust 网关 (首次)
-cd l0_ingest/l0_rust; maturin develop; cd ../..
+# backend
+$env:PYTHONPATH='.'
+python -m uvicorn main:app --host 0.0.0.0 --port 8001
 
-# 2. 启动基础依赖与后端
-.\scripts\redis-start.bat
-$env:PYTHONPATH='.'; python -m uvicorn main:app --port 8001
+# frontend
+npm --prefix l4_ui run dev -- --host 0.0.0.0 --port 5173
 
-# 3. 启动 GUI 控制台
-cd l4_ui; npm run dev
+# strict session gate
+powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict
 ```
-
-默认访问: `http://localhost:5173`
