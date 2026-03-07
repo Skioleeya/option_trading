@@ -59,6 +59,12 @@
 - **Skew 关键字段**：`feature_vector.skew_25d_normalized` 为 L3 `UIStateTracker` 的 `skew_dynamics` 状态输入，缺失将导致前端长期显示 `NEUTRAL/0.00`。
 - **容错边界**：`feature_vector` 仅作为跨层观察快照，不替代 L2 护栏与融合主链路。
 
+### 2.3 防耦合边界契约 (2026-03-06 Guardrail)
+- **禁止上行实现依赖**：`l2_decision/*` 严禁导入 `l3_assembly/*`、`l4_ui/*`。
+- **允许范围**：L2 仅依赖 L1 快照契约与本层模块；跨层输出只通过 `DecisionOutput` / `events` 契约结构暴露。
+- **服务抽象要求**：若 L2 需要可复用计算能力，必须落在中立服务模块（contracts/services），禁止直接复用 L3 presenter。
+- **执行门禁**：会话严格校验将扫描 `files_changed` 中的 L2 源文件，命中禁令即阻断交付。
+
 ## 3. 信号生成与融合 (Signals & Fusion)
 
 - **Institutional Upgrade (v4.5 核心逻辑)**：

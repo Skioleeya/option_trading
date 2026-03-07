@@ -1,16 +1,16 @@
-# Project State (Index)
+﻿# Project State (Index)
 
 ## Active Session
-- Path: notes/sessions/2026-03-06/2018_mtf_flow_l0_l4_hotfix_mod/project_state.md
-- Meta: notes/sessions/2026-03-06/2018_mtf_flow_l0_l4_hotfix_mod/meta.yaml
+- Path: notes/sessions/2026-03-06/2105_anti_coupling_guardrail_mod/project_state.md
+- Meta: notes/sessions/2026-03-06/2105_anti_coupling_guardrail_mod/meta.yaml
 - Status: ACTIVE
 
 ## Recent Sessions
+- notes/sessions/2026-03-06/2105_anti_coupling_guardrail_mod/
+- notes/sessions/2026-03-06/2034_l0_l4_architecture_audit_mod/
 - notes/sessions/2026-03-06/2018_mtf_flow_l0_l4_hotfix_mod/
 - notes/sessions/2026-03-06/1954_active_options_l0_l4_hotfix_mod/
 - notes/sessions/2026-03-06/1936_skew_dynamics_l0_l4_hotfix_mod/
-- notes/sessions/2026-03-06/1915_tactical_triad_l0_l4_hotfix_mod/
-- notes/sessions/2026-03-06/1818_p2_process_tooling_followup_mod/
 
 ## Global Rules
 - Session folders are immutable records; do not overwrite prior sessions.

@@ -88,6 +88,12 @@
 - **回退策略**：仅当 L1 `mtf_consensus` 缺失或结构非法时，才允许回退到 L3 本地 `MTFIVEngine` 估算值。
 - **一致性目标**：L2 决策使用的 `mtf_consensus` 与 L4 `MtfFlow` 展示语义必须同源，避免“信号看涨但面板中性”的跨层漂移。
 
+### 2.9 防耦合边界契约 (2026-03-06 Guardrail)
+- **L2 契约导入白名单**：L3 允许导入 `l2_decision.events/*` 契约；禁止导入 `l2_decision.signals/*`、`l2_decision.agents/*` 等实现模块。
+- **Presenter 纯度要求**：`l3_assembly/presenters/ui/*` 禁止直接导入 `l1_compute.analysis/*` 与 `l1_compute.trackers/*`；输入必须来自 `EnrichedSnapshot` 或组装层注入参数。
+- **前端边界**：L3 禁止导入 `l4_ui/*`（包括类型或实现），L4 只通过协议负载消费 L3。
+- **校验方式**：上述规则由 `scripts/policy/layer_boundary_rules.json` 提供，`validate_session.ps1 -Strict` 命中即失败。
+
 ### 2.1 MicroStats 状态契约补丁 (2026-03-06)
 
 - **`wall_dyn` 强制映射**：`PayloadAssemblerV2` 必须将 `ui_metrics.wall_migration_data` 归一化后显式映射为 `micro_stats.wall_dyn` 输入，禁止遗漏该桥接步骤。

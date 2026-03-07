@@ -18,6 +18,14 @@ Python gives agility; **Rust gives deterministic speed**.
 ### 1.3 Schema & Contract Integrity
 * **Strict Alignment**: `CleanQuoteEvent` / `EnrichedSnapshot` changes MUST be synchronized across Rust/Python.
 * **Metadata Continuity**: `rust_active`, `shm_stats` and diagnostics MUST survive L0→L4 propagation.
+
+### 1.4 Layer Dependency Direction (Hard Gate)
+* **One-Way Flow Only**: Allowed runtime dependency direction is `L0 -> L1 -> L2 -> L3 -> L4`; `app/` is orchestration-only wiring, not business logic sink.
+* **L2 Isolation**: `l2_decision/` MUST NOT import `l3_assembly/` or `l4_ui/`.
+* **L3 Contract-Only L2 Access**: `l3_assembly/` may consume `l2_decision.events/*` contracts only; importing `l2_decision.signals/*`, `l2_decision.agents/*`, or other implementation modules is forbidden.
+* **Presenter Purity**: `l3_assembly/presenters/ui/*` MUST NOT import `l1_compute.analysis/*` or `l1_compute.trackers/*`; upstream data enters through `EnrichedSnapshot`/`DecisionOutput` only.
+* **No Private-Member Orchestration**: `app/loops/*` MUST NOT touch cross-layer private members (e.g. `obj._active_options_presenter`); use explicit public APIs/adapters.
+* **Boundary Adapter Rule**: Cross-layer reuse MUST flow through dedicated contract or neutral service modules; direct implementation imports across non-adjacent layers are forbidden.
 ---
 ## 2. Microstructure & Quant Principles
 ### 2.1 Native Threat Pipeline
@@ -125,7 +133,9 @@ Every agent MUST follow the `notes/context` continuity contract.
 
 ### 6.5 Scripted Enforcement
 * **Bootstrap Script**: SHOULD use `scripts/new_session.ps1`.
-* **Validation Script**: SHOULD run `scripts/validate_session.ps1` before handoff/exit.
+* **Validation Script**: SHOULD run `scripts/validate_session.ps1 -Strict` before handoff/exit.
+* **Architecture Boundary Policy**: `scripts/validate_session.ps1` MUST enforce anti-coupling rules from `scripts/policy/layer_boundary_rules.json` against `meta.yaml.files_changed` runtime source files.
+* **Violation Contract**: Any boundary hit MUST fail validation and print offending `file:line`.
 * **Validation Scope**: Pointer consistency for active session; structural validity minimum for non-active sessions.
 
 ---

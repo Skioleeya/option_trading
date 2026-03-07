@@ -40,6 +40,99 @@ function Normalize-RepoPath {
     return $v
 }
 
+function Test-PathGlobMatch {
+    param(
+        [string]$Path,
+        [string]$Glob
+    )
+    $normPath = Normalize-RepoPath -Path $Path
+    $normGlob = Normalize-RepoPath -Path $Glob
+    if ([string]::IsNullOrWhiteSpace($normPath) -or [string]::IsNullOrWhiteSpace($normGlob)) {
+        return $false
+    }
+    return $normPath -like $normGlob
+}
+
+function Get-ArchitectureBoundaryHits {
+    param(
+        [string]$RepoRoot,
+        [string[]]$TargetPaths,
+        [string]$PolicyPath
+    )
+
+    $hits = @()
+    if (-not (Test-Path $PolicyPath)) {
+        Fail "Architecture policy file missing: $PolicyPath"
+        return $hits
+    }
+
+    try {
+        $policy = Get-Content $PolicyPath -Raw | ConvertFrom-Json
+    } catch {
+        Fail "Architecture policy parse failed: $PolicyPath"
+        return $hits
+    }
+
+    $rules = @($policy.rules | Where-Object { $_.enabled -ne $false })
+    $allowRules = @($policy.allow)
+
+    foreach ($target in ($TargetPaths | Select-Object -Unique)) {
+        $normTarget = Normalize-RepoPath -Path $target
+        if ([string]::IsNullOrWhiteSpace($normTarget)) {
+            continue
+        }
+
+        $fullPath = Join-Path $RepoRoot $normTarget
+        if (-not (Test-Path $fullPath)) {
+            continue
+        }
+
+        $lineNo = 0
+        foreach ($line in Get-Content $fullPath) {
+            $lineNo += 1
+            foreach ($rule in $rules) {
+                $ruleGlob = Coalesce-String -Value $rule.glob
+                $ruleRegex = Coalesce-String -Value $rule.regex
+                if ([string]::IsNullOrWhiteSpace($ruleGlob) -or [string]::IsNullOrWhiteSpace($ruleRegex)) {
+                    continue
+                }
+                if (-not (Test-PathGlobMatch -Path $normTarget -Glob $ruleGlob)) {
+                    continue
+                }
+                if (-not [regex]::IsMatch($line, $ruleRegex, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)) {
+                    continue
+                }
+
+                $allowed = $false
+                foreach ($allowRule in $allowRules) {
+                    $allowGlob = Coalesce-String -Value $allowRule.glob
+                    $allowRegex = Coalesce-String -Value $allowRule.regex
+                    if ([string]::IsNullOrWhiteSpace($allowGlob) -or [string]::IsNullOrWhiteSpace($allowRegex)) {
+                        continue
+                    }
+                    if ((Test-PathGlobMatch -Path $normTarget -Glob $allowGlob) -and
+                        [regex]::IsMatch($line, $allowRegex, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)) {
+                        $allowed = $true
+                        break
+                    }
+                }
+
+                if (-not $allowed) {
+                    $hits += [pscustomobject]@{
+                        id = Coalesce-String -Value $rule.id
+                        path = $normTarget
+                        line = $lineNo
+                        excerpt = $line.Trim()
+                        message = Coalesce-String -Value $rule.message
+                    }
+                }
+            }
+        }
+    }
+
+    return $hits
+}
+
 function Read-ActiveSessionPath {
     param([string]$ContextProjectFile)
     if (-not (Test-Path $ContextProjectFile)) {
@@ -266,6 +359,43 @@ if ($runtimeChanged.Count -gt 0) {
     }
 } else {
     Pass "SOP sync gate skipped (no runtime-layer files changed)"
+}
+
+# Architecture anti-coupling gate (strict only)
+if ($Strict) {
+    $architectureTargets = @(
+        $runtimeChanged | Where-Object {
+            $norm = Normalize-RepoPath -Path $_
+            $norm -match '\.(py|ts|tsx)$'
+        }
+    )
+    if ($architectureTargets.Count -gt 0) {
+        $policyPath = Join-Path $repoRoot "scripts/policy/layer_boundary_rules.json"
+        $boundaryHits = @(Get-ArchitectureBoundaryHits -RepoRoot $repoRoot -TargetPaths $architectureTargets -PolicyPath $policyPath)
+        if ($boundaryHits.Count -gt 0) {
+            Fail ("Strict gate: architecture anti-coupling violations detected (" + $boundaryHits.Count + " hit(s))")
+            $maxReport = 20
+            $reported = 0
+            foreach ($hit in $boundaryHits) {
+                if ($reported -ge $maxReport) {
+                    break
+                }
+                $id = if ([string]::IsNullOrWhiteSpace($hit.id)) { "RULE" } else { $hit.id }
+                $msg = if ([string]::IsNullOrWhiteSpace($hit.message)) { "Layer boundary violation" } else { $hit.message }
+                Fail ("  " + $id + " @ " + $hit.path + ":" + $hit.line + " -> " + $msg + " | " + $hit.excerpt)
+                $reported += 1
+            }
+            if ($boundaryHits.Count -gt $maxReport) {
+                Fail ("  ... " + ($boundaryHits.Count - $maxReport) + " more violation(s) not shown")
+            }
+        } else {
+            Pass "Strict gate: architecture anti-coupling scan passed"
+        }
+    } else {
+        Pass "Strict gate: architecture anti-coupling scan skipped (no changed runtime source files)"
+    }
+} else {
+    Pass "Architecture anti-coupling gate skipped (run with -Strict)"
 }
 
 # Runtime artifact hygiene gate (strict only)

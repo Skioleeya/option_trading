@@ -1,12 +1,12 @@
-# Handoff (Index)
+﻿# Handoff (Index)
 
 ## Active Handoff
-- Path: notes/sessions/2026-03-06/2018_mtf_flow_l0_l4_hotfix_mod/handoff.md
-- Meta: notes/sessions/2026-03-06/2018_mtf_flow_l0_l4_hotfix_mod/meta.yaml
+- Path: notes/sessions/2026-03-06/2105_anti_coupling_guardrail_mod/handoff.md
+- Meta: notes/sessions/2026-03-06/2105_anti_coupling_guardrail_mod/meta.yaml
 
 ## Latest Outcome
-- Session: 2026-03-06/2018_mtf_flow_l0_l4_hotfix_mod
-- Summary: Completed MtfFlow L0-L4 hotfix + modularization (L1-source consensus alignment + L4 model normalization, focused pytest/vitest passed).
+- Session: 2026-03-06/2105_anti_coupling_guardrail_mod
+- Summary: Hardened anti-coupling constraints in AGENTS/SOP and added strict policy-driven boundary gate in `validate_session.ps1`.
 
 ## Next Session Bootstrap
 1. Read this file.

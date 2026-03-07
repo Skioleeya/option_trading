@@ -1,0 +1,40 @@
+﻿session_id: "2026-03-06/2105_anti_coupling_guardrail_mod"
+title: "2105 anti coupling guardrail mod"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-06 20:49:37 -05:00"
+updated_at_et: "2026-03-06 20:57:54 -05:00"
+parent_session: "2026-03-06/2034_l0_l4_architecture_audit_mod"
+
+branch: "master"
+base_commit: "e716c69"
+head_commit: "e716c69"
+
+files_changed:
+  - "AGENTS.md"
+  - "docs/SOP/SYSTEM_OVERVIEW.md"
+  - "docs/SOP/L2_DECISION_ANALYSIS.md"
+  - "docs/SOP/L3_OUTPUT_ASSEMBLY.md"
+  - "scripts/policy/layer_boundary_rules.json"
+  - "scripts/validate_session.ps1"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-06/2105_anti_coupling_guardrail_mod/project_state.md"
+  - "notes/sessions/2026-03-06/2105_anti_coupling_guardrail_mod/open_tasks.md"
+  - "notes/sessions/2026-03-06/2105_anti_coupling_guardrail_mod/handoff.md"
+  - "notes/sessions/2026-03-06/2105_anti_coupling_guardrail_mod/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId 2105_anti_coupling_guardrail_mod -Timezone Eastern Standard Time ..."
+  - "rg -n \"^\\s*(from|import)\\s+(l0_ingest|l1_compute|l2_decision|l3_assembly|l4_ui|app)\" l0_ingest l1_compute l2_decision l3_assembly app --glob \"*.py\""
+  - "apply_patch: update AGENTS.md, SOP docs, validate_session.ps1; add scripts/policy/layer_boundary_rules.json"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_failed: []
+blockers: []
+notes:
+  - "No runtime-layer source file changed in this session, so strict architecture scan reported skip-by-design."
+
+
