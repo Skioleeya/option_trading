@@ -156,10 +156,11 @@ export class ProtocolAdapter {
         const msg = DeltaDecoder.parseMessage(raw)
         if (msg === null) return
 
+        // Any valid control/data frame proves transport liveness.
+        ConnectionMonitor.onKeepalive()
+
         // ── keepalive ────────────────────────────────────────────────────────────
         if (DeltaDecoder.isKeepalive(msg)) {
-            ConnectionMonitor.onKeepalive()
-            // Optional: trigger state update for debugging connection status
             return
         }
 

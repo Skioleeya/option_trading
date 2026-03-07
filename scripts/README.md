@@ -52,8 +52,14 @@ powershell -ExecutionPolicy Bypass -File .\scripts\test\run_pytest.ps1 l1_comput
 
 - `new_session.ps1`: 创建一次改动的独立会话目录，并自动更新 `notes/context` 三文件指针。
 - `new_session.ps1 -NoPointerUpdate`: 创建会话目录但不改写 `notes/context` 指针（用于并行准备/预创建会话）。
+- `new_session.ps1 -Timezone <IANA|Windows>`: 指定会话时间基准（影响 session 路径日期/HHMM 与 `meta.yaml` 时间字段）。
 - `validate_session.ps1`: 校验会话四文件完整性（`project_state/open_tasks/handoff/meta`）以及 context 指针一致性。
+- `validate_session.ps1 -Strict`: 启用硬门禁（`commands/files_changed/tests_passed` 非空、债务门禁不降级、运行产物策略校验）。
 - `new_session.ps1 -UseTimeBucket`: 可选按分钟桶创建会话目录（`YYYY-MM-DD/HHMM/<task-id>`）。
+
+严格模式下运行产物策略：
+- 默认禁止在 `files_changed` 中包含 `logs/*` 与 `data/atm_decay/atm*.json`。
+- 如确需提交，`handoff.md` 必须填写 `RUNTIME-ARTIFACT-EXEMPT: <reason>`。
 
 示例：
 
@@ -72,6 +78,12 @@ powershell -ExecutionPolicy Bypass -File .\scripts\new_session.ps1 `
   -UseTimeBucket `
   -Title "anchor guard refine"
 
+# 指定时区创建（IANA/Windows 均可）
+powershell -ExecutionPolicy Bypass -File .\scripts\new_session.ps1 `
+  -TaskId "1133_p2_tooling_followup" `
+  -Title "p2 tooling followup" `
+  -Timezone "America/New_York"
+
 # 创建会话但不更新 context 指针（可选）
 powershell -ExecutionPolicy Bypass -File .\scripts\new_session.ps1 `
   -TaskId "1132_parallel_p1_prep" `
@@ -84,4 +96,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\validate_session.ps1
 # 校验指定 session
 powershell -ExecutionPolicy Bypass -File .\scripts\validate_session.ps1 `
   -SessionPath "notes/sessions/2026-03-06/1118_backend_cutoff_hotfix"
+
+# 严格模式校验（CI/提交流程建议）
+powershell -ExecutionPolicy Bypass -File .\scripts\validate_session.ps1 `
+  -Strict
 ```

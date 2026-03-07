@@ -19,8 +19,8 @@
   - Blocking: None
 
 ## Parking Lot
-- [ ] T2-1: Add `-Timezone` option in `scripts/new_session.ps1`.
-- [ ] T2-2: Extend `validate_session.ps1 -Strict`.
+- [ ] T2-1: Add `-Timezone` option in `scripts/new_session.ps1`. SUPERSEDED-BY: 2026-03-06/1818_p2_process_tooling_followup_mod
+- [ ] T2-2: Extend `validate_session.ps1 -Strict`. SUPERSEDED-BY: 2026-03-06/1818_p2_process_tooling_followup_mod
 
 ## Supersede Marker Rule
 - Use `SUPERSEDED-BY: <session-id>` (or legacy `SUPSERSEDED-BY`) in unchecked historical items that are already resolved later.

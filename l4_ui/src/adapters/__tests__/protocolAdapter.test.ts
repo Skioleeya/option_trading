@@ -13,6 +13,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ProtocolAdapter } from '../../adapters/protocolAdapter'
 import type { DashboardPayload } from '../../types/dashboard'
+import { ConnectionMonitor } from '../../observability/connectionMonitor'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WebSocket mock setup
@@ -100,6 +101,21 @@ describe('ProtocolAdapter message routing', () => {
         expect(store.applyMergedPayload).toHaveBeenCalledOnce()
         const arg = store.applyMergedPayload.mock.calls[0][0] as DashboardPayload
         expect(arg.spot).toBe(561.0)
+    })
+
+    it('marks liveness on full and delta frames to avoid false stall', () => {
+        const keepaliveSpy = vi.spyOn(ConnectionMonitor, 'onKeepalive')
+
+        MockWebSocket.instance!.simulateMessage(JSON.stringify(FULL_PAYLOAD))
+        MockWebSocket.instance!.simulateMessage(
+            JSON.stringify({
+                type: 'dashboard_delta',
+                patch: [{ op: 'replace', path: '/spot', value: 562.0 }],
+                timestamp: 'T3',
+            })
+        )
+
+        expect(keepaliveSpy).toHaveBeenCalledTimes(2)
     })
 
     it('invalid JSON is silently ignored — no crash', () => {

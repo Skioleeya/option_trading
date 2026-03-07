@@ -1,5 +1,6 @@
 param(
-    [string]$SessionPath = ""
+    [string]$SessionPath = "",
+    [switch]$Strict
 )
 
 $ErrorActionPreference = "Stop"
@@ -19,6 +20,26 @@ function Pass {
     Write-Host "[OK]   $Message" -ForegroundColor Green
 }
 
+function Coalesce-String {
+    param([object]$Value)
+    if ($null -eq $Value) {
+        return ""
+    }
+    return [string]$Value
+}
+
+function Normalize-RepoPath {
+    param([string]$Path)
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return ""
+    }
+    $v = $Path.Replace('\', '/').Trim()
+    if ($v.StartsWith("./")) {
+        $v = $v.Substring(2)
+    }
+    return $v
+}
+
 function Read-ActiveSessionPath {
     param([string]$ContextProjectFile)
     if (-not (Test-Path $ContextProjectFile)) {
@@ -28,8 +49,7 @@ function Read-ActiveSessionPath {
     if (-not $line) {
         throw "Cannot parse active session path from $ContextProjectFile"
     }
-    $rel = $line.Matches[0].Groups[1].Value
-    return $rel
+    return $line.Matches[0].Groups[1].Value
 }
 
 function Require-Key {
@@ -46,22 +66,49 @@ function Require-Key {
     }
 }
 
-function Get-MetaQuotedListItems {
+function Get-MetaListItems {
     param(
         [string]$MetaText,
         [string]$Key
     )
-    $pattern = '(?ms)^' + [regex]::Escape($Key) + ':\s*\r?\n(?<body>(?:\s*-\s*".*?"\s*\r?\n)*)'
-    $m = [regex]::Match($MetaText, $pattern)
-    if (-not $m.Success) {
+
+    $items = @()
+
+    $inlinePattern = '(?m)^' + [regex]::Escape($Key) + ':\s*\[(?<body>.*?)\]\s*$'
+    $inlineMatch = [regex]::Match($MetaText, $inlinePattern)
+    if ($inlineMatch.Success) {
+        $inlineBody = $inlineMatch.Groups['body'].Value.Trim()
+        if (-not [string]::IsNullOrWhiteSpace($inlineBody)) {
+            foreach ($token in ($inlineBody -split ',')) {
+                $t = $token.Trim()
+                if ([string]::IsNullOrWhiteSpace($t)) {
+                    continue
+                }
+                if (($t.StartsWith('"') -and $t.EndsWith('"')) -or ($t.StartsWith("'") -and $t.EndsWith("'"))) {
+                    $t = $t.Substring(1, $t.Length - 2)
+                }
+                if (-not [string]::IsNullOrWhiteSpace($t)) {
+                    $items += $t
+                }
+            }
+        }
+        return $items
+    }
+
+    $blockPattern = '(?ms)^' + [regex]::Escape($Key) + ':\s*\r?\n(?<body>(?:\s*-\s*.+\r?\n)*)'
+    $blockMatch = [regex]::Match($MetaText, $blockPattern)
+    if (-not $blockMatch.Success) {
         return @()
     }
 
-    $items = @()
-    $lines = $m.Groups['body'].Value -split '\r?\n'
+    $lines = $blockMatch.Groups['body'].Value -split '\r?\n'
     foreach ($line in $lines) {
         $t = $line.Trim()
         if ($t -match '^\-\s*"(?<v>.*)"\s*$') {
+            $items += $Matches['v']
+        } elseif ($t -match "^\-\s*'(?<v>.*)'\s*$") {
+            $items += $Matches['v']
+        } elseif ($t -match '^\-\s*(?<v>.+?)\s*$') {
             $items += $Matches['v']
         }
     }
@@ -69,9 +116,7 @@ function Get-MetaQuotedListItems {
 }
 
 function Get-UncheckedOpenTaskItems {
-    param(
-        [string]$OpenTasksPath
-    )
+    param([string]$OpenTasksPath)
     $rows = @()
     if (-not (Test-Path $OpenTasksPath)) {
         return $rows
@@ -87,7 +132,6 @@ function Get-UncheckedOpenTaskItems {
         }
         if ($line -match '^\s*-\s*\[\s\]\s*(?<item>.+?)\s*$') {
             $item = $Matches['item'].Trim()
-            # Explicit superseded markers are treated as closed records.
             if ($item -match '(?i)SUP(?:ER|SER)SEDED-BY\s*:') {
                 continue
             }
@@ -98,11 +142,10 @@ function Get-UncheckedOpenTaskItems {
             }
         }
     }
-
     return $rows
 }
 
-function Get-HandoffDebtField {
+function Get-HandoffField {
     param(
         [string]$HandoffText,
         [string]$FieldName
@@ -127,6 +170,8 @@ if ([string]::IsNullOrWhiteSpace($SessionPath)) {
     $SessionPath = Read-ActiveSessionPath -ContextProjectFile $contextProject
 }
 $activeSessionPath = Read-ActiveSessionPath -ContextProjectFile $contextProject
+$isActiveSession = ($SessionPath -eq $activeSessionPath)
+$enforceDebtGate = $isActiveSession -or $Strict
 
 $sessionDir = Join-Path $repoRoot $SessionPath
 if (-not (Test-Path $sessionDir)) {
@@ -134,6 +179,9 @@ if (-not (Test-Path $sessionDir)) {
 }
 
 Write-Host "Validating session: $SessionPath"
+if ($Strict) {
+    Write-Host "Mode: STRICT"
+}
 
 $requiredFiles = @(
     "project_state.md",
@@ -148,16 +196,29 @@ foreach ($f in $requiredFiles) {
 }
 
 $metaPath = Join-Path $sessionDir "meta.yaml"
+$metaText = if (Test-Path $metaPath) { Get-Content $metaPath -Raw } else { "" }
+$handoffPath = Join-Path $sessionDir "handoff.md"
+$handoffText = if (Test-Path $handoffPath) { Get-Content $handoffPath -Raw } else { "" }
+
 if (Test-Path $metaPath) {
-    $meta = Get-Content $metaPath -Raw
-    Require-Key -Text $meta -KeyPattern '^session_id:\s*".+?"\s*$' -Label "session_id"
-    Require-Key -Text $meta -KeyPattern '^branch:\s*".+?"\s*$' -Label "branch"
-    Require-Key -Text $meta -KeyPattern '^base_commit:\s*".+?"\s*$' -Label "base_commit"
-    Require-Key -Text $meta -KeyPattern '^head_commit:\s*".+?"\s*$' -Label "head_commit"
-    Require-Key -Text $meta -KeyPattern '^tests_passed:\s*.*$' -Label "tests_passed"
+    Require-Key -Text $metaText -KeyPattern '^session_id:\s*".+?"\s*$' -Label "session_id"
+    Require-Key -Text $metaText -KeyPattern '^branch:\s*".+?"\s*$' -Label "branch"
+    Require-Key -Text $metaText -KeyPattern '^base_commit:\s*".+?"\s*$' -Label "base_commit"
+    Require-Key -Text $metaText -KeyPattern '^head_commit:\s*".+?"\s*$' -Label "head_commit"
+    Require-Key -Text $metaText -KeyPattern '^tests_passed:\s*.*$' -Label "tests_passed"
 }
 
-if ($SessionPath -eq $activeSessionPath) {
+$changedFiles = @(Get-MetaListItems -MetaText $metaText -Key "files_changed")
+$commands = @(Get-MetaListItems -MetaText $metaText -Key "commands")
+$testsPassed = @(Get-MetaListItems -MetaText $metaText -Key "tests_passed")
+
+if ($Strict) {
+    if ($changedFiles.Count -gt 0) { Pass "Strict gate: files_changed is non-empty" } else { Fail "Strict gate: files_changed must be non-empty" }
+    if ($commands.Count -gt 0) { Pass "Strict gate: commands is non-empty" } else { Fail "Strict gate: commands must be non-empty" }
+    if ($testsPassed.Count -gt 0) { Pass "Strict gate: tests_passed is non-empty" } else { Fail "Strict gate: tests_passed must be non-empty" }
+}
+
+if ($isActiveSession) {
     $expectedProjectPtrA = '- Path: ' + $SessionPath + '/project_state.md'
     $expectedProjectPtrB = '- Path: `' + $SessionPath + '/project_state.md`'
     $expectedTasksPtrA = '- Path: ' + $SessionPath + '/open_tasks.md'
@@ -169,32 +230,30 @@ if ($SessionPath -eq $activeSessionPath) {
 
     $projectText = Get-Content $contextProject -Raw
     $tasksText = Get-Content $contextTasks -Raw
-    $handoffText = Get-Content $contextHandoff -Raw
+    $handoffIndexText = Get-Content $contextHandoff -Raw
 
     if (($projectText -match [regex]::Escape($expectedProjectPtrA)) -or ($projectText -match [regex]::Escape($expectedProjectPtrB))) { Pass "project_state index pointer OK" } else { Fail "project_state index pointer mismatch" }
     if (($projectText -match [regex]::Escape($expectedMetaPtrA)) -or ($projectText -match [regex]::Escape($expectedMetaPtrB))) { Pass "project_state meta pointer OK" } else { Fail "project_state meta pointer mismatch" }
     if (($tasksText -match [regex]::Escape($expectedTasksPtrA)) -or ($tasksText -match [regex]::Escape($expectedTasksPtrB))) { Pass "open_tasks index pointer OK" } else { Fail "open_tasks index pointer mismatch" }
-    if (($handoffText -match [regex]::Escape($expectedHandoffPtrA)) -or ($handoffText -match [regex]::Escape($expectedHandoffPtrB))) { Pass "handoff index pointer OK" } else { Fail "handoff index pointer mismatch" }
-    if (($handoffText -match [regex]::Escape($expectedMetaPtrA)) -or ($handoffText -match [regex]::Escape($expectedMetaPtrB))) { Pass "handoff meta pointer OK" } else { Fail "handoff meta pointer mismatch" }
+    if (($handoffIndexText -match [regex]::Escape($expectedHandoffPtrA)) -or ($handoffIndexText -match [regex]::Escape($expectedHandoffPtrB))) { Pass "handoff index pointer OK" } else { Fail "handoff index pointer mismatch" }
+    if (($handoffIndexText -match [regex]::Escape($expectedMetaPtrA)) -or ($handoffIndexText -match [regex]::Escape($expectedMetaPtrB))) { Pass "handoff meta pointer OK" } else { Fail "handoff meta pointer mismatch" }
 } else {
     Pass "Pointer checks skipped (validating non-active session)"
 }
 
 # SOP sync gate (AGENTS.md §7)
-$metaText = Get-Content $metaPath -Raw
-$changedFiles = @(Get-MetaQuotedListItems -MetaText $metaText -Key "files_changed")
 $runtimeRegex = '^(l0_ingest|l1_compute|l2_decision|l3_assembly|l4_ui|app)/'
 $runtimeChanged = @(
     $changedFiles | Where-Object {
-        $_ -match $runtimeRegex -and
-        $_ -notmatch '/tests?/' -and
-        $_ -notmatch '^docs/' -and
-        $_ -notmatch '^notes/'
+        $norm = Normalize-RepoPath -Path $_
+        $norm -match $runtimeRegex -and
+        $norm -notmatch '/tests?/' -and
+        $norm -notmatch '/__tests__/' -and
+        $norm -notmatch '^docs/' -and
+        $norm -notmatch '^notes/'
     }
 )
-$sopChanged = @($changedFiles | Where-Object { $_ -match '^docs/SOP/' })
-$handoffPath = Join-Path $sessionDir "handoff.md"
-$handoffText = if (Test-Path $handoffPath) { Get-Content $handoffPath -Raw } else { "" }
+$sopChanged = @($changedFiles | Where-Object { (Normalize-RepoPath -Path $_) -match '^docs/SOP/' })
 $hasSopExempt = [regex]::IsMatch($handoffText, '(?im)^\s*SOP-EXEMPT\s*:\s*.+$')
 
 if ($runtimeChanged.Count -gt 0) {
@@ -209,21 +268,46 @@ if ($runtimeChanged.Count -gt 0) {
     Pass "SOP sync gate skipped (no runtime-layer files changed)"
 }
 
+# Runtime artifact hygiene gate (strict only)
+if ($Strict) {
+    $artifactHits = @()
+    foreach ($filePath in $changedFiles) {
+        $normPath = Normalize-RepoPath -Path $filePath
+        if ($normPath -match '^logs/' -or $normPath -match '^data/atm_decay/atm[^/]*\.json$') {
+            $artifactHits += $filePath
+        }
+    }
+
+    if ($artifactHits.Count -gt 0) {
+        $artifactExempt = Get-HandoffField -HandoffText $handoffText -FieldName "RUNTIME-ARTIFACT-EXEMPT"
+        if ([string]::IsNullOrWhiteSpace($artifactExempt)) {
+            Fail ("Strict gate: runtime artifacts detected in files_changed but RUNTIME-ARTIFACT-EXEMPT missing. Files: " + ($artifactHits -join ", "))
+        } else {
+            Pass "Strict gate: runtime artifact exemption present"
+        }
+    } else {
+        Pass "Strict gate: no runtime artifacts in files_changed"
+    }
+}
+
 # Technical debt gate (AGENTS.md §8)
-if ($SessionPath -eq $activeSessionPath) {
+if ($enforceDebtGate) {
+    if (-not $isActiveSession -and $Strict) {
+        Write-Host "Debt gate: strict mode enforces debt checks on non-active target session."
+    }
+
     $openTasksPath = Join-Path $sessionDir "open_tasks.md"
     $uncheckedItems = @(Get-UncheckedOpenTaskItems -OpenTasksPath $openTasksPath)
 
-    $debtExempt = Get-HandoffDebtField -HandoffText $handoffText -FieldName "DEBT-EXEMPT"
-    $debtOwner = Get-HandoffDebtField -HandoffText $handoffText -FieldName "DEBT-OWNER"
-    $debtDueRaw = Get-HandoffDebtField -HandoffText $handoffText -FieldName "DEBT-DUE"
-    $debtRisk = Get-HandoffDebtField -HandoffText $handoffText -FieldName "DEBT-RISK"
-    $debtNewRaw = Get-HandoffDebtField -HandoffText $handoffText -FieldName "DEBT-NEW"
-    $debtClosedRaw = Get-HandoffDebtField -HandoffText $handoffText -FieldName "DEBT-CLOSED"
-    $debtDeltaRaw = Get-HandoffDebtField -HandoffText $handoffText -FieldName "DEBT-DELTA"
-    $debtJustification = Get-HandoffDebtField -HandoffText $handoffText -FieldName "DEBT-JUSTIFICATION"
+    $debtExempt = Get-HandoffField -HandoffText $handoffText -FieldName "DEBT-EXEMPT"
+    $debtOwner = Get-HandoffField -HandoffText $handoffText -FieldName "DEBT-OWNER"
+    $debtDueRaw = Get-HandoffField -HandoffText $handoffText -FieldName "DEBT-DUE"
+    $debtRisk = Get-HandoffField -HandoffText $handoffText -FieldName "DEBT-RISK"
+    $debtNewRaw = Get-HandoffField -HandoffText $handoffText -FieldName "DEBT-NEW"
+    $debtClosedRaw = Get-HandoffField -HandoffText $handoffText -FieldName "DEBT-CLOSED"
+    $debtDeltaRaw = Get-HandoffField -HandoffText $handoffText -FieldName "DEBT-DELTA"
+    $debtJustification = Get-HandoffField -HandoffText $handoffText -FieldName "DEBT-JUSTIFICATION"
 
-    # 8.2: unchecked tasks require complete DEBT-EXEMPT record.
     if ($uncheckedItems.Count -gt 0) {
         if ([string]::IsNullOrWhiteSpace($debtExempt)) { Fail "Debt gate: unchecked tasks exist but DEBT-EXEMPT missing" } else { Pass "Debt gate: DEBT-EXEMPT present" }
         if ([string]::IsNullOrWhiteSpace($debtOwner)) { Fail "Debt gate: DEBT-OWNER missing" } else { Pass "Debt gate: DEBT-OWNER present" }
@@ -233,7 +317,6 @@ if ($SessionPath -eq $activeSessionPath) {
         Pass "Debt gate: no unchecked tasks"
     }
 
-    # 8.6: debt metrics are always mandatory on active handoff.
     if ([string]::IsNullOrWhiteSpace($debtNewRaw)) { Fail "Debt gate: DEBT-NEW missing" } else { Pass "Debt gate: DEBT-NEW present" }
     if ([string]::IsNullOrWhiteSpace($debtClosedRaw)) { Fail "Debt gate: DEBT-CLOSED missing" } else { Pass "Debt gate: DEBT-CLOSED present" }
     if ([string]::IsNullOrWhiteSpace($debtDeltaRaw)) { Fail "Debt gate: DEBT-DELTA missing" } else { Pass "Debt gate: DEBT-DELTA present" }
@@ -242,15 +325,15 @@ if ($SessionPath -eq $activeSessionPath) {
     $debtClosed = 0
     $debtDelta = 0
     $metricsParsable = $true
-    if (-not [int]::TryParse(($debtNewRaw ?? ""), [ref]$debtNew)) {
+    if (-not [int]::TryParse((Coalesce-String -Value $debtNewRaw), [ref]$debtNew)) {
         Fail "Debt gate: DEBT-NEW must be integer"
         $metricsParsable = $false
     }
-    if (-not [int]::TryParse(($debtClosedRaw ?? ""), [ref]$debtClosed)) {
+    if (-not [int]::TryParse((Coalesce-String -Value $debtClosedRaw), [ref]$debtClosed)) {
         Fail "Debt gate: DEBT-CLOSED must be integer"
         $metricsParsable = $false
     }
-    if (-not [int]::TryParse(($debtDeltaRaw ?? ""), [ref]$debtDelta)) {
+    if (-not [int]::TryParse((Coalesce-String -Value $debtDeltaRaw), [ref]$debtDelta)) {
         Fail "Debt gate: DEBT-DELTA must be integer"
         $metricsParsable = $false
     }
@@ -269,7 +352,6 @@ if ($SessionPath -eq $activeSessionPath) {
         }
     }
 
-    # 8.3: due date SLA checks for deferred debt
     if ($uncheckedItems.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace($debtDueRaw)) {
         $due = [datetime]::MinValue
         if (-not [datetime]::TryParseExact($debtDueRaw, "yyyy-MM-dd", $null, [System.Globalization.DateTimeStyles]::None, [ref]$due)) {
@@ -291,14 +373,13 @@ if ($SessionPath -eq $activeSessionPath) {
             }
             $maxDue = $today.AddDays($maxDays)
             if ($dueDate -gt $maxDue) {
-                Fail "Debt gate: DEBT-DUE exceeds SLA window for active priority"
+                Fail "Debt gate: DEBT-DUE exceeds SLA window for target priority"
             } else {
                 Pass "Debt gate: DEBT-DUE within SLA window"
             }
         }
     }
 
-    # 8.5: duplicate unresolved debt records across sessions must be superseded.
     $allOpenTasks = Get-ChildItem -Path (Join-Path $repoRoot "notes/sessions") -Recurse -Filter open_tasks.md
     $allDebtItems = @()
     foreach ($ot in $allOpenTasks) {
@@ -314,7 +395,7 @@ if ($SessionPath -eq $activeSessionPath) {
         Pass "Debt gate: no duplicate unresolved debt entries"
     }
 } else {
-    Pass "Debt gate skipped (validating non-active session)"
+    Pass "Debt gate skipped (validating non-active session in non-strict mode)"
 }
 
 if ($script:HasError) {

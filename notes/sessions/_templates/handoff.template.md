@@ -27,6 +27,7 @@
 - DEBT-CLOSED: 0
 - DEBT-DELTA: 0
 - DEBT-JUSTIFICATION:
+- RUNTIME-ARTIFACT-EXEMPT:
 
 ## How To Continue
 - Start Command:

@@ -3,9 +3,6 @@
 Date: 2026-03-06 (ET)  
 Scope: `notes/sessions/2026-03-06/**/open_tasks.md`  
 Accounting: net debt = 35 (raw 37 - 2 obsolete items)
-Status: ARCHIVED (2026-03-06 ET)  
-Archive Copy: `notes/archive/tech_debt/2026-03-06_TECH_DEBT_TASKLIST.md`  
-Archived-By: `2026-03-06/1818_p2_process_tooling_followup_mod`
 
 ## P0 (Do First)
 

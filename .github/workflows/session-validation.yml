@@ -1,0 +1,55 @@
+name: Session Validation
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  validate-session:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate active session (strict)
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/validate_session.ps1 -Strict
+
+      - name: Collect diagnostics on failure
+        if: failure()
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Continue"
+          $diagDir = "tmp/session_validation_diag"
+          New-Item -ItemType Directory -Path $diagDir -Force | Out-Null
+
+          Write-Host "---- notes/context/project_state.md ----"
+          Get-Content notes/context/project_state.md
+          Write-Host "---- notes/context/open_tasks.md ----"
+          Get-Content notes/context/open_tasks.md
+          Write-Host "---- notes/context/handoff.md ----"
+          Get-Content notes/context/handoff.md
+
+          Copy-Item notes/context/project_state.md (Join-Path $diagDir "context_project_state.md") -Force
+          Copy-Item notes/context/open_tasks.md (Join-Path $diagDir "context_open_tasks.md") -Force
+          Copy-Item notes/context/handoff.md (Join-Path $diagDir "context_handoff.md") -Force
+
+          $line = Select-String -Path notes/context/project_state.md -Pattern '^- Path:\s+`?(.+?)/project_state\.md`?$' | Select-Object -First 1
+          if ($line) {
+            $rel = $line.Matches[0].Groups[1].Value
+            $sessionDir = Join-Path (Get-Location) $rel
+            if (Test-Path $sessionDir) {
+              Copy-Item (Join-Path $sessionDir "project_state.md") (Join-Path $diagDir "session_project_state.md") -Force -ErrorAction SilentlyContinue
+              Copy-Item (Join-Path $sessionDir "open_tasks.md") (Join-Path $diagDir "session_open_tasks.md") -Force -ErrorAction SilentlyContinue
+              Copy-Item (Join-Path $sessionDir "handoff.md") (Join-Path $diagDir "session_handoff.md") -Force -ErrorAction SilentlyContinue
+              Copy-Item (Join-Path $sessionDir "meta.yaml") (Join-Path $diagDir "session_meta.yaml") -Force -ErrorAction SilentlyContinue
+            }
+          }
+
+      - name: Upload diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: session-validation-diagnostics
+          path: tmp/session_validation_diag

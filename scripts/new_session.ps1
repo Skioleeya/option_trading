@@ -5,6 +5,7 @@ param(
     [string]$Scope = "hotfix + modularization",
     [string]$Owner = "Codex",
     [string]$ParentSession = "",
+    [string]$Timezone = "America/New_York",
     [switch]$UseTimeBucket,
     [switch]$NoPointerUpdate
 )
@@ -21,6 +22,30 @@ function Ensure-Template {
     if (-not (Test-Path $Path)) {
         throw "Template not found: $Path"
     }
+}
+
+function Resolve-TimeZoneInfo {
+    param([string]$TimeZoneId)
+    if ([string]::IsNullOrWhiteSpace($TimeZoneId)) {
+        throw "Timezone cannot be empty"
+    }
+
+    try {
+        return [System.TimeZoneInfo]::FindSystemTimeZoneById($TimeZoneId)
+    } catch {
+        # Fall through to IANA -> Windows conversion.
+    }
+
+    $windowsId = $null
+    if ([System.TimeZoneInfo]::TryConvertIanaIdToWindowsId($TimeZoneId, [ref]$windowsId)) {
+        try {
+            return [System.TimeZoneInfo]::FindSystemTimeZoneById($windowsId)
+        } catch {
+            # Fall through to terminal error below.
+        }
+    }
+
+    throw "Invalid timezone id '$TimeZoneId'. Use a valid IANA/Windows timezone (for example: America/New_York, UTC)."
 }
 
 function Get-RecentSessionLines {
@@ -58,9 +83,18 @@ function Get-GlobalBacklogLines {
 $repoRoot = Get-RepoRoot
 Set-Location $repoRoot
 
-$date = Get-Date -Format "yyyy-MM-dd"
-$hhmm = Get-Date -Format "HHmm"
-$timeStampEt = Get-Date -Format "yyyy-MM-dd HH:mm:ss zzz"
+$tzInfo = Resolve-TimeZoneInfo -TimeZoneId $Timezone
+$nowUtc = [datetime]::UtcNow
+$nowInZone = [System.TimeZoneInfo]::ConvertTimeFromUtc($nowUtc, $tzInfo)
+$date = $nowInZone.ToString("yyyy-MM-dd")
+$hhmm = $nowInZone.ToString("HHmm")
+$offset = $tzInfo.GetUtcOffset($nowInZone)
+$totalOffsetMinutes = [int][math]::Round($offset.TotalMinutes)
+$offsetSign = if ($totalOffsetMinutes -ge 0) { "+" } else { "-" }
+$offsetMinutesAbs = [math]::Abs($totalOffsetMinutes)
+$offsetHours = [int]($offsetMinutesAbs / 60)
+$offsetMinutes = $offsetMinutesAbs % 60
+$timeStampEt = "{0:yyyy-MM-dd HH:mm:ss} {1}{2:00}:{3:00}" -f $nowInZone, $offsetSign, $offsetHours, $offsetMinutes
 
 $sessionsRoot = Join-Path $repoRoot "notes/sessions"
 $templatesRoot = Join-Path $sessionsRoot "_templates"
@@ -105,6 +139,7 @@ $meta = $meta -replace 'session_id: "YYYY-MM-DD/HHMM_scope_hotfix_or_mod"', "ses
 $meta = $meta -replace 'title: ""', "title: `"$Title`""
 $meta = $meta -replace 'scope: "hotfix only \| hotfix \+ modularization \| feature"', "scope: `"$Scope`""
 $meta = $meta -replace 'owner: ""', "owner: `"$Owner`""
+$meta = $meta -replace 'timezone: ".*?"', "timezone: `"$Timezone`""
 $meta = $meta -replace 'started_at_et: ""', "started_at_et: `"$timeStampEt`""
 $meta = $meta -replace 'updated_at_et: ""', "updated_at_et: `"$timeStampEt`""
 $meta = $meta -replace 'branch: ""', "branch: `"$branch`""
@@ -170,7 +205,7 @@ $backlogText
 - Meta: $sessionRel/meta.yaml
 
 ## Latest Outcome
-- Session: $date/$TaskId
+- Session: $sessionId
 - Summary: Session created. Fill handoff.md when work is completed.
 
 ## Next Session Bootstrap
@@ -185,6 +220,7 @@ $backlogText
 }
 
 Write-Host "Session created: $sessionRel"
+Write-Host "Timezone: $Timezone"
 if ($NoPointerUpdate) {
     Write-Host "Context pointer update: skipped (-NoPointerUpdate)"
 } else {
