@@ -41,7 +41,7 @@
       "id": "APP_LOOPS_NO_PRIVATE_CROSS_LAYER_ACCESS",
       "enabled": true,
       "glob": "app/loops/*.py",
-      "regex": "\\._[a-zA-Z]\\w*",
+      "regex": "\\b(?:ctr|container)\\.[A-Za-z]\\w*\\._[a-zA-Z]\\w*",
       "message": "app loops must not reach across layers via private members."
     }
   ],

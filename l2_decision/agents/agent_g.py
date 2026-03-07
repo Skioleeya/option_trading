@@ -10,7 +10,6 @@ from shared.config import settings
 from shared.system.tactical_triad_logic import classify_vrp_state, compute_vrp
 from shared.models.agent_output import AgentB1Output
 from l2_decision.signals.fusion.dynamic_weight_engine import DynamicWeightEngine
-from l3_assembly.presenters.ui.active_options.presenter import ActiveOptionsPresenter
 
 
 logger = logging.getLogger(__name__)
@@ -37,7 +36,6 @@ class AgentG:
         self._agent_a = agent_a or AgentA()
         self._agent_b = agent_b or AgentB1()
         self._weight_engine = DynamicWeightEngine()
-        self._active_options_presenter = ActiveOptionsPresenter()
 
         # Hysteresis States (Fixing Boundary Flicker)
         self._vrp_active = False    # True if currently in VRP Veto state

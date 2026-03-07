@@ -334,37 +334,28 @@ async def run_compute_loop(ctr: 'AppContainer', state: SharedLoopState) -> None:
             iv_sync_obj = getattr(ctr.option_chain_builder, "_iv_sync", None)
             iv_cache_size = len(iv_sync_obj.iv_cache) if iv_sync_obj else 0
 
-            # 2. Run agent pipeline (L1+L2 or legacy AgentG)
+            # 2. Run L1 -> L2 pipeline
             agent_start = time.monotonic()
-            decision = None
-            l1_snap = None
-            if ctr.l1_reactor:
-                iv_cache = getattr(iv_sync_obj, "iv_cache", {}) if iv_sync_obj else {}
-                spot_sync = getattr(iv_sync_obj, "spot_at_sync", {}) if iv_sync_obj else {}
+            iv_cache = getattr(iv_sync_obj, "iv_cache", {}) if iv_sync_obj else {}
+            spot_sync = getattr(iv_sync_obj, "spot_at_sync", {}) if iv_sync_obj else {}
 
-                l1_snap = await ctr.l1_reactor.compute(
-                    chain_snapshot=snapshot.get("chain", []),
-                    spot=snapshot.get("spot", 0.0),
-                    l0_version=snapshot_version,
-                    iv_cache=iv_cache,
-                    spot_at_sync=spot_sync,
-                    extra_metadata=_build_l1_extra_metadata(snapshot),
-                )
+            l1_snap = await ctr.l1_reactor.compute(
+                chain_snapshot=snapshot.get("chain", []),
+                spot=snapshot.get("spot", 0.0),
+                l0_version=snapshot_version,
+                iv_cache=iv_cache,
+                spot_at_sync=spot_sync,
+                extra_metadata=_build_l1_extra_metadata(snapshot),
+            )
 
-            if l1_snap and ctr.l2_reactor:
-                decision = await ctr.l2_reactor.decide(l1_snap)
-                result = decision.to_legacy_agent_result()
-                
-                logger.debug(
-                    f"[L2] direction={decision.direction}, "
-                    f"conf={decision.confidence:.2f}, "
-                    f"lat={decision.latency_ms:.1f}ms"
-                )
-            else:
-                # If no L1, pass raw snapshot. If L1 exists, pass legacy dict shim.
-                target_snapshot = l1_snap.to_legacy_dict() if l1_snap else snapshot
-                result = await ctr.agent_g.run(target_snapshot)
-                decision = result
+            decision = await ctr.l2_reactor.decide(l1_snap)
+            result = decision.to_legacy_agent_result()
+
+            logger.debug(
+                f"[L2] direction={decision.direction}, "
+                f"conf={decision.confidence:.2f}, "
+                f"lat={decision.latency_ms:.1f}ms"
+            )
 
             probe_diag = version_iv_probe.observe(
                 snapshot_version=snapshot_version,
@@ -394,28 +385,21 @@ async def run_compute_loop(ctr: 'AppContainer', state: SharedLoopState) -> None:
             )
 
             # 3. Build and cache payload via L3 Reactor
-            if result and ctr.l3_reactor:
-                active_opts = ctr.agent_g._active_options_presenter.get_latest()
-                
-                target_snap = l1_snap if l1_snap is not None else snapshot
+            active_opts = ctr.active_options_service.get_latest()
 
-                frozen = await ctr.l3_reactor.tick(
-                    decision=decision,
-                    snapshot=target_snap,
-                    atm_decay=atm_decay_payload,
-                    active_options=active_opts
-                )
-                
-                # Atomically update global state
-                state.update(frozen, snapshot.get("spot"))
-            else:
-                if not result:
-                    logger.warning("[AgentRunner] Agent result is None, skipping payload update")
+            frozen = await ctr.l3_reactor.tick(
+                decision=decision,
+                snapshot=l1_snap,
+                atm_decay=atm_decay_payload,
+                active_options=active_opts
+            )
+
+            # Atomically update global state
+            state.update(frozen, snapshot.get("spot"))
 
             # 4. Periodically flush L2 audit logs
-            if ctr.l2_reactor and hasattr(ctr.l2_reactor, "_audit_writer"):
-                if state.total_computations > 0 and state.total_computations % 60 == 0:
-                    ctr.l2_reactor._audit_writer.flush()
+            if state.total_computations > 0 and state.total_computations % 60 == 0:
+                ctr.l2_reactor.flush_audit()
 
         except asyncio.CancelledError:
             raise

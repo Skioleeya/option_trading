@@ -62,6 +62,7 @@
 - **唯一方向**：运行时依赖只允许 `L0 -> L1 -> L2 -> L3 -> L4`；`app/` 仅做组装编排。
 - **禁止反向耦合**：低层不得导入高层实现（例如 `l2_decision -> l3_assembly`、`l3_assembly -> l4_ui`）。
 - **契约层白名单**：跨层复用仅允许通过 `events/contracts` 等稳定接口模块，禁止直接依赖上游实现细节（signals/agents/presenter internals）。
+- **中立服务复用**：跨层共享计算能力（如 ActiveOptions Flow/DEG）必须下沉到 `shared/services/*`，禁止通过 `l2_decision/*` 实现目录被 L3 复用。
 - **编排私有成员禁令**：`app/loops/*` 禁止访问跨层私有属性（`._xxx`）；必须通过容器公开 API 或适配器服务。
 - **校验落地**：严格校验由 `scripts/validate_session.ps1 -Strict` + `scripts/policy/layer_boundary_rules.json` 执行，命中即失败。
 

@@ -39,15 +39,14 @@ async def run_housekeeping_loop(ctr: 'AppContainer', state: SharedLoopState) -> 
                 atm_iv = g_data.get("spy_atm_iv") or 0.0
                 gex_regime = g_data.get("gex_regime", "NEUTRAL")
             
-            # 3. Call the newly async decoupled presenter
-            redis_client = getattr(ctr.agent_g, "_redis", None)
-            await ctr.agent_g._active_options_presenter.update_background(
+            # 3. Refresh ActiveOptions via shared neutral service
+            await ctr.active_options_service.update_background(
                 chain=chain,
                 spot=spot,
                 atm_iv=atm_iv,
                 gex_regime=gex_regime,
                 ttm_seconds=snapshot.get("ttm_seconds"),
-                redis=redis_client,
+                redis=ctr.redis_service.client,
                 limit=5
             )
 

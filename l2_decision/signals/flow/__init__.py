@@ -1,6 +1,6 @@
-"""DEG-FLOW service package.
+"""Compatibility exports for DEG-FLOW classes.
 
-Exports the three FlowEngine implementations and the DEGComposer.
+Concrete implementations were moved to shared.services.active_options.
 """
 
 from .flow_engine_d import FlowEngineD

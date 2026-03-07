@@ -308,6 +308,10 @@ class L2DecisionReactor:
     def audit(self) -> AuditTrail:
         return self._audit
 
+    def flush_audit(self) -> int:
+        """Flush buffered audit entries to disk through the public API."""
+        return self._audit.flush_to_disk()
+
     @property
     def feature_store(self) -> FeatureStore:
         return self._feature_store

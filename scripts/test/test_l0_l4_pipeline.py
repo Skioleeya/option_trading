@@ -3,12 +3,14 @@ import json
 import sys
 import websockets
 import jsonpatch
+import pytest
 from colorama import Fore, Style, init
 
 init(autoreset=True)
 
 WS_URL = "ws://localhost:8001/ws/dashboard"
 
+@pytest.mark.asyncio
 async def test_l0_l4_pipeline():
     print(f"{Fore.CYAN}[*] Connecting to L4 WebSocket Endpoint at {WS_URL}...{Style.RESET_ALL}")
     

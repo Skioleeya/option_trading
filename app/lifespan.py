@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.container import build_container, USE_L2
+from app.container import build_container
 from app.ws.manager import WSManager
 from app.loops.shared_state import SharedLoopState
 from app.loops.compute_loop import run_compute_loop
@@ -29,8 +29,7 @@ async def lifespan(app: FastAPI):
     if ctr.redis_service.client:
         await ctr.agent_g.set_redis_client(ctr.redis_service.client)
         ctr.atm_decay_tracker.redis = ctr.redis_service.client
-        if ctr.l3_reactor:
-            await ctr.l3_reactor.ui_tracker.set_redis_client(ctr.redis_service.client)
+        await ctr.l3_reactor.ui_tracker.set_redis_client(ctr.redis_service.client)
             
     await ctr.option_chain_builder.initialize()
     
@@ -47,9 +46,8 @@ async def lifespan(app: FastAPI):
     ctr.quote_hub_ready.set()
     
     # Hook L1 microstructure into WS depth/trade callbacks
-    if USE_L2 and ctr.l1_reactor:
-        ctr.option_chain_builder.on_depth = ctr.l1_reactor.update_microstructure_depth
-        ctr.option_chain_builder.on_trade = ctr.l1_reactor.update_microstructure_trades
+    ctr.option_chain_builder.on_depth = ctr.l1_reactor.update_microstructure_depth
+    ctr.option_chain_builder.on_trade = ctr.l1_reactor.update_microstructure_trades
 
 
     # 5. Build Shared Loop Objects
@@ -80,8 +78,7 @@ async def lifespan(app: FastAPI):
         
     await asyncio.gather(*tasks, return_exceptions=True)
 
-    if USE_L2 and ctr.l2_reactor and hasattr(ctr.l2_reactor, "_audit_writer"):
-        ctr.l2_reactor._audit_writer.flush()
+    ctr.l2_reactor.flush_audit()
 
     await ctr.option_chain_builder.shutdown()
     await ctr.redis_service.stop()
