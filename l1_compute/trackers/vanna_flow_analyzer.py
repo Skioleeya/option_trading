@@ -457,9 +457,9 @@ class VannaFlowAnalyzer:
         """Classify GEX regime.
 
         Logic:
-        - SUPER_PIN:   |GEX| >= 1000M (Frozen)
-        - DAMPING:     200M <= |GEX| < 500M (positive only)
-        - NEUTRAL:     |GEX| < 200M
+        - SUPER_PIN:   |GEX| >= 100000M (>= 100B, Frozen)
+        - DAMPING:     20000M <= |GEX| < 100000M (20B~100B, positive only)
+        - NEUTRAL:     |GEX| < 20000M
         - ACCELERATION: net_gex < 0 (any negative)
         """
         if net_gex is None:

@@ -65,10 +65,10 @@ function makePayload(overrides: Partial<DashboardPayload> = {}): DashboardPayloa
                 micro_structure: null,
                 ui_state: {
                     micro_stats: {
-                        net_gex: { label: 'GEX +120M', badge: 'badge-positive' },
+                        net_gex: { label: 'GEX +120M', badge: 'badge-red' },
                         wall_dyn: { label: 'DAMPING', badge: 'badge-green' },
                         vanna: { label: 'GRIND_STABLE', badge: 'badge-neutral' },
-                        momentum: { label: 'BULLISH', badge: 'badge-positive' },
+                        momentum: { label: 'BULLISH', badge: 'badge-red' },
                     },
                     wall_migration: [{ type_label: 'CALL', type_bg: '', type_text: '', h1: 565, h2: null, current: 565, dot_color: '', current_border: '', current_bg: '', current_shadow: '', current_text: '' }],
                     depth_profile: [{ strike: 560, put_pct: -0.5, call_pct: 0.5, put_color: '#10b981', call_color: '#ef4444', put_label_color: '', call_label_color: '', spot_tag_classes: '', flip_tag_classes: '', is_dominant_put: false, is_dominant_call: true, is_spot: true, is_flip: false, strike_color: '' }],

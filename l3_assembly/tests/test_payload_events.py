@@ -22,6 +22,7 @@ from l3_assembly.events.payload_events import (
     UIState,
     SignalData,
     FrozenPayload,
+    VALID_BADGE_TOKENS,
 )
 from l3_assembly.events.delta_events import DeltaPayload, DeltaType
 
@@ -86,8 +87,7 @@ def _frozen_payload() -> FrozenPayload:
 
 class TestMetricCard:
     def test_valid_badges(self):
-        for badge in ("badge-positive", "badge-negative", "badge-neutral",
-                      "badge-warning", "badge-danger"):
+        for badge in sorted(VALID_BADGE_TOKENS):
             mc = MetricCard(label="test", badge=badge)
             assert mc.badge == badge
 
@@ -101,13 +101,13 @@ class TestMetricCard:
             mc.label = "y"  # type: ignore
 
     def test_to_dict_no_tooltip(self):
-        mc = MetricCard(label="482B", badge="badge-positive")
+        mc = MetricCard(label="482B", badge="badge-red")
         d = mc.to_dict()
-        assert d == {"label": "482B", "badge": "badge-positive"}
+        assert d == {"label": "482B", "badge": "badge-red"}
         assert "tooltip" not in d
 
     def test_to_dict_with_tooltip(self):
-        mc = MetricCard(label="482B", badge="badge-positive", tooltip="Net GEX")
+        mc = MetricCard(label="482B", badge="badge-red", tooltip="Net GEX")
         d = mc.to_dict()
         assert d["tooltip"] == "Net GEX"
 
@@ -136,8 +136,8 @@ class TestMicroStatsState:
         assert z.net_gex.badge == "badge-neutral"
 
     def test_to_dict_schema(self):
-        d = _micro_stats("badge-positive").to_dict()
-        assert d["net_gex"]["badge"] == "badge-positive"
+        d = _micro_stats("badge-red").to_dict()
+        assert d["net_gex"]["badge"] == "badge-red"
         assert "label" in d["wall_dyn"]
 
 

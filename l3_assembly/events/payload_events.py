@@ -31,11 +31,7 @@ from typing import Any
 # Canonical badge tokens accepted by L3 payload contracts.
 # Must remain aligned with frontend classes in l4_ui/src/index.css.
 VALID_BADGE_TOKENS = {
-    "badge-positive",
-    "badge-negative",
     "badge-neutral",
-    "badge-warning",
-    "badge-danger",
     "badge-amber",
     "badge-red",
     "badge-green",
@@ -55,8 +51,10 @@ class MetricCard:
     Attributes:
         label:   Primary display string (e.g. "GEX", "482.1B").
         badge:   CSS/design-token class.  Always one of the canonical set:
-                 "badge-positive" | "badge-negative" | "badge-neutral"
-                 | "badge-warning" | "badge-danger"
+                 "badge-neutral" | "badge-amber" | "badge-red"
+                 | "badge-green" | "badge-purple" | "badge-cyan"
+                 | "badge-hollow-purple" | "badge-hollow-amber"
+                 | "badge-hollow-cyan" | "badge-hollow-green" | "badge-red-dim"
         tooltip: Optional hover explanation (empty string = no tooltip).
     """
     label: str

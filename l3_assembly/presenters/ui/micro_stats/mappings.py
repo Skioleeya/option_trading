@@ -14,16 +14,16 @@ from l3_assembly.presenters.ui.micro_stats import palette
 # 做市商视角：每个状态代表市场 Gamma 场的当前物理特性
 # ─────────────────────────────────────────────────────────────────────────────
 GEX_REGIME_MAP: dict[str, dict] = {
-    # 极度锁定：GEX >= 1000M，市场被"磁铁"固定，做市商全线压制波动
+    # 极度锁定：|GEX| >= 100000M (100B)，市场被"磁铁"固定，做市商全线压制波动
     "SUPER_PIN":    {"label": "SUPER PIN",  "badge": palette.BADGE_GEX_SUPER_PIN},
 
-    # Gamma 阻尼：200M~1000M，做市商温和对冲，价格弹性受限
+    # Gamma 阻尼：20000M~100000M (20B~100B)，做市商温和对冲，价格弹性受限
     "DAMPING":      {"label": "DAMPING",    "badge": palette.BADGE_GEX_DAMPING},
 
     # 负 Gamma 加速：GEX < 0，做市商追涨杀跌，提供加速而非抑制
     "ACCELERATION": {"label": "VOLATILE",   "badge": palette.BADGE_GEX_ACCELERATION},
 
-    # 中性区间：GEX 绝对值 < 200M，Gamma 力场影响弱
+    # 中性区间：|GEX| < 20000M (20B)，Gamma 力场影响弱
     "NEUTRAL":      {"label": "NEUTRAL",    "badge": palette.BADGE_GEX_NEUTRAL},
 }
 

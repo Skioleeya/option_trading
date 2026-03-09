@@ -67,10 +67,10 @@ function makePayload(
                 micro_structure: null,
                 ui_state: {
                     micro_stats: {
-                        net_gex: { label: 'GEX +120M', badge: 'badge-positive' },
+                        net_gex: { label: 'GEX +120M', badge: 'badge-red' },
                         wall_dyn: { label: 'DAMPING', badge: 'badge-neutral' },
                         vanna: { label: 'GRIND_STABLE', badge: 'badge-neutral' },
-                        momentum: { label: 'BULLISH', badge: 'badge-positive' },
+                        momentum: { label: 'BULLISH', badge: 'badge-red' },
                     },
                     wall_migration: [],
                     depth_profile: [],

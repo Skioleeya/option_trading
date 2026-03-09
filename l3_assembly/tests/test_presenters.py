@@ -58,14 +58,13 @@ class TestMicroStatsPresenterV2:
             assert "badge" in d[key], f"Missing 'badge' in {key}"
 
     def test_badge_is_always_valid(self):
-        from l3_assembly.events.payload_events import MetricCard
+        from l3_assembly.events.payload_events import MetricCard, VALID_BADGE_TOKENS
         state = MicroStatsPresenterV2.build(
             gex_regime="ACCELERATION", wall_dyn={}, vanna="DANGER_ZONE", momentum="BEARISH"
         )
-        valid = {"badge-positive","badge-negative","badge-neutral","badge-warning","badge-danger"}
         for card_attr in ("net_gex", "wall_dyn", "vanna", "momentum"):
             card: MetricCard = getattr(state, card_attr)
-            assert card.badge in valid, f"Invalid badge on {card_attr}: {card.badge}"
+            assert card.badge in VALID_BADGE_TOKENS, f"Invalid badge on {card_attr}: {card.badge}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────

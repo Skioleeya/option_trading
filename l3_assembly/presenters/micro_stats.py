@@ -23,11 +23,16 @@ _BADGE_ALIASES: dict[str, str] = {
     "badge-super-pin": "badge-amber",
     "badge-damping": "badge-hollow-green",
     "badge-acceleration": "badge-hollow-purple",
-    "positive": "badge-positive",
-    "negative": "badge-negative",
+    # Legacy semantic aliases (收敛到当前 L4 CSS token 集)
+    "positive": "badge-red",
+    "negative": "badge-green",
     "neutral": "badge-neutral",
-    "warning": "badge-warning",
-    "danger": "badge-danger",
+    "warning": "badge-amber",
+    "danger": "badge-red",
+    "badge-positive": "badge-red",
+    "badge-negative": "badge-green",
+    "badge-warning": "badge-amber",
+    "badge-danger": "badge-red",
 }
 
 

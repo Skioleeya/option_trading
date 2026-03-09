@@ -43,7 +43,7 @@ export function fmtFlow(val: number | null | undefined): string {
 export function gexRegimeBadge(regime: string): string {
     switch (regime) {
         case 'SUPER_PIN': return 'badge-amber'
-        case 'DAMPING': return 'badge-green'
+        case 'DAMPING': return 'badge-hollow-green'
         case 'ACCELERATION': return 'badge-hollow-purple'
         default: return 'badge-neutral'
     }

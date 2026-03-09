@@ -57,8 +57,17 @@ export const THEME = {
             currentValBg: 'rgba(245, 158, 11, 0.08)',
         },
         microStats: {
-            cardBorder: 'rgba(255, 255, 255, 0.07)',
-            cardBg: 'rgba(255, 255, 255, 0.02)',
+            panelBg: '#0a0c10',
+            cardBorder: '#1e2025',
+            cardBg: '#111318',
+            cardHoverBg: '#15181e',
+            title: '#8f939c',
+            edgeIdle: 'rgba(255,255,255,0.05)',
+            edgeHover: 'rgba(255,255,255,0.20)',
+            iconNetGex: '#a855f7',
+            iconWallDyn: '#f59e0b',
+            iconMomentum: 'rgba(255,255,255,0.60)',
+            iconVanna: '#06b6d4',
         }
     },
 

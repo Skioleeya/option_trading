@@ -25,15 +25,17 @@ import type {
 
 /** Badge token whitelist matching MetricCard.__post_init__ validation. */
 export type BadgeToken =
-    | 'badge-positive'
-    | 'badge-negative'
     | 'badge-neutral'
-    | 'badge-warning'
-    | 'badge-danger'
     | 'badge-amber'
+    | 'badge-red'
     | 'badge-green'
+    | 'badge-purple'
+    | 'badge-cyan'
     | 'badge-hollow-purple'
-    | string // allow extensibility without breaking older contracts
+    | 'badge-hollow-amber'
+    | 'badge-hollow-cyan'
+    | 'badge-hollow-green'
+    | 'badge-red-dim'
 
 /**
  * Mirrors L3 MetricCard frozen dataclass.

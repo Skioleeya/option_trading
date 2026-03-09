@@ -3,8 +3,12 @@
 做市商视角 (Market Maker Perspective)：
 每个阈值都对应着做市商被迫调整对冲仓位的边界。
 
-修改此文件可改变触发灵敏度，无需触碰 Presenter 或前端逻辑。
+阈值单一来源治理：
+1) GEX 数值阈值以 shared.config.settings 为唯一真源（L1/L2/L3 共享）。
+2) 本文件保留 Wall/Momentum/Vanna 的离散状态集合，供 L3 展示层分类使用。
 """
+
+from shared.config import settings
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. NET GEX  (Gamma Exposure 净头寸)
@@ -13,10 +17,10 @@
 # - 正 GEX 越大 → 做市商越需要卖涨买跌 → 价格被"钉住"
 # - 负 GEX      → 做市商需要追涨杀跌 → 价格加速
 #
-# 单位: Million USD (百万美元), matching 2024-2026 Institutional SPY scale
-GEX_SUPER_PIN_THRESHOLD_M   = 100000  # >= 100B → 市场像被磁铁锁住，极低波动
-GEX_DAMPING_THRESHOLD_M     = 20000   # >= 20B  → 温和阻尼，做市商小幅吸收波动
-GEX_DEEP_NEGATIVE_THRESHOLD = -50000  # <= -50B → 深度负 Gamma，极度加速
+# 单位: Million USD (百万美元), authoritative source = shared.config.AgentGConfig
+GEX_SUPER_PIN_THRESHOLD_M = float(getattr(settings, "gex_super_pin_threshold", 100000.0))
+GEX_DAMPING_THRESHOLD_M = float(getattr(settings, "gex_neutral_threshold", 20000.0))
+GEX_DEEP_NEGATIVE_THRESHOLD = float(getattr(settings, "gex_strong_negative", -50000.0))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. WALL DYN  (Gamma Wall Dynamics — 墙体动态)
