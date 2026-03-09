@@ -16,8 +16,9 @@ from datetime import datetime, date, timedelta
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
-from longport.openapi import QuoteContext, CalcIndex
+from longport.openapi import CalcIndex
 
+from l0_ingest.feeds.quote_runtime import L0QuoteRuntime
 from l0_ingest.feeds.rate_limiter import APIRateLimiter
 
 logger = logging.getLogger(__name__)
@@ -47,9 +48,9 @@ class Tier2Poller:
         self._meta_expiry: date | None = None
         self._meta_sym_to_strike: dict[str, float] = {}
 
-    def start(self, ctx: QuoteContext, get_spot_fn: Callable[[], float | None]) -> None:
+    def start(self, runtime: L0QuoteRuntime, get_spot_fn: Callable[[], float | None]) -> None:
         """Start the background polling loop."""
-        self._ctx = ctx
+        self._runtime = runtime
         self._get_spot = get_spot_fn
         if self._task is None:
             self._task = asyncio.create_task(self._loop())
@@ -69,7 +70,7 @@ class Tier2Poller:
         while True:
             try:
                 spot = self._get_spot()
-                if spot and self._ctx and not self._syncing:
+                if spot and not self._syncing:
                     await self._fetch(spot)
             except Exception as e:
                 logger.error(f"[Tier2Poller] Sync error: {e}")
@@ -89,7 +90,7 @@ class Tier2Poller:
             check_date = now_date + timedelta(days=i)
             async with self._limiter.acquire(weight=1):
                 try:
-                    chain_info = self._ctx.option_chain_info_by_date("SPY.US", check_date)
+                    chain_info = await self._runtime.option_chain_info_by_date("SPY.US", check_date)
                 except Exception as e:
                     if "301607" in str(e):
                         self._limiter.trigger_cooldown()
@@ -155,14 +156,14 @@ class Tier2Poller:
             # ── Data fetch: IV / OI / Volume ──────────────────────────────────
             dte2_date = self._meta_expiry
             results_data: list[dict[str, Any]] = []
-            batch_size = 50
+            batch_size = max(1, min(50, self._limiter.max_symbol_weight))
             for i in range(0, len(symbols), batch_size):
                 batch = symbols[i:i + batch_size]
                 async with self._limiter.acquire(weight=len(batch)):
                     try:
-                        results = self._ctx.calc_indexes(
-                            batch, [CalcIndex.Volume, CalcIndex.OpenInterest,
-                                    CalcIndex.ImpliedVolatility]
+                        results = await self._runtime.calc_indexes(
+                            batch,
+                            [CalcIndex.Volume, CalcIndex.OpenInterest, CalcIndex.ImpliedVolatility],
                         )
                         for r in results:
                             strike = self._meta_sym_to_strike.get(r.symbol, 0.0)

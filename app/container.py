@@ -2,7 +2,6 @@
 
 import asyncio
 from dataclasses import dataclass
-from typing import Any
 
 from l0_ingest.feeds.option_chain_builder import OptionChainBuilder
 from l2_decision.agents.agent_g import AgentG
@@ -40,10 +39,10 @@ class AppContainer:
     l3_reactor: L3AssemblyReactor
 
 
-def build_container(primary_ctx: Any = None) -> AppContainer:
+def build_container() -> AppContainer:
     """Factory function to build the AppContainer without running I/O bindings."""
     # Data layer
-    option_chain_builder = OptionChainBuilder(primary_ctx=primary_ctx)
+    option_chain_builder = OptionChainBuilder()
     redis_service = RedisService()
     historical_store = HistoricalStore(redis_service)
     

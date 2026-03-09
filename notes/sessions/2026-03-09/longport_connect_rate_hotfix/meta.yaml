@@ -1,0 +1,48 @@
+session_id: "2026-03-09/longport_connect_rate_hotfix"
+title: "longport connect rate hotfix"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-09 10:07:26 -04:00"
+updated_at_et: "2026-03-09 10:30:30 -04:00"
+parent_session: "2026-03-07/0855_p0_agents_machine_directive_mod"
+
+branch: "master"
+base_commit: "9739a17"
+head_commit: "9739a17"
+
+files_changed:
+  - "main.py"
+  - "l0_ingest/feeds/market_data_gateway.py"
+  - "l0_ingest/feeds/iv_baseline_sync.py"
+  - "l0_ingest/feeds/feed_orchestrator.py"
+  - "l0_ingest/feeds/option_chain_builder.py"
+  - "l0_ingest/feeds/rate_limiter.py"
+  - "l0_ingest/subscription_manager.py"
+  - "shared/config/api_credentials.py"
+  - "docs/SOP/SYSTEM_OVERVIEW.md"
+  - "docs/SOP/L0_DATA_FEED.md"
+  - "scripts/validate_session.ps1"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-09/longport_connect_rate_hotfix/project_state.md"
+  - "notes/sessions/2026-03-09/longport_connect_rate_hotfix/open_tasks.md"
+  - "notes/sessions/2026-03-09/longport_connect_rate_hotfix/handoff.md"
+  - "notes/sessions/2026-03-09/longport_connect_rate_hotfix/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId longport_connect_rate_hotfix -Timezone \"Eastern Standard Time\" -ParentSession \"2026-03-07/0855_p0_agents_machine_directive_mod\""
+  - "python -m compileall main.py l0_ingest/feeds/market_data_gateway.py l0_ingest/feeds/iv_baseline_sync.py l0_ingest/feeds/feed_orchestrator.py l0_ingest/feeds/option_chain_builder.py l0_ingest/feeds/rate_limiter.py l0_ingest/subscription_manager.py shared/config/api_credentials.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/test_market_data_gateway.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 scripts/test/test_l0_l4_pipeline.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict (after UTF-8 parser fix)"
+tests_passed:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/test_market_data_gateway.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 scripts/test/test_l0_l4_pipeline.py"
+tests_failed: []
+blockers: []
+notes:
+  - "LongPort connect path hardened with bounded retry/backoff in both pre-flight and gateway fallback init."
+  - "Startup load shaping added: IV warm-up dedupe + deferred research + configurable symbol/min budget."
+  - "validate_session strict debt parsing fixed by forcing UTF-8 text reads in Windows PowerShell 5.1 path."

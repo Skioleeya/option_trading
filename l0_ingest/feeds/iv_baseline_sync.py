@@ -9,13 +9,16 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
+import time
 from datetime import datetime
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
-from longport.openapi import QuoteContext, CalcIndex
+from longport.openapi import CalcIndex
 
 from l0_ingest.feeds.rate_limiter import APIRateLimiter
+from l0_ingest.feeds.quote_runtime import L0QuoteRuntime
+from shared.config import settings
 from shared.system.persistent_oi_store import PersistentOIStore
 
 logger = logging.getLogger(__name__)
@@ -44,6 +47,10 @@ class IVBaselineSync:
         self._on_update: Callable[[str, Any], None] | None = None
         self._task: asyncio.Task | None = None
         self._warming_up = False
+        self._bootstrap_warmup_done = False
+        self._last_warmup_signature: frozenset[str] | None = None
+        self._last_warmup_ts: float = 0.0
+        self._warmup_dedupe_window_sec = 120.0
         self._limiter = rate_limiter
         self._loop: asyncio.AbstractEventLoop | None = None  # set by OptionChainBuilder.initialize()
         self._oi_store = PersistentOIStore()          # disk persistence for OI hotstart
@@ -97,11 +104,11 @@ class IVBaselineSync:
         if oi is not None:
             self.oi_cache[symbol] = oi
 
-    def start(self, ctx: QuoteContext, get_symbols_fn: Callable[[], set[str]],
+    def start(self, runtime: L0QuoteRuntime, get_symbols_fn: Callable[[], set[str]],
               get_spot_fn: Callable[[], float | None],
               on_update: Callable[[str, Any], None] | None = None) -> None:
         """Start the background sync loop."""
-        self._ctx = ctx
+        self._runtime = runtime
         self._get_symbols = get_symbols_fn
         self._get_spot = get_spot_fn
         self._on_update = on_update
@@ -117,12 +124,46 @@ class IVBaselineSync:
             except asyncio.CancelledError:
                 pass
 
+    @property
+    def warming_up(self) -> bool:
+        return self._warming_up
+
+    @property
+    def bootstrap_warmup_done(self) -> bool:
+        return self._bootstrap_warmup_done
+
+    def _safe_batch_size(self) -> int:
+        return max(1, min(50, self._limiter.max_symbol_weight))
+
     async def warm_up(self, symbols: list[str]) -> None:
         """Initial baseline sync for freshly subscribed symbols (ATM-first)."""
         if not symbols or self._warming_up:
             return
+        subscription_cap = max(1, min(int(settings.subscription_max), 500))
+        if len(symbols) > subscription_cap:
+            logger.warning(
+                "[IVSync] Warm-up symbols exceed cap: %d -> %d",
+                len(symbols),
+                subscription_cap,
+            )
+            symbols = self._sort_by_proximity(symbols)[:subscription_cap]
+        signature = frozenset(symbols)
+        now_ts = time.monotonic()
+        if (
+            self._last_warmup_signature == signature
+            and (now_ts - self._last_warmup_ts) < self._warmup_dedupe_window_sec
+        ):
+            logger.info(
+                "[IVSync] Warm-up deduplicated: %d symbols within %.0fs window.",
+                len(signature),
+                self._warmup_dedupe_window_sec,
+            )
+            return
+        self._last_warmup_signature = signature
+        self._last_warmup_ts = now_ts
 
         self._warming_up = True
+        any_update = False
         try:
             logger.info(f"[IVBaselineSync] Warming up {len(symbols)} symbols.")
 
@@ -130,14 +171,15 @@ class IVBaselineSync:
             symbols = self._sort_by_proximity(symbols)
             spot = self._get_spot()  # Fetch here so it's in scope for spot_at_sync below
 
-            batch_size = 50
+            batch_size = self._safe_batch_size()
             for i in range(0, len(symbols), batch_size):
                 batch = symbols[i:i + batch_size]
                 logger.warning(f"[IVSync] Warm-up batch {i//batch_size + 1} STARTING (batch size {len(batch)})...")
                 async with self._limiter.acquire(weight=len(batch)):
                     try:
-                        results = self._ctx.calc_indexes(
-                            batch, [CalcIndex.ImpliedVolatility, CalcIndex.OpenInterest]
+                        results = await self._runtime.calc_indexes(
+                            batch,
+                            [CalcIndex.ImpliedVolatility, CalcIndex.OpenInterest],
                         )
                         n_res = len(results or [])
                         logger.warning(f"[IVSync] Batch SUCCESS: Received {n_res} results.")
@@ -159,6 +201,8 @@ class IVBaselineSync:
                                 except (ValueError, TypeError): pass
                                 
                             self.apply_iv_update(item.symbol, iv, oi)
+                            if iv is not None or oi is not None:
+                                any_update = True
                             if self._on_update:
                                 self._on_update(item.symbol, item)
                             # BUG-3 FIX: IV 有效才记录 spot ref，防止 Sticky Strike 矫正使用错误基准
@@ -175,6 +219,8 @@ class IVBaselineSync:
             logger.info(f"[IVBaselineSync] Warm-up session error: {e}")
         finally:
             self._warming_up = False
+            if any_update:
+                self._bootstrap_warmup_done = True
             # OI-PERSIST FIX: write REST-fetched OI to disk so next restart hot-starts
             today_str = datetime.now(ZoneInfo("US/Eastern")).strftime("%Y%m%d")
             self._persist_oi_to_disk(today_str)
@@ -190,9 +236,16 @@ class IVBaselineSync:
         await asyncio.sleep(3.0)
         try:
             symbols = list(self._get_symbols())
-            if symbols:
+            if symbols and not self._bootstrap_warmup_done and not self.iv_cache:
                 logger.info("[IVSync] Triggering initial warm_up for %d symbols.", len(symbols))
                 await self.warm_up(symbols)
+            elif symbols:
+                logger.info(
+                    "[IVSync] Initial warm_up skipped: already bootstrapped "
+                    "(symbols=%d iv_cache=%d).",
+                    len(symbols),
+                    len(self.iv_cache),
+                )
             else:
                 logger.warning("[IVSync] No symbols yet for initial warm_up — will retry in 60s loop.")
         except Exception as e:
@@ -239,7 +292,7 @@ class IVBaselineSync:
                 f"iv_cache_size={iv_before}, spot={self._get_spot()}"
             )
 
-            batch_size = 50
+            batch_size = self._safe_batch_size()
             for i in range(0, len(chunk), batch_size):
                 batch = chunk[i:i + batch_size]
                 # PP-3 FIX: capture spot immediately before each REST call so
@@ -247,8 +300,9 @@ class IVBaselineSync:
                 spot_ref_now = self._get_spot()
                 async with self._limiter.acquire(weight=len(batch)):
                     try:
-                        results = self._ctx.calc_indexes(
-                            batch, [CalcIndex.ImpliedVolatility, CalcIndex.OpenInterest]
+                        results = await self._runtime.calc_indexes(
+                            batch,
+                            [CalcIndex.ImpliedVolatility, CalcIndex.OpenInterest],
                         )
                         for item in results:
                             iv_raw = item.implied_volatility

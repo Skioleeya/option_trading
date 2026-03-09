@@ -1,12 +1,12 @@
 ﻿# Handoff (Index)
 
 ## Active Handoff
-- Path: notes/sessions/2026-03-07/0855_p0_agents_machine_directive_mod/handoff.md
-- Meta: notes/sessions/2026-03-07/0855_p0_agents_machine_directive_mod/meta.yaml
+- Path: notes/sessions/2026-03-09/rust_only_single_connection_cutover/handoff.md
+- Meta: notes/sessions/2026-03-09/rust_only_single_connection_cutover/meta.yaml
 
 ## Latest Outcome
-- Session: 2026-03-07/0855_p0_agents_machine_directive_mod
-- Summary: Rewrote AGENTS.md into machine-enforced directive format and completed validate_session gate upgrade implementation (strict command evidence + full-repo boundary scan + anti-pattern scan); strict validation loop rerun and passed.
+- Session: 2026-03-09/rust_only_single_connection_cutover
+- Summary: 完成 Rust-only 单连接收敛与 OpenSpec 父子提案组合：L0 runtime 协议化、primary_ctx 链路移除、Rust FFI 补齐 REST pull、SOP 同步与定向回归通过。
 
 ## Next Session Bootstrap
 1. Read this file.

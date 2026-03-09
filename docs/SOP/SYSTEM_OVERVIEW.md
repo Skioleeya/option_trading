@@ -1,6 +1,6 @@
 # SPY 0DTE Dashboard SOP — SYSTEM OVERVIEW
 
-> Version: 2026-03-07
+> Version: 2026-03-09
 > Scope: L0/L1/L2/L3/L4 + app orchestration + shared services
 
 ## 1. Mission
@@ -19,7 +19,7 @@ flowchart LR
   subgraph L0["L0 Data Ingest"]
     L0A[LongPort WS/REST]
     L0B[Rust Ingest Gateway]
-    L0C[MarketDataGateway]
+    L0C[RustQuoteRuntime]
     L0D[ChainStateStore]
     L0E[IV/Tier2/Tier3 Pollers]
   end
@@ -126,31 +126,30 @@ Payload 核心语义:
 ```mermaid
 sequenceDiagram
   participant U as Uvicorn
-  participant M as main.py PRE-FLIGHT
+  participant M as main.py
   participant A as app.lifespan
-  participant G as MarketDataGateway
+  participant G as L0QuoteRuntime
 
   U->>M: import main
-  M->>M: init QuoteContext
-  alt success
-    M->>A: app.state.primary_ctx=ctx
-  else failure
-    M->>A: app.state.primary_ctx=None (degraded)
-  end
-
-  A->>G: connect()
+  M->>A: build_container()
+  A->>G: connect(runtime_mode=rust_only)
   alt connect success
-    G-->>A: quote_ctx ready
+    G-->>A: runtime ready
   else connect failure
-    G-->>A: feed paused (non-fatal)
+    G-->>A: explicit degraded mode (non-fatal)
   end
 ```
 
 关键要求:
 
-- PRE-FLIGHT 失败不能导致进程崩溃
-- Gateway 二次建连失败不能中断生命周期
+- Runtime 建连失败不能导致进程崩溃
+- Runtime 建连失败需有限次退避重试后再降级（避免瞬时网络抖动直接进入长时间降级）
+- Runtime 二次建连失败不能中断生命周期
 - 降级模式必须有明确日志
+- LongPort Quote API 配额守卫必须持续生效:
+  - 同时订阅 symbols <= 500（超限自动裁剪）
+  - REST 调用频率 <= 10/s（配置超限时运行时钳制）
+  - REST 并发 <= 5（配置超限时运行时钳制）
 
 ## 6. Observability
 
@@ -160,6 +159,7 @@ sequenceDiagram
 - `[L3 Assembler]`
 - `[IVSync]`
 - `shm_stats.status/head/tail`
+- LongPort 建连阶段必须输出 attempt/退避信息，便于区分瞬时抖动与持续不可达
 
 关键诊断端点:
 

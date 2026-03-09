@@ -28,6 +28,14 @@ function Coalesce-String {
     return [string]$Value
 }
 
+function Read-TextUtf8 {
+    param([string]$Path)
+    if (-not (Test-Path $Path)) {
+        return ""
+    }
+    return [System.IO.File]::ReadAllText((Resolve-Path $Path), [System.Text.Encoding]::UTF8)
+}
+
 function Normalize-RepoPath {
     param([string]$Path)
     if ([string]::IsNullOrWhiteSpace($Path)) {
@@ -67,7 +75,7 @@ function Get-ArchitectureBoundaryHits {
     }
 
     try {
-        $policy = Get-Content $PolicyPath -Raw | ConvertFrom-Json
+        $policy = Read-TextUtf8 -Path $PolicyPath | ConvertFrom-Json
     } catch {
         Fail "Architecture policy parse failed: $PolicyPath"
         return $hits
@@ -335,7 +343,7 @@ function Get-UncheckedOpenTaskItems {
 
     $section = ""
     $lineNo = 0
-    foreach ($line in Get-Content $OpenTasksPath) {
+    foreach ($line in Get-Content $OpenTasksPath -Encoding UTF8) {
         $lineNo += 1
         if ($line -match '^\s*##\s+(?<sec>.+?)\s*$') {
             $section = $Matches['sec'].Trim()
@@ -407,9 +415,9 @@ foreach ($f in $requiredFiles) {
 }
 
 $metaPath = Join-Path $sessionDir "meta.yaml"
-$metaText = if (Test-Path $metaPath) { Get-Content $metaPath -Raw } else { "" }
+$metaText = Read-TextUtf8 -Path $metaPath
 $handoffPath = Join-Path $sessionDir "handoff.md"
-$handoffText = if (Test-Path $handoffPath) { Get-Content $handoffPath -Raw } else { "" }
+$handoffText = Read-TextUtf8 -Path $handoffPath
 
 if (Test-Path $metaPath) {
     Require-Key -Text $metaText -KeyPattern '^session_id:\s*".+?"\s*$' -Label "session_id"
@@ -455,9 +463,9 @@ if ($isActiveSession) {
     $expectedMetaPtrA = '- Meta: ' + $SessionPath + '/meta.yaml'
     $expectedMetaPtrB = '- Meta: `' + $SessionPath + '/meta.yaml`'
 
-    $projectText = Get-Content $contextProject -Raw
-    $tasksText = Get-Content $contextTasks -Raw
-    $handoffIndexText = Get-Content $contextHandoff -Raw
+    $projectText = Read-TextUtf8 -Path $contextProject
+    $tasksText = Read-TextUtf8 -Path $contextTasks
+    $handoffIndexText = Read-TextUtf8 -Path $contextHandoff
 
     if (($projectText -match [regex]::Escape($expectedProjectPtrA)) -or ($projectText -match [regex]::Escape($expectedProjectPtrB))) { Pass "project_state index pointer OK" } else { Fail "project_state index pointer mismatch" }
     if (($projectText -match [regex]::Escape($expectedMetaPtrA)) -or ($projectText -match [regex]::Escape($expectedMetaPtrB))) { Pass "project_state meta pointer OK" } else { Fail "project_state meta pointer mismatch" }

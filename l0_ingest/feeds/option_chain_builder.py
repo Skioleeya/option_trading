@@ -1,46 +1,33 @@
-"""Option Chain Builder — Longport API integration.
-
-Thin orchestrator that composes modular components:
-- SubscriptionManager: Tier 1 WS subscription (0DTE + 1DTE, asymmetric window)
-- IVBaselineSync: Staggered IV/OI REST polling (120s, 2-chunk)
-- Tier2Poller: 2DTE REST polling (120s, ±30pt)
-- Tier3Poller: Weekly REST polling (10min, Top 20 OI)
-
-All Greeks are computed locally via BSM using WebSocket price ticks
-and REST-sourced IV baseline, with Sticky-Strike correction.
-"""
+"""Option Chain Builder — L0 ingest orchestrator."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import math
-import threading
 import time
 from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-import numpy as np
+from longport.openapi import Config, TradeDirection
 
-from longport.openapi import QuoteContext, Config, SubType
-from shared.config import settings, convert_to_market_time
-from shared.system.persistent_oi_store import PersistentOIStore
+from shared.config import settings
 
-from l0_ingest.feeds.market_data_gateway import MarketDataGateway
-from l0_ingest.feeds.sanitization import (
-    SanitizationPipeline, RawMarketEvent, CleanQuoteEvent, EventType, _infer_opt_type
-)
 from l0_ingest.feeds.chain_state_store import ChainStateStore
 from l0_ingest.feeds.feed_orchestrator import FeedOrchestrator
 from l0_ingest.feeds.iv_baseline_sync import IVBaselineSync
+from l0_ingest.feeds.quote_runtime import L0QuoteRuntime, PythonQuoteRuntime, RustQuoteRuntime
+from l0_ingest.feeds.rate_limiter import APIRateLimiter
+from l0_ingest.feeds.sanitization import (
+    CleanQuoteEvent,
+    EventType,
+    SanitizationPipeline,
+    _infer_opt_type,
+)
 from l0_ingest.feeds.tier2_poller import Tier2Poller
 from l0_ingest.feeds.tier3_poller import Tier3Poller
-from l0_ingest.feeds.rate_limiter import APIRateLimiter
 from l0_ingest.subscription_manager import OptionSubscriptionManager
 
-from l1_compute.analysis.bsm import get_trading_time_to_maturity, skew_adjust_iv
-from l1_compute.analysis.bsm_fast import compute_greeks_batch, warmup as bsm_warmup
 from l1_compute.analysis.depth_engine import DepthEngine
 from l1_compute.analysis.entropy_filter import EntropyFilter
 from l1_compute.analysis.greeks_engine import GreeksEngine
@@ -48,178 +35,165 @@ from l1_compute.rust_bridge import RustBridge
 
 logger = logging.getLogger(__name__)
 
+
 class OptionChainBuilder:
-    """Institutional-grade Orchestrator for the Option Chain Feed.
+    """Institutional-grade coordinator of the L0 ingestion pipeline."""
 
-    Refactored from God Object into a lean coordinator of specialized modules:
-    - MarketDataGateway: L0-L1 WS Queue (Thread-safe)
-    - SanitizationPipeline: L1A Data Cleaning (NaN/Inf filter)
-    - ChainStateStore: L1B State Management (Sequence-ordered)
-    - FeedOrchestrator: Management & Research Scheduler
-    - GreeksEngine: Off-thread BSM Compute (Non-blocking)
-    """
-
-    def __init__(self, primary_ctx: Any = None) -> None:
-        """Initialize all ingestion components with unified rate control."""
-        # 1. State Store (The Single Source of Truth)
+    def __init__(self) -> None:
         self._store = ChainStateStore()
-
-        # 2. Logic Engines
         self._depth_engine = DepthEngine(ewma_alpha=0.1)
         self._entropy_filter = EntropyFilter(min_entropy=0.05)
         self._sanitizer = SanitizationPipeline()
 
-        # 3. Connectivity & Metadata Infrastructure (L0)
-        # 1. Configuration & Key Loading
         config = Config(
             app_key=settings.longport_app_key,
             app_secret=settings.longport_app_secret,
             access_token=settings.longport_access_token,
         )
-        
-        # 2. Shared Rate Limiter (Institutional Safeguard: 10/s, 5 concurrent)
+
         self._rate_limiter = APIRateLimiter(
             rate=settings.longport_api_rate_limit,
             burst=settings.longport_api_burst,
-            max_concurrent=settings.longport_api_max_concurrent
+            max_concurrent=settings.longport_api_max_concurrent,
+            symbol_rate=settings.longport_symbol_rate_per_min,
+            symbol_burst=settings.longport_symbol_burst,
         )
 
-        # 3. Component Instantiation
-        self._sub_mgr = OptionSubscriptionManager(config, rate_limiter=self._rate_limiter, primary_ctx=primary_ctx)
-        self._gateway = self._sub_mgr.py_gateway
+        runtime_mode = str(getattr(settings, "longport_runtime_mode", "rust_only")).strip().lower()
+        if runtime_mode in {"python", "python_fallback"}:
+            self._quote_runtime: L0QuoteRuntime = PythonQuoteRuntime(config)
+        else:
+            self._quote_runtime = RustQuoteRuntime(config)
+
+        self._sub_mgr = OptionSubscriptionManager(
+            config=config,
+            quote_runtime=self._quote_runtime,
+            rate_limiter=self._rate_limiter,
+        )
         self._rust_bridge = RustBridge(self._sub_mgr.shm_path)
 
         self._iv_sync = IVBaselineSync(self._rate_limiter)
         self._tier2 = Tier2Poller(self._rate_limiter)
         self._tier3 = Tier3Poller(self._rate_limiter)
 
-        # 4. Domain Engines
         self._greeks_engine = GreeksEngine(self._store, self._iv_sync)
         self._orchestrator = FeedOrchestrator(
-            self._gateway, self._store, self._sub_mgr, self._iv_sync, self._rate_limiter
+            self._quote_runtime,
+            self._store,
+            self._sub_mgr,
+            self._iv_sync,
+            self._rate_limiter,
         )
 
         self._initialized = False
         self._consumer_task: asyncio.Task | None = None
+        self._rust_consumer_task: asyncio.Task | None = None
         self._mgmt_task: asyncio.Task | None = None
 
     async def initialize(self) -> None:
-        """Startup entire modular pipeline."""
         if self._initialized:
             return
 
         try:
-            print("[OptionChainBuilder] >>> INITIALIZE START <<<")
-            # Connect Gateway (captures loop and registers callbacks)
-            print("[OptionChainBuilder] Connecting SubMgr...")
             await self._sub_mgr.connect()
-            print("[OptionChainBuilder] Connecting RustBridge...")
             self._rust_bridge.connect()
 
-            # Shared loop config for IV sync hot-start
             self._iv_sync.set_event_loop(asyncio.get_event_loop())
-            
-            # Start Pipeline Consumers
-            print("[OptionChainBuilder] Starting Event Consumer Loop...")
             self._consumer_task = asyncio.create_task(self._event_consumer_loop())
-            print("[OptionChainBuilder] Starting Rust Consumer Loop...")
             self._rust_consumer_task = asyncio.create_task(self._rust_consumer_loop())
 
-            # OI hot-start from disk
-            print("[OptionChainBuilder] Preloading OI...")
             today_str = datetime.now(ZoneInfo("US/Eastern")).strftime("%Y%m%d")
             preloaded_count = self._iv_sync.preload_oi_from_disk(today_str)
-            logger.info(f"[OptionChainBuilder] OI preloaded: {preloaded_count} symbols")
-            
-            # Seed the store with hot-start data
-            if preloaded_count > 0:
-                for sym, oi in self._iv_sync.oi_cache.items():
-                    strike = self._sub_mgr.resolve_strike(sym)
-                    if strike:
-                        # Use apply_oi_smooth or direct? 
-                        # Direct update to ensure it's there for n_valid check
-                        self._store.apply_event(CleanQuoteEvent(
-                            seq_no=0, event_type=EventType.REST, symbol=sym, strike=strike,
-                            opt_type=_infer_opt_type(sym),
-                            bid=None, ask=None, last_price=None, volume=None,
-                            open_interest=oi, implied_volatility=None, iv_timestamp=None,
-                            delta=None, gamma=None, theta=None, vega=None,
-                            current_volume=None, turnover=None, arrival_mono=time.monotonic()
-                        ))
-                logger.info("[OptionChainBuilder] ChainStateStore seeded with preloaded OI.")
+            logger.info("[OptionChainBuilder] OI preloaded: %d symbols", preloaded_count)
 
-            # Start Pollers
+            if preloaded_count > 0:
+                for symbol, oi in self._iv_sync.oi_cache.items():
+                    strike = self._sub_mgr.resolve_strike(symbol)
+                    if strike:
+                        self._store.apply_event(
+                            CleanQuoteEvent(
+                                seq_no=0,
+                                event_type=EventType.REST,
+                                symbol=symbol,
+                                strike=strike,
+                                opt_type=_infer_opt_type(symbol),
+                                bid=None,
+                                ask=None,
+                                last_price=None,
+                                volume=None,
+                                open_interest=oi,
+                                implied_volatility=None,
+                                iv_timestamp=None,
+                                delta=None,
+                                gamma=None,
+                                theta=None,
+                                vega=None,
+                                current_volume=None,
+                                turnover=None,
+                                arrival_mono=time.monotonic(),
+                            )
+                        )
+
             self._iv_sync.start(
-                self._gateway.quote_ctx,
+                self._quote_runtime,
                 get_symbols_fn=lambda: self._sub_mgr.subscribed_symbols,
                 get_spot_fn=lambda: self._store.spot,
-                on_update=self._handle_rest_update
+                on_update=self._handle_rest_update,
             )
             if settings.enable_tier2_polling:
-                self._tier2.start(self._gateway.quote_ctx, get_spot_fn=lambda: self._store.spot)
+                self._tier2.start(self._quote_runtime, get_spot_fn=lambda: self._store.spot)
             if settings.enable_tier3_polling:
-                self._tier3.start(self._gateway.quote_ctx, get_spot_fn=lambda: self._store.spot)
+                self._tier3.start(self._quote_runtime, get_spot_fn=lambda: self._store.spot)
 
-            # Start Orchestrator Task
             self._mgmt_task = asyncio.create_task(self._orchestrator.run())
 
             from l1_compute.analysis.bsm_fast import warmup
-            warmup()
 
+            warmup()
             self._initialized = True
-            logger.info("[OptionChainBuilder] Modular Pipeline INITIALIZED & READY")
-            print("[OptionChainBuilder] >>> ALL CONSUMER LOOPS READY <<<")
-        except Exception as e:
-            logger.error(f"[OptionChainBuilder] Initialization disaster: {e}")
+            logger.info("[OptionChainBuilder] Modular pipeline initialized")
+        except Exception as exc:
+            logger.error("[OptionChainBuilder] Initialization failure: %s", exc)
             raise
 
     async def _rust_consumer_loop(self) -> None:
-        """The High-Perf Consumer: Shared Memory → RustBridge → Store."""
-        logger.info("[OptionChainBuilder] Rust Consumer Loop ACTIVE")
+        logger.info("[OptionChainBuilder] Rust consumer loop active")
         while self._initialized:
             try:
                 if not self._rust_bridge.mm:
                     self._rust_bridge.connect()
-                
                 if not self._rust_bridge.mm:
-                    await asyncio.sleep(0.5) # Try again later
+                    await asyncio.sleep(0.5)
                     continue
 
                 events = list(self._rust_bridge.poll())
-                if events:
-                    # Convert to Arrow for high-speed enrichment (future enhancement)
-                    # batch = self._rust_bridge.to_arrow_batch(events)
-                    
-                    for ev in events:
-                        # Map Rust struct to CleanQuoteEvent
-                        strike = self._sub_mgr.symbol_to_strike.get(ev["symbol"])
-                        if strike is None: continue
-                        
-                        clean = CleanQuoteEvent(
-                            seq_no=ev["seq_no"],
-                            event_type=EventType(ev["event_type"]),
-                            symbol=ev["symbol"],
-                            strike=strike,
-                            opt_type=_infer_opt_type(ev["symbol"]),
-                            bid=ev["bid"] if ev["bid"] > 0 else None,
-                            ask=ev["ask"] if ev["ask"] > 0 else None,
-                            last_price=ev["last_price"] if ev["last_price"] > 0 else None,
-                            volume=ev["volume"],
-                            open_interest=None, # Pulled from REST
-                            implied_volatility=None,
-                            arrival_mono=ev["arrival_mono_ns"] / 1e9,
-                            impact_index=ev["impact_index"],
-                            is_sweep=ev["is_sweep"]
-                        )
-                        self._store.apply_event(clean)
-                
-                await asyncio.sleep(0.001) # Ultra-fast poll
-            except Exception as e:
-                logger.error(f"[OptionChainBuilder] Rust Consumer Loop Error: {e}")
+                for event in events:
+                    strike = self._sub_mgr.symbol_to_strike.get(event["symbol"])
+                    if strike is None:
+                        continue
+                    clean = CleanQuoteEvent(
+                        seq_no=event["seq_no"],
+                        event_type=EventType(event["event_type"]),
+                        symbol=event["symbol"],
+                        strike=strike,
+                        opt_type=_infer_opt_type(event["symbol"]),
+                        bid=event["bid"] if event["bid"] > 0 else None,
+                        ask=event["ask"] if event["ask"] > 0 else None,
+                        last_price=event["last_price"] if event["last_price"] > 0 else None,
+                        volume=event["volume"],
+                        open_interest=None,
+                        implied_volatility=None,
+                        arrival_mono=event["arrival_mono_ns"] / 1e9,
+                        impact_index=event["impact_index"],
+                        is_sweep=event["is_sweep"],
+                    )
+                    self._store.apply_event(clean)
+                await asyncio.sleep(0.001)
+            except Exception as exc:
+                logger.error("[OptionChainBuilder] Rust consumer loop error: %s", exc)
                 await asyncio.sleep(0.1)
 
     async def fetch_chain(self) -> dict[str, Any]:
-        """Fetch current chain snapshot (Consumer Interface)."""
         if not self._initialized:
             return {
                 "spot": None,
@@ -232,18 +206,14 @@ class OptionChainBuilder:
         now = datetime.now(ZoneInfo("US/Eastern"))
         now_utc = now.astimezone(ZoneInfo("UTC"))
         try:
-            # 1. Get filtered snapshot (only target symbols)
             target_set = self._sub_mgr.target_symbols
             snapshot = self._store.get_flow_merged_snapshot(
                 self._depth_engine.get_flow_snapshot(),
-                target_symbols=target_set
+                target_symbols=target_set,
             )
-
-            # 2. Trigger non-blocking enrichment (off-thread compute)
-            # This is the "pull-through" update for Greeks
             agg = await self._greeks_engine.enrich(snapshot, self._store.spot or 0.0)
 
-            return {
+            data = {
                 "spot": self._store.spot,
                 "chain": snapshot,
                 "version": self._store.version,
@@ -259,18 +229,18 @@ class OptionChainBuilder:
                 "shm_stats": {
                     "head": self._get_shm_val(self._rust_bridge.head_ptr),
                     "tail": self._get_shm_val(self._rust_bridge.tail_ptr),
-                    "status": "OK" if self._rust_bridge.mm else "DISCONNECTED"
+                    "status": "OK" if self._rust_bridge.mm else "DISCONNECTED",
                 },
                 "governor_telemetry": {
                     "symbols_per_min": self._rate_limiter.symbol_tokens,
-                    "cooldown_active": self._rate_limiter.cooldown_active
-                }
+                    "cooldown_active": self._rate_limiter.cooldown_active,
+                },
             }
             if not data["rust_active"]:
-                logger.warning(f"[OptionChainBuilder] fetch_chain status: rust_active=FALSE (self._rust_bridge.mm={self._rust_bridge.mm})")
+                logger.warning("[OptionChainBuilder] fetch_chain rust_active=FALSE")
             return data
-        except Exception as e:
-            logger.error(f"[OptionChainBuilder] fetch_chain failure: {e}")
+        except Exception as exc:
+            logger.error("[OptionChainBuilder] fetch_chain failure: %s", exc)
             return {
                 "spot": self._store.spot,
                 "chain": [],
@@ -280,82 +250,68 @@ class OptionChainBuilder:
             }
 
     def _get_shm_val(self, ptr: int) -> int:
-        """Helper to read a uint64 from shm without moving internal pointers."""
-        if not self._rust_bridge.mm: return 0
+        if not self._rust_bridge.mm:
+            return 0
         import struct
-        return struct.unpack("Q", self._rust_bridge.mm[ptr:ptr+8])[0]
+
+        return struct.unpack("Q", self._rust_bridge.mm[ptr : ptr + 8])[0]
 
     def _handle_rest_update(self, symbol: str, item: Any) -> None:
-        """Update store from REST-fetched metadata (IV/OI)."""
         strike = self._sub_mgr.resolve_strike(symbol)
-        if strike:
-            clean = self._sanitizer.parse_rest_item(symbol, strike, item)
-            if clean:
-                applied = self._store.apply_event(clean)
-                logger.debug("[OptionChainBuilder] REST update for %s | strike=%s | applied=%s", symbol, strike, applied)
-            else:
-                logger.warning("[OptionChainBuilder] REST update for %s failed to sanitize", symbol)
+        if strike is None:
+            logger.warning("[OptionChainBuilder] REST update dropped: strike unresolved for %s", symbol)
+            return
+        clean = self._sanitizer.parse_rest_item(symbol, strike, item)
+        if clean:
+            self._store.apply_event(clean)
         else:
-            logger.warning("[OptionChainBuilder] REST update for %s dropped: strike UNRESOLVED", symbol)
+            logger.warning("[OptionChainBuilder] REST update sanitize failed for %s", symbol)
 
     async def _event_consumer_loop(self) -> None:
-        """The Pipeline Consumer: Raw Queue → Sanitizer → Entropy → Store."""
-        logger.info("[OptionChainBuilder] Pipeline Consumer Loop ACTIVE")
-        queue = self._gateway.event_queue
+        logger.info("[OptionChainBuilder] Pipeline consumer loop active")
+        queue = self._quote_runtime.event_queue
         while self._initialized:
             try:
                 raw_event = await queue.get()
-                
-                # Type-specific processing
-                from l0_ingest.feeds.sanitization import EventType
-                
-                # SPECIAL CASE: SPY spot handle
+
                 if raw_event.symbol == "SPY.US" and raw_event.event_type == EventType.QUOTE:
-                    price = float(getattr(raw_event.payload, 'last_done', 0) or 0)
+                    price = float(getattr(raw_event.payload, "last_done", 0) or 0)
                     if price > 0:
                         self._store.update_spot(price)
+                    queue.task_done()
                     continue
 
-                # Normal Option Processing
                 if raw_event.event_type == EventType.QUOTE:
-                    # Resolve strike from sub mgr
                     strike = self._sub_mgr.symbol_to_strike.get(raw_event.symbol)
-                    if strike is None: continue
-
+                    if strike is None:
+                        queue.task_done()
+                        continue
                     clean = self._sanitizer.parse_quote(raw_event, strike)
                     if clean and self._entropy_filter.accept(clean.symbol, clean):
                         self._store.apply_event(clean)
-                        
-                        # PP-4 Sync OI smoothing if present
                         if clean.open_interest is not None:
                             self._store.apply_oi_smooth(clean.symbol, clean.open_interest)
-                
+
                 elif raw_event.event_type == EventType.DEPTH:
-                    clean_d = self._sanitizer.parse_depth(raw_event)
-                    if clean_d:
-                        self._depth_engine.update_depth(
-                            clean_d.symbol, 
-                            getattr(raw_event.payload, 'bids', []), 
-                            getattr(raw_event.payload, 'asks', [])
-                        )
-                        self._store.apply_depth(clean_d)
-                        
-                        if hasattr(self, 'on_depth') and self.on_depth is not None:
-                            self.on_depth(
-                                clean_d.symbol,
-                                getattr(raw_event.payload, 'bids', []),
-                                getattr(raw_event.payload, 'asks', [])
-                            )
-                
+                    clean_depth = self._sanitizer.parse_depth(raw_event)
+                    if clean_depth:
+                        bids = getattr(raw_event.payload, "bids", [])
+                        asks = getattr(raw_event.payload, "asks", [])
+                        self._depth_engine.update_depth(clean_depth.symbol, bids, asks)
+                        self._store.apply_depth(clean_depth)
+                        if hasattr(self, "on_depth") and self.on_depth is not None:
+                            self.on_depth(clean_depth.symbol, bids, asks)
+
                 elif raw_event.event_type == EventType.TRADE:
-                    trades = getattr(raw_event.payload, 'trades', [])
+                    trades = getattr(raw_event.payload, "trades", [])
                     if trades:
-                        # Convert Trade objects to dicts for VPINv2 which expects dicts
-                        trade_dicts = []
-                        from longport.openapi import TradeDirection
-                        for t in trades:
-                            # Extract and normalize direction
-                            raw_dir = getattr(t, "direction", 0) if not isinstance(t, dict) else t.get("dir", t.get("direction", 0))
+                        trade_dicts: list[dict[str, Any]] = []
+                        for trade in trades:
+                            raw_dir = (
+                                getattr(trade, "direction", 0)
+                                if not isinstance(trade, dict)
+                                else trade.get("dir", trade.get("direction", 0))
+                            )
                             if raw_dir == TradeDirection.Up or str(raw_dir) == "2" or raw_dir == 2:
                                 dir_sign = 1
                             elif raw_dir == TradeDirection.Down or str(raw_dir) == "1" or raw_dir == 1:
@@ -363,69 +319,79 @@ class OptionChainBuilder:
                             else:
                                 dir_sign = 0
 
-                            if isinstance(t, dict):
-                                d = dict(t)
-                                d["vol"] = float(d.get("vol", 0.0) or d.get("volume", 0.0))
-                                d["dir"] = dir_sign
-                                trade_dicts.append(d)
+                            if isinstance(trade, dict):
+                                trade_dict = dict(trade)
+                                trade_dict["vol"] = float(
+                                    trade_dict.get("vol", 0.0) or trade_dict.get("volume", 0.0)
+                                )
+                                trade_dict["dir"] = dir_sign
+                                trade_dicts.append(trade_dict)
                             else:
-                                # Safe parsing for TRADE objects
-                                def _local_safe_float(v, default=0.0):
-                                    try: return float(v)
-                                    except: return default
-                                
-                                def _local_safe_int(v, default=0):
-                                    try: return int(float(v))
-                                    except: return default
+                                def _local_safe_float(value: Any, default: float = 0.0) -> float:
+                                    try:
+                                        return float(value)
+                                    except (TypeError, ValueError):
+                                        return default
 
-                                vol = _local_safe_float(getattr(t, "volume", 0))
-                                ts = getattr(t, "timestamp", 0)
-                                def to_ts_int(val):
-                                    if hasattr(val, "timestamp"): return int(val.timestamp())
-                                    try: return int(float(val))
-                                    except: return int(time.time())
+                                def _local_safe_int(value: Any, default: int = 0) -> int:
+                                    try:
+                                        return int(float(value))
+                                    except (TypeError, ValueError):
+                                        return default
 
-                                ts_int = to_ts_int(ts)
-                                trade_dicts.append({
-                                    "price": _local_safe_float(getattr(t, "price", 0.0)),
-                                    "vol": vol,
-                                    "volume": vol,
-                                    "timestamp": ts_int,
-                                    "dir": dir_sign,
-                                    "direction": dir_sign,
-                                    "trade_type": _local_safe_int(getattr(t, "trade_type", 0))
-                                })
-                        
+                                volume = _local_safe_float(getattr(trade, "volume", 0))
+                                timestamp_val = getattr(trade, "timestamp", 0)
+
+                                def to_ts_int(value: Any) -> int:
+                                    if hasattr(value, "timestamp"):
+                                        return int(value.timestamp())
+                                    try:
+                                        return int(float(value))
+                                    except (TypeError, ValueError):
+                                        return int(time.time())
+
+                                trade_dicts.append(
+                                    {
+                                        "price": _local_safe_float(getattr(trade, "price", 0.0)),
+                                        "vol": volume,
+                                        "volume": volume,
+                                        "timestamp": to_ts_int(timestamp_val),
+                                        "dir": dir_sign,
+                                        "direction": dir_sign,
+                                        "trade_type": _local_safe_int(getattr(trade, "trade_type", 0)),
+                                    }
+                                )
+
                         self._depth_engine.update_trades(raw_event.symbol, trade_dicts)
-                        if hasattr(self, 'on_trade') and self.on_trade is not None:
+                        if hasattr(self, "on_trade") and self.on_trade is not None:
                             self.on_trade(raw_event.symbol, trade_dicts)
 
                 queue.task_done()
-            except Exception as e:
-                logger.error(f"[OptionChainBuilder] Consumer Loop Exception: {e}")
+            except Exception as exc:
+                logger.error("[OptionChainBuilder] Consumer loop exception: %s", exc)
                 await asyncio.sleep(0.1)
 
     def set_mandatory_symbols(self, symbols: set[str]) -> None:
         self._orchestrator.set_mandatory_symbols(symbols)
 
     def get_diagnostics(self) -> dict[str, Any]:
-        """Consolidate diagnostics from all components."""
-        diag = {
+        diagnostics = {
             "initialized": self._initialized,
-            "gateway": self._gateway.diagnostics(),
+            "gateway": self._quote_runtime.diagnostics(),
             "store": self._store.diagnostics(),
         }
-        diag.update(self._store.diagnostics())
-        return diag
+        diagnostics.update(self._store.diagnostics())
+        return diagnostics
 
     async def shutdown(self) -> None:
-        """Controlled pipeline shutdown."""
         self._initialized = False
-        if self._consumer_task: self._consumer_task.cancel()
-        if self._mgmt_task: self._mgmt_task.cancel()
-        await self._gateway.disconnect()
+        tasks = [t for t in [self._consumer_task, self._rust_consumer_task, self._mgmt_task] if t]
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        await self._quote_runtime.disconnect()
         await self._iv_sync.stop()
         await self._tier2.stop()
         await self._tier3.stop()
-        logger.info("[OptionChainBuilder] Modular Pipeline SHUTDOWN COMPLETE")
-
+        logger.info("[OptionChainBuilder] Modular pipeline shutdown complete")

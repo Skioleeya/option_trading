@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from typing import Any
 
 from longport.openapi import QuoteContext, Config, SubType
@@ -37,6 +38,11 @@ logger = logging.getLogger(__name__)
 # Maximum backpressure queue depth before we start dropping events.
 # At 1000 Hz tick rate this is ~1 second of buffering.
 _QUEUE_MAXSIZE = 2000
+_CONNECT_RETRIES = max(1, int(os.environ.get("LONGPORT_CONNECT_RETRIES", "3")))
+_CONNECT_RETRY_BASE_SEC = max(
+    0.2,
+    float(os.environ.get("LONGPORT_CONNECT_RETRY_BASE_SEC", "0.8")),
+)
 
 
 class MarketDataGateway:
@@ -76,12 +82,28 @@ class MarketDataGateway:
         logger.info("[MarketDataGateway] Connecting to LongPort (Capturing Event Loop)...")
         
         if self._ctx is None:
-            try:
-                print("[MarketDataGateway] >>> QuoteContext(self._config) START <<<")
-                self._ctx = QuoteContext(self._config)
-                print("[MarketDataGateway] >>> QuoteContext(self._config) SUCCESS <<<")
-            except Exception as e:
-                print(f"[MarketDataGateway] !!! QuoteContext(self._config) INIT FAILED: {e}")
+            last_exc: Exception | None = None
+            for attempt in range(1, _CONNECT_RETRIES + 1):
+                try:
+                    print("[MarketDataGateway] >>> QuoteContext(self._config) START <<<")
+                    self._ctx = QuoteContext(self._config)
+                    print("[MarketDataGateway] >>> QuoteContext(self._config) SUCCESS <<<")
+                    break
+                except Exception as exc:
+                    last_exc = exc
+                    logger.warning(
+                        "[MarketDataGateway] QuoteContext init failed (%d/%d): %s",
+                        attempt,
+                        _CONNECT_RETRIES,
+                        exc,
+                    )
+                    if attempt < _CONNECT_RETRIES:
+                        await asyncio.sleep(_CONNECT_RETRY_BASE_SEC * attempt)
+            if self._ctx is None:
+                print(
+                    "[MarketDataGateway] !!! QuoteContext(self._config) INIT FAILED "
+                    f"after {_CONNECT_RETRIES} attempts: {last_exc}"
+                )
                 logger.error(
                     "[MarketDataGateway] LongPort SDK initialization failed. "
                     "Entering degraded mode without quote_ctx.",

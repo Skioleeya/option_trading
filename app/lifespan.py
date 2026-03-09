@@ -20,9 +20,8 @@ async def lifespan(app: FastAPI):
     """Orchestrates application startup and shutdown via AppContainer."""
     print("[DEBUG] ========== LIFESPAN START ==========")
     
-    # 1. Build Container (Injecting Early-Bound institutional context)
-    primary_ctx = getattr(app.state, "primary_ctx", None)
-    ctr = build_container(primary_ctx=primary_ctx)
+    # 1. Build container
+    ctr = build_container()
     
     # 2. Sequential I/O Initialization
     await ctr.redis_service.start()
@@ -33,14 +32,12 @@ async def lifespan(app: FastAPI):
             
     await ctr.option_chain_builder.initialize()
     
-    # 3. Patch late-bound dependencies (Explicit ordered resolution)
-    ctr.atm_decay_tracker.ctx = ctr.option_chain_builder._gateway.quote_ctx
-    
-    # 4. Fetch initial spot to initialize trackers
+    # 3. Fetch initial spot to initialize trackers
     try:
         _init_snapshot = await ctr.option_chain_builder.fetch_chain()
         _init_spot = _init_snapshot.get("spot", 0.0)
-    except Exception:
+    except Exception as exc:
+        logger.warning("[Lifespan] Initial fetch_chain failed, using spot=0. reason=%s", exc)
         _init_spot = 0.0
     await ctr.atm_decay_tracker.initialize(spot=_init_spot)
     ctr.quote_hub_ready.set()
@@ -50,17 +47,17 @@ async def lifespan(app: FastAPI):
     ctr.option_chain_builder.on_trade = ctr.l1_reactor.update_microstructure_trades
 
 
-    # 5. Build Shared Loop Objects
+    # 4. Build Shared Loop Objects
     ws_manager = WSManager()
     shared_state = SharedLoopState()
     
-    # 6. Attach to app state for Routes to access
+    # 5. Attach to app state for Routes to access
     app.state.container = ctr
     app.state.ws_manager = ws_manager
     app.state.state = shared_state
     app.state.market_data_service = ctr.option_chain_builder # required for backward compat
 
-    # 7. Start Background Loops
+    # 6. Start Background Loops
     tasks = [
         asyncio.create_task(run_compute_loop(ctr, shared_state)),
         asyncio.create_task(run_broadcast_loop(ctr, ws_manager, shared_state)),
@@ -71,7 +68,7 @@ async def lifespan(app: FastAPI):
 
     yield  # Application runs here
 
-    # 8. Shutdown sequence
+    # 7. Shutdown sequence
     print("[DEBUG] ========== LIFESPAN END ==========")
     for task in tasks:
         task.cancel()
