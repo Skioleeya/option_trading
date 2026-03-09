@@ -136,16 +136,16 @@ sequenceDiagram
   alt connect success
     G-->>A: runtime ready
   else connect failure
-    G-->>A: explicit degraded mode (non-fatal)
+    G-->>A: strict gate fail-fast (default)
   end
 ```
 
 关键要求:
 
-- Runtime 建连失败不能导致进程崩溃
-- Runtime 建连失败需有限次退避重试后再降级（避免瞬时网络抖动直接进入长时间降级）
-- Runtime 二次建连失败不能中断生命周期
-- 降级模式必须有明确日志
+- 默认 `longport_startup_strict_connectivity=true`：启动必须通过最小连通性预检，否则 fail-fast 终止进程启动。
+- 当显式关闭 strict 开关时，Runtime 建连失败可降级运行，但必须输出结构化诊断日志。
+- Runtime 建连失败需有限次退避重试后再判定失败（避免瞬时网络抖动直接进入长时间降级）。
+- 降级模式必须有明确日志。
 - LongPort Quote API 配额守卫必须持续生效:
   - 同时订阅 symbols <= 500（超限自动裁剪）
   - REST 调用频率 <= 10/s（配置超限时运行时钳制）

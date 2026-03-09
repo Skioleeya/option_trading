@@ -1,6 +1,6 @@
 """[P0] LongPort API credentials and top-level system parameters."""
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 
 from shared.config._base import BaseConfig
 
@@ -8,10 +8,55 @@ from shared.config._base import BaseConfig
 class APICredentialsConfig(BaseConfig):
     """LongPort OpenAPI credentials and core system settings."""
 
-    # LongPort API credentials
-    longport_app_key: str = Field(..., description="Longport OpenAPI App Key")
-    longport_app_secret: str = Field(..., description="Longport OpenAPI App Secret")
-    longport_access_token: str = Field(..., description="Longport OpenAPI Access Token")
+    # LongPort / Longbridge API credentials (dual env alias for compatibility)
+    longport_app_key: str = Field(
+        ...,
+        description="Longport OpenAPI App Key",
+        validation_alias=AliasChoices("LONGPORT_APP_KEY", "LONGBRIDGE_APP_KEY"),
+    )
+    longport_app_secret: str = Field(
+        ...,
+        description="Longport OpenAPI App Secret",
+        validation_alias=AliasChoices("LONGPORT_APP_SECRET", "LONGBRIDGE_APP_SECRET"),
+    )
+    longport_access_token: str = Field(
+        ...,
+        description="Longport OpenAPI Access Token",
+        validation_alias=AliasChoices("LONGPORT_ACCESS_TOKEN", "LONGBRIDGE_ACCESS_TOKEN"),
+    )
+    longport_http_url: str = Field(
+        default="https://openapi.longportapp.com",
+        description="HTTP endpoint url (official default from Longport Rust SDK Config::from_env)",
+        validation_alias=AliasChoices("LONGPORT_HTTP_URL", "LONGBRIDGE_HTTP_URL"),
+    )
+    longport_quote_ws_url: str = Field(
+        default="wss://openapi-quote.longportapp.com/v2",
+        description="Quote websocket endpoint url (official default from Longport Rust SDK Config::from_env)",
+        validation_alias=AliasChoices("LONGPORT_QUOTE_WS_URL", "LONGBRIDGE_QUOTE_WS_URL"),
+    )
+    longport_trade_ws_url: str = Field(
+        default="wss://openapi-trade.longportapp.com/v2",
+        description="Trade websocket endpoint url (official default from Longport Rust SDK Config::from_env)",
+        validation_alias=AliasChoices("LONGPORT_TRADE_WS_URL", "LONGBRIDGE_TRADE_WS_URL"),
+    )
+    longport_language: str = Field(
+        default="en",
+        description="Language identifier (en/zh-CN/zh-HK)",
+        validation_alias=AliasChoices("LONGPORT_LANGUAGE", "LONGBRIDGE_LANGUAGE"),
+    )
+    longport_enable_overnight: bool = Field(
+        default=False,
+        description="Enable overnight quote mode",
+        validation_alias=AliasChoices("LONGPORT_ENABLE_OVERNIGHT", "LONGBRIDGE_ENABLE_OVERNIGHT"),
+    )
+    longport_startup_strict_connectivity: bool = Field(
+        default=True,
+        description="Fail fast on startup when quote REST probe cannot reach any endpoint profile",
+        validation_alias=AliasChoices(
+            "LONGPORT_STARTUP_STRICT_CONNECTIVITY",
+            "LONGBRIDGE_STARTUP_STRICT_CONNECTIVITY",
+        ),
+    )
 
     # Logging
     log_level: str = Field(

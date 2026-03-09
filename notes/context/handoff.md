@@ -1,12 +1,12 @@
 ﻿# Handoff (Index)
 
 ## Active Handoff
-- Path: notes/sessions/2026-03-09/rust_only_single_connection_cutover/handoff.md
-- Meta: notes/sessions/2026-03-09/rust_only_single_connection_cutover/meta.yaml
+- Path: notes/sessions/2026-03-09/iv_skew_true_25d_pipeline_fix/handoff.md
+- Meta: notes/sessions/2026-03-09/iv_skew_true_25d_pipeline_fix/meta.yaml
 
 ## Latest Outcome
-- Session: 2026-03-09/rust_only_single_connection_cutover
-- Summary: 完成 Rust-only 单连接收敛与 OpenSpec 父子提案组合：L0 runtime 协议化、primary_ctx 链路移除、Rust FFI 补齐 REST pull、SOP 同步与定向回归通过。
+- Session: 2026-03-09/iv_skew_true_25d_pipeline_fix
+- Summary: 完成 IV SKEW 真25Δ链路修复：L1 新增 `computed_delta`，L2 新增 `skew_25d_valid` 并改真25Δ提取，L3 输出 `UNAVAILABLE/N/A`，阈值默认修正为 `-0.10 / +0.15`，并通过定向后端/前端回归。
 
 ## Next Session Bootstrap
 1. Read this file.

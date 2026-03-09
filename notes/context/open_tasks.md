@@ -1,7 +1,7 @@
 ﻿# Open Tasks (Index)
 
 ## Active Session Tasks
-- Path: notes/sessions/2026-03-09/rust_only_single_connection_cutover/open_tasks.md
+- Path: notes/sessions/2026-03-09/iv_skew_true_25d_pipeline_fix/open_tasks.md
 
 ## Global Backlog (Cross-Session)
 - [ ] P2: Stage2 remove `DecisionOutput.to_legacy_agent_result` and migrate compute-loop/L3 to typed-contract direct path (Owner: Codex, DUE: 2026-03-12).

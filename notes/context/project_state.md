@@ -1,16 +1,16 @@
 ﻿# Project State (Index)
 
 ## Active Session
-- Path: notes/sessions/2026-03-09/rust_only_single_connection_cutover/project_state.md
-- Meta: notes/sessions/2026-03-09/rust_only_single_connection_cutover/meta.yaml
+- Path: notes/sessions/2026-03-09/iv_skew_true_25d_pipeline_fix/project_state.md
+- Meta: notes/sessions/2026-03-09/iv_skew_true_25d_pipeline_fix/meta.yaml
 - Status: ACTIVE
 
 ## Recent Sessions
+- notes/sessions/2026-03-09/iv_skew_true_25d_pipeline_fix/
+- notes/sessions/2026-03-09/longport_startup_strict_connectivity/
+- notes/sessions/2026-03-09/longbridge_gateway_dual_endpoint_fallback/
 - notes/sessions/2026-03-09/rust_only_single_connection_cutover/
 - notes/sessions/2026-03-09/longport_subpool_warmup_guard/
-- notes/sessions/2026-03-09/longport_connect_rate_hotfix/
-- notes/sessions/2026-03-07/0855_p0_agents_machine_directive_mod/
-- notes/sessions/2026-03-07/0845_p0_sop_full_refresh_mod/
 
 ## Global Rules
 - Session folders are immutable records; do not overwrite prior sessions.

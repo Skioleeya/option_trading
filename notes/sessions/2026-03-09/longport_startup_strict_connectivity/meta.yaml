@@ -1,0 +1,47 @@
+﻿session_id: "2026-03-09/longport_startup_strict_connectivity"
+title: "longport startup strict connectivity"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-09 13:53:31 -04:00"
+updated_at_et: "2026-03-09 13:59:31 -04:00"
+parent_session: "2026-03-09/longbridge_gateway_dual_endpoint_fallback"
+
+branch: "master"
+base_commit: "1a72132"
+head_commit: "1a72132"
+
+files_changed:
+  - "shared/config/api_credentials.py"
+  - "shared/config_cloud_ref/api_credentials.py"
+  - "l0_ingest/feeds/option_chain_builder.py"
+  - "l0_ingest/tests/test_openapi_config_alignment.py"
+  - "l0_ingest/tests/test_quote_runtime.py"
+  - "docs/SOP/L0_DATA_FEED.md"
+  - "docs/SOP/SYSTEM_OVERVIEW.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-09/longport_startup_strict_connectivity/project_state.md"
+  - "notes/sessions/2026-03-09/longport_startup_strict_connectivity/open_tasks.md"
+  - "notes/sessions/2026-03-09/longport_startup_strict_connectivity/handoff.md"
+  - "notes/sessions/2026-03-09/longport_startup_strict_connectivity/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId longport_startup_strict_connectivity -Timezone \"Eastern Standard Time\" -ParentSession \"2026-03-09/longbridge_gateway_dual_endpoint_fallback\""
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/test_openapi_config_alignment.py l0_ingest/tests/test_quote_runtime.py"
+  - "python -m uvicorn main:app --host 127.0.0.1 --port 8014"
+  - "python -m uvicorn main:app --host 127.0.0.1 --port 8015"
+  - "python -m compileall shared/config/api_credentials.py shared/config_cloud_ref/api_credentials.py l0_ingest/feeds/option_chain_builder.py l0_ingest/tests/test_openapi_config_alignment.py l0_ingest/tests/test_quote_runtime.py app/lifespan.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/test_openapi_config_alignment.py l0_ingest/tests/test_quote_runtime.py"
+  - "python -m uvicorn main:app --host 127.0.0.1 --port 8014 (strict=true fail-fast expected)"
+  - "python -m uvicorn main:app --host 127.0.0.1 --port 8015 with LONGPORT_STARTUP_STRICT_CONNECTIVITY=false (startup complete expected)"
+  - "python -m compileall shared/config/api_credentials.py shared/config_cloud_ref/api_credentials.py l0_ingest/feeds/option_chain_builder.py l0_ingest/tests/test_openapi_config_alignment.py l0_ingest/tests/test_quote_runtime.py app/lifespan.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_failed:
+  - "External network connectivity recovery verification blocked by sandbox network policy"
+blockers: []
+notes: []
+
+

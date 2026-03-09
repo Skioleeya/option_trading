@@ -34,10 +34,26 @@ flowchart LR
  - 超过上限时按离 spot 距离优先保留近端合约，输出 drop 诊断日志。
 3. `ChainStateStore` 聚合并提供 `fetch_chain()` 快照。
 
+## 3.1 官方网关与环境变量对齐（Rust SDK）
+
+按 Longport Rust `Config::from_env` 契约，L0 默认应使用以下主网关：
+
+- `https://openapi.longportapp.com`
+- `wss://openapi-quote.longportapp.com/v2`
+- `wss://openapi-trade.longportapp.com/v2`
+
+运行时要求：
+
+- 同时兼容 `LONGPORT_*` 与 `LONGBRIDGE_*` 两套环境变量名。
+- 启动阶段必须将配置同步到两套别名，避免 Python/Rust bridge 读取键名不一致导致初始化失败。
+- Rust runtime 必须维护端点候选序列（primary -> fallback），默认顺序：`longportapp -> longbridge`。
+- 当 `socket/token` 建连出现 `client error (Connect)` 等网络类错误时，允许在未建立 WS 会话前切换后备端点并重试一次。
+
 ## 4. Degraded Startup Contract
 
-- Rust runtime 初始化失败: 必须显式降级并输出诊断，禁止进程崩溃。
-- 降级时必须保持 L4 广播连续（空链 + 诊断），禁止静默停更。
+- `longport_startup_strict_connectivity=true`（默认）时，启动阶段必须执行 `quote(["SPY.US"])` 连通性预检；两端点均失败时必须 fail-fast 中止启动。
+- `longport_startup_strict_connectivity=false` 时，允许显式降级并输出结构化诊断（`endpoint_profile/endpoint_http_url/error`）。
+- 降级模式下必须保持 L4 广播连续（空链 + 诊断），禁止静默停更。
 - Rust REST pull 路径必须支持 `QuoteContext` 懒初始化（不依赖先 `start/subscribe`），
   防止冷启动阶段出现 `spot -> subscribe -> quote_ctx` 的闭环阻塞。
 
@@ -69,6 +85,8 @@ flowchart LR
 - `[RustQuoteRuntime]`
 - `[OptionChainBuilder]`
 - `[IVSync]`
+- `Switching endpoint profile to '<name>' (http=<url>)`
+- `Startup connectivity probe passed|failed ... profile=<name> endpoint=<url>`
 
 关键指标:
 
@@ -78,7 +96,9 @@ flowchart LR
 
 ## 8. Failure Handling
 
-- 网络失败: 降级运行 + 明确日志
+- 网络失败:
+  - strict 开启: 启动失败并显式报错
+  - strict 关闭: 降级运行 + 明确日志
 - REST 限频: governor cooldown
 - 启动期限频保护:
   - IV warm-up 启用去重窗口，避免启动阶段重复全量 warm-up。
