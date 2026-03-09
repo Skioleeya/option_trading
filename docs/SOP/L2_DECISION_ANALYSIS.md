@@ -1,6 +1,6 @@
 # L2 SOP — DECISION ANALYSIS
 
-> Version: 2026-03-07
+> Version: 2026-03-09
 > Layer: L2 Decision & Risk
 
 ## 1. Responsibility
@@ -46,6 +46,12 @@ flowchart LR
 
 - L2 不重写 L0/L1 时间语义
 - 不在 L2 引入展示层样式/配色语义
+- `skew_25d_normalized` 必须基于真 25Δ 口径：
+  - CALL 使用 `+0.25`，PUT 使用 `-0.25`
+  - 仅当两侧 delta 距离均在容差 `±0.10` 内时才判定有效
+  - IV 读取优先级：`computed_iv` > `iv` > `implied_volatility`
+  - delta 读取优先级：`computed_delta` > `delta`
+- L2 必须同时输出 `skew_25d_valid`（1/0）以区分“真实 0”与“不可计算”
 
 ## 7. Observability
 

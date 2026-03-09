@@ -273,3 +273,9 @@ class TestSkewDynamicsPresenterV2:
         result = SkewDynamicsPresenterV2.build(data)
         assert result["value"] == "-0.30"
         assert result["state_label"] == "SPECULATIVE"
+
+    def test_unavailable_state_renders_na(self):
+        result = SkewDynamicsPresenterV2.build({"skew_value": None, "skew_state": "UNAVAILABLE"})
+        assert result["state_label"] == "UNAVAILABLE"
+        assert result["value"] == "N/A"
+        assert result["badge"] == "badge-neutral"

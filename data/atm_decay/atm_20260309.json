@@ -1,0 +1,19 @@
+{
+  "strike": 669.0,
+  "base_strike": 669.0,
+  "call_symbol": "SPY260309C669000.US",
+  "put_symbol": "SPY260309P669000.US",
+  "call_price": 1.0350000000000001,
+  "put_price": 1.52,
+  "timestamp": "2026-03-09T13:39:55.513420-04:00",
+  "accumulated_factor": {
+    "c": 1.0,
+    "p": 1.0,
+    "s": 1.0
+  },
+  "accumulated_offset": {
+    "c": 0.0,
+    "p": 0.0,
+    "s": 0.0
+  }
+}

@@ -296,6 +296,7 @@ class L1ComputeReactor:
         # ── Extra Step: Populate Arrow Output ─────────────────────────────────
         # In a fully unified world we would append Greeks as Arrow columns. Keep original RB.
         out_batch = rb.append_column("computed_iv", pa.array(ivs_arr))
+        out_batch = out_batch.append_column("computed_delta", pa.array(matrix.delta))
         out_batch = out_batch.append_column("gex", pa.array(matrix.gex_per_contract))
 
         # Split into call_gex / put_gex for legacy consumers

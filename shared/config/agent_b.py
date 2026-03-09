@@ -23,7 +23,7 @@ class AgentBConfig(BaseConfig):
     mtf_weight_15min: float = Field(default=0.2)
 
     # Skew Thresholds
-    skew_speculative_max: float = Field(default=0.05)
+    skew_speculative_max: float = Field(default=-0.10)
     skew_defensive_min: float = Field(default=0.15)
 
     # Practice 3: Squeeze Threshold

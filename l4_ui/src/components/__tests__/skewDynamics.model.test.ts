@@ -20,4 +20,19 @@ describe('skewDynamicsModel', () => {
         expect(skew.color_class).toBe('text-accent-red')
         expect(skew.bg_class).toBe('bg-bg-card')
     })
+
+    it('preserves unavailable rendering tokens', () => {
+        const skew = normalizeSkewDynamicsState({
+            value: 'N/A',
+            state_label: 'UNAVAILABLE',
+            color_class: 'text-text-secondary',
+            border_class: 'border-bg-border',
+            bg_class: 'bg-bg-card',
+            shadow_class: 'shadow-none',
+            badge: 'badge-neutral',
+        })
+        expect(skew.value).toBe('N/A')
+        expect(skew.state_label).toBe('UNAVAILABLE')
+        expect(skew.badge).toBe('badge-neutral')
+    })
 })

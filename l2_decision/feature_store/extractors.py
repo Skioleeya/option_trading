@@ -187,7 +187,8 @@ class _TurnoverVelocityExtractor:
                 turnover = float(pa.compute.sum(chain.column("turnover")).as_py())
             else:
                 turnover = sum(float(row.get("turnover", 0.0)) for row in chain)
-        except Exception:
+        except Exception as exc:
+            logger.debug("turnover_velocity extraction fallback: %s", exc)
             return 0.0
 
         now_mono = time.monotonic()
@@ -231,8 +232,9 @@ class _MaxImpactExtractor:
                 imp = flow_proxy * gamma
                 if imp > max_imp:
                     max_imp = imp
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("max_impact extraction fallback: %s", exc)
+            return 0.0
 
         return max_imp
 
@@ -293,41 +295,227 @@ class _MTFConsensusExtractor:
         self._iv1m.reset(); self._iv5m.reset(); self._iv15m.reset()
 
 
-class _Skew25dExtractor:
-    """25-delta normalized skew: (put_IV_25d - call_IV_25d) / atm_IV."""
+class _Skew25dMetricsExtractor:
+    """Compute true 25-delta skew and validity from L1/L2 snapshot contracts."""
 
-    def __call__(self, snapshot: Any) -> float:
+    _CALL_TARGET_DELTA: float = 0.25
+    _PUT_TARGET_DELTA: float = -0.25
+    _DEFAULT_DELTA_TOLERANCE: float = 0.10
+
+    def __init__(self, delta_tolerance: float = _DEFAULT_DELTA_TOLERANCE) -> None:
+        self._delta_tolerance = abs(float(delta_tolerance))
+        self._last_key: tuple[int, int | None, int] | None = None
+        self._last_value: float = 0.0
+        self._last_valid: float = 0.0
+
+    def extract_value(self, snapshot: Any) -> float:
+        value, _ = self._compute(snapshot)
+        return value
+
+    def extract_valid(self, snapshot: Any) -> float:
+        _, valid = self._compute(snapshot)
+        return valid
+
+    def reset(self) -> None:
+        self._last_key = None
+        self._last_value = 0.0
+        self._last_valid = 0.0
+
+    def _compute(self, snapshot: Any) -> tuple[float, float]:
+        key = self._build_cache_key(snapshot)
+        if key is not None and key == self._last_key:
+            return self._last_value, self._last_valid
+
+        value, valid = self._compute_uncached(snapshot)
+        if key is not None:
+            self._last_key = key
+            self._last_value = value
+            self._last_valid = valid
+        return value, valid
+
+    def _compute_uncached(self, snapshot: Any) -> tuple[float, float]:
         chain = _get_val(snapshot, "chain")
-        spot = _get_val(snapshot, "spot")
-        atm_iv = _get_agg(snapshot, "atm_iv")
+        atm_iv = self._normalize_iv(_get_agg(snapshot, "atm_iv"))
+        if chain is None or atm_iv is None or atm_iv <= 0.0:
+            return 0.0, 0.0
 
-        if not (chain is not None and spot and spot > 0 and atm_iv and atm_iv > 0):
-            return 0.0
+        rows = self._coerce_chain_rows(chain)
+        if not rows:
+            return 0.0, 0.0
 
+        call_match: tuple[float, float] | None = None  # (distance, iv)
+        put_match: tuple[float, float] | None = None
+
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+
+            is_call = self._extract_is_call(row)
+            if is_call is None:
+                continue
+
+            iv = self._extract_iv(row)
+            if iv is None:
+                continue
+
+            delta = self._extract_delta(row, is_call=is_call)
+            if delta is None:
+                continue
+
+            target = self._CALL_TARGET_DELTA if is_call else self._PUT_TARGET_DELTA
+            distance = abs(delta - target)
+            if not math.isfinite(distance):
+                continue
+
+            if is_call:
+                if call_match is None or distance < call_match[0]:
+                    call_match = (distance, iv)
+            else:
+                if put_match is None or distance < put_match[0]:
+                    put_match = (distance, iv)
+
+        if call_match is None or put_match is None:
+            return 0.0, 0.0
+        if call_match[0] > self._delta_tolerance or put_match[0] > self._delta_tolerance:
+            return 0.0, 0.0
+
+        skew = (put_match[1] - call_match[1]) / atm_iv
+        if not math.isfinite(skew):
+            return 0.0, 0.0
+
+        return max(-1.0, min(1.0, skew)), 1.0
+
+    @staticmethod
+    def _build_cache_key(snapshot: Any) -> tuple[int, int | None, int] | None:
+        chain = _get_val(snapshot, "chain")
+        if chain is None:
+            return None
+        version = getattr(snapshot, "version", None)
+        if version is None and isinstance(snapshot, dict):
+            version = snapshot.get("version")
+        if isinstance(version, bool):
+            version = None
+        elif isinstance(version, float):
+            version = int(version) if math.isfinite(version) else None
+        elif isinstance(version, str):
+            text = version.strip()
+            version = int(text) if text.isdigit() else None
+        elif not isinstance(version, int):
+            version = None
+        return (id(snapshot), version, id(chain))
+
+    @staticmethod
+    def _coerce_chain_rows(chain: Any) -> list[dict[str, Any]]:
         try:
             import pyarrow as pa
-            chain_list = chain.to_pylist() if isinstance(chain, pa.RecordBatch) else list(chain)
-        except: return 0.0
+        except Exception as exc:
+            logger.debug("pyarrow import unavailable for skew extractor: %s", exc)
+            pa = None  # type: ignore[assignment]
 
-        if not chain_list: return 0.0
-
-        target_moneyness = 0.025
-        call_ivs, put_ivs = [], []
-
-        for row in chain_list:
+        if pa is not None and isinstance(chain, pa.RecordBatch):
             try:
-                strike = float(row.get("strike", 0.0))
-                iv = float(row.get("implied_volatility", 0.0))
-                otype = str(row.get("type", "")).upper()
-                if not (strike > 0 and iv > 0): continue
-                m = abs(strike - spot) / spot
-                if abs(m - target_moneyness) < 0.01:
-                    if "CALL" in otype: call_ivs.append(iv)
-                    elif "PUT" in otype: put_ivs.append(iv)
-            except: continue
+                rows = chain.to_pylist()
+            except Exception as exc:
+                logger.debug("recordbatch to_pylist failed for skew extractor: %s", exc)
+                return []
+            return [row for row in rows if isinstance(row, dict)]
 
-        if not call_ivs or not put_ivs: return 0.0
-        return max(-1.0, min(1.0, (sum(put_ivs)/len(put_ivs) - sum(call_ivs)/len(call_ivs)) / atm_iv))
+        if isinstance(chain, (str, bytes)):
+            return []
+        if isinstance(chain, dict):
+            return []
+        try:
+            rows = list(chain)
+        except TypeError:
+            return []
+        return [row for row in rows if isinstance(row, dict)]
+
+    @staticmethod
+    def _extract_is_call(row: dict[str, Any]) -> bool | None:
+        raw_is_call = row.get("is_call")
+        if isinstance(raw_is_call, bool):
+            return raw_is_call
+
+        raw_type = row.get("option_type", row.get("type"))
+        text = str(raw_type).strip().upper()
+        if text in ("CALL", "C"):
+            return True
+        if text in ("PUT", "P"):
+            return False
+        return None
+
+    @classmethod
+    def _extract_iv(cls, row: dict[str, Any]) -> float | None:
+        for key in ("computed_iv", "iv", "implied_volatility"):
+            iv = cls._normalize_iv(row.get(key))
+            if iv is not None and iv > 0.0:
+                return iv
+        return None
+
+    @classmethod
+    def _extract_delta(cls, row: dict[str, Any], *, is_call: bool) -> float | None:
+        for key in ("computed_delta", "delta"):
+            raw = row.get(key)
+            if raw is None:
+                continue
+            try:
+                delta = float(raw)
+            except (TypeError, ValueError):
+                continue
+            if not math.isfinite(delta):
+                continue
+
+            if abs(delta) > 1.0 and abs(delta) <= 100.0:
+                delta = delta / 100.0
+            if abs(delta) > 1.0:
+                continue
+
+            if is_call and delta < 0:
+                delta = abs(delta)
+            if not is_call and delta > 0:
+                delta = -delta
+            return delta
+        return None
+
+    @staticmethod
+    def _normalize_iv(value: Any) -> float | None:
+        try:
+            iv = float(value)
+        except (TypeError, ValueError):
+            return None
+        if not math.isfinite(iv):
+            return None
+        if iv > 3.0 and iv <= 300.0:
+            iv = iv / 100.0
+        if iv <= 0.0:
+            return None
+        return iv
+
+
+class _Skew25dExtractor:
+    """Return normalized true 25-delta skew value."""
+
+    def __init__(self, metrics: _Skew25dMetricsExtractor) -> None:
+        self._metrics = metrics
+
+    def __call__(self, snapshot: Any) -> float:
+        return self._metrics.extract_value(snapshot)
+
+    def reset(self) -> None:
+        self._metrics.reset()
+
+
+class _Skew25dValidExtractor:
+    """Return validity flag (1.0/0.0) for true 25-delta skew."""
+
+    def __init__(self, metrics: _Skew25dMetricsExtractor) -> None:
+        self._metrics = metrics
+
+    def __call__(self, snapshot: Any) -> float:
+        return self._metrics.extract_valid(snapshot)
+
+    def reset(self) -> None:
+        self._metrics.reset()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -341,7 +529,9 @@ def build_default_extractors() -> list[FeatureSpec]:
     wall_speed = _WallMigrationSpeedExtractor(window_seconds=30.0)
     svol_corr = _SVolCorrelationExtractor(window_seconds=900.0)
     mtf_consensus = _MTFConsensusExtractor()
-    skew_25d = _Skew25dExtractor()
+    skew_25d_metrics = _Skew25dMetricsExtractor(delta_tolerance=0.10)
+    skew_25d = _Skew25dExtractor(skew_25d_metrics)
+    skew_25d_valid = _Skew25dValidExtractor(skew_25d_metrics)
     turnover_vel = _TurnoverVelocityExtractor()
     max_impact = _MaxImpactExtractor()
 
@@ -434,8 +624,18 @@ def build_default_extractors() -> list[FeatureSpec]:
             name="skew_25d_normalized",
             extractor=skew_25d,
             ttl_seconds=5.0,
-            description="Normalized 25-delta skew: (put25d - call25d) / atm_iv",
+            description=(
+                "True 25-delta skew: nearest-delta put(-0.25)/call(+0.25) "
+                "using IV priority computed_iv>iv>implied_volatility"
+            ),
             tags=["skew", "regime"],
+        ),
+        FeatureSpec(
+            name="skew_25d_valid",
+            extractor=skew_25d_valid,
+            ttl_seconds=5.0,
+            description="1.0 when both ±25d legs are valid within delta tolerance; otherwise 0.0",
+            tags=["skew", "quality"],
         ),
         FeatureSpec(
             name="mtf_consensus_score",
@@ -485,7 +685,8 @@ def _safe(fn: Callable[[], float], default: float = 0.0) -> float:
         if v is None or not math.isfinite(v):
             return default
         return float(v)
-    except Exception:
+    except Exception as exc:
+        logger.debug("feature extractor fallback in _safe(): %s", exc)
         return default
 
 

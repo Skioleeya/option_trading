@@ -223,4 +223,106 @@ describe('Right panel typed contract integration', () => {
         expect(screen.getByText('$1.25M')).toBeInTheDocument()
         expect(screen.getByText('50K')).toBeInTheDocument()
     })
+
+    it('renders unavailable skew as N/A with neutral styling contract', () => {
+        const tacticalTriad: TacticalTriadState = {
+            vrp: {
+                value: '0.0%',
+                state_label: 'FAIR',
+                color_class: 'text-text-primary',
+                border_class: 'border-bg-border',
+                bg_class: 'bg-bg-card',
+                shadow_class: 'shadow-none',
+                animation: '',
+                sub_intensity: 'LOW',
+                sub_label: 'NEUTRAL',
+            },
+            charm: {
+                value: '0.0',
+                state_label: 'NEUTRAL',
+                color_class: 'text-text-primary',
+                border_class: 'border-bg-border',
+                bg_class: 'bg-bg-card',
+                shadow_class: 'shadow-none',
+                multiplier: null,
+                sub_intensity: 'LOW',
+                sub_label: 'NEUTRAL',
+            },
+            svol: {
+                value: '0.0',
+                state_label: 'UNAVAILABLE',
+                color_class: 'text-text-secondary',
+                border_class: 'border-bg-border',
+                bg_class: 'bg-bg-card',
+                shadow_class: 'shadow-none',
+                animation: '',
+                sub_intensity: 'LOW',
+                sub_label: 'MOMENTUM',
+            },
+        }
+        const skewDynamics: SkewDynamicsState = {
+            value: 'N/A',
+            state_label: 'UNAVAILABLE',
+            color_class: 'text-text-secondary',
+            border_class: 'border-bg-border',
+            bg_class: 'bg-bg-card',
+            shadow_class: 'shadow-none',
+            badge: 'badge-neutral',
+        }
+        const mtfFlow: MtfFlowState = {
+            m1: {
+                direction: 'NEUTRAL',
+                regime: 'NOISE',
+                regime_label: 'NOISE',
+                z: 0.0,
+                strength: 0.1,
+                tier: 'WEAK',
+                dot_color: 'bg-zinc-700',
+                text_color: 'text-text-secondary',
+                shadow: 'shadow-none',
+                border: 'border-bg-border',
+                animate: '',
+            },
+            m5: {
+                direction: 'NEUTRAL',
+                regime: 'NOISE',
+                regime_label: 'NOISE',
+                z: 0.0,
+                strength: 0.1,
+                tier: 'WEAK',
+                dot_color: 'bg-zinc-700',
+                text_color: 'text-text-secondary',
+                shadow: 'shadow-none',
+                border: 'border-bg-border',
+                animate: '',
+            },
+            m15: {
+                direction: 'NEUTRAL',
+                regime: 'NOISE',
+                regime_label: 'NOISE',
+                z: 0.0,
+                strength: 0.1,
+                tier: 'WEAK',
+                dot_color: 'bg-zinc-700',
+                text_color: 'text-text-secondary',
+                shadow: 'shadow-none',
+                border: 'border-bg-border',
+                animate: '',
+            },
+            consensus: 'NEUTRAL',
+            strength: 0.0,
+            alignment: 0.0,
+            align_label: 'SPLIT',
+            align_color: 'text-text-secondary',
+        }
+
+        useDashboardStore.setState({
+            payload: makePayload(tacticalTriad, skewDynamics, mtfFlow, []),
+        })
+
+        render(<SkewDynamics />)
+
+        expect(screen.getByText('UNAVAILABLE')).toBeInTheDocument()
+        expect(screen.getByText('N/A')).toBeInTheDocument()
+    })
 })

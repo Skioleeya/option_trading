@@ -37,10 +37,10 @@ class MarketStructureConfig(BaseConfig):
 
     # SKEW Dynamics (25-Delta normalized)
     skew_speculative_max: float = Field(
-        default=0.08, description="Skew < 0.08 = Call demand spike (SPECULATIVE/Fomo)"
+        default=-0.10, description="Skew < -0.10 = Call demand spike (SPECULATIVE/Fomo)"
     )
     skew_defensive_min: float = Field(
-        default=0.22, description="Skew > 0.22 = Put hedging spike (DEFENSIVE/Fear)"
+        default=0.15, description="Skew > 0.15 = Put hedging spike (DEFENSIVE/Fear)"
     )
 
     # Gamma Flip

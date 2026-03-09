@@ -1,0 +1,42 @@
+﻿session_id: "2026-03-09/longbridge_gateway_dual_endpoint_fallback"
+title: "longbridge gateway dual endpoint fallback"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-09 13:23:06 -04:00"
+updated_at_et: "2026-03-09 13:34:02 -04:00"
+parent_session: "2026-03-09/rust_only_single_connection_cutover"
+
+branch: "master"
+base_commit: "1a72132"
+head_commit: "1a72132"
+
+files_changed:
+  - "l0_ingest/feeds/option_chain_builder.py"
+  - "l0_ingest/feeds/quote_runtime.py"
+  - "l0_ingest/tests/test_quote_runtime.py"
+  - "l0_ingest/tests/test_openapi_config_alignment.py"
+  - "docs/SOP/L0_DATA_FEED.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-09/longbridge_gateway_dual_endpoint_fallback/project_state.md"
+  - "notes/sessions/2026-03-09/longbridge_gateway_dual_endpoint_fallback/open_tasks.md"
+  - "notes/sessions/2026-03-09/longbridge_gateway_dual_endpoint_fallback/handoff.md"
+  - "notes/sessions/2026-03-09/longbridge_gateway_dual_endpoint_fallback/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId longbridge_gateway_dual_endpoint_fallback -Timezone \"Eastern Standard Time\" -ParentSession \"2026-03-09/rust_only_single_connection_cutover\""
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/test_quote_runtime.py l0_ingest/tests/test_openapi_config_alignment.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/test_market_data_gateway.py l0_ingest/tests/test_rate_limiter_guards.py"
+  - "python -m compileall l0_ingest/feeds/option_chain_builder.py l0_ingest/feeds/quote_runtime.py l0_ingest/tests/test_quote_runtime.py l0_ingest/tests/test_openapi_config_alignment.py"
+  - "python -m uvicorn main:app --host 127.0.0.1 --port 8012"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/test_quote_runtime.py l0_ingest/tests/test_openapi_config_alignment.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/test_market_data_gateway.py l0_ingest/tests/test_rate_limiter_guards.py"
+  - "python -m compileall l0_ingest/feeds/option_chain_builder.py l0_ingest/feeds/quote_runtime.py l0_ingest/tests/test_quote_runtime.py l0_ingest/tests/test_openapi_config_alignment.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_failed:
+  - "External network connectivity verification is blocked in current sandbox environment"
+blockers: []
+notes: []
+
+

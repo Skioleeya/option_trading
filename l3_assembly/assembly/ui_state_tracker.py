@@ -6,6 +6,7 @@ L1 tracker/analysis implementation modules.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 import math
 from types import SimpleNamespace
 from typing import Any
@@ -169,14 +170,40 @@ class UIStateTracker:
 
         call_state = raw.get("call_wall_state")
         put_state = raw.get("put_wall_state")
+        call_history = cls._normalize_wall_history(raw.get("call_wall_history"))
+        put_history = cls._normalize_wall_history(raw.get("put_wall_history"))
 
-        if call_state is None and put_state is None:
+        if call_state is None and put_state is None and not call_history and not put_history:
             return {}
 
         return {
-            "call_wall_state": str(call_state) if call_state is not None else "",
-            "put_wall_state": str(put_state) if put_state is not None else "",
+            "call_wall_state": str(call_state) if call_state is not None else "UNAVAILABLE",
+            "put_wall_state": str(put_state) if put_state is not None else "UNAVAILABLE",
+            "call_wall_history": call_history,
+            "put_wall_history": put_history,
         }
+
+    @staticmethod
+    def _normalize_wall_history(value: Any) -> list[float | None]:
+        if value is None or isinstance(value, (str, bytes)):
+            return []
+        if not isinstance(value, Iterable):
+            return []
+
+        out: list[float | None] = []
+        for item in value:
+            if item is None:
+                out.append(None)
+                continue
+            try:
+                num = float(item)
+            except (TypeError, ValueError):
+                continue
+            if not math.isfinite(num) or num <= 0.0:
+                out.append(None)
+            else:
+                out.append(num)
+        return out
 
     @classmethod
     def _extract_skew_dynamics(cls, decision: Any) -> dict[str, Any]:
@@ -184,10 +211,17 @@ class UIStateTracker:
         if not isinstance(features, dict):
             features = {}
 
+        valid_flag = cls._to_float(features.get("skew_25d_valid", 0.0), default=0.0)
+        if valid_flag < 0.5:
+            return {
+                "skew_value": None,
+                "skew_state": "UNAVAILABLE",
+            }
+
         skew_val = cls._to_float(features.get("skew_25d_normalized", 0.0), default=0.0)
 
         skew_state = "NEUTRAL"
-        if skew_val < getattr(settings, "skew_speculative_max", -0.15):
+        if skew_val < getattr(settings, "skew_speculative_max", -0.10):
             skew_state = "SPECULATIVE"
         elif skew_val > getattr(settings, "skew_defensive_min", 0.15):
             skew_state = "DEFENSIVE"

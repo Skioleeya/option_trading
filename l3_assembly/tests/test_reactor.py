@@ -169,7 +169,7 @@ class TestL3AssemblyReactor:
     def test_cross_layer_contract_regression_ui_state_fields(self):
         reactor = L3AssemblyReactor()
         decision = _MockDecision(
-            feature_vector={"skew_25d_normalized": -0.33},
+            feature_vector={"skew_25d_normalized": -0.33, "skew_25d_valid": 1.0},
             signal_summary={
                 "gex_regime": "ACCELERATION",
                 "atm_iv": "0.12",
@@ -186,6 +186,8 @@ class TestL3AssemblyReactor:
                 "wall_migration": {
                     "call_wall_state": "REINFORCED",
                     "put_wall_state": "RETREAT",
+                    "call_wall_history": [667.0, 668.0, 669.0],
+                    "put_wall_history": [662.0, 661.0, 660.0],
                 },
                 "mtf_consensus": {
                     "timeframes": {
@@ -254,6 +256,11 @@ class TestL3AssemblyReactor:
         for key in ("m1", "m5", "m15", "consensus", "strength", "alignment", "align_label", "align_color"):
             assert key in mtf_flow
         assert mtf_flow["consensus"] == "BULLISH"
+
+        wall_rows = ui_state["wall_migration"]
+        assert len(wall_rows) >= 2
+        assert wall_rows[0]["strike"] > 0
+        assert len(wall_rows[0]["history"]) >= 1
 
         tactical_triad = ui_state["tactical_triad"]
         for leg in ("vrp", "charm", "svol"):

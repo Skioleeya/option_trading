@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+import pyarrow as pa
 import pytest
 
 sys.path.insert(0, "e:\\US.market\\Option_v3")
@@ -296,12 +297,12 @@ class TestDefaultExtractors:
         self._store = FeatureStore(enable_cache=False)
         self._store.register_bulk(self._specs)
 
-    def test_all_12_features_registered(self):
+    def test_all_default_features_registered(self):
         expected = {
             "spot_roc_1m", "atm_iv", "net_gex_normalized", "vpin_composite",
             "bbo_imbalance_ewma", "call_wall_distance", "iv_velocity_1m",
             "wall_migration_speed", "svol_correlation_15m", "vol_accel_ratio",
-            "skew_25d_normalized", "mtf_consensus_score",
+            "skew_25d_normalized", "skew_25d_valid", "mtf_consensus_score",
         }
         assert expected.issubset(set(self._store.registered_names))
 
@@ -350,6 +351,42 @@ class TestDefaultExtractors:
         reset_all_default_extractors(self._specs)
         fv = self._store.compute_all(snap)
         assert fv.get("spot_roc_1m") == 0.0  # not enough history after reset
+
+    def test_skew_25d_uses_recordbatch_computed_delta_and_iv(self):
+        snap = _make_snap(spot=100.0)
+        snap.aggregates.atm_iv = 0.25
+        snap.chain = pa.RecordBatch.from_arrays(
+            [
+                pa.array(["C1", "P1"], type=pa.string()),
+                pa.array([102.5, 97.5], type=pa.float64()),
+                pa.array([True, False], type=pa.bool_()),
+                pa.array([0.22, 0.31], type=pa.float64()),
+                pa.array([0.27, -0.23], type=pa.float64()),
+            ],
+            names=["symbol", "strike", "is_call", "computed_iv", "computed_delta"],
+        )
+
+        fv = self._store.compute_all(snap)
+        assert fv.get("skew_25d_valid") == pytest.approx(1.0)
+        assert fv.get("skew_25d_normalized") == pytest.approx((0.31 - 0.22) / 0.25)
+
+    def test_skew_25d_marks_invalid_when_delta_outside_tolerance(self):
+        snap = _make_snap(spot=100.0)
+        snap.aggregates.atm_iv = 0.25
+        snap.chain = pa.RecordBatch.from_arrays(
+            [
+                pa.array(["C1", "P1"], type=pa.string()),
+                pa.array([102.5, 97.5], type=pa.float64()),
+                pa.array([True, False], type=pa.bool_()),
+                pa.array([0.22, 0.31], type=pa.float64()),
+                pa.array([0.45, -0.45], type=pa.float64()),
+            ],
+            names=["symbol", "strike", "is_call", "computed_iv", "computed_delta"],
+        )
+
+        fv = self._store.compute_all(snap)
+        assert fv.get("skew_25d_valid") == pytest.approx(0.0)
+        assert fv.get("skew_25d_normalized") == pytest.approx(0.0)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

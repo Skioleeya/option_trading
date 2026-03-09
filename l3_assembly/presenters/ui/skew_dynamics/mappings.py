@@ -26,5 +26,13 @@ SKEW_STATES = {
         "bg_class": "bg-bg-card",
         "shadow_class": "shadow-none",
         "badge": "badge-neutral"
+    },
+    "UNAVAILABLE": {
+        "label": "UNAVAILABLE",
+        "color_class": "text-text-secondary",
+        "border_class": "border-bg-border",
+        "bg_class": "bg-bg-card",
+        "shadow_class": "shadow-none",
+        "badge": "badge-neutral"
     }
 }

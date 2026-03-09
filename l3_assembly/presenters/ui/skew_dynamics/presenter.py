@@ -14,9 +14,10 @@ class SkewDynamicsPresenter:
         if "." in state: state = state.split(".")[-1]
 
         mapping = SKEW_STATES.get(state, SKEW_STATES["NEUTRAL"])
+        value = "N/A" if mapping["label"] == "UNAVAILABLE" else f"{skew_val:.2f}"
         
         return {
-            "value": f"{skew_val:.2f}",
+            "value": value,
             "state_label": mapping["label"],
             "color_class": mapping["color_class"],
             "border_class": mapping["border_class"],
