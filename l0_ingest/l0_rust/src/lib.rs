@@ -130,6 +130,26 @@ pub struct RustIngestGateway {
     quote_ctx: Option<QuoteContext>,
 }
 
+impl RustIngestGateway {
+    fn ensure_quote_ctx(&mut self) -> PyResult<()> {
+        if self.quote_ctx.is_some() {
+            return Ok(());
+        }
+        let (ctx, _receiver) = self
+            .runtime
+            .block_on(QuoteContext::try_new(self.config.clone()))
+            .map_err(|e| PyRuntimeError::new_err(format!("QuoteContext init failed: {e}")))?;
+        self.quote_ctx = Some(ctx);
+        Ok(())
+    }
+
+    fn clone_quote_ctx(&self) -> PyResult<QuoteContext> {
+        self.quote_ctx
+            .clone()
+            .ok_or_else(|| PyRuntimeError::new_err("quote context unavailable"))
+    }
+}
+
 #[pymethods]
 impl RustIngestGateway {
     #[new]
@@ -288,11 +308,9 @@ impl RustIngestGateway {
         Ok(())
     }
 
-    fn rest_quote(&self, symbols: Vec<String>) -> PyResult<String> {
-        let ctx = self
-            .quote_ctx
-            .clone()
-            .ok_or_else(|| PyRuntimeError::new_err("quote context unavailable"))?;
+    fn rest_quote(&mut self, symbols: Vec<String>) -> PyResult<String> {
+        self.ensure_quote_ctx()?;
+        let ctx = self.clone_quote_ctx()?;
         let rows = self
             .runtime
             .block_on(async move { ctx.quote(symbols).await })
@@ -310,11 +328,9 @@ impl RustIngestGateway {
         serde_json::to_string(&payload).map_err(|e| PyRuntimeError::new_err(format!("json encode failed: {e}")))
     }
 
-    fn rest_option_quote(&self, symbols: Vec<String>) -> PyResult<String> {
-        let ctx = self
-            .quote_ctx
-            .clone()
-            .ok_or_else(|| PyRuntimeError::new_err("quote context unavailable"))?;
+    fn rest_option_quote(&mut self, symbols: Vec<String>) -> PyResult<String> {
+        self.ensure_quote_ctx()?;
+        let ctx = self.clone_quote_ctx()?;
         let rows = self
             .runtime
             .block_on(async move { ctx.option_quote(symbols).await })
@@ -332,11 +348,9 @@ impl RustIngestGateway {
         serde_json::to_string(&payload).map_err(|e| PyRuntimeError::new_err(format!("json encode failed: {e}")))
     }
 
-    fn rest_option_chain_info_by_date(&self, symbol: String, expiry_iso: String) -> PyResult<String> {
-        let ctx = self
-            .quote_ctx
-            .clone()
-            .ok_or_else(|| PyRuntimeError::new_err("quote context unavailable"))?;
+    fn rest_option_chain_info_by_date(&mut self, symbol: String, expiry_iso: String) -> PyResult<String> {
+        self.ensure_quote_ctx()?;
+        let ctx = self.clone_quote_ctx()?;
         let expiry_date = parse_iso_date(&expiry_iso)?;
         let rows = self
             .runtime
@@ -353,11 +367,9 @@ impl RustIngestGateway {
         serde_json::to_string(&payload).map_err(|e| PyRuntimeError::new_err(format!("json encode failed: {e}")))
     }
 
-    fn rest_calc_indexes(&self, symbols: Vec<String>, indexes: Vec<String>) -> PyResult<String> {
-        let ctx = self
-            .quote_ctx
-            .clone()
-            .ok_or_else(|| PyRuntimeError::new_err("quote context unavailable"))?;
+    fn rest_calc_indexes(&mut self, symbols: Vec<String>, indexes: Vec<String>) -> PyResult<String> {
+        self.ensure_quote_ctx()?;
+        let ctx = self.clone_quote_ctx()?;
         let index_values = indexes
             .iter()
             .filter_map(|name| parse_calc_index(name))

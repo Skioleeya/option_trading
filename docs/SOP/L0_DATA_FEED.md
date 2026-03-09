@@ -38,6 +38,8 @@ flowchart LR
 
 - Rust runtime 初始化失败: 必须显式降级并输出诊断，禁止进程崩溃。
 - 降级时必须保持 L4 广播连续（空链 + 诊断），禁止静默停更。
+- Rust REST pull 路径必须支持 `QuoteContext` 懒初始化（不依赖先 `start/subscribe`），
+  防止冷启动阶段出现 `spot -> subscribe -> quote_ctx` 的闭环阻塞。
 
 ## 5. Output Contract (to L1)
 
