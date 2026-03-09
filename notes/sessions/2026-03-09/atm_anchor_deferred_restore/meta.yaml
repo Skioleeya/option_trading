@@ -1,0 +1,36 @@
+﻿session_id: "2026-03-09/atm_anchor_deferred_restore"
+title: "atm anchor deferred restore"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-09 15:17:47 -04:00"
+updated_at_et: "2026-03-09 15:19:46 -04:00"
+parent_session: "2026-03-09/wall_migration_restart_persistence"
+
+branch: "master"
+base_commit: "f2268d2"
+head_commit: "f2268d2"
+
+files_changed:
+  - "l1_compute/analysis/atm_decay/tracker.py"
+  - "l1_compute/tests/test_atm_decay_modular.py"
+  - "docs/SOP/L1_LOCAL_COMPUTATION.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-09/atm_anchor_deferred_restore/project_state.md"
+  - "notes/sessions/2026-03-09/atm_anchor_deferred_restore/open_tasks.md"
+  - "notes/sessions/2026-03-09/atm_anchor_deferred_restore/handoff.md"
+  - "notes/sessions/2026-03-09/atm_anchor_deferred_restore/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId atm_anchor_deferred_restore -Timezone \"Eastern Standard Time\" -ParentSession \"2026-03-09/wall_migration_restart_persistence\""
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_atm_decay_modular.py l1_compute/tests/test_wall_migration_tracker.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_atm_decay_modular.py l1_compute/tests/test_wall_migration_tracker.py"
+tests_failed: []
+blockers: []
+notes:
+  - "Deferred anchor restore prevents restart-time re-lock when startup spot is unavailable."
+
+

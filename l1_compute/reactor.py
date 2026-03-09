@@ -60,6 +60,7 @@ from l1_compute.analysis.mtf_iv_engine import MTFIVEngine
 from l1_compute.analysis.volume_imbalance_engine import VolumeImbalanceEngine
 from l1_compute.analysis.jump_detector import JumpDetector
 from l1_compute.trackers.iv_velocity_tracker import IVVelocityTracker
+from l1_compute.trackers.mtf_iv_persistence import MTFIVWindowPersistence
 from l1_compute.trackers.vanna_flow_analyzer import VannaFlowAnalyzer
 from l1_compute.trackers.wall_migration_tracker import WallMigrationTracker
 from shared.config import settings
@@ -89,6 +90,7 @@ class L1ComputeReactor:
         q: float = 0.0,
         sabr_enabled: bool = True,
         iv_ws_ttl: float = 7200.0,
+        mtf_window_persistence: MTFIVWindowPersistence | None = None,
     ) -> None:
         self._r = r
         self._q = q
@@ -112,6 +114,14 @@ class L1ComputeReactor:
         self._mtf_iv_engine = MTFIVEngine()
         self._vib_engine = VolumeImbalanceEngine()
         self._jump_detector = JumpDetector()
+        if mtf_window_persistence is not None:
+            self._mtf_persistence = mtf_window_persistence
+        else:
+            try:
+                self._mtf_persistence = MTFIVWindowPersistence()
+            except Exception as exc:
+                logger.error("[L1ComputeReactor] MTF persistence init failed: %s", exc)
+                self._mtf_persistence = None
 
         # MTF intervals and buffers for VSRSD
         self._MTF_INTERVALS: dict[str, float] = {"1m": 60.0, "5m": 300.0, "15m": 900.0}
@@ -391,6 +401,9 @@ class L1ComputeReactor:
     ) -> MicroSignals:
         """Assemble microstructure signals from VPIN, BBO, VolAccel, and trackers."""
         sim_clock_mono = time.monotonic()
+        mtf_date = None
+        if self._mtf_persistence is not None:
+            mtf_date = self._mtf_persistence.bootstrap_day(now_et=now, engine=self._mtf_iv_engine)
         
         # 1. Base Signals (VPIN, BBO, VolAccel)
         all_vpin_scores = []
@@ -449,6 +462,7 @@ class L1ComputeReactor:
         iv_result = self._iv_tracker.update(
             spot=spot, atm_iv=atm_iv, sim_clock_mono=sim_clock_mono
         )
+        has_mtf_window_update = False
         if atm_iv > 0:
             for tf, interval in self._MTF_INTERVALS.items():
                 self._mtf_buf[tf].append(atm_iv)
@@ -457,6 +471,14 @@ class L1ComputeReactor:
                     self._mtf_iv_engine.update(tf, bar_mean)
                     self._mtf_buf[tf].clear()
                     self._mtf_last_push[tf] = sim_clock_mono
+                    has_mtf_window_update = True
+
+        if has_mtf_window_update and self._mtf_persistence is not None and mtf_date is not None:
+            self._mtf_persistence.persist_snapshot(
+                date_str=mtf_date,
+                now_et=now,
+                engine=self._mtf_iv_engine,
+            )
 
         mtf_consensus = self._mtf_iv_engine.compute({
             "1m":  atm_iv, "5m":  atm_iv, "15m": atm_iv,

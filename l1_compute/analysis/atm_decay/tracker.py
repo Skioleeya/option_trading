@@ -64,6 +64,8 @@ class AtmDecayTracker:
         self._out_of_bounds_ticks: int = 0
         self._strike_changed_flag: bool = False
         self._recent_spots: list[float] = []
+        self._pending_restore_anchor: dict[str, Any] | None = None
+        self._pending_restore_source: str | None = None
         self.is_initialized = False
 
     @property
@@ -78,6 +80,8 @@ class AtmDecayTracker:
         """Restore today's anchor from Redis -> cold JSON -> empty."""
         now = datetime.now(ET)
         self._today = now.strftime("%Y%m%d")
+        self._pending_restore_anchor = None
+        self._pending_restore_source = None
 
         # 1) Redis
         if self.redis:
@@ -94,6 +98,16 @@ class AtmDecayTracker:
                                 float(anchor["strike"]),
                                 spot,
                             )
+                            self._pending_restore_anchor = anchor
+                            self._pending_restore_source = "redis"
+                            logger.info(
+                                "[AtmDecayTracker] Redis anchor deferred for later restore when spot is available "
+                                "(date=%s strike=%.2f).",
+                                self._today,
+                                float(anchor["strike"]),
+                            )
+                            self.is_initialized = True
+                            return
                         elif dist > MAX_ANCHOR_DISTANCE:
                             logger.warning(
                                 "[AtmDecayTracker] Redis anchor discarded (distance check): "
@@ -132,6 +146,16 @@ class AtmDecayTracker:
                             float(anchor["strike"]),
                             spot,
                         )
+                        self._pending_restore_anchor = anchor
+                        self._pending_restore_source = "cold_json"
+                        logger.info(
+                            "[AtmDecayTracker] Cold JSON anchor deferred for later restore when spot is available "
+                            "(date=%s strike=%.2f).",
+                            self._today,
+                            float(anchor["strike"]),
+                        )
+                        self.is_initialized = True
+                        return
                     elif dist > MAX_ANCHOR_DISTANCE:
                         logger.warning(
                             "[AtmDecayTracker] Cold JSON anchor discarded (distance check): "
@@ -156,8 +180,8 @@ class AtmDecayTracker:
                                     anchor,
                                     settings.opening_atm_redis_ttl_seconds,
                                 )
-                            except Exception:
-                                pass
+                            except Exception as exc:
+                                logger.error("[AtmDecayTracker] Redis sync for cold-restored anchor failed: %s", exc)
                             await self._storage.recover_series_from_cold_if_needed(
                                 self._today,
                                 settings.opening_atm_redis_ttl_seconds,
@@ -184,6 +208,8 @@ class AtmDecayTracker:
         self._recent_spots.clear()
         self.accumulated_factor = default_stitch_factor()
         self.accumulated_offset = factor_to_legacy_offset(self.accumulated_factor)
+        self._pending_restore_anchor = None
+        self._pending_restore_source = None
 
     def _load_stitch_state(self, anchor: dict[str, Any]) -> None:
         raw_factor = anchor.get("accumulated_factor")
@@ -217,6 +243,62 @@ class AtmDecayTracker:
         self._recent_spots.clear()
         self.accumulated_factor = default_stitch_factor()
         self.accumulated_offset = factor_to_legacy_offset(self.accumulated_factor)
+        self._pending_restore_anchor = None
+        self._pending_restore_source = None
+
+    async def _try_restore_pending_anchor(self, spot: float) -> bool:
+        pending = self._pending_restore_anchor
+        if pending is None:
+            return False
+        if spot <= 0:
+            return False
+
+        dist = spot_distance(pending.get("strike"), spot)
+        if dist is None:
+            return False
+        if dist > MAX_ANCHOR_DISTANCE:
+            logger.warning(
+                "[AtmDecayTracker] Deferred anchor discarded (distance check): date=%s source=%s strike=%.2f spot=%.2f diff=%.2f max=%.2f",
+                self._today,
+                self._pending_restore_source or "unknown",
+                float(pending["strike"]),
+                float(spot),
+                dist,
+                MAX_ANCHOR_DISTANCE,
+            )
+            self._pending_restore_anchor = None
+            self._pending_restore_source = None
+            return False
+
+        self.anchor = pending
+        self._load_stitch_state(pending)
+        logger.info(
+            "[AtmDecayTracker] Deferred anchor restored: source=%s strike=%.2f spot=%.2f",
+            self._pending_restore_source or "unknown",
+            float(pending["strike"]),
+            float(spot),
+        )
+
+        if self.redis and self._pending_restore_source == "cold_json":
+            try:
+                await self._storage.save_anchor(
+                    self._today,
+                    pending,
+                    settings.opening_atm_redis_ttl_seconds,
+                )
+            except Exception as exc:
+                logger.error("[AtmDecayTracker] Failed syncing deferred cold anchor to Redis: %s", exc)
+            try:
+                await self._storage.recover_series_from_cold_if_needed(
+                    self._today,
+                    settings.opening_atm_redis_ttl_seconds,
+                )
+            except Exception as exc:
+                logger.error("[AtmDecayTracker] Failed recovering deferred cold series into Redis: %s", exc)
+
+        self._pending_restore_anchor = None
+        self._pending_restore_source = None
+        return True
 
     async def _persist(self, anchor: dict[str, Any]) -> None:
         anchor["accumulated_factor"] = dict(getattr(self, "accumulated_factor", default_stitch_factor()))
@@ -246,6 +328,9 @@ class AtmDecayTracker:
             return None
 
         record_spot_sample(self._recent_spots, spot)
+
+        if not self.anchor and self._pending_restore_anchor is not None:
+            await self._try_restore_pending_anchor(spot)
 
         if not self.anchor:
             if self._warmup_ticks_remaining > 0:

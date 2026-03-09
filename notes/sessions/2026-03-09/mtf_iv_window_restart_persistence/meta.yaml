@@ -1,0 +1,43 @@
+session_id: "2026-03-09/mtf_iv_window_restart_persistence"
+title: "mtf iv window restart persistence"
+scope: "backend modular persistence"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-09 16:17:34 -04:00"
+updated_at_et: "2026-03-09 16:24:11 -04:00"
+parent_session: "2026-03-09/active_options_asian_state_normalize"
+
+branch: "master"
+base_commit: "f2268d2"
+head_commit: "f2268d2"
+
+files_changed:
+  - "l1_compute/analysis/mtf_iv_engine.py"
+  - "l1_compute/trackers/mtf_iv_window_storage.py"
+  - "l1_compute/trackers/mtf_iv_persistence.py"
+  - "l1_compute/reactor.py"
+  - "l1_compute/tests/test_mtf_iv_persistence.py"
+  - "shared/config/persistence.py"
+  - "docs/SOP/L1_LOCAL_COMPUTATION.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-09/mtf_iv_window_restart_persistence/project_state.md"
+  - "notes/sessions/2026-03-09/mtf_iv_window_restart_persistence/open_tasks.md"
+  - "notes/sessions/2026-03-09/mtf_iv_window_restart_persistence/handoff.md"
+  - "notes/sessions/2026-03-09/mtf_iv_window_restart_persistence/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId mtf_iv_window_restart_persistence -Timezone \"Eastern Standard Time\" -ParentSession \"2026-03-09/active_options_asian_state_normalize\""
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_mtf_iv_persistence.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_reactor.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_wall_migration_tracker.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "scripts/test/run_pytest.ps1 l1_compute/tests/test_mtf_iv_persistence.py (4 passed)"
+  - "scripts/test/run_pytest.ps1 l1_compute/tests/test_reactor.py (16 passed)"
+  - "scripts/test/run_pytest.ps1 l1_compute/tests/test_wall_migration_tracker.py (5 passed)"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict (Session validation passed)"
+tests_failed: []
+blockers: []
+notes:
+  - "MTF windows are persisted per trade day and restored lazily on bootstrap without changing L3/L4 contracts."

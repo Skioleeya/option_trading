@@ -11,7 +11,7 @@ import {
     selectGammaWalls,
     selectFlipLevel,
 } from '../../store/dashboardStore'
-import { normalizeGexStatus } from './gexStatus'
+import { ASIAN_WALL_STYLE, normalizeGexStatus, resolveAsianGexTone } from './gexStatus'
 
 interface Props {
     netGex?: number | null
@@ -41,8 +41,8 @@ export const GexStatusBar: React.FC<Props> = memo(({
     const putWall = normalized.putWall
     const flipLevel = normalized.flipLevel
 
-    const isGexPos = netGex != null && netGex > 0
-    const gexColor = netGex == null ? 'text-[#71717a]' : isGexPos ? 'text-[#10b981]' : 'text-[#ef4444]'
+    const gexTone = resolveAsianGexTone(netGex)
+    const gexColor = gexTone.textClass
 
     return (
         <div className="flex items-center bg-[#0d0d0f]/96 border border-[#3f3f46] rounded-full shadow-[0_0_24px_rgba(0,0,0,0.8)] font-sans overflow-hidden"
@@ -62,7 +62,7 @@ export const GexStatusBar: React.FC<Props> = memo(({
             {/* CALL WALL */}
             <div className="flex-1 flex items-center justify-center gap-2">
                 <span className="text-[8px] font-bold tracking-[0.1em] text-[#71717a] uppercase whitespace-nowrap">Call Wall</span>
-                <span className="px-1.5 py-[1px] rounded-[3px] bg-[#450a0a] border border-[#7f1d1d]/60 font-mono text-[12px] font-black text-[#ef4444]">
+                <span className={`px-1.5 py-[1px] rounded-[3px] font-mono text-[12px] font-black ${ASIAN_WALL_STYLE.call}`}>
                     {fmtPrice(callWall)}
                 </span>
             </div>
@@ -72,7 +72,7 @@ export const GexStatusBar: React.FC<Props> = memo(({
             {/* FLIP */}
             <div className="flex-1 flex items-center justify-center gap-2">
                 <span className="text-[8px] font-bold tracking-[0.1em] text-[#71717a] uppercase">Flip</span>
-                <span className="px-1.5 py-[1px] rounded-[3px] bg-[#422006] border border-[#92400e]/60 font-mono text-[12px] font-black text-[#f59e0b]">
+                <span className={`px-1.5 py-[1px] rounded-[3px] font-mono text-[12px] font-black ${ASIAN_WALL_STYLE.flip}`}>
                     {fmtPrice(flipLevel)}
                 </span>
             </div>
@@ -82,7 +82,7 @@ export const GexStatusBar: React.FC<Props> = memo(({
             {/* PUT WALL */}
             <div className="flex-1 flex items-center justify-center gap-2">
                 <span className="text-[8px] font-bold tracking-[0.1em] text-[#71717a] uppercase whitespace-nowrap">Put Wall</span>
-                <span className="px-1.5 py-[1px] rounded-[3px] bg-[#022c22] border border-[#065f46]/60 font-mono text-[12px] font-black text-[#10b981]">
+                <span className={`px-1.5 py-[1px] rounded-[3px] font-mono text-[12px] font-black ${ASIAN_WALL_STYLE.put}`}>
                     {fmtPrice(putWall)}
                 </span>
             </div>

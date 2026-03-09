@@ -1,0 +1,39 @@
+﻿session_id: "2026-03-09/wall_migration_restart_persistence"
+title: "wall migration restart persistence"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-09 15:00:16 -04:00"
+updated_at_et: "2026-03-09 15:06:28 -04:00"
+parent_session: "2026-03-09/iv_skew_true_25d_pipeline_fix"
+
+branch: "master"
+base_commit: "f2268d2"
+head_commit: "f2268d2"
+
+files_changed:
+  - "shared/config/persistence.py"
+  - "l1_compute/trackers/wall_migration_storage.py"
+  - "l1_compute/trackers/wall_migration_tracker.py"
+  - "l1_compute/tests/test_wall_migration_tracker.py"
+  - "docs/SOP/L1_LOCAL_COMPUTATION.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-09/wall_migration_restart_persistence/project_state.md"
+  - "notes/sessions/2026-03-09/wall_migration_restart_persistence/open_tasks.md"
+  - "notes/sessions/2026-03-09/wall_migration_restart_persistence/handoff.md"
+  - "notes/sessions/2026-03-09/wall_migration_restart_persistence/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId wall_migration_restart_persistence -Timezone \"Eastern Standard Time\" -ParentSession \"2026-03-09/iv_skew_true_25d_pipeline_fix\""
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_wall_migration_tracker.py l1_compute/tests/test_atm_decay_modular.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_wall_migration_tracker.py l1_compute/tests/test_atm_decay_modular.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_wall_migration_tracker.py l1_compute/tests/test_atm_decay_modular.py"
+tests_failed:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_wall_migration_tracker.py l1_compute/tests/test_atm_decay_modular.py (first run failed due tmp_path permission on host temp dir, fixed by switching tests to tmp/pytest_cache paths)"
+blockers: []
+notes: []
+
+

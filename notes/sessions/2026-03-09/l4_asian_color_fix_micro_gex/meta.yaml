@@ -1,0 +1,48 @@
+﻿session_id: "2026-03-09/l4_asian_color_fix_micro_gex"
+title: "l4 asian color fix micro gex"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-09 15:34:21 -04:00"
+updated_at_et: "2026-03-09 15:35:25 -04:00"
+parent_session: "2026-03-09/atm_anchor_deferred_restore"
+
+branch: "master"
+base_commit: "f2268d2"
+head_commit: "f2268d2"
+
+files_changed:
+  - "l4_ui/src/components/center/gexStatus.ts"
+  - "l4_ui/src/components/center/GexStatusBar.tsx"
+  - "l4_ui/src/components/center/__tests__/gexStatus.test.ts"
+  - "l4_ui/src/components/left/microStatsTheme.ts"
+  - "l4_ui/src/components/left/MicroStats.tsx"
+  - "l4_ui/src/components/left/__tests__/microStatsTheme.test.ts"
+  - "docs/SOP/L4_FRONTEND.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-09/l4_asian_color_fix_micro_gex/project_state.md"
+  - "notes/sessions/2026-03-09/l4_asian_color_fix_micro_gex/open_tasks.md"
+  - "notes/sessions/2026-03-09/l4_asian_color_fix_micro_gex/handoff.md"
+  - "notes/sessions/2026-03-09/l4_asian_color_fix_micro_gex/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId l4_asian_color_fix_micro_gex -Timezone \"Eastern Standard Time\" -ParentSession \"2026-03-09/atm_anchor_deferred_restore\""
+  - "npm --prefix e:\\US.market\\Option_v3\\l4_ui run test -- gexStatus microStatsTheme"
+  - "npm --prefix e:\\US.market\\Option_v3\\l4_ui run test -- --reporter=verbose src/components/center/__tests__/gexStatus.test.ts"
+  - "npm --prefix e:\\US.market\\Option_v3\\l4_ui run test -- rightPanelContract.integration"
+  - "npm --prefix e:\\US.market\\Option_v3\\l4_ui run build"
+  - "npm --prefix e:\\US.market\\Option_v3\\l4_ui run test -- wallMigrationTheme"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_wall_migration_tracker.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_wall_migration_tracker.py"
+tests_failed:
+  - "npm --prefix e:\\US.market\\Option_v3\\l4_ui run test -- gexStatus microStatsTheme (No test suite found)"
+  - "npm --prefix e:\\US.market\\Option_v3\\l4_ui run test -- rightPanelContract.integration (Cannot read properties of undefined (reading 'on'))"
+  - "npm --prefix e:\\US.market\\Option_v3\\l4_ui run build (existing TS errors in debugHotkey.integration.test.tsx)"
+blockers: []
+notes:
+  - "Asian semantics normalized for GEX and MicroStats: red=up/bullish, green=down/bearish."
+
+

@@ -53,6 +53,31 @@ class MTFIVEngine:
         if tf in self._windows:
             self._windows[tf].append(atm_iv)
 
+    def export_state(self) -> dict[str, list[float]]:
+        """Export current rolling-window state as plain serializable lists."""
+        return {tf: list(win) for tf, win in self._windows.items()}
+
+    def restore_state(self, state: dict[str, list[float]]) -> None:
+        """Restore rolling-window state from sanitized external snapshot."""
+        for tf, win in self._windows.items():
+            win.clear()
+            values = state.get(tf, [])
+            if not isinstance(values, list):
+                continue
+            for raw in values:
+                try:
+                    iv = float(raw)
+                except (TypeError, ValueError):
+                    continue
+                if not math.isfinite(iv) or iv <= 0.0:
+                    continue
+                win.append(iv)
+
+    def reset(self) -> None:
+        """Clear all rolling windows."""
+        for win in self._windows.values():
+            win.clear()
+
     # ------------------------------------------------------------------
     def compute(self, current_iv_map: dict[str, float]) -> dict[str, Any]:
         """Compute regime + alignment from the latest snapshot.

@@ -40,7 +40,7 @@ const ZERO_CELL: MetricCell = { label: '—', badge: 'badge-neutral' }
 
 const normalizeCell = (cell?: MetricCell | null): MetricCell => ({
     label: cell?.label ?? '—',
-    badge: normalizeBadgeToken(cell?.badge),
+    badge: normalizeBadgeToken(cell?.badge, cell?.label),
 })
 
 // ─────────────────────────────────────────────────────────────────────────────

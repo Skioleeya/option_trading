@@ -20,8 +20,10 @@ from shared.models.microstructure import (
     WallMigrationPutState,
     WallMigrationResult,
 )
+from l1_compute.trackers.wall_migration_storage import WallMigrationStorage
 
 logger = logging.getLogger(__name__)
+_ET = ZoneInfo("US/Eastern")
 
 
 class _WallSnapshot(NamedTuple):
@@ -42,17 +44,113 @@ class WallMigrationTracker:
     - REINFORCED_SUPPORT: Put wall stable with increasing volume (bullish floor)
     """
 
-    def __init__(self) -> None:
-        self._snapshots: deque[_WallSnapshot] = deque(maxlen=100)
+    def __init__(
+        self,
+        *,
+        storage: WallMigrationStorage | None = None,
+        cold_storage_root: str | None = None,
+        snapshot_window: int = 100,
+    ) -> None:
+        self._snapshots: deque[_WallSnapshot] = deque(maxlen=max(2, int(snapshot_window)))
         self._last_snapshot_time: float = 0.0
         self._last_result: WallMigrationResult | None = None
+        self._active_date: str | None = None
 
         # Persistence
         self._redis = None
+        if storage is not None:
+            self._storage = storage
+        else:
+            root = cold_storage_root or settings.wall_migration_cold_storage_root
+            try:
+                self._storage = WallMigrationStorage(root)
+            except Exception as exc:
+                logger.error("[L1 WallTracker] Storage init failed root=%s error=%s", root, exc)
+                self._storage = None
 
     def set_redis_client(self, client: Any) -> None:
         """Inject shared Redis client."""
         self._redis = client
+
+    @staticmethod
+    def _coerce_now_et(sim_now_et: datetime | None) -> datetime:
+        if sim_now_et is None:
+            return datetime.now(_ET)
+        if sim_now_et.tzinfo is None:
+            return sim_now_et.replace(tzinfo=_ET)
+        return sim_now_et.astimezone(_ET)
+
+    def _bootstrap_day(self, now_real: datetime) -> str:
+        date_str = now_real.strftime("%Y%m%d")
+        if self._active_date == date_str:
+            return date_str
+
+        if self._active_date is not None and self._active_date != date_str:
+            logger.info(
+                "[L1 WallTracker] Trade date rollover detected: %s -> %s. Resetting in-memory wall state.",
+                self._active_date,
+                date_str,
+            )
+
+        self._snapshots.clear()
+        self._last_snapshot_time = 0.0
+        self._last_result = None
+        self._active_date = date_str
+
+        if self._storage is None:
+            return date_str
+
+        try:
+            restored = self._storage.load_recent(date_str, self._snapshots.maxlen)
+        except Exception as exc:
+            logger.error("[L1 WallTracker] Failed loading cold history date=%s error=%s", date_str, exc)
+            return date_str
+
+        for idx, row in enumerate(restored):
+            self._snapshots.append(
+                _WallSnapshot(
+                    timestamp_mono=float(idx + 1),
+                    call_wall=row.get("call_wall"),
+                    put_wall=row.get("put_wall"),
+                    call_volume=int(row.get("call_volume", 0)),
+                    put_volume=int(row.get("put_volume", 0)),
+                )
+            )
+
+        if restored:
+            logger.info(
+                "[L1 WallTracker] Restored wall history from cold storage date=%s points=%d",
+                date_str,
+                len(restored),
+            )
+
+        return date_str
+
+    def _persist_snapshot(
+        self,
+        *,
+        date_str: str,
+        now_real: datetime,
+        call_wall: float | None,
+        put_wall: float | None,
+        call_wall_volume: int,
+        put_wall_volume: int,
+    ) -> None:
+        if self._storage is None:
+            return
+        try:
+            self._storage.append_snapshot(
+                date_str,
+                {
+                    "timestamp": now_real.isoformat(),
+                    "call_wall": call_wall,
+                    "put_wall": put_wall,
+                    "call_volume": call_wall_volume,
+                    "put_volume": put_wall_volume,
+                },
+            )
+        except Exception as exc:
+            logger.error("[L1 WallTracker] Persist snapshot failed date=%s error=%s", date_str, exc)
 
     @staticmethod
     def _normalize_wall_level(level: float | None) -> float | None:
@@ -81,11 +179,13 @@ class WallMigrationTracker:
         call_wall_volume: int = 0,
         put_wall_volume: int = 0,
         sim_clock_mono: float | None = None,
+        sim_now_et: datetime | None = None,
         displacement_multiplier: float = 1.0,
     ) -> WallMigrationResult:
         """Update tracker with current wall positions."""
         now_mono = sim_clock_mono if sim_clock_mono is not None else time.monotonic()
-        now_real = datetime.now(ZoneInfo("US/Eastern"))
+        now_real = self._coerce_now_et(sim_now_et)
+        date_str = self._bootstrap_day(now_real)
 
         # Normalize sentinel/invalid levels early so all downstream branches
         # (throttle path + standard path) share identical semantics.
@@ -145,7 +245,7 @@ class WallMigrationTracker:
         # snapshot — refuse to advance _last_snapshot_time so the next valid
         # call immediately retries instead of waiting 900s.
         if call_wall is None and put_wall is None:
-            logger.debug("[L3 WallTracker] Snapshot rejected: Both call_wall and put_wall are None (chain likely unwarmed).")
+            logger.debug("[L1 WallTracker] Snapshot rejected: Both call_wall and put_wall are None (chain likely unwarmed).")
             # Still cache a minimal result for the UI so it shows '—' consistently
             if self._last_result is None:
                 self._last_result = WallMigrationResult(
@@ -159,6 +259,14 @@ class WallMigrationTracker:
         self._snapshots.append(_WallSnapshot(
             now_mono, call_wall, put_wall, call_wall_volume, put_wall_volume
         ))
+        self._persist_snapshot(
+            date_str=date_str,
+            now_real=now_real,
+            call_wall=call_wall,
+            put_wall=put_wall,
+            call_wall_volume=call_wall_volume,
+            put_wall_volume=put_wall_volume,
+        )
 
         if len(self._snapshots) < 2:
             # First snapshot: history = [None, None, current_wall]
@@ -251,3 +359,4 @@ class WallMigrationTracker:
         self._snapshots.clear()
         self._last_snapshot_time = 0.0
         self._last_result = None
+        self._active_date = None

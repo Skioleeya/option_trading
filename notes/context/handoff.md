@@ -1,12 +1,12 @@
 ﻿# Handoff (Index)
 
 ## Active Handoff
-- Path: notes/sessions/2026-03-09/iv_skew_true_25d_pipeline_fix/handoff.md
-- Meta: notes/sessions/2026-03-09/iv_skew_true_25d_pipeline_fix/meta.yaml
+- Path: notes/sessions/2026-03-09/research_feature_store_compact_history/handoff.md
+- Meta: notes/sessions/2026-03-09/research_feature_store_compact_history/meta.yaml
 
 ## Latest Outcome
-- Session: 2026-03-09/iv_skew_true_25d_pipeline_fix
-- Summary: 完成 IV SKEW 真25Δ链路修复：L1 新增 `computed_delta`，L2 新增 `skew_25d_valid` 并改真25Δ提取，L3 输出 `UNAVAILABLE/N/A`，阈值默认修正为 `-0.10 / +0.15`，并通过定向后端/前端回归。
+- Session: 2026-03-09/research_feature_store_compact_history
+- Summary: 研究特征库（raw-lite/feature/label）与 compact history 下载改造已落地，待/将执行 strict gate 固化交付。
 
 ## Next Session Bootstrap
 1. Read this file.

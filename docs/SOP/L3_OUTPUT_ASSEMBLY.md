@@ -45,6 +45,17 @@ flowchart LR
 - `active_options.option_type` 统一 `CALL|PUT`
 - 保留 `impact_index` 与 `is_sweep`
 - 不返回空结构破坏前端渲染
+- `/history` 默认视图必须为 `compact`，禁止默认返回重字段全量 payload
+- 研究下载必须走字段投影（`fields`）与时间降采样（`interval`），超限查询进入异步导出
+
+### 3.2 Research Feature Store
+
+- L3 必须维护 `research_feature_store` 三层数据：
+  - `raw-lite`（短期）
+  - `feature`（中期）
+  - `label/outcome`（长期）
+- 存储格式必须优先 Parquet + ZSTD，支持 `jsonl` 调试导出
+- 研究表主键必须包含 `data_timestamp + l0_version`，用于跨层 join 对齐
 
 ## 4. Boundary Rules (Hard)
 

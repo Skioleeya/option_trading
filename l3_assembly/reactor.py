@@ -46,6 +46,7 @@ from l3_assembly.broadcast.broadcast_governor import BroadcastGovernor
 from l3_assembly.storage.timeseries_store import TimeSeriesStoreV2
 from l3_assembly.observability.l3_instrumentation import L3Instrumentation
 from l3_assembly.assembly.ui_state_tracker import UIStateTracker
+from shared.services.research_feature_store import ResearchFeatureStore
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,7 @@ class L3AssemblyReactor:
         self.encoder = FieldDeltaEncoder(full_snapshot_interval)
         self.governor = BroadcastGovernor(encoder=self.encoder)
         self.store = TimeSeriesStoreV2(max_hot=max_hot, redis=redis)
+        self.research_store = ResearchFeatureStore()
         self.instrumentation = L3Instrumentation()
         self.ui_tracker = UIStateTracker()
         self.shadow_mode = shadow_mode
@@ -117,6 +119,10 @@ class L3AssemblyReactor:
 
             with self.instrumentation.span_timeseries():
                 await self.store.write(payload)
+                try:
+                    self.research_store.append_tick(decision=decision, snapshot=snapshot, payload=payload)
+                except Exception as exc:
+                    logger.error("[L3 Reactor] research_store append failed (non-fatal): %s", exc)
 
             assemble_ms = (time.monotonic() - start) * 1000
             self.instrumentation.record_assembly_latency(assemble_ms)
@@ -147,6 +153,7 @@ class L3AssemblyReactor:
                 "delta_ratio": f"{self.encoder.delta_ratio:.1%}",
             },
             "l3_store": store_diag,
+            "research_store": self.research_store.diagnostics(),
         }
 
     # ── Private helpers ────────────────────────────────────────────────────

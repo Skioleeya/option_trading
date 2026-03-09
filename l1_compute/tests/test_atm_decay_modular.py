@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from l1_compute.analysis.atm_decay import AtmDecayTracker as NewPathTracker
+from l1_compute.analysis.atm_decay import tracker as tracker_mod
 from l1_compute.analysis.atm_decay.anchor import select_opening_anchor
 from l1_compute.analysis.atm_decay.storage import AtmDecayStorage
 from l1_compute.analysis.atm_decay_tracker import AtmDecayTracker as LegacyPathTracker
@@ -234,3 +235,54 @@ class NoneLogger:
 
     def warning(self, *args, **kwargs):
         return None
+
+
+@pytest.mark.asyncio
+async def test_deferred_restore_when_startup_spot_unavailable(monkeypatch):
+    fixed_now = datetime(2026, 3, 9, 10, 5, tzinfo=ET)
+
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return fixed_now.replace(tzinfo=None)
+            return fixed_now.astimezone(tz)
+
+    monkeypatch.setattr(tracker_mod, "datetime", FixedDateTime)
+
+    redis = FakeRedis()
+    tracker = NewPathTracker(redis_client=redis, quote_ctx=None)
+    tracker._storage = AtmDecayStorage(  # noqa: SLF001 - test-only deterministic storage root
+        redis_client=redis,
+        cold_dir=_mk_cold_dir(),
+        redis_key_tpl="app:opening_atm:{date}",
+        series_key_tpl="app:atm_decay_series:{date}",
+    )
+
+    date_str = fixed_now.strftime("%Y%m%d")
+    anchor = {
+        "strike": 670.0,
+        "base_strike": 670.0,
+        "call_symbol": _symbol(fixed_now, "C", 670.0),
+        "put_symbol": _symbol(fixed_now, "P", 670.0),
+        "call_price": 2.0,
+        "put_price": 2.0,
+        "timestamp": fixed_now.isoformat(),
+    }
+    await tracker._storage.save_anchor(date_str, anchor, ttl_seconds=600)  # noqa: SLF001
+
+    await tracker.initialize(spot=0.0)
+    assert tracker.anchor is None
+    assert tracker._pending_restore_anchor is not None  # noqa: SLF001
+
+    chain = [
+        _mk_opt(fixed_now, 670.0, "C", 1.8, 2.0),
+        _mk_opt(fixed_now, 670.0, "P", 1.9, 2.1),
+    ]
+    out = await tracker.update(chain=chain, spot=670.2)
+
+    assert tracker.anchor is not None
+    assert tracker.anchor["strike"] == 670.0
+    assert tracker._pending_restore_anchor is None  # noqa: SLF001
+    assert out is not None
+    assert out["strike"] == 670.0

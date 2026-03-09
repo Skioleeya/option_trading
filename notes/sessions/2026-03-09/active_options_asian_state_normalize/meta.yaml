@@ -1,0 +1,41 @@
+session_id: "2026-03-09/active_options_asian_state_normalize"
+title: "active options asian state normalize"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-09 15:45:18 -04:00"
+updated_at_et: "2026-03-09 16:06:52 -04:00"
+parent_session: "2026-03-09/l4_asian_color_fix_micro_gex"
+
+branch: "master"
+base_commit: "f2268d2"
+head_commit: "f2268d2"
+
+files_changed:
+  - "l4_ui/src/components/right/activeOptionsModel.ts"
+  - "l4_ui/src/components/__tests__/activeOptions.model.test.ts"
+  - "docs/SOP/L4_FRONTEND.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-09/active_options_asian_state_normalize/project_state.md"
+  - "notes/sessions/2026-03-09/active_options_asian_state_normalize/open_tasks.md"
+  - "notes/sessions/2026-03-09/active_options_asian_state_normalize/handoff.md"
+  - "notes/sessions/2026-03-09/active_options_asian_state_normalize/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId active_options_asian_state_normalize -Timezone \"Eastern Standard Time\" -ParentSession \"2026-03-09/l4_asian_color_fix_micro_gex\""
+  - "npm --prefix e:\\US.market\\Option_v3\\l4_ui run test -- src/components/__tests__/activeOptions.model.test.ts"
+  - "npm --prefix e:\\US.market\\Option_v3\\l4_ui run test -- src/components/left/__tests__/microStatsTheme.test.ts --run"
+  - "npm --prefix e:\\US.market\\Option_v3\\l4_ui run test -- src/components/__tests__/activeOptions.model.test.ts"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_wall_migration_tracker.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_wall_migration_tracker.py (5 passed)"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict (Session validation passed)"
+tests_failed:
+  - "npm --prefix e:\\US.market\\Option_v3\\l4_ui run test -- src/components/__tests__/activeOptions.model.test.ts (No test suite found)"
+  - "npm --prefix e:\\US.market\\Option_v3\\l4_ui run test -- src/components/__tests__/activeOptions.model.test.ts (No test suite found; re-run confirmed)"
+  - "npm --prefix e:\\US.market\\Option_v3\\l4_ui run test -- src/components/left/__tests__/microStatsTheme.test.ts --run (No test suite found)"
+blockers: []
+notes:
+  - "ActiveOptions FLOW sign is now authoritative for direction/color; negative flow is forced to BEARISH + text-accent-green."
