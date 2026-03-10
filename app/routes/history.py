@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
+import logging
 import math
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -13,10 +15,36 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import Response
 
 from shared.config import settings
+from shared.services.history_columnar import build_columnar_payload
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 _UTC = timezone.utc
+_ALLOWED_SCHEMA = {"v1", "v2"}
+_ATM_DECAY_ALLOWED_FIELDS = {
+    "timestamp",
+    "straddle_pct",
+    "call_pct",
+    "put_pct",
+    "strike_changed",
+    "strike",
+    "base_strike",
+    "locked_at",
+}
+
+
+def _parse_schema(raw: str | None) -> str:
+    default_schema = str(getattr(settings, "history_schema_default", "v2") or "v2").strip().lower()
+    if default_schema not in _ALLOWED_SCHEMA:
+        default_schema = "v2"
+    norm = (raw or default_schema).strip().lower()
+    if norm not in _ALLOWED_SCHEMA:
+        raise HTTPException(status_code=400, detail=f"invalid schema: {raw}")
+    if norm == "v2" and not bool(settings.history_v2_enabled):
+        logger.info("[HistoryV2] disabled by config; fallback to v1")
+        return "v1"
+    return norm
 
 
 def _parse_fields(raw: str | None) -> list[str] | None:
@@ -130,6 +158,45 @@ def _to_parquet_bytes(rows: list[dict[str, Any]]) -> bytes:
     return sink.getvalue().to_pybytes()
 
 
+def _estimate_json_bytes(payload: dict[str, Any]) -> int:
+    try:
+        return len(
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        )
+    except (TypeError, ValueError, OverflowError) as exc:
+        logger.warning("[HistoryV2] json size estimate failed: %s", exc)
+        return -1
+
+
+def _log_v2_metrics(*, endpoint: str, payload: dict[str, Any]) -> None:
+    columns = payload.get("columns")
+    rows = payload.get("rows")
+    logger.info(
+        "[HistoryV2] endpoint=%s count=%s columns=%s est_bytes=%s",
+        endpoint,
+        payload.get("count"),
+        len(columns) if isinstance(columns, list) else 0,
+        _estimate_json_bytes(payload),
+    )
+    if not isinstance(rows, list):
+        logger.warning("[HistoryV2] endpoint=%s rows is not list", endpoint)
+
+
+def _project_atm_decay_fields(
+    rows: list[dict[str, Any]],
+    fields: list[str] | None,
+) -> list[dict[str, Any]]:
+    if not fields:
+        return rows
+    invalid = [f for f in fields if f not in _ATM_DECAY_ALLOWED_FIELDS]
+    if invalid:
+        raise HTTPException(
+            status_code=400,
+            detail=f"invalid atm_decay fields: {','.join(invalid)}",
+        )
+    return [{k: row.get(k) for k in fields} for row in rows]
+
+
 @router.get("/history")
 async def get_history(
     request: Request,
@@ -138,6 +205,7 @@ async def get_history(
     fields: str | None = None,
     interval: str = "1s",
     format: str = "jsonl",
+    schema: str | None = None,
 ):
     """Retrieve historical snapshots with projection-first views."""
     container = request.app.state.container
@@ -146,6 +214,7 @@ async def get_history(
     fmt_norm = format.strip().lower()
     if fmt_norm not in {"jsonl", "parquet"}:
         raise HTTPException(status_code=400, detail=f"invalid format: {format}")
+    schema_norm = _parse_schema(schema)
 
     field_list = _parse_fields(fields)
     rows: list[dict[str, Any]]
@@ -180,6 +249,14 @@ async def get_history(
 
     if fmt_norm == "parquet":
         return Response(content=_to_parquet_bytes(rows), media_type="application/x-parquet")
+    if schema_norm == "v2":
+        payload = build_columnar_payload(
+            rows,
+            count=len(rows),
+            meta={"view": view_norm, "format": "jsonl"},
+        )
+        _log_v2_metrics(endpoint="/history", payload=payload)
+        return payload
     return {"history": rows, "count": len(rows), "view": view_norm, "format": "jsonl"}
 
 
@@ -192,11 +269,13 @@ async def get_research_features(
     view: str = "feature",
     interval: str = "1s",
     format: str = "jsonl",
+    schema: str | None = None,
 ):
     """Query research feature store with field projection and compact format options."""
     container = request.app.state.container
     if not container.l3_reactor:
         raise HTTPException(status_code=503, detail="l3 reactor unavailable")
+    schema_norm = _parse_schema(schema)
 
     result = await container.l3_reactor.research_store.query(
         start=start,
@@ -212,6 +291,20 @@ async def get_research_features(
         return result
     if result.get("format") == "parquet":
         return Response(content=result["bytes"], media_type=result["content_type"])
+    if schema_norm == "v2" and result.get("format") == "jsonl":
+        records = result.get("records")
+        if isinstance(records, list):
+            payload = build_columnar_payload(
+                records,
+                count=int(result.get("count", len(records))),
+                meta={"status": str(result.get("status", "ok")), "format": "jsonl"},
+            )
+            _log_v2_metrics(endpoint="/api/research/features", payload=payload)
+            return payload
+        logger.warning(
+            "[HistoryV2] /api/research/features expected list records, got %s",
+            type(records).__name__,
+        )
     return result
 
 
@@ -239,11 +332,25 @@ async def download_research_export(request: Request, job_id: str):
 
 
 @router.get("/api/atm-decay/history")
-async def get_atm_decay_history(request: Request):
+async def get_atm_decay_history(
+    request: Request,
+    fields: str | None = None,
+    schema: str | None = None,
+):
     """Retrieve the full historical ATM decay series for the current trade date."""
     container = request.app.state.container
     date_str = datetime.now(ZoneInfo("US/Eastern")).strftime("%Y%m%d")
+    schema_norm = _parse_schema(schema)
     history = await container.atm_decay_tracker.get_history(date_str)
+    history = _project_atm_decay_fields(history, _parse_fields(fields))
+    if schema_norm == "v2":
+        payload = build_columnar_payload(
+            history,
+            count=len(history),
+            meta={"date": date_str},
+        )
+        _log_v2_metrics(endpoint="/api/atm-decay/history", payload=payload)
+        return payload
 
     return {
         "date": date_str,

@@ -46,3 +46,22 @@ class PersistenceConfig(BaseConfig):
         default=10000,
         description="Approx max length for Wall Migration Redis stream",
     )
+
+    # History query controls
+    history_default_view: str = Field(default="compact", description="Default /history view")
+    history_schema_default: str = Field(
+        default="v2",
+        description="Default history schema version (v1|v2)",
+    )
+    history_max_fields_per_query: int = Field(
+        default=64,
+        description="Maximum projected fields allowed per query",
+    )
+    history_max_points_per_query: int = Field(
+        default=5000,
+        description="Maximum points allowed per inline history query",
+    )
+    history_v2_enabled: bool = Field(
+        default=True,
+        description="Enable schema=v2 columnar JSON history responses",
+    )

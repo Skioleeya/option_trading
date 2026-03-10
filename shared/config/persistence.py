@@ -15,5 +15,7 @@ class PersistenceConfig(BaseConfig):
     research_feature_retention_days: int = Field(default=90)
     research_label_retention_days: int = Field(default=365)
     history_default_view: str = Field(default="compact")
+    history_schema_default: str = Field(default="v2")
     history_max_fields_per_query: int = Field(default=64)
     history_max_points_per_query: int = Field(default=5000)
+    history_v2_enabled: bool = Field(default=True)

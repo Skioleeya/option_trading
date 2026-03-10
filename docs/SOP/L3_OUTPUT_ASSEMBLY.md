@@ -1,6 +1,6 @@
 # L3 SOP — OUTPUT ASSEMBLY
 
-> Version: 2026-03-07
+> Version: 2026-03-10
 > Layer: L3 Payload Assembly & Broadcast
 
 ## 1. Responsibility
@@ -54,6 +54,9 @@ flowchart LR
 - 不返回空结构破坏前端渲染
 - `/history` 默认视图必须为 `compact`，禁止默认返回重字段全量 payload
 - 研究下载必须走字段投影（`fields`）与时间降采样（`interval`），超限查询进入异步导出
+- 历史查询接口支持版本协商：`schema=v1|v2`（默认 `v2`，`v1` 仅兼容保留）
+- `schema=v2` 统一返回列式 JSON 包络：`{schema:"v2", encoding:"columnar-json", columns, rows, count, ...meta}`
+- `format=parquet` 路径优先级高于 schema（保持现有二进制下载语义不变）
 
 ### 3.2 Research Feature Store
 

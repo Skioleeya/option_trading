@@ -31,6 +31,8 @@ import { AlertToast } from './AlertToast'
 import { CommandPalette } from './CommandPalette'
 import { DebugOverlay } from './DebugOverlay'
 import { deriveMarketStatus } from './center/headerState'
+import { decodeHistoryRows } from '../lib/historyColumnar'
+import type { AtmDecay } from '../types/dashboard'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // App
@@ -47,16 +49,27 @@ export const App: React.FC = () => {
         const handleOverlayToggle = () => setDebugOpen(prev => !prev)
         window.addEventListener('l4:toggle_debug_overlay', handleOverlayToggle)
 
-        // Cold boot: Attempt to hydrate ATM Decay historical array bounds natively BEFORE websocket. 
-        // Eliminates single-tick wipeouts during crashes or manual F5.
-        fetch('http://localhost:8001/api/atm-decay/history')
-            .then(res => res.json())
-            .then(data => {
-                if (data && Array.isArray(data.history) && data.history.length > 0) {
-                    useDashboardStore.getState().hydrateAtmHistory(data.history);
-                }
-            })
-            .catch(err => console.warn('[App] Cold history hydration failed:', err));
+        // Cold boot: hydrate chart with minimal ATM history fields before websocket.
+        const atmHistoryFields = 'timestamp,straddle_pct,call_pct,put_pct,strike_changed'
+        const fetchAtmHistoryV2 = async (): Promise<AtmDecay[] | null> => {
+            const url = `http://localhost:8001/api/atm-decay/history?fields=${encodeURIComponent(atmHistoryFields)}&schema=v2`
+            try {
+                const res = await fetch(url)
+                const data = await res.json()
+                const rows = decodeHistoryRows(data, 'history')
+                return rows ? (rows as AtmDecay[]) : null
+            } catch (err) {
+                console.warn('[App] ATM history fetch failed (schema=v2):', err)
+                return null
+            }
+        }
+
+        ; (async () => {
+            const rows = await fetchAtmHistoryV2()
+            if (rows && rows.length > 0) {
+                useDashboardStore.getState().hydrateAtmHistory(rows)
+            }
+        })()
 
         return () => {
             AlertEngine.stop()
