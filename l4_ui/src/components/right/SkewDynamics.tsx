@@ -4,17 +4,14 @@
  */
 import React, { memo } from 'react'
 import { AlertCircle } from 'lucide-react'
-import { useDashboardStore } from '../../store/dashboardStore'
+import { useDashboardStore, selectUiStateSkewDynamics } from '../../store/dashboardStore'
 import type { SkewDynamicsState } from '../../types/dashboard'
 import { normalizeSkewDynamicsState } from './skewDynamicsModel'
-
-const selectSkewDynamics = (s: ReturnType<typeof useDashboardStore.getState>) =>
-    s.payload?.agent_g?.data?.ui_state?.skew_dynamics ?? null
 
 interface Props { uiState?: SkewDynamicsState | null }
 
 export const SkewDynamics: React.FC<Props> = memo(({ uiState: propState }) => {
-    const storeState = useDashboardStore(selectSkewDynamics)
+    const storeState = useDashboardStore(selectUiStateSkewDynamics)
     const preferStore = !!(storeState && typeof storeState === 'object' && Object.keys(storeState).length > 0)
     const state = normalizeSkewDynamicsState(preferStore ? storeState : propState)
 

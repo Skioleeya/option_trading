@@ -18,7 +18,7 @@ describe('skewDynamicsModel', () => {
         expect(skew.value).toBe('-0.22')
         expect(skew.state_label).toBe('SPECULATIVE')
         expect(skew.color_class).toBe('text-accent-red')
-        expect(skew.bg_class).toBe('bg-bg-card')
+        expect(skew.bg_class).toBe('bg-accent-red/5')
     })
 
     it('preserves unavailable rendering tokens', () => {

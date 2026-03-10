@@ -5,16 +5,13 @@
 import React, { memo } from 'react'
 import { fmtVolume, fmtFlow } from '../../lib/utils'
 import type { ActiveOption } from '../../types/dashboard'
-import { useDashboardStore } from '../../store/dashboardStore'
+import { useDashboardStore, selectUiStateActiveOptions } from '../../store/dashboardStore'
 import { normalizeActiveOptions } from './activeOptionsModel'
-
-const selectActiveOptions = (s: ReturnType<typeof useDashboardStore.getState>) =>
-    s.payload?.agent_g?.data?.ui_state?.active_options ?? null
 
 interface Props { options?: ActiveOption[] }
 
 export const ActiveOptions: React.FC<Props> = memo(({ options: propOptions }) => {
-    const storeOptions = useDashboardStore(selectActiveOptions)
+    const storeOptions = useDashboardStore(selectUiStateActiveOptions)
     const options: ActiveOption[] = normalizeActiveOptions(storeOptions ?? propOptions ?? [], 5)
 
     // THE BACKEND ALREADY SORTS BY IMPACT_INDEX. 

@@ -123,7 +123,43 @@ export function smartMergeUiState(prev: any, next: any): any {
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-const MAX_ATM_HISTORY = 5000 // Reduced from 50000 to improve rendering performance
+// Keep one full regular session (09:30-16:00 ET) with headroom for sub-second bursts.
+const MAX_ATM_HISTORY = 30000
+const ET_TIME_ZONE = 'America/New_York'
+const ET_TRADE_DATE_FORMATTER = new Intl.DateTimeFormat('en-CA', {
+    timeZone: ET_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+})
+
+function toValidDate(raw: string | null | undefined): Date | null {
+    if (!raw) return null
+    const d = new Date(raw)
+    if (Number.isNaN(d.getTime())) return null
+    return d
+}
+
+function getEtTradeDateKeyFromTimestamp(raw: string | null | undefined): string | null {
+    const d = toValidDate(raw)
+    if (!d) return null
+    return ET_TRADE_DATE_FORMATTER.format(d)
+}
+
+function getPayloadTradeDateKey(payload: DashboardPayload | null | undefined): string | null {
+    if (!payload) return null
+    const sourceTs =
+        payload.data_timestamp
+        ?? payload.timestamp
+        ?? payload.agent_g?.as_of
+        ?? null
+    return getEtTradeDateKeyFromTimestamp(sourceTs)
+}
+
+function keepHistoryWithinTradeDate(history: AtmDecay[], tradeDateKey: string | null): AtmDecay[] {
+    if (!tradeDateKey) return history
+    return history.filter((tick) => getEtTradeDateKeyFromTimestamp(tick.timestamp ?? null) === tradeDateKey)
+}
 
 function extractSpot(p: DashboardPayload): number | null {
     return p?.spot ?? null
@@ -151,7 +187,15 @@ function mergePayloads(
     if (!prev) return next
     const prevUiState = prev.agent_g?.data?.ui_state ?? {}
     const nextUiState = next.agent_g?.data?.ui_state ?? {}
-    const mergedUiState = smartMergeUiState(prevUiState, nextUiState)
+    const prevTradeDate = getPayloadTradeDateKey(prev)
+    const nextTradeDate = getPayloadTradeDateKey(next)
+    const allowStickyMerge =
+        prevTradeDate === null
+        || nextTradeDate === null
+        || prevTradeDate === nextTradeDate
+    const mergedUiState = allowStickyMerge
+        ? smartMergeUiState(prevUiState, nextUiState)
+        : nextUiState
     return {
         ...prev,
         ...next,
@@ -196,18 +240,19 @@ export const useDashboardStore = create<DashboardState>()(
             }
 
             set((state) => {
-                let nextHistory = state.atmHistory
-                if (atm && !state.atmHistory.some((t) => t.timestamp === atm.timestamp)) {
-                    const last = state.atmHistory[state.atmHistory.length - 1]
+                const tradeDateKey = getPayloadTradeDateKey(merged)
+                let nextHistory = keepHistoryWithinTradeDate(state.atmHistory, tradeDateKey)
+                if (atm && !nextHistory.some((t) => t.timestamp === atm.timestamp)) {
+                    const last = nextHistory[nextHistory.length - 1]
                     const isStatic = last &&
                         Math.abs((last.call_pct || 0) - (atm.call_pct || 0)) < 1e-6 &&
                         Math.abs((last.put_pct || 0) - (atm.put_pct || 0)) < 1e-6 &&
                         Math.abs((last.straddle_pct || 0) - (atm.straddle_pct || 0)) < 1e-6
 
                     if (isStatic) {
-                        nextHistory = [...state.atmHistory.slice(0, -1), atm]
+                        nextHistory = [...nextHistory.slice(0, -1), atm]
                     } else {
-                        nextHistory = [...state.atmHistory.slice(-MAX_ATM_HISTORY + 1), atm]
+                        nextHistory = [...nextHistory.slice(-MAX_ATM_HISTORY + 1), atm]
                     }
                 }
 
@@ -234,18 +279,19 @@ export const useDashboardStore = create<DashboardState>()(
             }
 
             set((state) => {
-                let nextHistory = state.atmHistory
-                if (atm && !state.atmHistory.some((t) => t.timestamp === atm.timestamp)) {
-                    const last = state.atmHistory[state.atmHistory.length - 1]
+                const tradeDateKey = getPayloadTradeDateKey(merged)
+                let nextHistory = keepHistoryWithinTradeDate(state.atmHistory, tradeDateKey)
+                if (atm && !nextHistory.some((t) => t.timestamp === atm.timestamp)) {
+                    const last = nextHistory[nextHistory.length - 1]
                     const isStatic = last &&
                         Math.abs((last.call_pct || 0) - (atm.call_pct || 0)) < 1e-6 &&
                         Math.abs((last.put_pct || 0) - (atm.put_pct || 0)) < 1e-6 &&
                         Math.abs((last.straddle_pct || 0) - (atm.straddle_pct || 0)) < 1e-6
 
                     if (isStatic) {
-                        nextHistory = [...state.atmHistory.slice(0, -1), atm]
+                        nextHistory = [...nextHistory.slice(0, -1), atm]
                     } else {
-                        nextHistory = [...state.atmHistory.slice(-MAX_ATM_HISTORY + 1), atm]
+                        nextHistory = [...nextHistory.slice(-MAX_ATM_HISTORY + 1), atm]
                     }
                 }
 
@@ -262,23 +308,32 @@ export const useDashboardStore = create<DashboardState>()(
 
         appendAtmHistory: (tick) => {
             set((state) => {
-                if (state.atmHistory.some((t) => t.timestamp === tick.timestamp)) {
+                const tickTradeDate = getEtTradeDateKeyFromTimestamp(tick.timestamp ?? null)
+                const baseHistory = keepHistoryWithinTradeDate(state.atmHistory, tickTradeDate)
+                if (baseHistory.some((t) => t.timestamp === tick.timestamp)) {
                     return state // de-dup
                 }
                 return {
-                    atmHistory: [...state.atmHistory.slice(-MAX_ATM_HISTORY + 1), tick],
+                    atmHistory: [...baseHistory.slice(-MAX_ATM_HISTORY + 1), tick],
                 }
             })
         },
 
         hydrateAtmHistory: (history) => {
             set((state) => {
-                const existingTimestamps = new Set(state.atmHistory.map((t) => t.timestamp))
-                const newPoints = history.filter((t) => t.timestamp && !existingTimestamps.has(t.timestamp))
+                const activeTradeDate =
+                    getPayloadTradeDateKey(state.payload)
+                    ?? getEtTradeDateKeyFromTimestamp(history[history.length - 1]?.timestamp ?? null)
+                const baseHistory = keepHistoryWithinTradeDate(state.atmHistory, activeTradeDate)
+                const scopedIncoming = activeTradeDate
+                    ? history.filter((t) => getEtTradeDateKeyFromTimestamp(t.timestamp ?? null) === activeTradeDate)
+                    : history
+                const existingTimestamps = new Set(baseHistory.map((t) => t.timestamp))
+                const newPoints = scopedIncoming.filter((t) => t.timestamp && !existingTimestamps.has(t.timestamp))
 
                 if (newPoints.length === 0) return state
 
-                const combined = [...state.atmHistory, ...newPoints].sort((a, b) =>
+                const combined = [...baseHistory, ...newPoints].sort((a, b) =>
                     (a.timestamp || '').localeCompare(b.timestamp || '')
                 )
 
@@ -316,6 +371,42 @@ export const selectAtmHistory = (s: DashboardState) => s.atmHistory
 /** Selector: ui_state sub-tree */
 export const selectUiState = (s: DashboardState) =>
     s.payload?.agent_g?.data?.ui_state ?? null
+
+export const selectUiStateMicroStats = (s: DashboardState) =>
+    s.payload?.agent_g?.data?.ui_state?.micro_stats ?? null
+
+export const selectUiStateWallMigration = (s: DashboardState) =>
+    s.payload?.agent_g?.data?.ui_state?.wall_migration ?? null
+
+export const selectUiStateDepthProfile = (s: DashboardState) =>
+    s.payload?.agent_g?.data?.ui_state?.depth_profile ?? null
+
+export const selectUiStateMacroVolumeMap = (s: DashboardState) =>
+    s.payload?.agent_g?.data?.ui_state?.macro_volume_map ?? null
+
+export const selectUiStateActiveOptions = (s: DashboardState) =>
+    s.payload?.agent_g?.data?.ui_state?.active_options ?? null
+
+export const selectUiStateTacticalTriad = (s: DashboardState) =>
+    s.payload?.agent_g?.data?.ui_state?.tactical_triad ?? null
+
+export const selectUiStateSkewDynamics = (s: DashboardState) =>
+    s.payload?.agent_g?.data?.ui_state?.skew_dynamics ?? null
+
+export const selectUiStateMtfFlow = (s: DashboardState) =>
+    s.payload?.agent_g?.data?.ui_state?.mtf_flow ?? null
+
+export const selectUiStateIvVelocity = (s: DashboardState) =>
+    s.payload?.agent_g?.data?.ui_state?.iv_velocity ?? null
+
+export const selectPayloadTimestamp = (s: DashboardState) =>
+    s.payload?.timestamp ?? null
+
+export const selectFusedIvRegime = (s: DashboardState) =>
+    s.payload?.agent_g?.data?.fused_signal?.iv_regime ?? 'NORMAL'
+
+export const selectRustActive = (s: DashboardState) =>
+    s.payload?.rust_active ?? null
 
 /** Selector: fused signal */
 export const selectFused = (s: DashboardState) =>

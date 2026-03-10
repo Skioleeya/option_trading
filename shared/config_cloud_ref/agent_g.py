@@ -63,6 +63,38 @@ class AgentGConfig(BaseConfig):
             "Default 1.15 = +15% confidence boost."
         ),
     )
+    guard_vrp_entry_threshold: float = Field(
+        default=0.15,
+        description="GuardRail VRP veto entry threshold (hysteresis entry).",
+    )
+    guard_vrp_exit_threshold: float = Field(
+        default=0.13,
+        description="GuardRail VRP veto exit threshold (hysteresis exit).",
+    )
+    guard_vrp_min_hold_ticks: int = Field(
+        default=3,
+        description="Minimum ticks to hold VRP veto once activated.",
+    )
+    guard_vrp_exit_confirm_ticks: int = Field(
+        default=2,
+        description="Consecutive below-exit ticks required before releasing VRP veto.",
+    )
+    guard_drawdown_limit_usd: float = Field(
+        default=-500.0,
+        description="GuardRail drawdown stop threshold in USD.",
+    )
+    guard_drawdown_cooldown_minutes: float = Field(
+        default=30.0,
+        description="Cooldown minutes after drawdown guard is triggered.",
+    )
+    guard_session_window_minutes: int = Field(
+        default=15,
+        description="Session guard opening/closing window in minutes.",
+    )
+    guard_session_confidence_reduction: float = Field(
+        default=0.30,
+        description="Session guard confidence reduction ratio inside opening/closing windows.",
+    )
 
     # ── Jump Detection (Phase 27) ──────────────────────────────────────────────
     jump_z_threshold: float = Field(

@@ -25,6 +25,7 @@ from typing import Any, Protocol, runtime_checkable
 from zoneinfo import ZoneInfo
 
 from l2_decision.events.decision_events import FusedDecision, GuardedDecision
+from shared.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -104,15 +105,37 @@ class VRPVetoGuard:
 
     def __init__(
         self,
-        entry_threshold: float = ENTRY_THRESHOLD,
-        exit_threshold: float = EXIT_THRESHOLD,
-        min_hold_ticks: int = MIN_HOLD_TICKS,
-        exit_confirm_ticks: int = EXIT_CONFIRM_TICKS,
+        entry_threshold: float | None = None,
+        exit_threshold: float | None = None,
+        min_hold_ticks: int | None = None,
+        exit_confirm_ticks: int | None = None,
     ) -> None:
-        self._entry_threshold = entry_threshold
-        self._exit_threshold = exit_threshold
-        self._min_hold_ticks = max(1, int(min_hold_ticks))
-        self._exit_confirm_ticks = max(1, int(exit_confirm_ticks))
+        self._entry_threshold = float(
+            entry_threshold
+            if entry_threshold is not None
+            else getattr(settings, "guard_vrp_entry_threshold", self.ENTRY_THRESHOLD)
+        )
+        self._exit_threshold = float(
+            exit_threshold
+            if exit_threshold is not None
+            else getattr(settings, "guard_vrp_exit_threshold", self.EXIT_THRESHOLD)
+        )
+        self._min_hold_ticks = max(
+            1,
+            int(
+                min_hold_ticks
+                if min_hold_ticks is not None
+                else getattr(settings, "guard_vrp_min_hold_ticks", self.MIN_HOLD_TICKS)
+            ),
+        )
+        self._exit_confirm_ticks = max(
+            1,
+            int(
+                exit_confirm_ticks
+                if exit_confirm_ticks is not None
+                else getattr(settings, "guard_vrp_exit_confirm_ticks", self.EXIT_CONFIRM_TICKS)
+            ),
+        )
         self._active = False
         self._active_ticks = 0
         self._below_exit_ticks = 0
@@ -167,10 +190,24 @@ class DrawdownGuard:
     priority = 0.7
     name = "DrawdownGuard"
 
-    DRAWDOWN_LIMIT: float = -500.0          # USD simulated limit
+    DRAWDOWN_LIMIT: float = -500.0
     COOLDOWN_DURATION_MINUTES: float = 30.0
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        drawdown_limit: float | None = None,
+        cooldown_minutes: float | None = None,
+    ) -> None:
+        self._drawdown_limit = float(
+            drawdown_limit
+            if drawdown_limit is not None
+            else getattr(settings, "guard_drawdown_limit_usd", self.DRAWDOWN_LIMIT)
+        )
+        self._cooldown_minutes = float(
+            cooldown_minutes
+            if cooldown_minutes is not None
+            else getattr(settings, "guard_drawdown_cooldown_minutes", self.COOLDOWN_DURATION_MINUTES)
+        )
         self._session_pnl: float = 0.0
         self._cooldown_until: datetime | None = None
 
@@ -189,13 +226,13 @@ class DrawdownGuard:
         if "realized_pnl" in context:
             self._session_pnl = float(context["realized_pnl"])
 
-        if self._session_pnl < self.DRAWDOWN_LIMIT:
-            self._cooldown_until = now + timedelta(minutes=self.COOLDOWN_DURATION_MINUTES)
+        if self._session_pnl < self._drawdown_limit:
+            self._cooldown_until = now + timedelta(minutes=self._cooldown_minutes)
             logger.warning(
-                "DrawdownGuard: session PnL %.1f < %.1f, entering 30min cooldown",
-                self._session_pnl, self.DRAWDOWN_LIMIT,
+                "DrawdownGuard: session PnL %.1f < %.1f, entering %.0fmin cooldown",
+                self._session_pnl, self._drawdown_limit, self._cooldown_minutes,
             )
-            return True, f"P0.7 DrawdownGuard: PnL={self._session_pnl:.0f}<{self.DRAWDOWN_LIMIT}", 0.0
+            return True, f"P0.7 DrawdownGuard: PnL={self._session_pnl:.0f}<{self._drawdown_limit}", 0.0
 
         return False, "", 1.0
 
@@ -222,20 +259,40 @@ class SessionGuard:
     WINDOW_MINUTES = 15
     CONFIDENCE_REDUCTION = 0.30
 
+    def __init__(
+        self,
+        window_minutes: int | None = None,
+        confidence_reduction: float | None = None,
+    ) -> None:
+        self._window_minutes = max(
+            1,
+            int(
+                window_minutes
+                if window_minutes is not None
+                else getattr(settings, "guard_session_window_minutes", self.WINDOW_MINUTES)
+            ),
+        )
+        raw_reduction = float(
+            confidence_reduction
+            if confidence_reduction is not None
+            else getattr(settings, "guard_session_confidence_reduction", self.CONFIDENCE_REDUCTION)
+        )
+        self._confidence_reduction = max(0.0, min(1.0, raw_reduction))
+
     def check(self, decision: FusedDecision, context: dict[str, Any]) -> tuple[bool, str, float]:
         now = datetime.now(_ET)
         market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
         market_close = now.replace(hour=16, minute=0, second=0, microsecond=0)
 
-        opening_end = market_open + timedelta(minutes=self.WINDOW_MINUTES)
-        closing_start = market_close - timedelta(minutes=self.WINDOW_MINUTES)
+        opening_end = market_open + timedelta(minutes=self._window_minutes)
+        closing_start = market_close - timedelta(minutes=self._window_minutes)
 
         in_opening = market_open <= now < opening_end
         in_closing = closing_start <= now <= market_close
 
         if in_opening or in_closing:
             window = "opening" if in_opening else "closing"
-            multiplier = 1.0 - self.CONFIDENCE_REDUCTION
+            multiplier = 1.0 - self._confidence_reduction
             return True, f"P0.9 SessionGuard: {window} window → confidence ×{multiplier:.1f}", multiplier
 
         return False, "", 1.0

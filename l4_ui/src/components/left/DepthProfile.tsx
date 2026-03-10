@@ -8,18 +8,14 @@ import {
     selectSpot,
     selectGammaWalls,
     selectFlipLevel,
+    selectUiStateDepthProfile,
+    selectUiStateMacroVolumeMap,
 } from '../../store/dashboardStore'
 import {
     resolveNavigationTarget,
     resolveNearestStrike,
     type DepthProfileNavEvent,
 } from './depthProfileNav'
-
-const selectDepthProfile = (s: ReturnType<typeof useDashboardStore.getState>) =>
-    s.payload?.agent_g?.data?.ui_state?.depth_profile ?? null
-
-const selectMacroVolumeMap = (s: ReturnType<typeof useDashboardStore.getState>) =>
-    s.payload?.agent_g?.data?.ui_state?.macro_volume_map ?? null
 
 interface PropTableRow {
     strike: number; put_pct: number; call_pct: number
@@ -118,8 +114,8 @@ const DepthProfileRow: React.FC<{
 DepthProfileRow.displayName = 'DepthProfileRow'
 
 export const DepthProfile: React.FC<Props> = memo(({ rows: propRows, macroVolumeMap: propMap, spot: propSpot }) => {
-    const storeRows = useDashboardStore(selectDepthProfile) as PropTableRow[] | null
-    const storeMap = useDashboardStore(selectMacroVolumeMap) as Record<string, number> | null
+    const storeRows = useDashboardStore(selectUiStateDepthProfile) as PropTableRow[] | null
+    const storeMap = useDashboardStore(selectUiStateMacroVolumeMap) as Record<string, number> | null
     const storeSpot = useDashboardStore(selectSpot)
     const storeGammaWalls = useDashboardStore(selectGammaWalls)
     const storeFlipLevel = useDashboardStore(selectFlipLevel)

@@ -3,13 +3,10 @@
  * DOM/CSS/Layout: UNCHANGED
  */
 import React, { memo } from 'react'
-import { useDashboardStore } from '../../store/dashboardStore'
+import { useDashboardStore, selectUiStateMtfFlow } from '../../store/dashboardStore'
 import type { MtfFlowState } from '../../types/dashboard'
 import type { FlowState } from './mtfFlowModel'
 import { normalizeMtfFlowState } from './mtfFlowModel'
-
-const selectMtfFlow = (s: ReturnType<typeof useDashboardStore.getState>) =>
-    s.payload?.agent_g?.data?.ui_state?.mtf_flow ?? null
 
 interface Props { uiState?: MtfFlowState | null }
 
@@ -20,7 +17,7 @@ const CONSENSUS_BAR: Record<FlowState, string> = {
 }
 
 export const MtfFlow: React.FC<Props> = memo(({ uiState: propState }) => {
-    const storeState = useDashboardStore(selectMtfFlow)
+    const storeState = useDashboardStore(selectUiStateMtfFlow)
     const s = normalizeMtfFlowState(storeState ?? propState)
 
     const timeframes = [

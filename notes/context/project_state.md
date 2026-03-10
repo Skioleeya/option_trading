@@ -1,17 +1,17 @@
 ﻿# Project State (Index)
 
 ## Active Session
-- Path: notes/sessions/2026-03-10/history_v2_columnar_upgrade/project_state.md
-- Meta: notes/sessions/2026-03-10/history_v2_columnar_upgrade/meta.yaml
+- Path: notes/sessions/2026-03-10/coupling_point_audit_repair/project_state.md
+- Meta: notes/sessions/2026-03-10/coupling_point_audit_repair/meta.yaml
 - Status: ACTIVE
-- Focus: History 三接口已硬切默认 schema=v2 + 前端 ATM 冷启动 v2-only，进入收益观察
+- Focus: 耦合点专项审计与修复已完成 P0/P1，进入 strict gate 收尾
 
 ## Recent Sessions
+- notes/sessions/2026-03-10/coupling_point_audit_repair/
 - notes/sessions/2026-03-10/history_v2_columnar_upgrade/
 - notes/sessions/2026-03-10/mtf_flow_geometry_refactor/
 - notes/sessions/2026-03-10/decisionengine_gex_mirror_sync/
 - notes/sessions/2026-03-10/decisionengine_guard_jitter_fix/
-- notes/sessions/2026-03-10/flow_semantics_contract_fix/
 
 ## Global Rules
 - Session folders are immutable records; do not overwrite prior sessions.

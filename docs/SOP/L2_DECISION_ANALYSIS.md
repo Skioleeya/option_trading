@@ -43,6 +43,7 @@ flowchart LR
   - `entry_threshold = 0.15`
   - `exit_threshold = 0.13`
   - `min_hold_ticks = 3`
+- 上述阈值以及 Drawdown/Session Guard 参数必须由配置驱动（`guard_*`），禁止在 Guard 实现层硬编码策略阈值。
 - 激活逻辑:
   - 未激活时仅当 `vrp > entry_threshold` 进入 veto。
   - 激活后在 `vrp >= exit_threshold` 区间保持 veto。

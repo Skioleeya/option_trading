@@ -1,12 +1,12 @@
 ﻿# Handoff (Index)
 
 ## Active Handoff
-- Path: notes/sessions/2026-03-10/history_v2_columnar_upgrade/handoff.md
-- Meta: notes/sessions/2026-03-10/history_v2_columnar_upgrade/meta.yaml
+- Path: notes/sessions/2026-03-10/coupling_point_audit_repair/handoff.md
+- Meta: notes/sessions/2026-03-10/coupling_point_audit_repair/meta.yaml
 
 ## Latest Outcome
-- Session: 2026-03-10/history_v2_columnar_upgrade
-- Summary: 已完成 History 三接口默认 v2 硬切与前端 v2-only 冷启动；压缩实测（ATM/Research 约 38%）并通过 strict validation。
+- Session: 2026-03-10/coupling_point_audit_repair
+- Summary: 已完成耦合点专项修复（L4 跨日隔离、右栏本地主题映射、L3 ActiveOptions 契约收敛、L2 guard 配置化）并通过定向回归与 strict 校验。
 
 ## Next Session Bootstrap
 1. Read this file.

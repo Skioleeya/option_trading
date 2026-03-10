@@ -5,7 +5,7 @@
 import React, { memo } from 'react'
 import { Target, Activity, TrendingUp, BarChart3 } from 'lucide-react'
 import type { FusedSignal } from '../../types/dashboard'
-import { useDashboardStore, selectFused } from '../../store/dashboardStore'
+import { useDashboardStore, selectFused, selectUiStateMicroStats } from '../../store/dashboardStore'
 import { normalizeBadgeToken } from '../left/microStatsTheme'
 import {
     confidenceToPercent,
@@ -21,9 +21,6 @@ interface Props {
     fused?: FusedSignal | null
 }
 
-const selectNetGexBadge = (s: ReturnType<typeof useDashboardStore.getState>) =>
-    s.payload?.agent_g?.data?.ui_state?.micro_stats?.net_gex ?? null
-
 function stripGexPrefix(label: string): string {
     return label.replace(/^gex\s+/i, '').trim()
 }
@@ -37,7 +34,7 @@ const Zap: React.FC = () => (
 
 export const DecisionEngine: React.FC<Props> = memo(({ fused: propFused }) => {
     const storeFused = useDashboardStore(selectFused)
-    const storeNetGex = useDashboardStore(selectNetGexBadge)
+    const storeNetGex = useDashboardStore(selectUiStateMicroStats)?.net_gex ?? null
     const fused = storeFused ?? propFused ?? null
 
     const dir = normalizeDecisionTone(fused?.direction)

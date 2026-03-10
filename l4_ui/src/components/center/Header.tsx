@@ -11,6 +11,10 @@ import {
     selectSpot,
     selectIvPct,
     selectConnectionStatus,
+    selectPayloadTimestamp,
+    selectFusedIvRegime,
+    selectUiStateIvVelocity,
+    selectRustActive,
 } from '../../store/dashboardStore'
 import {
     deriveMarketStatus,
@@ -40,9 +44,9 @@ export const Header: React.FC<Props> = memo(({
     const storeSpot = useDashboardStore(selectSpot)
     const storeIvPct = useDashboardStore(selectIvPct)
     const storeStatus = useDashboardStore(selectConnectionStatus)
-    const timestamp = useDashboardStore((s) => s.payload?.timestamp ?? null)
-    const ivRegimeRaw = useDashboardStore((s) => s.payload?.agent_g?.data?.fused_signal?.iv_regime ?? 'NORMAL')
-    const storeIvVelocity = useDashboardStore((s) => s.payload?.agent_g?.data?.ui_state?.iv_velocity ?? null)
+    const timestamp = useDashboardStore(selectPayloadTimestamp)
+    const ivRegimeRaw = useDashboardStore(selectFusedIvRegime)
+    const storeIvVelocity = useDashboardStore(selectUiStateIvVelocity)
 
     const spot = storeSpot ?? propSpot ?? null
     const ivPct = storeIvPct ?? propIvPct ?? null
@@ -50,7 +54,7 @@ export const Header: React.FC<Props> = memo(({
     const as_of = timestamp ?? propAsOf ?? null
     const ivRegime = ivRegimeRaw ?? propIvRegime ?? 'NORMAL'
     const marketStatus = propMarketStatus ?? deriveMarketStatus()
-    const rustActive = useDashboardStore((s) => s.payload?.rust_active ?? null)
+    const rustActive = useDashboardStore(selectRustActive)
 
     const timeStr = as_of
         ? new Date(as_of).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'America/New_York' })

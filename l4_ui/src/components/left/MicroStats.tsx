@@ -1,21 +1,18 @@
 /**
  * MicroStats — Phase 3: Zustand field-level selector
  *
- * Data source: useDashboardStore(selectMicroStats)
+ * Data source: useDashboardStore(selectUiStateMicroStats)
  * Props: kept for backward compat fallback (App.tsx no longer needs to pass them)
  * Layout/DOM/CSS: UNCHANGED
  */
 import React, { memo } from 'react'
 import { Anchor, Activity, Minus, Zap } from 'lucide-react'
-import { useDashboardStore } from '../../store/dashboardStore'
+import { useDashboardStore, selectUiStateMicroStats } from '../../store/dashboardStore'
 import { MICRO_STATS_THEME, normalizeBadgeToken } from './microStatsTheme'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Store selector (field-level — only re-renders when micro_stats changes)
 // ─────────────────────────────────────────────────────────────────────────────
-
-const selectMicroStats = (s: ReturnType<typeof useDashboardStore.getState>) =>
-    s.payload?.agent_g?.data?.ui_state?.micro_stats ?? null
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -82,7 +79,7 @@ const StatCard: React.FC<{
 
 export const MicroStats: React.FC<Props> = memo(({ uiState: propUiState }) => {
     // Store selector — fine-grained subscription (only this slice)
-    const storeData = useDashboardStore(selectMicroStats)
+    const storeData = useDashboardStore(selectUiStateMicroStats)
 
     // Store takes priority; fall back to prop; then zero-state
     const raw = storeData ?? propUiState ?? null

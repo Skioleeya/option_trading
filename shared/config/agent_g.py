@@ -28,6 +28,14 @@ class AgentGConfig(BaseConfig):
     vrp_cheap_threshold: float = Field(default=-5.0)
     vrp_veto_threshold: float = Field(default=-2.0)
     vrp_bargain_boost: float = Field(default=1.2)
+    guard_vrp_entry_threshold: float = Field(default=0.15)
+    guard_vrp_exit_threshold: float = Field(default=0.13)
+    guard_vrp_min_hold_ticks: int = Field(default=3)
+    guard_vrp_exit_confirm_ticks: int = Field(default=2)
+    guard_drawdown_limit_usd: float = Field(default=-500.0)
+    guard_drawdown_cooldown_minutes: float = Field(default=30.0)
+    guard_session_window_minutes: int = Field(default=15)
+    guard_session_confidence_reduction: float = Field(default=0.30)
 
     # MTF Alignment
     mtf_alignment_ewma_alpha: float = Field(default=0.1)

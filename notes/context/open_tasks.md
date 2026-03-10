@@ -1,8 +1,8 @@
 ﻿# Open Tasks (Index)
 
 ## Active Session Tasks
-- Path: notes/sessions/2026-03-10/history_v2_columnar_upgrade/open_tasks.md
-- Status: P0/P1 completed（含默认 v2 硬切）；pending only P2（量化压缩评估）
+- Path: notes/sessions/2026-03-10/coupling_point_audit_repair/open_tasks.md
+- Status: P0/P1 completed; pending only P2（跨语言状态枚举契约统一）
 
 ## Global Backlog (Cross-Session)
 - [ ] P2: Stage2 remove `DecisionOutput.to_legacy_agent_result` and migrate compute-loop/L3 to typed-contract direct path (Owner: Codex, DUE: 2026-03-12).

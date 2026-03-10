@@ -184,6 +184,60 @@ describe('DashboardStore', () => {
         expect(retained).toHaveLength(1)
     })
 
+    it('does not carry sticky ui_state across ET trade-date boundary', () => {
+        const first = makePayload({
+            timestamp: '2026-01-01T20:59:00Z',
+            data_timestamp: '2026-01-01T20:59:00Z',
+        })
+        useDashboardStore.getState().applyFullUpdate(first)
+        expect(useDashboardStore.getState().payload!.agent_g!.data.ui_state.wall_migration).toHaveLength(1)
+
+        const second = makePayload({
+            timestamp: '2026-01-02T14:31:00Z',
+            data_timestamp: '2026-01-02T14:31:00Z',
+        })
+        ;(second.agent_g!.data.ui_state as any).wall_migration = []
+        useDashboardStore.getState().applyFullUpdate(second)
+
+        const migrated = useDashboardStore.getState().payload!.agent_g!.data.ui_state.wall_migration
+        expect(migrated).toHaveLength(0)
+    })
+
+    it('keeps atmHistory scoped to current ET trade-date', () => {
+        const day1 = makePayload({
+            timestamp: '2026-01-01T20:59:00Z',
+            data_timestamp: '2026-01-01T20:59:00Z',
+            atm: {
+                strike: 560,
+                locked_at: '2026-01-01T20:59:00Z',
+                straddle_pct: 0.02,
+                call_pct: 0.01,
+                put_pct: 0.01,
+                timestamp: '2026-01-01T20:59:00Z',
+            },
+        })
+        useDashboardStore.getState().applyFullUpdate(day1)
+        expect(useDashboardStore.getState().atmHistory).toHaveLength(1)
+
+        const day2 = makePayload({
+            timestamp: '2026-01-02T14:31:00Z',
+            data_timestamp: '2026-01-02T14:31:00Z',
+            atm: {
+                strike: 561,
+                locked_at: '2026-01-02T14:31:00Z',
+                straddle_pct: 0.03,
+                call_pct: 0.015,
+                put_pct: 0.015,
+                timestamp: '2026-01-02T14:31:00Z',
+            },
+        })
+        useDashboardStore.getState().applyFullUpdate(day2)
+
+        const history = useDashboardStore.getState().atmHistory
+        expect(history).toHaveLength(1)
+        expect(history[0].timestamp).toBe('2026-01-02T14:31:00Z')
+    })
+
     // ── applyMergedPayload ─────────────────────────────────────────────────────
 
     it('applyMergedPayload updates spot and version', () => {

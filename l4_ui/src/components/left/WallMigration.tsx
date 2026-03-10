@@ -4,11 +4,8 @@
  */
 import React, { memo } from 'react'
 import { fmtPrice } from '../../lib/utils'
-import { useDashboardStore } from '../../store/dashboardStore'
+import { useDashboardStore, selectUiStateWallMigration } from '../../store/dashboardStore'
 import { getHistoryValue, getWallMigrationRowTokens } from './wallMigrationTheme'
-
-const selectWallMigration = (s: ReturnType<typeof useDashboardStore.getState>) =>
-    s.payload?.agent_g?.data?.ui_state?.wall_migration ?? null
 
 interface PropTableRow {
     label: string
@@ -23,7 +20,7 @@ interface Props {
 }
 
 export const WallMigration: React.FC<Props> = memo(({ rows: propRows }) => {
-    const storeRows = useDashboardStore(selectWallMigration) as PropTableRow[] | null
+    const storeRows = useDashboardStore(selectUiStateWallMigration) as PropTableRow[] | null
     const rows = storeRows ?? propRows ?? []
 
     if (!rows || rows.length === 0) {
