@@ -60,10 +60,11 @@ class UIStateTracker:
         mtf_consensus = self._extract_snapshot_mtf_consensus({"mtf_consensus": mtf_raw})
         if mtf_consensus is None:
             mtf_consensus = {
-                "timeframes": {},
-                "alignment": 0.0,
-                "consensus": "NEUTRAL",
-                "strength": 0.0,
+                "timeframes": {
+                    "1m": self._zero_mtf_tf(),
+                    "5m": self._zero_mtf_tf(),
+                    "15m": self._zero_mtf_tf(),
+                },
             }
 
         vrp = compute_vrp(atm_iv, getattr(settings, "vrp_baseline_hv", 13.5))
@@ -273,21 +274,45 @@ class UIStateTracker:
         timeframes = candidate.get("timeframes")
         if not isinstance(timeframes, dict):
             return None
+        out_timeframes: dict[str, dict[str, float | int]] = {}
+        for tf in ("1m", "5m", "15m"):
+            raw_tf = timeframes.get(tf, {})
+            if not isinstance(raw_tf, dict):
+                out_timeframes[tf] = UIStateTracker._zero_mtf_tf()
+                continue
 
-        consensus = str(candidate.get("consensus", "NEUTRAL"))
-        strength_raw = candidate.get("strength", 0.0)
-        alignment_raw = candidate.get("alignment", 0.0)
-        try:
-            strength = float(strength_raw)
-            alignment = float(alignment_raw)
-        except (TypeError, ValueError):
-            return None
-        if not math.isfinite(strength) or not math.isfinite(alignment):
-            return None
+            state_raw = raw_tf.get("state")
+            if isinstance(state_raw, (int, float)):
+                state = 1 if state_raw > 0 else (-1 if state_raw < 0 else 0)
+            else:
+                direction = str(raw_tf.get("direction", "NEUTRAL")).upper()
+                state = 1 if direction == "BULLISH" else (-1 if direction == "BEARISH" else 0)
 
-        out = dict(candidate)
-        out["consensus"] = consensus
-        out["strength"] = strength
-        out["alignment"] = alignment
-        out["timeframes"] = dict(timeframes)
-        return out
+            rel = UIStateTracker._to_float(raw_tf.get("relative_displacement", 0.0), 0.0)
+            grad = UIStateTracker._to_float(raw_tf.get("pressure_gradient", 0.0), 0.0)
+            dist = max(0.0, UIStateTracker._to_float(raw_tf.get("distance_to_vacuum", 0.0), 0.0))
+            kinetic = UIStateTracker._to_float(raw_tf.get("kinetic_level", 0.0), 0.0)
+            if kinetic < 0.0:
+                kinetic = 0.0
+            if kinetic > 1.0:
+                kinetic = 1.0
+
+            out_timeframes[tf] = {
+                "state": state,
+                "relative_displacement": rel,
+                "pressure_gradient": grad,
+                "distance_to_vacuum": dist,
+                "kinetic_level": kinetic,
+            }
+
+        return {"timeframes": out_timeframes}
+
+    @staticmethod
+    def _zero_mtf_tf() -> dict[str, float | int]:
+        return {
+            "state": 0,
+            "relative_displacement": 0.0,
+            "pressure_gradient": 0.0,
+            "distance_to_vacuum": 0.0,
+            "kinetic_level": 0.0,
+        }

@@ -1,0 +1,15 @@
+{
+  "run_id": "stage3_SPY_US_20260310_145117",
+  "stage": "stage3_weekly_roll",
+  "symbol": "SPY.US",
+  "anchor_date_et": "2026-03-10",
+  "weeks": 12,
+  "rolling_trade_days": 22,
+  "fetch_stats": {
+    "request_count": 138,
+    "retry_count": 0,
+    "bar_count": 35841,
+    "feature_rows": 35835
+  },
+  "rows": 12
+}

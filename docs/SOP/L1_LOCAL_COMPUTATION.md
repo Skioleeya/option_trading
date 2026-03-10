@@ -58,7 +58,9 @@ flowchart LR
 - Opening ATM 在启动阶段若 `spot` 不可用，已持久化 anchor 必须进入 deferred-restore，待首个有效 `spot` 再执行严格距离校验恢复，禁止直接新开锚覆盖盘中历史
 - Wall Migration 历史必须支持后端冷存储恢复（按交易日 JSONL），服务重启后恢复最近窗口，保证盘中历史连续
 - Wall Migration 持久化失败必须显式日志降级，不得阻断 L1->L4 广播链路
-- MTFIVEngine 窗口状态必须支持后端冷存储恢复（按交易日 JSONL 快照）；重启后恢复最近窗口，减少 1m/5m/15m 暖机失真
+- MTFIVEngine 必须采用几何状态机（`state=-1|0|1` + `relative_displacement/pressure_gradient/distance_to_vacuum/kinetic_level`），禁止输出统计语义字段（如 `zscore/z/strength`）
+- 多周期输入必须独立封帧（1m/5m/15m 各自始末向量），禁止将同一瞬时 `atm_iv` 同步喂入所有周期
+- MTFIVEngine 几何帧状态必须支持后端冷存储恢复（按交易日 JSONL 快照）；重启后恢复最近状态，减少 1m/5m/15m 暖机失真
 - MTFIVEngine 持久化失败必须显式日志降级，不得阻断 `compute()` 与 L1->L4 广播链路
 
 ## 7. Observability

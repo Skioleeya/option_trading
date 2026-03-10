@@ -53,9 +53,10 @@ describe('decisionEngineModel', () => {
     })
 
     it('maps gex intensity to stable badge classes', () => {
-        expect(resolveGexIntensityBadgeClass('EXTREME_NEGATIVE')).toBe('badge-red-dim')
+        expect(resolveGexIntensityBadgeClass('EXTREME_NEGATIVE')).toBe('badge-hollow-purple')
         expect(resolveGexIntensityBadgeClass('STRONG_POSITIVE')).toBe('badge-hollow-green')
-        expect(resolveGexIntensityBadgeClass('MODERATE')).toBe('badge-amber')
+        expect(resolveGexIntensityBadgeClass('EXTREME_POSITIVE')).toBe('badge-amber')
+        expect(resolveGexIntensityBadgeClass('MODERATE')).toBe('badge-neutral')
         expect(resolveGexIntensityBadgeClass('NEUTRAL')).toBe('badge-neutral')
     })
 

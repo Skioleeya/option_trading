@@ -214,6 +214,7 @@ class ActiveOptionRow:
     volume: int
     turnover: float
     flow: float
+    flow_score: float
     impact_index: float
     is_sweep: bool
     flow_deg_formatted: str
@@ -225,6 +226,8 @@ class ActiveOptionRow:
     flow_d_z: float
     flow_e_z: float
     flow_g_z: float
+    is_placeholder: bool = False
+    slot_index: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -235,17 +238,16 @@ class ActiveOptionRow:
             "volume":             self.volume,
             "turnover":           round(self.turnover, 2),
             "flow":               round(self.flow, 2),
+            "flow_score":         round(self.flow_score, 4),
             "impact_index":       round(self.impact_index, 4),
             "is_sweep":           self.is_sweep,
             "flow_deg_formatted": self.flow_deg_formatted,
             "flow_volume_label":  self.flow_volume_label,
-            "flow_color":         self.flow_color,
-            "flow_glow":          self.flow_glow,
-            "flow_intensity":     self.flow_intensity,
-            "flow_direction":     self.flow_direction,
             "flow_d_z":           round(self.flow_d_z, 4),
             "flow_e_z":           round(self.flow_e_z, 4),
             "flow_g_z":           round(self.flow_g_z, 4),
+            "is_placeholder":     self.is_placeholder,
+            "slot_index":         self.slot_index,
         }
 
 
@@ -255,36 +257,28 @@ class ActiveOptionRow:
 
 @dataclass(frozen=True)
 class MTFFlowState:
-    """Multi-timeframe IV flow signal state."""
+    """Multi-timeframe geometric flow state (physics-only contract)."""
     m1: dict[str, Any]
     m5: dict[str, Any]
     m15: dict[str, Any]
-    consensus: str          # "BULLISH" | "BEARISH" | "NEUTRAL"
-    strength: float
-    alignment: float
-    align_label: str        # "ALIGNED" | "SPLIT" | "DIVERGE"
-    align_color: str
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "m1":          dict(self.m1),
-            "m5":          dict(self.m5),
-            "m15":         dict(self.m15),
-            "consensus":   self.consensus,
-            "strength":    self.strength,
-            "alignment":   self.alignment,
-            "align_label": self.align_label,
-            "align_color": self.align_color,
+            "m1": dict(self.m1),
+            "m5": dict(self.m5),
+            "m15": dict(self.m15),
         }
 
     @classmethod
     def zero_state(cls) -> "MTFFlowState":
-        empty: dict[str, Any] = {}
-        return cls(
-            m1=empty, m5=empty, m15=empty,
-            consensus="NEUTRAL", strength=0.0, alignment=0.0,
-            align_label="SPLIT", align_color="text-text-secondary",
-        )
+        neutral = {
+            "state": 0,
+            "relative_displacement": 0.0,
+            "pressure_gradient": 0.0,
+            "distance_to_vacuum": 0.0,
+            "kinetic_level": 0.0,
+        }
+        return cls(m1=dict(neutral), m5=dict(neutral), m15=dict(neutral))
 
 
 # ─────────────────────────────────────────────────────────────────────────────

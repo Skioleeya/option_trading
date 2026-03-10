@@ -1,0 +1,21 @@
+signal_name: "momentum_signal"
+version: "calibrated-stage1_SPY_US_20260310_144457"
+description: "Offline calibrated with Longbridge 1m kline (K-line only phase)."
+parameters:
+  roc_bull_threshold: 0.000500
+  roc_bear_threshold: -0.000500
+  bbo_confirmation_min: 0.100000
+  max_roc_reference: 0.005000
+  confidence_floor: 0.300000
+calibration:
+  objective: "fwd_5m_direction_accuracy"
+  symbol: "SPY.US"
+  train_start_et: "2026-02-08"
+  train_end_et: "2026-03-10"
+  accuracy: 0.510997
+  coverage: 0.168455
+  total_rows: 8109
+  signal_rows: 1366
+  scored_rows: 1364
+  correct_rows: 697
+  generated_at_et: "2026-03-10T14:44:57.058869-04:00"

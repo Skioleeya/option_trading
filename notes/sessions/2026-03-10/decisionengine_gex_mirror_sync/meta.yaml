@@ -1,0 +1,39 @@
+session_id: "2026-03-10/decisionengine_gex_mirror_sync"
+title: "decisionengine gex mirror sync"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-10 11:01:26 -04:00"
+updated_at_et: "2026-03-10 11:09:12 -04:00"
+parent_session: "2026-03-10/decisionengine_guard_jitter_fix"
+
+branch: "master"
+base_commit: "368c9b9"
+head_commit: "368c9b9"
+
+files_changed:
+  - "l4_ui/src/components/right/DecisionEngine.tsx"
+  - "l4_ui/src/components/right/decisionEngineModel.ts"
+  - "l4_ui/src/components/__tests__/decisionEngine.render.test.tsx"
+  - "l4_ui/src/components/__tests__/decisionEngineModel.test.ts"
+  - "docs/SOP/L4_FRONTEND.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-10/decisionengine_gex_mirror_sync/project_state.md"
+  - "notes/sessions/2026-03-10/decisionengine_gex_mirror_sync/open_tasks.md"
+  - "notes/sessions/2026-03-10/decisionengine_gex_mirror_sync/handoff.md"
+  - "notes/sessions/2026-03-10/decisionengine_gex_mirror_sync/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId decisionengine_gex_mirror_sync -Title \"decisionengine gex mirror sync\" -Scope \"hotfix + modularization\" -Owner \"Codex\" -ParentSession \"2026-03-10/decisionengine_guard_jitter_fix\" -Timezone \"Eastern Standard Time\""
+  - "npm --prefix l4_ui run test -- src/components/__tests__/decisionEngine.render.test.tsx src/components/__tests__/decisionEngineModel.test.ts"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "npm --prefix l4_ui run test -- src/components/__tests__/decisionEngine.render.test.tsx src/components/__tests__/decisionEngineModel.test.ts (2 files, 9 tests passed)"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict (passed)"
+tests_failed:
+  - "npm --prefix l4_ui run test -- src/components/__tests__/decisionEngine.render.test.tsx src/components/__tests__/decisionEngineModel.test.ts (spawn EPERM under default sandbox run)"
+blockers: []
+notes:
+  - "DecisionEngine GEX source now mirrors ui_state.micro_stats.net_gex when present."
+  - "Fallback gex_intensity badge mapping aligned to MicroStats semantics."

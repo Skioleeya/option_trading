@@ -40,9 +40,6 @@ class AgentG:
         # Hysteresis States (Fixing Boundary Flicker)
         self._vrp_active = False    # True if currently in VRP Veto state
         self._mtf_damped = False    # True if currently in MTF Alignment Damping state
-
-        # PP-2 FIX: EWMA smoothed MTF alignment to eliminate single-tick discrete jumps
-        self._mtf_alignment_ema: float | None = None
         
         # PP-L3C FIX: Persist last valid UI state to bridge transient calculation gaps
         self._last_ui_state: dict[str, Any] = {}
@@ -102,6 +99,65 @@ class AgentG:
         else:
             return "NEUTRAL"
 
+    @staticmethod
+    def _normalize_direction(raw: Any) -> str:
+        text = str(raw or "NEUTRAL").upper()
+        if text in ("BULLISH", "BEARISH", "NEUTRAL"):
+            return text
+        return "NEUTRAL"
+
+    @staticmethod
+    def _clamp01(raw: Any, default: float = 0.0) -> float:
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            return default
+        if value < 0.0:
+            return 0.0
+        if value > 1.0:
+            return 1.0
+        return value
+
+    def _derive_mtf_geometry(self, mtf_consensus: Any) -> tuple[int, float, float]:
+        """Derive direction/confidence/alignment from geometric MTF payload.
+
+        New schema:
+        timeframes.{1m|5m|15m}.{state, kinetic_level, ...}
+        """
+        if not isinstance(mtf_consensus, dict):
+            return 0, 0.0, 0.0
+
+        timeframes = mtf_consensus.get("timeframes")
+        if not isinstance(timeframes, dict):
+            return 0, 0.0, 0.0
+
+        states: list[int] = []
+        kinetics: list[float] = []
+        for tf in ("1m", "5m", "15m"):
+            tf_data = timeframes.get(tf, {})
+            if not isinstance(tf_data, dict):
+                continue
+
+            raw_state = tf_data.get("state")
+            if raw_state == 1 or raw_state == -1 or raw_state == 0:
+                state = int(raw_state)
+            elif raw_state == "1" or raw_state == "-1" or raw_state == "0":
+                state = int(raw_state)
+            else:
+                state = 0
+            states.append(state)
+            kinetics.append(self._clamp01(tf_data.get("kinetic_level", 0.0), 0.0))
+
+        if not states:
+            return 0, 0.0, 0.0
+
+        balance = sum(states)
+        consensus_state = 1 if balance > 0 else (-1 if balance < 0 else 0)
+        confidence = sum(kinetics) / len(kinetics) if kinetics else 0.0
+        dominant_count = max(states.count(-1), states.count(0), states.count(1))
+        alignment = dominant_count / len(states)
+        return consensus_state, self._clamp01(confidence, 0.0), self._clamp01(alignment, 0.0)
+
     async def run(self, snapshot: dict[str, Any] | Any) -> AgentResult:
         # PP-L2 Robust: snapshot can be EnrichedSnapshot or legacy dict
         # 1. Run B1 first to get dynamic thresholds from Vanna
@@ -131,8 +187,8 @@ class AgentG:
             if res.data and "ui_state" in res.data:
                 self._last_ui_state = res.data["ui_state"]
             return res
-        except Exception:
-            logger.exception("[AgentG] decide() crashed; emitting NO_TRADE safety fallback")
+        except Exception as exc:
+            logger.exception("[AgentG] decide() crashed; emitting NO_TRADE safety fallback: %s", exc)
             
             # PP-L3C: Fallback still tries to provide UI state
             data = {
@@ -213,7 +269,8 @@ class AgentG:
         )
         vanna_direction = self._map_vanna_to_direction(vanna_data.state if vanna_data else None)
         
-        mtf_direction = mtf_consensus.get("consensus", "NEUTRAL")
+        mtf_state, mtf_confidence, raw_mtf_alignment = self._derive_mtf_geometry(mtf_consensus)
+        mtf_direction = "BULLISH" if mtf_state > 0 else ("BEARISH" if mtf_state < 0 else "NEUTRAL")
         vib_direction = vib_data.consensus if vib_data else "NEUTRAL"
 
         # Update weight engine
@@ -250,7 +307,8 @@ class AgentG:
                  import pyarrow as pa
                  if isinstance(snapshot.chain, pa.RecordBatch):
                      per_strike = snapshot.chain.to_pylist()
-             except: pass
+             except Exception as exc:
+                 logger.debug("[AgentG] pyarrow chain fast-path unavailable: %s", exc)
 
         atm_tox_vals: list[float] = []
         atm_bbo_vals: list[float] = []
@@ -331,7 +389,7 @@ class AgentG:
             vanna_signal={"direction": vanna_direction, "confidence": vanna_confidence},
             mtf_signal={
                 "direction": mtf_direction,
-                "confidence": mtf_consensus.get("strength", 0.5),
+                "confidence": mtf_confidence,
             },
             vib_signal={
                 "direction": vib_direction,
@@ -381,16 +439,7 @@ class AgentG:
 
         # Phase 25B — MTF Alignment confidence dampener (Paper 1)
         # Paper: Dim et al. (SSRN #4692190) — MTF alignment < 0.34 → confidence cut 50%
-        raw_mtf_alignment = mtf_consensus.get("alignment", 1.0)
-
-        # PP-2 FIX: EWMA smooth the raw alignment to eliminate single-vote discrete jumps.
-        # e.g. one TF switching from NEUTRAL→BULLISH flipped alignment 0.33→0.67 instantly.
-        alpha = settings.mtf_alignment_ewma_alpha
-        if self._mtf_alignment_ema is None:
-            self._mtf_alignment_ema = raw_mtf_alignment
-        else:
-            self._mtf_alignment_ema = alpha * raw_mtf_alignment + (1 - alpha) * self._mtf_alignment_ema
-        mtf_alignment = self._mtf_alignment_ema
+        mtf_alignment = raw_mtf_alignment
 
         # PP-2 FIX: Hysteresis thresholds now come from settings (were hardcoded 0.34/0.38)
         mtf_entry_th = settings.mtf_alignment_damp_entry

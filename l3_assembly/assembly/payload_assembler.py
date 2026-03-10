@@ -352,7 +352,8 @@ class PayloadAssemblerV2:
             delay = (computed_dt - source_dt).total_seconds()
             drift_ms = delay * 1000.0
             return drift_ms, delay > 0.8
-        except Exception:
+        except Exception as exc:
+            logger.warning(f"[L3 Assembler] Drift calculation failed: {exc}")
             return 0.0, False
 
     @staticmethod
@@ -477,6 +478,7 @@ def _convert_active_option(d: dict) -> Any:
         volume=int(d.get("volume", 0) or 0),
         turnover=float(d.get("turnover", 0.0) or 0.0),
         flow=float(d.get("flow", 0.0) or 0.0),
+        flow_score=float(d.get("flow_score", 0.0) or 0.0),
         impact_index=float(d.get("impact_index", 0.0) or 0.0),
         is_sweep=bool(d.get("is_sweep", False)),
         flow_deg_formatted=str(d.get("flow_deg_formatted", "$0")),
@@ -488,4 +490,6 @@ def _convert_active_option(d: dict) -> Any:
         flow_d_z=float(d.get("flow_d_z", 0.0) or 0.0),
         flow_e_z=float(d.get("flow_e_z", 0.0) or 0.0),
         flow_g_z=float(d.get("flow_g_z", 0.0) or 0.0),
+        is_placeholder=bool(d.get("is_placeholder", False)),
+        slot_index=int(d.get("slot_index", 0) or 0),
     )

@@ -1,0 +1,144 @@
+# Handoff
+
+## Session Summary
+- DateTime (ET): 2026-03-10 14:37:00 -04:00
+- Goal: 在 MVP 校验基础上，实装独立 MOMENTUM 阈值校准工具链（K线先行，Research 接口预留）。
+- Outcome: 已新增 `tools/momentum_calibration` 模块化目录、Stage1/2/3 CLI、输出契约与单元测试，并完成端到端实跑。
+
+## What Changed
+- Code / Docs Files:
+  - l1_compute/analysis/mtf_iv_engine.py
+  - l1_compute/reactor.py
+  - l1_compute/trackers/mtf_iv_persistence.py
+  - l1_compute/trackers/mtf_iv_window_storage.py
+  - l1_compute/tests/test_mtf_iv_engine_geometry.py
+  - l1_compute/tests/test_mtf_iv_persistence.py
+  - l2_decision/agents/agent_g.py
+  - l3_assembly/assembly/ui_state_tracker.py
+  - l3_assembly/events/payload_events.py
+  - l3_assembly/presenters/active_options.py
+  - l3_assembly/assembly/payload_assembler.py
+  - shared/services/active_options/runtime_service.py
+  - shared/services/active_options/test_runtime_service.py
+  - l4_ui/src/components/right/activeOptionsModel.ts
+  - l4_ui/src/components/right/ActiveOptions.tsx
+  - l4_ui/src/components/__tests__/activeOptions.model.test.ts
+  - shared/config/websocket.py
+  - app/loops/compute_loop.py
+  - app/loops/tests/test_compute_loop_helpers.py
+  - docs/SOP/SYSTEM_OVERVIEW.md
+  - l3_assembly/presenters/mtf_flow.py
+  - l3_assembly/tests/test_presenters.py
+  - l3_assembly/tests/test_reactor.py
+  - l3_assembly/tests/test_research_feature_store.py
+  - l3_assembly/tests/test_ui_state_tracker.py
+  - l4_ui/src/types/dashboard.ts
+  - l4_ui/src/components/right/mtfFlowModel.ts
+  - l4_ui/src/components/right/MtfFlow.tsx
+  - l4_ui/src/components/__tests__/mtfFlow.model.test.ts
+  - l4_ui/src/components/__tests__/rightPanelContract.integration.test.tsx
+  - l4_ui/src/components/__tests__/debugOverlayModel.test.ts
+  - l4_ui/src/store/__tests__/dashboardStore.test.ts
+  - docs/SOP/L1_LOCAL_COMPUTATION.md
+  - docs/SOP/L3_OUTPUT_ASSEMBLY.md
+  - docs/SOP/L4_FRONTEND.md
+  - scripts/test/mvp_longport_history_et.py
+  - tools/momentum_calibration/config.py
+  - tools/momentum_calibration/models.py
+  - tools/momentum_calibration/sources/longbridge_kline.py
+  - tools/momentum_calibration/sources/research_adapter.py
+  - tools/momentum_calibration/features/kline_features.py
+  - tools/momentum_calibration/optimize/roc_threshold_search.py
+  - tools/momentum_calibration/eval/oos_eval.py
+  - tools/momentum_calibration/io/report_writer.py
+  - tools/momentum_calibration/workflows/stage1_train.py
+  - tools/momentum_calibration/workflows/stage2_oos.py
+  - tools/momentum_calibration/workflows/stage3_weekly_roll.py
+  - tools/momentum_calibration/tests/test_longbridge_kline.py
+  - tools/momentum_calibration/tests/test_kline_features.py
+  - tools/momentum_calibration/tests/test_roc_threshold_search.py
+  - tools/momentum_calibration/tests/test_research_adapter.py
+  - tools/momentum_calibration/README.md
+  - docs/SOP/L2_DECISION_ANALYSIS.md
+- Runtime / Infra Changes:
+  - MTF 输出合同改为纯物理字段：`state, relative_displacement, pressure_gradient, distance_to_vacuum, kinetic_level`。
+  - L1 多周期改为独立封帧向量更新，不再同 tick 同步喂 1m/5m/15m。
+  - L4 MTF 渲染改为前端本地白名单映射，不信任后端样式字段。
+  - 新增离线 MOMENTUM 校准工具链，与 L0-L4 主链完全解耦（仅 CLI 使用）。
+  - Stage1: 最近1个月训练 ROC 双阈值；Stage2: 前一月 OOS；Stage3: 每周滚动（22交易日窗）。
+  - 固定参数策略：`bbo_confirmation_min/max_roc_reference/confidence_floor` 保持线上值，不参与本轮优化。
+- Commands Run:
+  - powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId mtf_flow_geometry_refactor -Title "mtf flow geometry refactor" -Scope "l1+l3+l4 contract hardening" -Owner "Codex" -ParentSession "2026-03-10/decisionengine_gex_mirror_sync" -Timezone "Eastern Standard Time"
+  - python -m py_compile l1_compute/analysis/mtf_iv_engine.py l1_compute/reactor.py l1_compute/trackers/mtf_iv_persistence.py l1_compute/trackers/mtf_iv_window_storage.py l2_decision/agents/agent_g.py l3_assembly/assembly/ui_state_tracker.py l3_assembly/presenters/mtf_flow.py l3_assembly/events/payload_events.py
+  - powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_mtf_iv_engine_geometry.py l1_compute/tests/test_mtf_iv_persistence.py l3_assembly/tests/test_presenters.py l3_assembly/tests/test_reactor.py l3_assembly/tests/test_ui_state_tracker.py
+  - powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l2_decision/tests/test_reactor_and_guards.py l2_decision/tests/test_institutional_integration.py l3_assembly/tests/test_payload_events.py
+  - powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l2_decision/tests/test_reactor_and_guards.py
+  - npm --prefix l4_ui run test -- src/components/__tests__/mtfFlow.model.test.ts src/components/__tests__/rightPanelContract.integration.test.tsx src/store/__tests__/dashboardStore.test.ts src/components/__tests__/debugOverlayModel.test.ts
+  - npm --prefix l4_ui run build
+  - powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict
+  - powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l2_decision/tests/test_reactor_and_guards.py l3_assembly/tests/test_payload_events.py l3_assembly/tests/test_presenters.py
+  - npm --prefix l4_ui run test -- src/components/__tests__/mtfFlow.model.test.ts src/components/__tests__/rightPanelContract.integration.test.tsx
+  - powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict
+  - powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 shared/services/active_options/test_runtime_service.py l3_assembly/tests/test_payload_events.py l3_assembly/tests/test_presenters.py l3_assembly/tests/test_reactor.py
+  - npm --prefix l4_ui run test -- src/components/__tests__/activeOptions.model.test.ts src/components/__tests__/rightPanelContract.integration.test.tsx
+  - powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict
+  - powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/loops/tests/test_compute_loop_helpers.py
+  - powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict
+  - python -m py_compile scripts/test/mvp_longport_history_et.py
+  - $env:PYTHONPATH='.'; python scripts/test/mvp_longport_history_et.py --symbol SPY.US --count 2
+  - python -m py_compile tools/momentum_calibration/config.py tools/momentum_calibration/models.py tools/momentum_calibration/sources/longbridge_kline.py tools/momentum_calibration/sources/research_adapter.py tools/momentum_calibration/features/kline_features.py tools/momentum_calibration/optimize/roc_threshold_search.py tools/momentum_calibration/eval/oos_eval.py tools/momentum_calibration/io/report_writer.py tools/momentum_calibration/workflows/common.py tools/momentum_calibration/workflows/stage1_train.py tools/momentum_calibration/workflows/stage2_oos.py tools/momentum_calibration/workflows/stage3_weekly_roll.py
+  - powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 tools/momentum_calibration/tests
+  - $env:PYTHONPATH='.'; python tools/momentum_calibration/workflows/stage1_train.py --symbol SPY.US --end-date 2026-03-10
+  - $env:PYTHONPATH='.'; python tools/momentum_calibration/workflows/stage2_oos.py --symbol SPY.US --train-run-id stage1_SPY_US_20260310_143505
+  - $env:PYTHONPATH='.'; python tools/momentum_calibration/workflows/stage3_weekly_roll.py --symbol SPY.US --anchor-date 2026-03-10 --weeks 4
+
+## Verification
+- Passed:
+  - `scripts/test/run_pytest.ps1` 目标集：L1/L2/L3 共 222 tests passed（分批执行均通过）
+  - `npm --prefix l4_ui run test -- ...`：4 files, 23 tests passed
+  - `scripts/test/run_pytest.ps1 l2_decision/tests/test_reactor_and_guards.py l3_assembly/tests/test_payload_events.py l3_assembly/tests/test_presenters.py`：118 passed（提权重跑后全绿）
+  - `npm --prefix l4_ui run test -- src/components/__tests__/mtfFlow.model.test.ts src/components/__tests__/rightPanelContract.integration.test.tsx`：2 files, 5 passed（提权重跑）
+  - `powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict`：passed（post-hardening）
+  - `scripts/test/run_pytest.ps1 shared/services/active_options/test_runtime_service.py l3_assembly/tests/test_payload_events.py l3_assembly/tests/test_presenters.py l3_assembly/tests/test_reactor.py`：83 passed
+  - `npm --prefix l4_ui run test -- src/components/__tests__/activeOptions.model.test.ts src/components/__tests__/rightPanelContract.integration.test.tsx`：2 files, 14 passed（提权重跑）
+  - `powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict`：passed（post-active-options-fixed5）
+  - `scripts/test/run_pytest.ps1 app/loops/tests/test_compute_loop_helpers.py`：8 passed
+  - `powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict`：passed（post-drift-probe-config）
+  - `python -m py_compile scripts/test/mvp_longport_history_et.py`：passed
+  - `python scripts/test/mvp_longport_history_et.py --symbol SPY.US --count 2`：passed（示例: `2026-03-10 14:07:00 -> 2026-03-10T14:07:00-04:00 -> 2026-03-10T18:07:00+00:00`）
+  - `scripts/test/run_pytest.ps1 tools/momentum_calibration/tests`：9 passed
+  - `python tools/momentum_calibration/workflows/stage1_train.py --symbol SPY.US --end-date 2026-03-10`：passed（run_id=stage1_SPY_US_20260310_143505）
+  - `python tools/momentum_calibration/workflows/stage2_oos.py --symbol SPY.US --train-run-id stage1_SPY_US_20260310_143505`：passed（acc=0.5159）
+  - `python tools/momentum_calibration/workflows/stage3_weekly_roll.py --symbol SPY.US --anchor-date 2026-03-10 --weeks 4`：passed（run_id=stage3_SPY_US_20260310_143659）
+- Failed / Not Run:
+  - `npm --prefix l4_ui run build` 失败（既有问题）：`src/components/__tests__/debugHotkey.integration.test.tsx` TS6133 / TS2345
+
+## Pending
+- Must Do Next:
+  - 观察实盘稀疏时段 Active Options 是否稳定固定5行且无旧帧残留。
+  - 低频分段拉取近1个月 `SPY.US` 1m K线，为 MOMENTUM 阈值优化准备样本。
+  - 待 research 历史充足后替换 `ResearchFeatureProvider` 空实现并启用 BBO 联合优化。
+- Nice to Have:
+  - 清理 `l3_assembly/presenters/ui/mtf_flow` 空目录与历史引用说明。
+  - 处理 `debugHotkey.integration.test.tsx` 既有 TS 错误以恢复 build 全绿。
+
+## Debt Record (Mandatory)
+- DEBT-EXEMPT: 本会话存在未勾选 P2（build 既有错误、目录清理）为非 P0/P1 交付阻断项
+- DEBT-OWNER: Codex
+- DEBT-DUE: 2026-03-12
+- DEBT-RISK: 不影响运行时合同正确性，但影响 `npm build` 全绿与目录整洁度
+- DEBT-NEW: 0
+- DEBT-CLOSED: 0
+- DEBT-DELTA: 0
+- DEBT-JUSTIFICATION: 未新增高优债务；现存未勾选项为既有/清理项
+- RUNTIME-ARTIFACT-EXEMPT: N/A
+
+## How To Continue
+- Start Command:
+  - powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict
+- Key Logs:
+  - [L1 MTFIVPersistence]
+  - [L3 Assembler]
+  - [AgentG]
+- First File To Read:
+  - l1_compute/analysis/mtf_iv_engine.py

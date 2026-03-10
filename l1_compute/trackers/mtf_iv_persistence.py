@@ -1,4 +1,4 @@
-"""Persistence coordinator for MTF IV rolling-window state."""
+"""Persistence coordinator for MTF IV geometric frame state."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ _ET = ZoneInfo("US/Eastern")
 
 
 class MTFIVWindowPersistence:
-    """Coordinates trade-day bootstrap and snapshot persistence for MTF IV windows."""
+    """Coordinates trade-day bootstrap and snapshot persistence for MTF state."""
 
     def __init__(
         self,
@@ -51,7 +51,7 @@ class MTFIVWindowPersistence:
 
         if self._active_date is not None and self._active_date != date_str:
             logger.info(
-                "[L1 MTFIVPersistence] Trade date rollover detected: %s -> %s. Resetting MTF windows.",
+                "[L1 MTFIVPersistence] Trade date rollover detected: %s -> %s. Resetting MTF state.",
                 self._active_date,
                 date_str,
             )
@@ -69,17 +69,28 @@ class MTFIVWindowPersistence:
             return date_str
 
         if restored:
-            windows = restored[-1].get("windows", {})
-            if isinstance(windows, dict):
-                engine.restore_state(windows)
+            latest = restored[-1]
+            # Preferred schema: {"state": {...}}
+            state = latest.get("state")
+            if isinstance(state, dict):
+                engine.restore_state(state)
                 logger.info(
-                    "[L1 MTFIVPersistence] Restored MTF windows from cold storage date=%s",
+                    "[L1 MTFIVPersistence] Restored MTF state from cold storage date=%s",
                     date_str,
                 )
+            else:
+                # Backward compatibility with old {"windows": {...}} schema.
+                windows = latest.get("windows")
+                if isinstance(windows, dict):
+                    engine.restore_state({"windows": windows})
+                    logger.info(
+                        "[L1 MTFIVPersistence] Restored legacy MTF windows from cold storage date=%s",
+                        date_str,
+                    )
         return date_str
 
     def persist_snapshot(self, *, date_str: str, now_et: datetime | None, engine: MTFIVEngine) -> None:
-        """Persist current engine windows; storage failures degrade via logs only."""
+        """Persist current engine state; storage failures degrade via logs only."""
         if self._storage is None:
             return
         now_real = self._coerce_now_et(now_et)
@@ -88,7 +99,7 @@ class MTFIVWindowPersistence:
                 date_str,
                 {
                     "timestamp": now_real.isoformat(),
-                    "windows": engine.export_state(),
+                    "state": engine.export_state(),
                 },
             )
         except Exception as exc:

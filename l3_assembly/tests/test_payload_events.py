@@ -205,6 +205,36 @@ class TestDepthProfileRow:
         }
 
 
+class TestActiveOptionRow:
+    def test_to_dict_includes_placeholder_contract_fields(self):
+        row = ActiveOptionRow(
+            symbol="SPY",
+            option_type="CALL",
+            strike=560.0,
+            implied_volatility=0.2,
+            volume=1000,
+            turnover=100000.0,
+            flow=1200.0,
+            flow_score=-0.8,
+            impact_index=12.3,
+            is_sweep=False,
+            flow_deg_formatted="$1.2K",
+            flow_volume_label="1K",
+            flow_color="text-accent-red",
+            flow_glow="",
+            flow_intensity="LOW",
+            flow_direction="BULLISH",
+            flow_d_z=0.1,
+            flow_e_z=0.2,
+            flow_g_z=0.3,
+            is_placeholder=True,
+            slot_index=4,
+        )
+        payload = row.to_dict()
+        assert payload["is_placeholder"] is True
+        assert payload["slot_index"] == 4
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # UIState tests
 # ─────────────────────────────────────────────────────────────────────────────

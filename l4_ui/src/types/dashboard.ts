@@ -75,6 +75,8 @@ export interface ActiveOption {
     volume: number
     turnover: number
     flow: number
+    // DEG composite score (directional z-score) for diagnostics, not FLOW color semantics.
+    flow_score?: number
     impact_index?: number
     is_sweep?: boolean
     // DEG-specific extended fields
@@ -84,6 +86,8 @@ export interface ActiveOption {
     flow_glow?: string
     flow_intensity?: 'EXTREME' | 'HIGH' | 'MODERATE' | 'LOW'
     flow_direction?: 'BULLISH' | 'BEARISH' | 'NEUTRAL'
+    is_placeholder?: boolean
+    slot_index?: number
 }
 
 export interface TacticalTriadCard {
@@ -116,28 +120,17 @@ export interface SkewDynamicsState {
 }
 
 export interface MtfTfState {
-    direction: string
-    regime: string
-    regime_label: string
-    z: number
-    strength: number
-    tier: string
-    dot_color: string
-    text_color: string
-    shadow: string
-    border: string
-    animate: string
+    state: -1 | 0 | 1
+    relative_displacement: number
+    pressure_gradient: number
+    distance_to_vacuum: number
+    kinetic_level: number
 }
 
 export interface MtfFlowState {
     m1: MtfTfState
     m5: MtfTfState
     m15: MtfTfState
-    consensus: 'BULLISH' | 'BEARISH' | 'NEUTRAL'
-    strength: number
-    alignment: number
-    align_label: string
-    align_color: string
 }
 
 export interface AgentBData {
@@ -151,7 +144,18 @@ export interface AgentBData {
     iv_confidence: number
     wall_confidence: number
     vanna_confidence: number
-    mtf_consensus: { consensus: string; strength: number; timeframes: Record<string, string> }
+    mtf_consensus: {
+        timeframes: Record<
+            string,
+            {
+                state: number
+                relative_displacement: number
+                pressure_gradient: number
+                distance_to_vacuum: number
+                kinetic_level: number
+            }
+        >
+    }
 }
 
 export interface AgentAData {

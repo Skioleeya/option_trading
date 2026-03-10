@@ -18,10 +18,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_IV_EPSILON = 1e-6
-_IV_DRIFT_CONFIRM_TICKS = 3
-_IV_DRIFT_ONGOING_LOG_EVERY_TICKS = 5
-
 
 def _normalize_volume_map(raw: Any) -> dict[str, float]:
     """Normalize volume_map into a JSON-safe strike->volume dict."""
@@ -142,8 +138,10 @@ def _extract_runtime_spy_atm_iv(
 class _SnapshotVersionIvDriftProbe:
     """Runtime probe for snapshot_version vs spy_atm_iv drift behavior."""
 
-    confirm_ticks: int = _IV_DRIFT_CONFIRM_TICKS
-    epsilon: float = _IV_EPSILON
+    confirm_ticks: int = int(settings.snapshot_iv_probe_confirm_ticks)
+    epsilon: float = float(settings.snapshot_iv_probe_epsilon)
+    activate_lag_seconds: float = float(settings.snapshot_iv_probe_activate_lag_seconds)
+    ongoing_log_interval_seconds: float = float(settings.snapshot_iv_probe_ongoing_log_interval_seconds)
     last_version: int | None = None
     last_iv: float | None = None
     consecutive_drift_ticks: int = 0
@@ -153,6 +151,7 @@ class _SnapshotVersionIvDriftProbe:
     current_lag_seconds: float = 0.0
     last_completed_lag_seconds: float = 0.0
     degraded_reason: str | None = None
+    next_ongoing_log_lag_seconds: float = 0.0
 
     def observe(
         self,
@@ -194,6 +193,8 @@ class _SnapshotVersionIvDriftProbe:
         return {
             "confirm_ticks": self.confirm_ticks,
             "epsilon": self.epsilon,
+            "activate_lag_seconds": self.activate_lag_seconds,
+            "ongoing_log_interval_seconds": self.ongoing_log_interval_seconds,
             "last_version": self.last_version,
             "last_spy_atm_iv": self.last_iv,
             "consecutive_drift_ticks": self.consecutive_drift_ticks,
@@ -209,26 +210,39 @@ class _SnapshotVersionIvDriftProbe:
         if self.lag_start_monotonic is None:
             self.lag_start_monotonic = now_monotonic
 
-        if self.consecutive_drift_ticks >= self.confirm_ticks and not self.drift_active:
+        if self.lag_start_monotonic is not None:
+            self.current_lag_seconds = max(0.0, now_monotonic - self.lag_start_monotonic)
+
+        can_activate = (
+            self.consecutive_drift_ticks >= self.confirm_ticks
+            and self.current_lag_seconds >= max(0.0, float(self.activate_lag_seconds))
+        )
+        if can_activate and not self.drift_active:
             self.drift_active = True
             self.mismatch_count += 1
+            self.next_ongoing_log_lag_seconds = self.current_lag_seconds + max(
+                0.0, float(self.ongoing_log_interval_seconds)
+            )
             logger.warning(
-                "[OBS] snapshot_version_iv_drift_start version=%s spy_atm_iv=%.6f confirm_ticks=%s mismatch_count=%s",
+                "[OBS] snapshot_version_iv_drift_start version=%s spy_atm_iv=%.6f confirm_ticks=%s lag_seconds=%.3f mismatch_count=%s",
                 version,
                 iv_value,
                 self.confirm_ticks,
+                self.current_lag_seconds,
                 self.mismatch_count,
             )
 
-        if self.drift_active and self.lag_start_monotonic is not None:
-            self.current_lag_seconds = max(0.0, now_monotonic - self.lag_start_monotonic)
-            if self.consecutive_drift_ticks % _IV_DRIFT_ONGOING_LOG_EVERY_TICKS == 0:
+        if self.drift_active:
+            if self.current_lag_seconds >= self.next_ongoing_log_lag_seconds:
                 logger.warning(
                     "[OBS] snapshot_version_iv_drift_ongoing version=%s spy_atm_iv=%.6f drift_ticks=%s lag_seconds=%.3f",
                     version,
                     iv_value,
                     self.consecutive_drift_ticks,
                     self.current_lag_seconds,
+                )
+                self.next_ongoing_log_lag_seconds = self.current_lag_seconds + max(
+                    0.0, float(self.ongoing_log_interval_seconds)
                 )
 
         self.last_version = version
@@ -250,6 +264,7 @@ class _SnapshotVersionIvDriftProbe:
         self.consecutive_drift_ticks = 0
         self.lag_start_monotonic = None
         self.current_lag_seconds = 0.0
+        self.next_ongoing_log_lag_seconds = 0.0
         self.last_version = version
         self.last_iv = iv_value
 
@@ -315,7 +330,12 @@ async def run_compute_loop(ctr: 'AppContainer', state: SharedLoopState) -> None:
     Runs at a constant cadence defined by websocket_update_interval.
     """
     next_tick = time.monotonic()
-    version_iv_probe = _SnapshotVersionIvDriftProbe()
+    version_iv_probe = _SnapshotVersionIvDriftProbe(
+        confirm_ticks=max(1, int(settings.snapshot_iv_probe_confirm_ticks)),
+        epsilon=max(0.0, float(settings.snapshot_iv_probe_epsilon)),
+        activate_lag_seconds=max(0.0, float(settings.snapshot_iv_probe_activate_lag_seconds)),
+        ongoing_log_interval_seconds=max(0.0, float(settings.snapshot_iv_probe_ongoing_log_interval_seconds)),
+    )
 
     while True:
         try:

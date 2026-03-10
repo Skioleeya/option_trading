@@ -35,7 +35,7 @@ describe('buildDebugOverlayModel', () => {
                         iv_confidence: 0,
                         wall_confidence: 0,
                         vanna_confidence: 0,
-                        mtf_consensus: { consensus: 'NEUTRAL', strength: 0, timeframes: {} },
+                        mtf_consensus: { timeframes: {} },
                     },
                 },
                 net_gex: null,

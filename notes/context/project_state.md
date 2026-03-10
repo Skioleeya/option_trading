@@ -1,16 +1,17 @@
 ﻿# Project State (Index)
 
 ## Active Session
-- Path: notes/sessions/2026-03-09/research_feature_store_compact_history/project_state.md
-- Meta: notes/sessions/2026-03-09/research_feature_store_compact_history/meta.yaml
+- Path: notes/sessions/2026-03-10/mtf_flow_geometry_refactor/project_state.md
+- Meta: notes/sessions/2026-03-10/mtf_flow_geometry_refactor/meta.yaml
 - Status: ACTIVE
+- Focus: MTF/ActiveOptions稳态已完成；新增独立 `tools/momentum_calibration` 工具链（K线先行、Research接口预留）并完成Stage1/2/3实跑验证
 
 ## Recent Sessions
+- notes/sessions/2026-03-10/mtf_flow_geometry_refactor/
+- notes/sessions/2026-03-10/decisionengine_gex_mirror_sync/
+- notes/sessions/2026-03-10/decisionengine_guard_jitter_fix/
+- notes/sessions/2026-03-10/flow_semantics_contract_fix/
 - notes/sessions/2026-03-09/research_feature_store_compact_history/
-- notes/sessions/2026-03-09/mtf_iv_window_restart_persistence/
-- notes/sessions/2026-03-09/active_options_asian_state_normalize/
-- notes/sessions/2026-03-09/l4_asian_color_fix_micro_gex/
-- notes/sessions/2026-03-09/atm_anchor_deferred_restore/
 
 ## Global Rules
 - Session folders are immutable records; do not overwrite prior sessions.

@@ -43,7 +43,7 @@ function makePayload(overrides: Partial<DashboardPayload> = {}): DashboardPayloa
                         iv_confidence: 0.9,
                         wall_confidence: 0.8,
                         vanna_confidence: 0.7,
-                        mtf_consensus: { consensus: 'BULLISH', strength: 0.72, timeframes: {} },
+                        mtf_consensus: { timeframes: {} },
                     },
                 },
                 net_gex: 120.5,

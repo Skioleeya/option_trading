@@ -123,9 +123,9 @@ class L1ComputeReactor:
                 logger.error("[L1ComputeReactor] MTF persistence init failed: %s", exc)
                 self._mtf_persistence = None
 
-        # MTF intervals and buffers for VSRSD
+        # MTF intervals and buffers (per-timeframe geometric frames)
         self._MTF_INTERVALS: dict[str, float] = {"1m": 60.0, "5m": 300.0, "15m": 900.0}
-        self._mtf_buf: dict[str, list[float]] = {"1m": [], "5m": [], "15m": []}
+        self._mtf_buf: dict[str, list[tuple[float, float]]] = {"1m": [], "5m": [], "15m": []}
         self._mtf_last_push: dict[str, float] = {"1m": 0.0, "5m": 0.0, "15m": 0.0}
 
         # SABR state
@@ -465,13 +465,24 @@ class L1ComputeReactor:
         has_mtf_window_update = False
         if atm_iv > 0:
             for tf, interval in self._MTF_INTERVALS.items():
-                self._mtf_buf[tf].append(atm_iv)
+                self._mtf_buf[tf].append((sim_clock_mono, atm_iv))
                 if (sim_clock_mono - self._mtf_last_push[tf]) >= interval:
-                    bar_mean = sum(self._mtf_buf[tf]) / len(self._mtf_buf[tf])
-                    self._mtf_iv_engine.update(tf, bar_mean)
+                    buf = self._mtf_buf[tf]
+                    did_update = False
+                    if len(buf) >= 2:
+                        start_ts, start_iv = buf[0]
+                        end_ts, end_iv = buf[-1]
+                        dt_seconds = max(end_ts - start_ts, 1e-6)
+                        self._mtf_iv_engine.update_frame(
+                            tf,
+                            start_iv=float(start_iv),
+                            end_iv=float(end_iv),
+                            dt_seconds=float(dt_seconds),
+                        )
+                        did_update = True
                     self._mtf_buf[tf].clear()
                     self._mtf_last_push[tf] = sim_clock_mono
-                    has_mtf_window_update = True
+                    has_mtf_window_update = has_mtf_window_update or did_update
 
         if has_mtf_window_update and self._mtf_persistence is not None and mtf_date is not None:
             self._mtf_persistence.persist_snapshot(
@@ -480,9 +491,7 @@ class L1ComputeReactor:
                 engine=self._mtf_iv_engine,
             )
 
-        mtf_consensus = self._mtf_iv_engine.compute({
-            "1m":  atm_iv, "5m":  atm_iv, "15m": atm_iv,
-        })
+        mtf_consensus = self._mtf_iv_engine.compute()
 
         # 2d. Volume Imbalance & Jump Detection
         vib_result = self._vib_engine.update(

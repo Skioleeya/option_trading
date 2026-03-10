@@ -1,8 +1,8 @@
 ﻿# Open Tasks (Index)
 
 ## Active Session Tasks
-- Path: notes/sessions/2026-03-09/research_feature_store_compact_history/open_tasks.md
-- Focus: 研究特征库三层持久化与 `/history` compact 投影下载优化。
+- Path: notes/sessions/2026-03-10/mtf_flow_geometry_refactor/open_tasks.md
+- Status: P0/P1 completed (含 ActiveOptions fixed-5 + drift probe config化 + momentum_calibration模块化工具链); pending P2 cleanup items (pre-existing build issue + directory hygiene)
 
 ## Global Backlog (Cross-Session)
 - [ ] P2: Stage2 remove `DecisionOutput.to_legacy_agent_result` and migrate compute-loop/L3 to typed-contract direct path (Owner: Codex, DUE: 2026-03-12).

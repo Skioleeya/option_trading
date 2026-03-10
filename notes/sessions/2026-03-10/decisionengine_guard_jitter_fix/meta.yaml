@@ -1,0 +1,47 @@
+session_id: "2026-03-10/decisionengine_guard_jitter_fix"
+title: "decisionengine guard jitter fix"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-10 10:29:07 -04:00"
+updated_at_et: "2026-03-10 10:49:20 -04:00"
+parent_session: "2026-03-10/flow_semantics_contract_fix"
+
+branch: "master"
+base_commit: "368c9b9"
+head_commit: "368c9b9"
+
+files_changed:
+  - "l2_decision/guards/rail_engine.py"
+  - "l2_decision/reactor.py"
+  - "l2_decision/tests/test_reactor_and_guards.py"
+  - "l4_ui/src/components/right/DecisionEngine.tsx"
+  - "l4_ui/src/components/__tests__/decisionEngine.render.test.tsx"
+  - "docs/SOP/L2_DECISION_ANALYSIS.md"
+  - "docs/SOP/L4_FRONTEND.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-10/decisionengine_guard_jitter_fix/project_state.md"
+  - "notes/sessions/2026-03-10/decisionengine_guard_jitter_fix/open_tasks.md"
+  - "notes/sessions/2026-03-10/decisionengine_guard_jitter_fix/handoff.md"
+  - "notes/sessions/2026-03-10/decisionengine_guard_jitter_fix/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId decisionengine_guard_jitter_fix -Title \"decisionengine guard jitter fix\" -Scope \"hotfix + modularization\" -Owner \"Codex\" -ParentSession \"2026-03-10/flow_semantics_contract_fix\" -Timezone \"Eastern Standard Time\""
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l2_decision/tests/test_reactor_and_guards.py -k \"vrp_veto or reset_session_calls_stateful_rule_reset\""
+  - "npm --prefix l4_ui run test -- src/components/__tests__/decisionEngine.render.test.tsx"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l2_decision/tests/test_reactor_and_guards.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l2_decision/tests/test_reactor_and_guards.py -k \"vrp_veto or reset_session_calls_stateful_rule_reset\""
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "scripts/test/run_pytest.ps1 l2_decision/tests/test_reactor_and_guards.py -k \"vrp_veto or reset_session_calls_stateful_rule_reset\" (5 passed)"
+  - "npm --prefix l4_ui run test -- src/components/__tests__/decisionEngine.render.test.tsx (2 passed)"
+  - "scripts/validate_session.ps1 -Strict (passed)"
+tests_failed:
+  - "scripts/test/run_pytest.ps1 l2_decision/tests/test_reactor_and_guards.py (9 failed, 47 passed) [existing local temp permission issues]"
+  - "npm --prefix l4_ui run test -- src/components/__tests__/decisionEngine.render.test.tsx (spawn EPERM under default sandbox run)"
+blockers: []
+notes:
+  - "DecisionEngine no longer consumes fused_signal.explanation."
+  - "VRP veto now uses hysteresis and session reset-safe state."

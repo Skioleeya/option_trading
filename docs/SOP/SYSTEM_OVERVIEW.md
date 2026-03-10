@@ -1,6 +1,6 @@
 # SPY 0DTE Dashboard SOP — SYSTEM OVERVIEW
 
-> Version: 2026-03-09
+> Version: 2026-03-10
 > Scope: L0/L1/L2/L3/L4 + app orchestration + shared services
 
 ## 1. Mission
@@ -146,6 +146,8 @@ sequenceDiagram
 - 当显式关闭 strict 开关时，Runtime 建连失败可降级运行，但必须输出结构化诊断日志。
 - Runtime 建连失败需有限次退避重试后再判定失败（避免瞬时网络抖动直接进入长时间降级）。
 - 降级模式必须有明确日志。
+- 运维启动必须遵循 probe-first：先检查 `/health`、`5173`、`6380`，仅对 DOWN 组件执行启动，避免重复启动导致 `WinError 10048`。
+- 当 `8001` 端口冲突时，先以 `/health` 判定是否已有健康实例在跑；仅在需要替换实例时才释放端口占用进程。
 - LongPort Quote API 配额守卫必须持续生效:
   - 同时订阅 symbols <= 500（超限自动裁剪）
   - REST 调用频率 <= 10/s（配置超限时运行时钳制）
@@ -165,6 +167,8 @@ sequenceDiagram
 
 - `/health`
 - `/debug/persistence_status`
+- `snapshot_version_iv_probe` 告警阈值必须由配置驱动（`snapshot_iv_probe_*`），禁止在探针逻辑中写死 tick/秒阈值
+- 漂移告警启用推荐为“时间阈值 + 连续tick阈值”联合触发，避免 IV 平台期造成噪声误报
 
 ## 7. Verification Standard
 
@@ -193,12 +197,28 @@ sequenceDiagram
 ## 9. Runtime Commands
 
 ```powershell
-# backend
+# probe first (do not blindly restart)
+try { (Invoke-WebRequest http://127.0.0.1:8001/health -UseBasicParsing -TimeoutSec 3).StatusCode } catch {}
+try { (Invoke-WebRequest http://127.0.0.1:5173 -UseBasicParsing -TimeoutSec 3).StatusCode } catch {}
+Get-NetTCPConnection -LocalPort 6380 -State Listen -ErrorAction SilentlyContinue
+
+# backend strict (default)
 $env:PYTHONPATH='.'
+python -m uvicorn main:app --host 0.0.0.0 --port 8001
+
+# backend degraded (only when startup connectivity fails)
+$env:PYTHONPATH='.'
+$env:LONGPORT_STARTUP_STRICT_CONNECTIVITY='false'
+$env:LONGBRIDGE_STARTUP_STRICT_CONNECTIVITY='false'
 python -m uvicorn main:app --host 0.0.0.0 --port 8001
 
 # frontend
 npm --prefix l4_ui run dev -- --host 0.0.0.0 --port 5173
+
+# release 8001 only when replacement is required
+$pid8001 = (Get-NetTCPConnection -LocalPort 8001 -State Listen | Select-Object -First 1).OwningProcess
+Get-Process -Id $pid8001
+Stop-Process -Id $pid8001 -Force
 
 # strict session gate
 powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict

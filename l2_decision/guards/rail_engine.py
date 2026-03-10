@@ -97,7 +97,25 @@ class VRPVetoGuard:
     priority = 0.5
     name = "VRPVetoGuard"
 
-    VRP_VETO_THRESHOLD = 0.15   # If VRP > 15% → reduce confidence 40%
+    ENTRY_THRESHOLD = 0.15
+    EXIT_THRESHOLD = 0.13
+    MIN_HOLD_TICKS = 3
+    EXIT_CONFIRM_TICKS = 2
+
+    def __init__(
+        self,
+        entry_threshold: float = ENTRY_THRESHOLD,
+        exit_threshold: float = EXIT_THRESHOLD,
+        min_hold_ticks: int = MIN_HOLD_TICKS,
+        exit_confirm_ticks: int = EXIT_CONFIRM_TICKS,
+    ) -> None:
+        self._entry_threshold = entry_threshold
+        self._exit_threshold = exit_threshold
+        self._min_hold_ticks = max(1, int(min_hold_ticks))
+        self._exit_confirm_ticks = max(1, int(exit_confirm_ticks))
+        self._active = False
+        self._active_ticks = 0
+        self._below_exit_ticks = 0
 
     def check(self, decision: FusedDecision, context: dict[str, Any]) -> tuple[bool, str, float]:
         atm_iv = decision.feature_vector.get("atm_iv", 0.20)
@@ -105,9 +123,38 @@ class VRPVetoGuard:
         # Proxy VRP: IV minus realized vol proxy (normalized vol accel)
         realized_vol_proxy = vol_accel * 0.10  # rough annualized proxy
         vrp = atm_iv - realized_vol_proxy
-        if vrp > self.VRP_VETO_THRESHOLD:
-            return True, f"P0.5 VRPVeto: VRP={vrp:.3f}> {self.VRP_VETO_THRESHOLD}", 0.6
-        return False, "", 1.0
+
+        if not self._active:
+            if vrp > self._entry_threshold:
+                self._active = True
+                self._active_ticks = 1
+                self._below_exit_ticks = 0
+                return True, f"P0.5 VRPVeto: VRP={vrp:.3f}> {self._entry_threshold:.2f}", 0.6
+            return False, "", 1.0
+
+        # Active state: hold while above exit threshold, and require
+        # minimum-hold + continuous below-exit confirmation before release.
+        self._active_ticks += 1
+        if vrp < self._exit_threshold:
+            self._below_exit_ticks += 1
+        else:
+            self._below_exit_ticks = 0
+
+        if (
+            self._active_ticks >= self._min_hold_ticks
+            and self._below_exit_ticks >= self._exit_confirm_ticks
+        ):
+            self._active = False
+            self._active_ticks = 0
+            self._below_exit_ticks = 0
+            return False, "", 1.0
+
+        return True, f"P0.5 VRPVeto: VRP={vrp:.3f}> {self._entry_threshold:.2f}", 0.6
+
+    def reset_session(self) -> None:
+        self._active = False
+        self._active_ticks = 0
+        self._below_exit_ticks = 0
 
 
 class DrawdownGuard:
@@ -296,3 +343,9 @@ class GuardRailEngine:
         self._rules.append(rule)
         self._rules.sort(key=lambda r: r.priority)
         logger.info("GuardRailEngine: added rule %s (P%.1f)", rule.name, rule.priority)
+
+    def reset_session(self) -> None:
+        """Reset all stateful guards at session boundary."""
+        for rule in self._rules:
+            if hasattr(rule, "reset_session"):
+                rule.reset_session()

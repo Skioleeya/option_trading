@@ -44,10 +44,11 @@ def test_persistence_restores_windows_after_restart() -> None:
     restarted_persistence.bootstrap_day(now_et=day, engine=restarted_engine)
 
     assert restarted_engine.export_state() == engine.export_state()
-    mtf = restarted_engine.compute({"1m": 0.25, "5m": 0.25, "15m": 0.25})
-    assert mtf["timeframes"]["1m"]["regime"] != "UNAVAILABLE"
-    assert mtf["timeframes"]["5m"]["regime"] != "UNAVAILABLE"
-    assert mtf["timeframes"]["15m"]["regime"] != "UNAVAILABLE"
+    mtf = restarted_engine.compute()
+    assert set(mtf["timeframes"].keys()) == {"1m", "5m", "15m"}
+    assert mtf["timeframes"]["1m"]["state"] in (-1, 0, 1)
+    assert mtf["timeframes"]["5m"]["state"] in (-1, 0, 1)
+    assert mtf["timeframes"]["15m"]["state"] in (-1, 0, 1)
 
 
 def test_date_rollover_resets_windows_and_isolates_files() -> None:
@@ -64,7 +65,7 @@ def test_date_rollover_resets_windows_and_isolates_files() -> None:
 
     date2 = persistence.bootstrap_day(now_et=day2, engine=engine)
     cleared = engine.export_state()
-    assert all(len(v) == 0 for v in cleared.values())
+    assert all(len(v) == 0 for v in cleared["history"].values())
 
     engine.update("1m", 0.30)
     persistence.persist_snapshot(date_str=date2, now_et=day2, engine=engine)
@@ -90,9 +91,9 @@ def test_storage_failure_does_not_break_engine_compute(monkeypatch) -> None:
     monkeypatch.setattr(persistence._storage, "append_snapshot", _raise_on_append)  # noqa: SLF001
     persistence.persist_snapshot(date_str=date_str, now_et=day, engine=engine)
 
-    mtf = engine.compute({"1m": 0.25, "5m": 0.25, "15m": 0.25})
+    mtf = engine.compute()
     assert "timeframes" in mtf
-    assert "consensus" in mtf
+    assert "1m" in mtf["timeframes"]
 
 
 def test_storage_sanitizes_bad_rows_without_polluting_windows() -> None:

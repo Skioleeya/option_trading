@@ -167,8 +167,11 @@ class L2DecisionReactor:
         # Also run jump sentinel (for guard use)
         try:
             self._signals["jump_sentinel"].generate(features)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(
+                "JumpSentinel generation failed; skipping jump gate for this tick: %s",
+                exc,
+            )
 
         # 3. IV regime from IVRegimeEngine signal (used to gate fusion weights)
         iv_regime_signal = raw_signals.get("iv_regime")
@@ -292,10 +295,7 @@ class L2DecisionReactor:
             gen.reset()
         self._feature_store.clear_cache()
         reset_all_default_extractors(self._feature_specs)
-        # Reset DrawdownGuard
-        for rule in self._guards._rules:
-            if hasattr(rule, "reset_session"):
-                rule.reset_session()
+        self._guards.reset_session()
         logger.info("L2DecisionReactor: session reset complete")
 
     # ── Accessors ─────────────────────────────────────────────────────────────

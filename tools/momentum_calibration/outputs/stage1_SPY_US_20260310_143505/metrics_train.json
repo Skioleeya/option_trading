@@ -1,0 +1,35 @@
+{
+  "run_id": "stage1_SPY_US_20260310_143505",
+  "stage": "stage1_train",
+  "objective": "fwd_5m_direction_accuracy",
+  "symbol": "SPY.US",
+  "train_start_et": "2026-02-08",
+  "train_end_et": "2026-03-10",
+  "selected_thresholds": {
+    "roc_bull_threshold": 0.0005,
+    "roc_bear_threshold": -0.0005,
+    "accuracy": 0.5103092783505154,
+    "coverage": 0.16790123456790124,
+    "total_rows": 8100,
+    "signal_rows": 1360,
+    "scored_rows": 1358,
+    "correct_rows": 693
+  },
+  "frozen_params": {
+    "bbo_confirmation_min": 0.1,
+    "max_roc_reference": 0.005,
+    "confidence_floor": 0.3
+  },
+  "search": {
+    "grid_size": 225,
+    "min_signal_coverage": 0.15
+  },
+  "fetch_stats": {
+    "request_count": 31,
+    "retry_count": 0,
+    "bar_count": 8106,
+    "feature_rows": 8100
+  },
+  "research_available": false,
+  "generated_at_et": "2026-03-10T14:35:06.004102-04:00"
+}

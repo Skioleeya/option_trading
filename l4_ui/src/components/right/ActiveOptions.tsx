@@ -41,38 +41,38 @@ export const ActiveOptions: React.FC<Props> = memo(({ options: propOptions }) =>
                     </tr>
                 </thead>
                 <tbody>
-                    {sorted.length === 0 && (
-                        <tr><td colSpan={7} className="text-center py-2 text-text-secondary">—</td></tr>
-                    )}
                     {sorted.map((opt, i) => {
-                        const isCall = opt.option_type === 'CALL'
+                        const isPlaceholder = Boolean(opt.is_placeholder)
+                        const isCall = !isPlaceholder && opt.option_type === 'CALL'
                         const flowNeg = opt.flow < 0
                         const impactValue = typeof opt.impact_index === 'number' ? opt.impact_index : 0
-                        // Use the sweep glow if provided by backend
-                        const rowGlow = opt.flow_glow || ''
+                        const rowGlow = isPlaceholder ? '' : (opt.flow_glow || '')
+                        const slot = opt.slot_index && opt.slot_index > 0 ? opt.slot_index : (i + 1)
 
                         return (
-                            <tr key={`${opt.symbol}-${opt.strike}-${opt.option_type}-${i}`}
+                            <tr key={`slot-${slot}`}
                                 className={`border-b border-bg-border/50 hover:bg-bg-card transition-colors ${rowGlow}`}>
                                 <td className="py-1 relative">
-                                    <div className={`absolute left-0 top-[20%] bottom-[20%] w-[4px] rounded-r-sm ${isCall ? 'bg-accent-red' : 'bg-accent-green'}`} />
-                                    <div className="text-center font-bold text-text-primary ml-1">{i + 1}</div>
+                                    {!isPlaceholder && (
+                                        <div className={`absolute left-0 top-[20%] bottom-[20%] w-[4px] rounded-r-sm ${isCall ? 'bg-accent-red' : 'bg-accent-green'}`} />
+                                    )}
+                                    <div className="text-center font-bold text-text-primary ml-1">{slot}</div>
                                 </td>
-                                <td className="py-0.5 pr-1 text-text-secondary">SPY</td>
-                                <td className={`py-1 text-center font-bold ${isCall ? 'text-accent-red' : 'text-accent-green'}`}>
-                                    {isCall ? 'C' : 'P'}
+                                <td className="py-0.5 pr-1 text-text-secondary">{isPlaceholder ? '—' : (opt.symbol || 'SPY')}</td>
+                                <td className={`py-1 text-center font-bold ${isPlaceholder ? 'text-text-secondary' : (isCall ? 'text-accent-red' : 'text-accent-green')}`}>
+                                    {isPlaceholder ? '—' : (isCall ? 'C' : 'P')}
                                 </td>
-                                <td className="py-1 text-right text-text-primary font-bold">{opt.strike.toFixed(2)}</td>
+                                <td className="py-1 text-right text-text-primary font-bold">{isPlaceholder ? '—' : opt.strike.toFixed(2)}</td>
                                 <td className="py-1 text-right font-bold text-white/90">
-                                    {impactValue.toFixed(2)}
+                                    {isPlaceholder ? '—' : impactValue.toFixed(2)}
                                 </td>
                                 <td className="py-1 text-right">
                                     <span className="px-1.5 py-0.5 rounded-[4px] text-[10px] font-bold bg-white/5 border border-white/10">
-                                        {opt.flow_volume_label || fmtVolume(opt.volume)}
+                                        {isPlaceholder ? '—' : (opt.flow_volume_label || fmtVolume(opt.volume))}
                                     </span>
                                 </td>
-                                <td className={`py-1 text-right font-bold transition-all duration-500 pr-1 ${opt.flow_color || (flowNeg ? 'text-accent-green' : 'text-accent-red')}`}>
-                                    {opt.flow_deg_formatted || fmtFlow(opt.flow)}
+                                <td className={`py-1 text-right font-bold transition-all duration-500 pr-1 ${isPlaceholder ? 'text-text-secondary' : (opt.flow_color || (flowNeg ? 'text-accent-green' : 'text-accent-red'))}`}>
+                                    {isPlaceholder ? '—' : (opt.flow_deg_formatted || fmtFlow(opt.flow))}
                                 </td>
                             </tr>
                         )

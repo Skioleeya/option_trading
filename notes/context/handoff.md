@@ -1,12 +1,12 @@
 ﻿# Handoff (Index)
 
 ## Active Handoff
-- Path: notes/sessions/2026-03-09/research_feature_store_compact_history/handoff.md
-- Meta: notes/sessions/2026-03-09/research_feature_store_compact_history/meta.yaml
+- Path: notes/sessions/2026-03-10/mtf_flow_geometry_refactor/handoff.md
+- Meta: notes/sessions/2026-03-10/mtf_flow_geometry_refactor/meta.yaml
 
 ## Latest Outcome
-- Session: 2026-03-09/research_feature_store_compact_history
-- Summary: 研究特征库（raw-lite/feature/label）与 compact history 下载改造已落地，待/将执行 strict gate 固化交付。
+- Session: 2026-03-10/mtf_flow_geometry_refactor
+- Summary: 在既有修复基础上新增 `tools/momentum_calibration` 独立工具链（K线先行、Research接口预留），并完成 Stage1/Stage2/Stage3 与单元测试验证。
 
 ## Next Session Bootstrap
 1. Read this file.

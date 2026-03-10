@@ -49,6 +49,7 @@ class ActiveOptionsPresenterV2:
             volume=int(d.get("volume", 0) or 0),
             turnover=float(d.get("turnover", 0.0) or 0.0),
             flow=float(d.get("flow", 0.0) or 0.0),
+            flow_score=float(d.get("flow_score", 0.0) or 0.0),
             impact_index=float(d.get("impact_index", 0.0) or 0.0),
             is_sweep=bool(d.get("is_sweep", False)),
             flow_deg_formatted=str(d.get("flow_deg_formatted", "$0")),
@@ -60,4 +61,6 @@ class ActiveOptionsPresenterV2:
             flow_d_z=float(d.get("flow_d_z", 0.0) or 0.0),
             flow_e_z=float(d.get("flow_e_z", 0.0) or 0.0),
             flow_g_z=float(d.get("flow_g_z", 0.0) or 0.0),
+            is_placeholder=bool(d.get("is_placeholder", False)),
+            slot_index=int(d.get("slot_index", 0) or 0),
         )

@@ -39,7 +39,7 @@ from l2_decision.fusion.rule_fusion import RuleFusionEngine
 from l2_decision.fusion.attention_fusion import AttentionFusionEngine
 from l2_decision.guards.kill_switch import ManualKillSwitch
 from l2_decision.guards.rail_engine import (
-    DrawdownGuard, GuardRailEngine, KillSwitchGuard, SessionGuard,
+    DrawdownGuard, GuardRailEngine, KillSwitchGuard, SessionGuard, VRPVetoGuard,
 )
 from l2_decision.audit.audit_trail import AuditTrail
 from l2_decision.observability.l2_instrumentation import L2Instrumentation
@@ -359,6 +359,25 @@ class TestGuardRailEngine:
             guarded = engine.process(_make_fused("BEARISH"))
             assert guarded.pre_guard_direction == "BEARISH"
 
+    def test_reset_session_calls_stateful_rule_reset(self):
+        class _StatefulRule:
+            priority = 0.2
+            name = "StatefulRule"
+
+            def __init__(self) -> None:
+                self.was_reset = False
+
+            def check(self, decision, context):
+                return False, "", 1.0
+
+            def reset_session(self) -> None:
+                self.was_reset = True
+
+        rule = _StatefulRule()
+        engine = GuardRailEngine([rule])
+        engine.reset_session()
+        assert rule.was_reset is True
+
     def test_session_guard_reduces_confidence(self):
         """SessionGuard should produce non-1.0 multiplier during session windows.
         We test that multiple guards compose correctly (not that clock is in window)."""
@@ -377,6 +396,56 @@ class TestGuardRailEngine:
         triggered, desc, multiplier = guard.check(fused, {})
         assert triggered
         assert multiplier == 0.0
+
+    def test_vrp_veto_enters_above_entry_threshold(self):
+        guard = VRPVetoGuard(entry_threshold=0.15, exit_threshold=0.13, min_hold_ticks=3, exit_confirm_ticks=2)
+        fused = _make_fused()
+        fused.feature_vector.features["atm_iv"] = 0.164
+        fused.feature_vector.features["vol_accel_ratio"] = 0.0
+        triggered, desc, multiplier = guard.check(fused, {})
+        assert triggered
+        assert "P0.5 VRPVeto" in desc
+        assert multiplier == 0.6
+
+    def test_vrp_veto_does_not_exit_immediately_below_exit_threshold(self):
+        guard = VRPVetoGuard(entry_threshold=0.15, exit_threshold=0.13, min_hold_ticks=3, exit_confirm_ticks=2)
+        fused = _make_fused()
+        fused.feature_vector.features["vol_accel_ratio"] = 0.0
+
+        fused.feature_vector.features["atm_iv"] = 0.164
+        assert guard.check(fused, {})[0] is True  # activate
+
+        fused.feature_vector.features["atm_iv"] = 0.120
+        triggered, _, _ = guard.check(fused, {})
+        assert triggered is True  # first below-exit tick should still hold veto
+
+    def test_vrp_veto_exits_after_hold_and_exit_confirmation(self):
+        guard = VRPVetoGuard(entry_threshold=0.15, exit_threshold=0.13, min_hold_ticks=3, exit_confirm_ticks=2)
+        fused = _make_fused()
+        fused.feature_vector.features["vol_accel_ratio"] = 0.0
+
+        fused.feature_vector.features["atm_iv"] = 0.164
+        assert guard.check(fused, {})[0] is True  # tick 1 activate
+        fused.feature_vector.features["atm_iv"] = 0.160
+        assert guard.check(fused, {})[0] is True  # tick 2 hold
+        fused.feature_vector.features["atm_iv"] = 0.158
+        assert guard.check(fused, {})[0] is True  # tick 3 hold (min_hold reached)
+        fused.feature_vector.features["atm_iv"] = 0.120
+        assert guard.check(fused, {})[0] is True  # tick 4 below-exit confirm #1
+        fused.feature_vector.features["atm_iv"] = 0.118
+        assert guard.check(fused, {})[0] is False  # tick 5 below-exit confirm #2 => release
+
+    def test_vrp_veto_reset_session_clears_active_state(self):
+        guard = VRPVetoGuard(entry_threshold=0.15, exit_threshold=0.13, min_hold_ticks=3, exit_confirm_ticks=2)
+        fused = _make_fused()
+        fused.feature_vector.features["vol_accel_ratio"] = 0.0
+
+        fused.feature_vector.features["atm_iv"] = 0.164
+        assert guard.check(fused, {})[0] is True  # activate
+
+        guard.reset_session()
+        fused.feature_vector.features["atm_iv"] = 0.140
+        assert guard.check(fused, {})[0] is False
 
 
 # ─────────────────────────────────────────────────────────────────────────────

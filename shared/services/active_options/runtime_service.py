@@ -37,6 +37,14 @@ _INTENSITY_GLOW = {
 }
 
 
+def _direction_from_flow_amount(flow_amount: float) -> str:
+    if flow_amount > 0:
+        return "BULLISH"
+    if flow_amount < 0:
+        return "BEARISH"
+    return "NEUTRAL"
+
+
 def _is_charm_surge() -> bool:
     """Return True if now is within the last 2 hours before market close (ET)."""
     now = datetime.now(ZoneInfo("US/Eastern"))
@@ -88,14 +96,20 @@ class ActiveOptionsRuntimeService:
         limit: int = 5,
     ) -> None:
         """Run the full D+E+G pipeline and update the background cache."""
+        target_limit = max(0, int(limit))
+        if target_limit == 0:
+            self._latest_payload = []
+            return
+
         min_vol = settings.flow_active_min_volume
         filtered = [o for o in chain if int(o.get("volume", 0) or 0) >= min_vol]
 
         if not filtered:
             logger.warning(
                 "[ActiveOptionsRuntimeService] No options above min_volume threshold — "
-                "retaining last valid payload (market closed or cold-start)."
+                "emitting neutral placeholders to keep fixed row contract."
             )
+            self._latest_payload = self._pad_rows([], target_limit)
             return
 
         if redis:
@@ -128,12 +142,16 @@ class ActiveOptionsRuntimeService:
             ttm_seconds=ttm_seconds,
         )
 
-        top = sorted(outputs, key=lambda o: o.impact_index, reverse=True)[:limit]
-        self._latest_payload = [self._format_row(o) for o in top]
+        top = sorted(outputs, key=lambda o: o.impact_index, reverse=True)[:target_limit]
+        rows = [self._format_row(o, slot_index=idx + 1) for idx, o in enumerate(top)]
+        self._latest_payload = self._pad_rows(rows, target_limit)
 
     @staticmethod
-    def _format_row(o: FlowEngineOutput) -> dict[str, Any]:
-        flow_color = _DIRECTION_COLOR.get(o.flow_direction, "text-text-secondary")
+    def _format_row(o: FlowEngineOutput, *, slot_index: int = 1) -> dict[str, Any]:
+        # UI semantics are amount-first: displayed FLOW sign must match direction/color.
+        flow_amount = o.flow_d + o.flow_e + o.flow_g
+        flow_direction = _direction_from_flow_amount(flow_amount)
+        flow_color = _DIRECTION_COLOR.get(flow_direction, "text-text-secondary")
         glow = _INTENSITY_GLOW.get(o.flow_intensity, "")
 
         return {
@@ -143,16 +161,57 @@ class ActiveOptionsRuntimeService:
             "implied_volatility": o.implied_volatility,
             "volume": o.volume,
             "turnover": o.turnover,
-            "flow": o.flow_deg,
+            "flow": flow_amount,
+            "flow_score": o.flow_deg,
             "impact_index": o.impact_index,
             "is_sweep": o.is_sweep,
-            "flow_deg_formatted": _format_flow(o.flow_d + o.flow_e + o.flow_g),
+            "flow_deg_formatted": _format_flow(flow_amount),
             "flow_volume_label": _format_volume(o.volume),
             "flow_color": flow_color,
             "flow_glow": glow if not o.is_sweep else "shadow-[0_0_15px_rgba(255,255,255,0.7)] animate-pulse",
             "flow_intensity": o.flow_intensity,
-            "flow_direction": o.flow_direction,
+            "flow_direction": flow_direction,
             "flow_d_z": round(o.flow_d_z, 3),
             "flow_e_z": round(o.flow_e_z, 3),
             "flow_g_z": round(o.flow_g_z, 3),
+            "is_placeholder": False,
+            "slot_index": max(1, int(slot_index)),
         }
+
+    @staticmethod
+    def _placeholder_row(slot_index: int) -> dict[str, Any]:
+        idx = max(1, int(slot_index))
+        return {
+            "symbol": "—",
+            "option_type": "CALL",
+            "strike": 0.0,
+            "implied_volatility": 0.0,
+            "volume": 0,
+            "turnover": 0.0,
+            "flow": 0.0,
+            "flow_score": 0.0,
+            "impact_index": 0.0,
+            "is_sweep": False,
+            "flow_deg_formatted": "—",
+            "flow_volume_label": "—",
+            "flow_color": "text-text-secondary",
+            "flow_glow": "",
+            "flow_intensity": "LOW",
+            "flow_direction": "NEUTRAL",
+            "flow_d_z": 0.0,
+            "flow_e_z": 0.0,
+            "flow_g_z": 0.0,
+            "is_placeholder": True,
+            "slot_index": idx,
+        }
+
+    @classmethod
+    def _pad_rows(cls, rows: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
+        target = max(0, int(limit))
+        trimmed = rows[:target]
+        for idx, row in enumerate(trimmed):
+            row["slot_index"] = idx + 1
+            row["is_placeholder"] = bool(row.get("is_placeholder", False))
+        while len(trimmed) < target:
+            trimmed.append(cls._placeholder_row(len(trimmed) + 1))
+        return trimmed

@@ -6,6 +6,7 @@ import React, { memo } from 'react'
 import { Target, Activity, TrendingUp, BarChart3 } from 'lucide-react'
 import type { FusedSignal } from '../../types/dashboard'
 import { useDashboardStore, selectFused } from '../../store/dashboardStore'
+import { normalizeBadgeToken } from '../left/microStatsTheme'
 import {
     confidenceToPercent,
     formatRegimeLabel,
@@ -20,7 +21,12 @@ interface Props {
     fused?: FusedSignal | null
 }
 
-const truncate = (s: string, n = 75) => s.length > n ? s.slice(0, n - 1) + '…' : s
+const selectNetGexBadge = (s: ReturnType<typeof useDashboardStore.getState>) =>
+    s.payload?.agent_g?.data?.ui_state?.micro_stats?.net_gex ?? null
+
+function stripGexPrefix(label: string): string {
+    return label.replace(/^gex\s+/i, '').trim()
+}
 
 const Zap: React.FC = () => (
     <svg width="8" height="8" viewBox="0 0 24 24" fill="none"
@@ -31,6 +37,7 @@ const Zap: React.FC = () => (
 
 export const DecisionEngine: React.FC<Props> = memo(({ fused: propFused }) => {
     const storeFused = useDashboardStore(selectFused)
+    const storeNetGex = useDashboardStore(selectNetGexBadge)
     const fused = storeFused ?? propFused ?? null
 
     const dir = normalizeDecisionTone(fused?.direction)
@@ -39,7 +46,15 @@ export const DecisionEngine: React.FC<Props> = memo(({ fused: propFused }) => {
     const comps = fused?.components ?? {}
     const regime = fused?.regime ?? ''
     const gexInt = fused?.gex_intensity ?? ''
-    const explanation = fused?.explanation ?? ''
+    const netGexLabelRaw = String(storeNetGex?.label ?? '').trim()
+    const hasNetGex = netGexLabelRaw !== '' && netGexLabelRaw !== '—'
+    const gexLabelCore = hasNetGex
+        ? stripGexPrefix(netGexLabelRaw)
+        : formatRegimeLabel(gexInt)
+    const gexBadgeClass = hasNetGex
+        ? normalizeBadgeToken(storeNetGex?.badge, gexLabelCore)
+        : resolveGexIntensityBadgeClass(gexInt)
+    const gexLabel = gexLabelCore ? `GEX ${gexLabelCore}` : ''
 
     const quadrants = [
         { key: 'momentum_signal', label: 'MOMENTUM', icon: <TrendingUp size={9} className="text-text-secondary" /> },
@@ -69,12 +84,12 @@ export const DecisionEngine: React.FC<Props> = memo(({ fused: propFused }) => {
                 <div className={`h-full rounded-full transition-all duration-700 ${dirTheme.bar}`} style={{ width: `${conf}%` }} />
             </div>
 
-            {(regime || gexInt) && (
+            {(regime || gexLabel) && (
                 <div className="flex gap-1 flex-wrap">
                     {regime && <span className="badge badge-neutral text-[7px] py-0 px-1">{formatRegimeLabel(regime)}</span>}
-                    {gexInt && (
-                        <span className={`badge text-[7px] py-0 px-1 ${resolveGexIntensityBadgeClass(gexInt)}`}>
-                            GEX {formatRegimeLabel(gexInt)}
+                    {gexLabel && (
+                        <span className={`badge text-[7px] py-0 px-1 ${gexBadgeClass}`}>
+                            {gexLabel}
                         </span>
                     )}
                 </div>
@@ -120,11 +135,6 @@ export const DecisionEngine: React.FC<Props> = memo(({ fused: propFused }) => {
                 })}
             </div>
 
-            {explanation && (
-                <p className="text-[8px] mono text-text-secondary leading-tight truncate cursor-default opacity-80" title={explanation}>
-                    {truncate(explanation, 75)}
-                </p>
-            )}
         </div>
     )
 })

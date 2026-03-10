@@ -45,7 +45,7 @@ function makePayload(
                         iv_confidence: 0.9,
                         wall_confidence: 0.8,
                         vanna_confidence: 0.7,
-                        mtf_consensus: { consensus: 'BULLISH', strength: 0.8, timeframes: {} },
+                        mtf_consensus: { timeframes: {} },
                     },
                 },
                 net_gex: 120.5,
@@ -139,49 +139,26 @@ describe('Right panel typed contract integration', () => {
         }
         const mtfFlow: MtfFlowState = {
             m1: {
-                direction: 'BULLISH',
-                regime: 'BREAKOUT',
-                regime_label: 'BRK↑',
-                z: 1.2,
-                strength: 0.8,
-                tier: 'EXTREME',
-                dot_color: 'bg-accent-red',
-                text_color: 'text-accent-red',
-                shadow: 'shadow-[0_0_8px_rgba(255,77,79,0.5)]',
-                border: 'border-accent-red/30',
-                animate: 'animate-pulse',
+                state: 1,
+                relative_displacement: 0.02,
+                pressure_gradient: 0.001,
+                distance_to_vacuum: 0.3,
+                kinetic_level: 0.8,
             },
             m5: {
-                direction: 'BULLISH',
-                regime: 'DRIFT_UP',
-                regime_label: 'DFT↑',
-                z: 0.8,
-                strength: 0.7,
-                tier: 'MODERATE',
-                dot_color: 'bg-accent-red',
-                text_color: 'text-accent-red',
-                shadow: 'shadow-none',
-                border: 'border-accent-red/30',
-                animate: '',
+                state: 1,
+                relative_displacement: 0.012,
+                pressure_gradient: 0.0004,
+                distance_to_vacuum: 0.5,
+                kinetic_level: 0.7,
             },
             m15: {
-                direction: 'NEUTRAL',
-                regime: 'NOISE',
-                regime_label: 'NOISE',
-                z: 0.0,
-                strength: 0.2,
-                tier: 'WEAK',
-                dot_color: 'bg-zinc-700',
-                text_color: 'text-text-secondary',
-                shadow: 'shadow-none',
-                border: 'border-bg-border',
-                animate: '',
+                state: 0,
+                relative_displacement: 0,
+                pressure_gradient: 0,
+                distance_to_vacuum: 0.7,
+                kinetic_level: 0.2,
             },
-            consensus: 'BULLISH',
-            strength: 0.82,
-            alignment: 0.9,
-            align_label: 'ALIGNED',
-            align_color: 'text-accent-red',
         }
         const activeOptions: ActiveOption[] = [
             {
@@ -192,6 +169,7 @@ describe('Right panel typed contract integration', () => {
                 volume: 50000,
                 turnover: 10000000,
                 flow: 1250000,
+                flow_score: -0.9,
                 impact_index: 88.1234,
                 is_sweep: true,
                 flow_deg_formatted: '$1.25M',
@@ -218,7 +196,7 @@ describe('Right panel typed contract integration', () => {
 
         expect(screen.getByText('FAIR')).toBeInTheDocument()
         expect(screen.getByText('SPECULATIVE')).toBeInTheDocument()
-        expect(screen.getByText('ALIGNED')).toBeInTheDocument()
+        expect(screen.getByText('SPLIT')).toBeInTheDocument()
         expect(screen.getByText('88.12')).toBeInTheDocument()
         expect(screen.getByText('$1.25M')).toBeInTheDocument()
         expect(screen.getByText('50K')).toBeInTheDocument()
@@ -271,49 +249,26 @@ describe('Right panel typed contract integration', () => {
         }
         const mtfFlow: MtfFlowState = {
             m1: {
-                direction: 'NEUTRAL',
-                regime: 'NOISE',
-                regime_label: 'NOISE',
-                z: 0.0,
-                strength: 0.1,
-                tier: 'WEAK',
-                dot_color: 'bg-zinc-700',
-                text_color: 'text-text-secondary',
-                shadow: 'shadow-none',
-                border: 'border-bg-border',
-                animate: '',
+                state: 0,
+                relative_displacement: 0.0,
+                pressure_gradient: 0.0,
+                distance_to_vacuum: 0.0,
+                kinetic_level: 0.1,
             },
             m5: {
-                direction: 'NEUTRAL',
-                regime: 'NOISE',
-                regime_label: 'NOISE',
-                z: 0.0,
-                strength: 0.1,
-                tier: 'WEAK',
-                dot_color: 'bg-zinc-700',
-                text_color: 'text-text-secondary',
-                shadow: 'shadow-none',
-                border: 'border-bg-border',
-                animate: '',
+                state: 0,
+                relative_displacement: 0.0,
+                pressure_gradient: 0.0,
+                distance_to_vacuum: 0.0,
+                kinetic_level: 0.1,
             },
             m15: {
-                direction: 'NEUTRAL',
-                regime: 'NOISE',
-                regime_label: 'NOISE',
-                z: 0.0,
-                strength: 0.1,
-                tier: 'WEAK',
-                dot_color: 'bg-zinc-700',
-                text_color: 'text-text-secondary',
-                shadow: 'shadow-none',
-                border: 'border-bg-border',
-                animate: '',
+                state: 0,
+                relative_displacement: 0.0,
+                pressure_gradient: 0.0,
+                distance_to_vacuum: 0.0,
+                kinetic_level: 0.1,
             },
-            consensus: 'NEUTRAL',
-            strength: 0.0,
-            alignment: 0.0,
-            align_label: 'SPLIT',
-            align_color: 'text-text-secondary',
         }
 
         useDashboardStore.setState({
@@ -324,5 +279,47 @@ describe('Right panel typed contract integration', () => {
 
         expect(screen.getByText('UNAVAILABLE')).toBeInTheDocument()
         expect(screen.getByText('N/A')).toBeInTheDocument()
+    })
+
+    it('renders active options as fixed 5 rows when payload has fewer rows', () => {
+        const sparseOptions: ActiveOption[] = [
+            {
+                symbol: 'SPY',
+                option_type: 'CALL',
+                strike: 560,
+                implied_volatility: 0.2,
+                volume: 22000,
+                turnover: 1500000,
+                flow: 520000,
+                impact_index: 88.12,
+            },
+            {
+                symbol: 'SPY',
+                option_type: 'PUT',
+                strike: 559,
+                implied_volatility: 0.21,
+                volume: 18000,
+                turnover: 1200000,
+                flow: -410000,
+                impact_index: 77.11,
+            },
+            {
+                symbol: 'SPY',
+                option_type: 'CALL',
+                strike: 561,
+                implied_volatility: 0.19,
+                volume: 17000,
+                turnover: 980000,
+                flow: 210000,
+                impact_index: 54.0,
+            },
+        ]
+
+        render(<ActiveOptions options={sparseOptions} />)
+
+        // 1 header row + 5 data rows
+        expect(screen.getAllByRole('row')).toHaveLength(6)
+        expect(screen.getByText('5')).toBeInTheDocument()
+        expect(screen.getAllByText('—').length).toBeGreaterThan(0)
     })
 })

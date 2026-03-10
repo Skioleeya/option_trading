@@ -43,6 +43,13 @@ flowchart LR
 规则:
 
 - `active_options.option_type` 统一 `CALL|PUT`
+- `active_options.flow` 必须是展示用 signed USD 流金额（与 FLOW 文本和颜色同源）
+- `active_options.flow_score` 必须承载 DEG 方向分数（`flow_deg`），仅用于分析/调试，不驱动 FLOW 配色
+- `active_options.flow_direction/flow_color` 必须由 `flow` 金额符号派生（正=红/BULLISH，负=绿/BEARISH，零=NEUTRAL）
+- `active_options` 必须固定输出 5 行槽位；真实数据不足时由后端补齐中性占位行，禁止沿用旧帧残留
+- `active_options.is_placeholder`（bool）与 `active_options.slot_index`（1..5）为固定槽位契约字段，必须稳定透传
+- `mtf_flow` 必须是纯状态合同：`m1/m5/m15.{state,relative_displacement,pressure_gradient,distance_to_vacuum,kinetic_level}`
+- `mtf_flow` 严禁携带视觉字段（如 `dot_color/text_color/border/animate/align_color`）与统计语义字段（如 `zscore/z/strength`）
 - 保留 `impact_index` 与 `is_sweep`
 - 不返回空结构破坏前端渲染
 - `/history` 默认视图必须为 `compact`，禁止默认返回重字段全量 payload

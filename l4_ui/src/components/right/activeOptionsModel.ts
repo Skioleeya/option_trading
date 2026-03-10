@@ -26,6 +26,29 @@ const FLOW_DIRECTION_BY_COLOR: Record<string, ActiveFlowDirection> = {
     'text-text-secondary': 'NEUTRAL',
 }
 
+function createPlaceholderOption(slotIndex: number): ActiveOption {
+    return {
+        symbol: '—',
+        option_type: 'CALL',
+        strike: 0,
+        implied_volatility: 0,
+        volume: 0,
+        turnover: 0,
+        flow: 0,
+        flow_score: 0,
+        impact_index: 0,
+        is_sweep: false,
+        flow_deg_formatted: '—',
+        flow_volume_label: '—',
+        flow_color: 'text-text-secondary',
+        flow_glow: '',
+        flow_intensity: 'LOW',
+        flow_direction: 'NEUTRAL',
+        is_placeholder: true,
+        slot_index: Math.max(1, slotIndex),
+    }
+}
+
 function parseCompactNumber(raw: string): number | null {
     const text = raw.trim()
     if (!text) return null
@@ -71,14 +94,9 @@ function toFiniteInteger(raw: unknown, fallback = 0): number {
     return Math.max(0, Math.trunc(toFiniteNumber(raw, fallback)))
 }
 
-function normalizeFlowDirection(raw: unknown, flow: number): ActiveFlowDirection {
+function normalizeFlowDirection(flow: number): ActiveFlowDirection {
     if (flow > 0) return 'BULLISH'
     if (flow < 0) return 'BEARISH'
-
-    const text = typeof raw === 'string' ? raw.trim().toUpperCase() : ''
-    if (text === 'BULLISH' || text === 'BEARISH' || text === 'NEUTRAL') {
-        return text
-    }
     return 'NEUTRAL'
 }
 
@@ -100,12 +118,21 @@ function normalizeFlowColor(raw: unknown, direction: ActiveFlowDirection): strin
 
 export function normalizeActiveOption(input: unknown): ActiveOption {
     const row = (input && typeof input === 'object') ? (input as Partial<ActiveOption>) : {}
+    const isPlaceholder = Boolean(row.is_placeholder)
+    const slotIndexRaw = toFiniteInteger(row.slot_index, 0)
+    const slotIndex = slotIndexRaw > 0 ? slotIndexRaw : undefined
+
+    if (isPlaceholder) {
+        return createPlaceholderOption(slotIndex ?? 1)
+    }
+
     const isSweep = Boolean(row.is_sweep)
     const flowFromLabel = toFiniteNumber(row.flow_deg_formatted, 0)
     const flow = toFiniteNumber(row.flow, flowFromLabel)
-    const flowDirection = normalizeFlowDirection(row.flow_direction, flow)
+    const flowDirection = normalizeFlowDirection(flow)
     const flowIntensity = normalizeFlowIntensity(row.flow_intensity)
     const flowColor = normalizeFlowColor(row.flow_color, flowDirection)
+    const flowScore = toFiniteNumber(row.flow_score, 0)
     const normalizedGlow = typeof row.flow_glow === 'string' && row.flow_glow.trim()
         ? row.flow_glow
         : (isSweep ? 'shadow-[0_0_15px_rgba(255,255,255,0.7)] animate-pulse' : '')
@@ -118,6 +145,7 @@ export function normalizeActiveOption(input: unknown): ActiveOption {
         volume: toFiniteInteger(row.volume, 0),
         turnover: Math.max(0, toFiniteNumber(row.turnover, 0)),
         flow,
+        flow_score: flowScore,
         impact_index: toFiniteNumber(row.impact_index, 0),
         is_sweep: isSweep,
         flow_deg_formatted: typeof row.flow_deg_formatted === 'string' ? row.flow_deg_formatted : undefined,
@@ -126,12 +154,24 @@ export function normalizeActiveOption(input: unknown): ActiveOption {
         flow_glow: normalizedGlow,
         flow_intensity: flowIntensity,
         flow_direction: flowDirection,
+        is_placeholder: false,
+        slot_index: slotIndex,
     }
 }
 
 export function normalizeActiveOptions(input: unknown, limit = 5): ActiveOption[] {
-    if (!Array.isArray(input)) return []
-    return input
+    const target = Math.max(0, limit)
+    const source = Array.isArray(input) ? input : []
+    const normalized = source
         .map((row) => normalizeActiveOption(row))
-        .slice(0, Math.max(0, limit))
+        .slice(0, target)
+        .map((row, idx) => ({
+            ...row,
+            slot_index: idx + 1,
+        }))
+
+    while (normalized.length < target) {
+        normalized.push(createPlaceholderOption(normalized.length + 1))
+    }
+    return normalized
 }

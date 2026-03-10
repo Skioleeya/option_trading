@@ -105,8 +105,8 @@ export function resolveWeightBarWidth(percent: number): number {
 
 export function resolveGexIntensityBadgeClass(gexIntensity: unknown): string {
     const label = String(gexIntensity ?? '').toUpperCase()
-    if (label.includes('NEGATIVE')) return 'badge-red-dim'
+    if (label.includes('EXTREME_POSITIVE')) return 'badge-amber'
     if (label.includes('POSITIVE')) return 'badge-hollow-green'
-    if (label.includes('MODERATE')) return 'badge-amber'
+    if (label.includes('NEGATIVE')) return 'badge-hollow-purple'
     return 'badge-neutral'
 }

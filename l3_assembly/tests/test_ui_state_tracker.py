@@ -122,19 +122,18 @@ def test_tick_prefers_snapshot_mtf_consensus_when_available() -> None:
         _make_snapshot(
             microstructure={
                 "mtf_consensus": {
-                    "timeframes": {"1m": {"direction": "BULLISH"}},
-                    "consensus": "BULLISH",
-                    "strength": 0.88,
-                    "alignment": 1.0,
+                    "timeframes": {
+                        "1m": {"state": 1, "kinetic_level": 0.88},
+                    },
                 }
             }
         ),
         decision=None,
     )
 
-    assert out["mtf_consensus"]["consensus"] == "BULLISH"
-    assert out["mtf_consensus"]["strength"] == pytest.approx(0.88)
-    assert out["mtf_consensus"]["alignment"] == pytest.approx(1.0)
+    assert out["mtf_consensus"]["timeframes"]["1m"]["state"] == 1
+    assert out["mtf_consensus"]["timeframes"]["1m"]["kinetic_level"] == pytest.approx(0.88)
+    assert "strength" not in out["mtf_consensus"]
 
 
 def test_tick_wall_payload_preserves_history_series() -> None:

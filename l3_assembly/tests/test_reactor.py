@@ -146,6 +146,7 @@ class TestL3AssemblyReactor:
             "volume": 50000,
             "turnover": 1e7,
             "flow": 2.5,
+            "flow_score": -0.7,
             "impact_index": 88.1234,
             "is_sweep": True,
             "flow_deg_formatted": "$1.0M",
@@ -165,6 +166,9 @@ class TestL3AssemblyReactor:
         assert row["impact_index"] == pytest.approx(88.1234)
         assert row["is_sweep"] is True
         assert row["option_type"] == "CALL"
+        assert row["flow_score"] == pytest.approx(-0.7)
+        assert row["is_placeholder"] is False
+        assert row["slot_index"] == 0
 
     def test_cross_layer_contract_regression_ui_state_fields(self):
         reactor = L3AssemblyReactor()
@@ -191,13 +195,10 @@ class TestL3AssemblyReactor:
                 },
                 "mtf_consensus": {
                     "timeframes": {
-                        "1m": {"direction": "BULLISH", "regime": "BREAKOUT", "z": 1.8, "strength": 0.90},
-                        "5m": {"direction": "BULLISH", "regime": "DRIFT_UP", "z": 1.1, "strength": 0.72},
-                        "15m": {"direction": "NEUTRAL", "regime": "NOISE", "z": 0.1, "strength": 0.30},
+                        "1m": {"state": 1, "relative_displacement": 0.02, "pressure_gradient": 0.001, "distance_to_vacuum": 0.3, "kinetic_level": 0.90},
+                        "5m": {"state": 1, "relative_displacement": 0.01, "pressure_gradient": 0.0003, "distance_to_vacuum": 0.5, "kinetic_level": 0.72},
+                        "15m": {"state": 0, "relative_displacement": 0.0, "pressure_gradient": 0.0, "distance_to_vacuum": 0.8, "kinetic_level": 0.30},
                     },
-                    "consensus": "BULLISH",
-                    "strength": 0.82,
-                    "alignment": 0.9,
                 },
             }
         )
@@ -210,6 +211,7 @@ class TestL3AssemblyReactor:
                 "volume": 50000,
                 "turnover": 1e7,
                 "flow": 2.5,
+                "flow_score": -0.4,
                 "impact_index": 88.1234,
                 "is_sweep": True,
                 "flow_deg_formatted": "$1.0M",
@@ -230,6 +232,7 @@ class TestL3AssemblyReactor:
                 "volume": 41000,
                 "turnover": 0.8e7,
                 "flow": -1.8,
+                "flow_score": 0.9,
                 "impact_index": 77.7777,
                 "is_sweep": False,
                 "flow_deg_formatted": "$0.8M",
@@ -253,9 +256,9 @@ class TestL3AssemblyReactor:
         assert ui_state["skew_dynamics"]["value"] == "-0.33"
 
         mtf_flow = ui_state["mtf_flow"]
-        for key in ("m1", "m5", "m15", "consensus", "strength", "alignment", "align_label", "align_color"):
+        for key in ("m1", "m5", "m15"):
             assert key in mtf_flow
-        assert mtf_flow["consensus"] == "BULLISH"
+        assert mtf_flow["m1"]["state"] == 1
 
         wall_rows = ui_state["wall_migration"]
         assert len(wall_rows) >= 2
@@ -275,3 +278,7 @@ class TestL3AssemblyReactor:
         assert row1["option_type"] == "PUT"
         assert row0["impact_index"] == pytest.approx(88.1234)
         assert row0["is_sweep"] is True
+        assert row0["flow_score"] == pytest.approx(-0.4)
+        assert row1["flow_score"] == pytest.approx(0.9)
+        assert row0["is_placeholder"] is False
+        assert row1["is_placeholder"] is False

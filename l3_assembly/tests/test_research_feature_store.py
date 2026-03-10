@@ -42,7 +42,13 @@ class _Micro:
 
     def __post_init__(self) -> None:
         if self.mtf_consensus is None:
-            self.mtf_consensus = {"consensus": "BULLISH", "alignment": 0.7, "strength": 0.8}
+            self.mtf_consensus = {
+                "timeframes": {
+                    "1m": {"state": 1, "relative_displacement": 0.02, "pressure_gradient": 0.001, "distance_to_vacuum": 0.3, "kinetic_level": 0.8},
+                    "5m": {"state": 1, "relative_displacement": 0.01, "pressure_gradient": 0.0004, "distance_to_vacuum": 0.5, "kinetic_level": 0.7},
+                    "15m": {"state": 0, "relative_displacement": 0.0, "pressure_gradient": 0.0, "distance_to_vacuum": 0.8, "kinetic_level": 0.2},
+                }
+            }
 
 
 @dataclass

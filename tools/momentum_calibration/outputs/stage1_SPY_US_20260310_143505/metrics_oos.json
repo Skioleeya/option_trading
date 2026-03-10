@@ -1,0 +1,25 @@
+{
+  "train_run_id": "stage1_SPY_US_20260310_143505",
+  "stage": "stage2_oos",
+  "symbol": "SPY.US",
+  "oos_start_et": "2026-01-08",
+  "oos_end_et": "2026-02-07",
+  "metrics": {
+    "roc_bull_threshold": 0.0005,
+    "roc_bear_threshold": -0.0005,
+    "accuracy": 0.5159453302961275,
+    "coverage": 0.10764907135874878,
+    "total_rows": 8184,
+    "signal_rows": 881,
+    "scored_rows": 878,
+    "correct_rows": 453,
+    "window": "oos_prev_month",
+    "fetch_stats": {
+      "request_count": 31,
+      "retry_count": 0,
+      "bar_count": 8190,
+      "feature_rows": 8184
+    }
+  },
+  "generated_at_et": "2026-03-10T14:35:56.509669-04:00"
+}

@@ -14,8 +14,8 @@ inputs:
 
 parameters:
   # ROC threshold to classify as directional (fractional)
-  roc_bull_threshold: 0.0015      # +0.15% per minute = BULLISH
-  roc_bear_threshold: -0.0015     # -0.15% per minute = BEARISH
+  roc_bull_threshold: 0.0005      # +0.05% per minute = BULLISH (calibrated 2026-03-10)
+  roc_bear_threshold: -0.0005     # -0.05% per minute = BEARISH (calibrated 2026-03-10)
   # BBO confirmation requirement (signal must align)
   bbo_confirmation_min: 0.1       # |bbo| > 0.1 to confirm direction
   # Confidence scaling

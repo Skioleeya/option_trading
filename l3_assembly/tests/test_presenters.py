@@ -157,8 +157,8 @@ class TestDepthProfilePresenterV2:
             per_strike_gex=self._sample_gex(), spot=560.0, flip_level=558.0
         )
         for row in result:
-            assert math.isfinite(row.call_gex), f"NaN/Inf call_gex at strike {row.strike}"
-            assert math.isfinite(row.put_gex),  f"NaN/Inf put_gex at strike {row.strike}"
+            assert math.isfinite(row.call_pct), f"NaN/Inf call_pct at strike {row.strike}"
+            assert math.isfinite(row.put_pct),  f"NaN/Inf put_pct at strike {row.strike}"
 
     def test_empty_gex_no_crash(self):
         result = DepthProfilePresenterV2.build(per_strike_gex=[], spot=None, flip_level=None)
@@ -176,10 +176,11 @@ class TestActiveOptionsPresenterV2:
             return [{
                 "symbol": "SPY", "option_type": "C", "strike": 560.0,
                 "implied_volatility": 0.12, "volume": 50000, "turnover": 1e7,
-                "flow": 2.5, "impact_index": 123.456, "is_sweep": True,
+                "flow": 2.5, "flow_score": -0.8, "impact_index": 123.456, "is_sweep": True,
                 "flow_deg_formatted": "$1.0M", "flow_volume_label": "50K",
                 "flow_color": "text-accent-red", "flow_glow": "", "flow_intensity": "HIGH",
                 "flow_direction": "BULLISH", "flow_d_z": 1.2, "flow_e_z": 0.8, "flow_g_z": 0.5,
+                "is_placeholder": False, "slot_index": 1,
             }]
 
     def test_returns_tuple(self):
@@ -198,8 +199,11 @@ class TestActiveOptionsPresenterV2:
         assert row.symbol == "SPY"
         assert row.option_type == "CALL"
         assert row.strike == 560.0
+        assert row.flow_score == -0.8
         assert row.impact_index == 123.456
         assert row.is_sweep is True
+        assert row.is_placeholder is False
+        assert row.slot_index == 1
 
     def test_empty_legacy_returns_empty_tuple(self):
         class EmptyLegacy:
@@ -216,33 +220,26 @@ class TestMTFFlowPresenterV2:
     def _sample_mtf(self) -> dict[str, Any]:
         return {
             "timeframes": {
-                "1m": {"direction": "BULLISH", "regime": "BREAKOUT", "z": 1.2, "strength": 0.9},
-                "5m": {"direction": "BULLISH", "regime": "DRIFT_UP", "z": 0.8, "strength": 0.6},
-                "15m": {"direction": "NEUTRAL", "regime": "NOISE", "z": 0.1, "strength": 0.1},
+                "1m": {"state": 1, "relative_displacement": 0.02, "pressure_gradient": 0.001, "distance_to_vacuum": 0.3, "kinetic_level": 0.9},
+                "5m": {"state": 1, "relative_displacement": 0.01, "pressure_gradient": 0.0003, "distance_to_vacuum": 0.5, "kinetic_level": 0.6},
+                "15m": {"state": 0, "relative_displacement": 0.00, "pressure_gradient": 0.0, "distance_to_vacuum": 0.7, "kinetic_level": 0.1},
             },
-            "consensus": "BULLISH",
-            "strength": 0.75,
-            "alignment": 0.67,
         }
 
     def test_returns_typed_state(self):
         state = MTFFlowPresenterV2.build(self._sample_mtf())
         assert isinstance(state, MTFFlowState)
 
-    def test_consensus(self):
-        """Consensus is set if legacy presenter is available, otherwise NEUTRAL fallback.
-
-        The value may be "BULLISH" (with legacy backend) or "NEUTRAL" (isolation env —
-        legacy presenter not on path). Both are valid outcomes of `build()`.
-        """
+    def test_states_are_normalized(self):
         state = MTFFlowPresenterV2.build(self._sample_mtf())
-        assert state.consensus in ("BULLISH", "BEARISH", "NEUTRAL"), (
-            f"consensus must be a valid directional value, got {state.consensus!r}"
-        )
+        assert state.m1["state"] == 1
+        assert state.m5["state"] == 1
+        assert state.m15["state"] == 0
+        assert 0.0 <= state.m1["kinetic_level"] <= 1.0
 
     def test_to_dict_keys(self):
         d = MTFFlowPresenterV2.build(self._sample_mtf()).to_dict()
-        assert all(k in d for k in ("m1", "m5", "m15", "consensus", "strength", "alignment"))
+        assert all(k in d for k in ("m1", "m5", "m15"))
 
     def test_empty_input_no_crash(self):
         state = MTFFlowPresenterV2.build({})
@@ -250,7 +247,7 @@ class TestMTFFlowPresenterV2:
 
     def test_zero_state(self):
         state = MTFFlowState.zero_state()
-        assert state.consensus == "NEUTRAL"
+        assert state.m1["state"] == 0
 
 
 # ─────────────────────────────────────────────────────────────────────────────

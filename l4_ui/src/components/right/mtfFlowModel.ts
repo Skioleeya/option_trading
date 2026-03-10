@@ -1,28 +1,74 @@
 import type { MtfFlowState, MtfTfState } from '../../types/dashboard'
 
-export const DEFAULT_TF: MtfTfState = {
-    direction: 'NEUTRAL',
-    regime: 'NOISE',
-    regime_label: '—',
-    z: 0,
-    strength: 0,
-    tier: 'WEAK',
-    dot_color: 'bg-zinc-700',
-    text_color: 'text-text-secondary',
-    shadow: 'shadow-none',
-    border: 'border-bg-border',
-    animate: '',
+export type FlowState = -1 | 0 | 1
+
+export interface VisualTokenSet {
+    dotColor: string
+    textColor: string
+    borderColor: string
+    shadowClass: string
+    animateClass: string
+    barColor: string
+    regimeLabel: string
 }
 
-export const DEFAULT_MTF_FLOW_STATE: MtfFlowState = {
+export interface MtfTfViewState extends MtfTfState {
+    tokens: VisualTokenSet
+}
+
+export interface MtfFlowViewState {
+    m1: MtfTfViewState
+    m5: MtfTfViewState
+    m15: MtfTfViewState
+    consensusState: FlowState
+    consensusLabel: 'EXPANSION' | 'CONTRACTION' | 'EQUILIBRIUM'
+    consensusPercent: number
+    alignLabel: 'ALIGNED' | 'SPLIT' | 'DIVERGE'
+    alignClass: string
+}
+
+const DEFAULT_TF: MtfTfState = {
+    state: 0,
+    relative_displacement: 0,
+    pressure_gradient: 0,
+    distance_to_vacuum: 0,
+    kinetic_level: 0,
+}
+
+const DEFAULT_MTF_FLOW_STATE: MtfFlowState = {
     m1: { ...DEFAULT_TF },
     m5: { ...DEFAULT_TF },
     m15: { ...DEFAULT_TF },
-    consensus: 'NEUTRAL',
-    strength: 0,
-    alignment: 0,
-    align_label: 'DIVERGE',
-    align_color: 'text-text-secondary',
+}
+
+export const STATE_THEME: Record<FlowState, VisualTokenSet> = {
+    1: {
+        dotColor: 'bg-accent-red',
+        textColor: 'text-accent-red',
+        borderColor: 'border-accent-red/30',
+        shadowClass: 'shadow-[0_0_8px_rgba(255,77,79,0.5)]',
+        animateClass: '',
+        barColor: 'bg-accent-red',
+        regimeLabel: 'EXP',
+    },
+    0: {
+        dotColor: 'bg-zinc-700',
+        textColor: 'text-text-secondary',
+        borderColor: 'border-bg-border',
+        shadowClass: 'shadow-none',
+        animateClass: '',
+        barColor: 'bg-zinc-600',
+        regimeLabel: 'EQ',
+    },
+    [-1]: {
+        dotColor: 'bg-accent-green',
+        textColor: 'text-accent-green',
+        borderColor: 'border-accent-green/30',
+        shadowClass: 'shadow-[0_0_8px_rgba(0,214,143,0.5)]',
+        animateClass: '',
+        barColor: 'bg-accent-green',
+        regimeLabel: 'CON',
+    },
 }
 
 function toFiniteNumber(raw: unknown, fallback = 0): number {
@@ -36,62 +82,105 @@ function clamp01(value: number): number {
     return value
 }
 
-function normalizeConsensus(raw: unknown): 'BULLISH' | 'BEARISH' | 'NEUTRAL' {
-    const text = typeof raw === 'string' ? raw.trim().toUpperCase() : ''
-    if (text === 'BULLISH' || text === 'BEARISH') return text
-    return 'NEUTRAL'
+function normalizeFlowState(raw: unknown): FlowState {
+    if (raw === 1 || raw === '1') return 1
+    if (raw === -1 || raw === '-1') return -1
+    if (raw === 0 || raw === '0') return 0
+    return 0
 }
 
 function normalizeTfState(raw: unknown): MtfTfState {
     if (!raw || typeof raw !== 'object') return { ...DEFAULT_TF }
     const src = raw as Partial<MtfTfState>
-    const strength = clamp01(toFiniteNumber(src.strength, DEFAULT_TF.strength))
     return {
-        direction: typeof src.direction === 'string' && src.direction.trim() ? src.direction : DEFAULT_TF.direction,
-        regime: typeof src.regime === 'string' && src.regime.trim() ? src.regime : DEFAULT_TF.regime,
-        regime_label: typeof src.regime_label === 'string' && src.regime_label.trim() ? src.regime_label : DEFAULT_TF.regime_label,
-        z: toFiniteNumber(src.z, DEFAULT_TF.z),
-        strength,
-        tier: typeof src.tier === 'string' && src.tier.trim() ? src.tier : DEFAULT_TF.tier,
-        dot_color: typeof src.dot_color === 'string' && src.dot_color.trim() ? src.dot_color : DEFAULT_TF.dot_color,
-        text_color: typeof src.text_color === 'string' && src.text_color.trim() ? src.text_color : DEFAULT_TF.text_color,
-        shadow: typeof src.shadow === 'string' && src.shadow.trim() ? src.shadow : DEFAULT_TF.shadow,
-        border: typeof src.border === 'string' && src.border.trim() ? src.border : DEFAULT_TF.border,
-        animate: typeof src.animate === 'string' ? src.animate : DEFAULT_TF.animate,
+        state: normalizeFlowState(src.state),
+        relative_displacement: toFiniteNumber(src.relative_displacement, DEFAULT_TF.relative_displacement),
+        pressure_gradient: toFiniteNumber(src.pressure_gradient, DEFAULT_TF.pressure_gradient),
+        distance_to_vacuum: Math.max(0, toFiniteNumber(src.distance_to_vacuum, DEFAULT_TF.distance_to_vacuum)),
+        kinetic_level: clamp01(toFiniteNumber(src.kinetic_level, DEFAULT_TF.kinetic_level)),
     }
 }
 
-function resolveAlignColor(label: string, consensus: 'BULLISH' | 'BEARISH' | 'NEUTRAL'): string {
+function toViewState(tf: MtfTfState): MtfTfViewState {
+    const tokens = STATE_THEME[tf.state]
+    const animateClass = tf.kinetic_level >= 0.85 ? 'animate-pulse' : tokens.animateClass
+    return {
+        ...tf,
+        tokens: {
+            ...tokens,
+            animateClass,
+        },
+    }
+}
+
+function deriveConsensus(states: FlowState[]): FlowState {
+    const balance = states.reduce((acc, value) => acc + value, 0 as number)
+    if (balance > 0) return 1
+    if (balance < 0) return -1
+    return 0
+}
+
+function deriveAlignmentLabel(states: FlowState[]): 'ALIGNED' | 'SPLIT' | 'DIVERGE' {
+    const total = states.length || 1
+    const dominantCount = Math.max(
+        states.filter((s) => s === 1).length,
+        states.filter((s) => s === -1).length,
+        states.filter((s) => s === 0).length
+    )
+    const alignment = dominantCount / total
+    if (alignment >= 0.67) return 'ALIGNED'
+    if (alignment >= 0.34) return 'SPLIT'
+    return 'DIVERGE'
+}
+
+function alignClassFrom(label: 'ALIGNED' | 'SPLIT' | 'DIVERGE', consensus: FlowState): string {
     if (label === 'ALIGNED') {
-        if (consensus === 'BULLISH') return 'text-accent-red'
-        if (consensus === 'BEARISH') return 'text-accent-green'
-        return 'text-text-secondary'
+        return STATE_THEME[consensus].textColor
     }
     if (label === 'SPLIT') return 'text-accent-amber'
     return 'text-text-secondary'
 }
 
-export function normalizeMtfFlowState(input: unknown): MtfFlowState {
-    if (!input || typeof input !== 'object') return { ...DEFAULT_MTF_FLOW_STATE }
+function consensusLabelFrom(state: FlowState): 'EXPANSION' | 'CONTRACTION' | 'EQUILIBRIUM' {
+    if (state > 0) return 'EXPANSION'
+    if (state < 0) return 'CONTRACTION'
+    return 'EQUILIBRIUM'
+}
+
+export function normalizeMtfFlowState(input: unknown): MtfFlowViewState {
+    if (!input || typeof input !== 'object') {
+        const m1 = toViewState(DEFAULT_MTF_FLOW_STATE.m1)
+        const m5 = toViewState(DEFAULT_MTF_FLOW_STATE.m5)
+        const m15 = toViewState(DEFAULT_MTF_FLOW_STATE.m15)
+        return {
+            m1,
+            m5,
+            m15,
+            consensusState: 0,
+            consensusLabel: 'EQUILIBRIUM',
+            consensusPercent: 0,
+            alignLabel: 'DIVERGE',
+            alignClass: 'text-text-secondary',
+        }
+    }
+
     const src = input as Partial<MtfFlowState>
-    const consensus = normalizeConsensus(src.consensus)
-    const strength = clamp01(toFiniteNumber(src.strength, DEFAULT_MTF_FLOW_STATE.strength))
-    const alignment = clamp01(toFiniteNumber(src.alignment, DEFAULT_MTF_FLOW_STATE.alignment))
-    const alignLabelRaw = typeof src.align_label === 'string' ? src.align_label.trim() : ''
-    const align_label = alignLabelRaw || (alignment >= 0.67 ? 'ALIGNED' : alignment >= 0.34 ? 'SPLIT' : 'DIVERGE')
-    const align_color =
-        typeof src.align_color === 'string' && src.align_color.trim()
-            ? src.align_color
-            : resolveAlignColor(align_label, consensus)
+    const m1 = toViewState(normalizeTfState(src.m1))
+    const m5 = toViewState(normalizeTfState(src.m5))
+    const m15 = toViewState(normalizeTfState(src.m15))
+    const states: FlowState[] = [m1.state, m5.state, m15.state]
+    const consensusState = deriveConsensus(states)
+    const alignLabel = deriveAlignmentLabel(states)
+    const consensusPercent = Math.round(((m1.kinetic_level + m5.kinetic_level + m15.kinetic_level) / 3) * 100)
 
     return {
-        m1: normalizeTfState(src.m1),
-        m5: normalizeTfState(src.m5),
-        m15: normalizeTfState(src.m15),
-        consensus,
-        strength,
-        alignment,
-        align_label,
-        align_color,
+        m1,
+        m5,
+        m15,
+        consensusState,
+        consensusLabel: consensusLabelFrom(consensusState),
+        consensusPercent,
+        alignLabel,
+        alignClass: alignClassFrom(alignLabel, consensusState),
     }
 }
