@@ -30,8 +30,14 @@ BADGE_GEX_NEUTRAL      = "badge-neutral"
 # SIEGE: 墙体加固 → 琥珀空心（警示：价格在大墙下方，需要更多能量才能突破）
 BADGE_WALL_SIEGE       = "badge-hollow-amber"
 
-# RETREAT: 阻力墙撤退 → 红色实心（对做市商是高风险警告：空间已打开）
-BADGE_WALL_RETREAT     = "badge-red"
+# RETREAT ↑: 阻力墙撤退（上涨语义）→ 红色实心
+BADGE_WALL_RETREAT_UP   = "badge-red"
+
+# RETREAT ↓: 支撑墙后撤（下跌语义）→ 绿色实心
+BADGE_WALL_RETREAT_DOWN = "badge-green"
+
+# 兼容旧键
+BADGE_WALL_RETREAT      = BADGE_WALL_RETREAT_UP
 
 # COLLAPSE: 支撑墙沦陷 → 绿色实心（下方支撑丢失，做市商 Put Delta 减少）
 BADGE_WALL_COLLAPSE    = "badge-green"

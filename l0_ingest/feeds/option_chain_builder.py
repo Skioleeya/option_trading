@@ -31,6 +31,7 @@ from l0_ingest.subscription_manager import OptionSubscriptionManager
 
 from l1_compute.analysis.depth_engine import DepthEngine
 from l1_compute.analysis.entropy_filter import EntropyFilter
+from l1_compute.analysis.bsm import get_trading_time_to_maturity
 from l1_compute.analysis.greeks_engine import GreeksEngine
 from l1_compute.rust_bridge import RustBridge
 
@@ -339,6 +340,9 @@ class OptionChainBuilder:
         self._tier3 = Tier3Poller(self._rate_limiter)
 
         self._greeks_engine = GreeksEngine(self._store, self._iv_sync)
+        self._legacy_greeks_invocations: int = 0
+        self._legacy_greeks_by_version: dict[int, int] = {}
+        self._legacy_greeks_by_caller: dict[str, int] = {}
         self._orchestrator = FeedOrchestrator(
             self._quote_runtime,
             self._store,
@@ -461,7 +465,11 @@ class OptionChainBuilder:
                 logger.error("[OptionChainBuilder] Rust consumer loop error: %s", exc)
                 await asyncio.sleep(0.1)
 
-    async def fetch_chain(self) -> dict[str, Any]:
+    async def fetch_chain(
+        self,
+        include_legacy_greeks: bool = False,
+        caller_tag: str = "unspecified",
+    ) -> dict[str, Any]:
         if not self._initialized:
             return {
                 "spot": None,
@@ -479,7 +487,25 @@ class OptionChainBuilder:
                 self._depth_engine.get_flow_snapshot(),
                 target_symbols=target_set,
             )
-            agg = await self._greeks_engine.enrich(snapshot, self._store.spot or 0.0)
+            ttm_seconds = get_trading_time_to_maturity(now) * (252 * 23400)
+            agg: dict[str, Any] = {}
+            if include_legacy_greeks:
+                version = int(self._store.version)
+                self._legacy_greeks_invocations += 1
+                self._legacy_greeks_by_version[version] = (
+                    self._legacy_greeks_by_version.get(version, 0) + 1
+                )
+                self._legacy_greeks_by_caller[caller_tag] = (
+                    self._legacy_greeks_by_caller.get(caller_tag, 0) + 1
+                )
+                logger.info(
+                    "[GPU-AUDIT] legacy_greeks_dispatch caller=%s snapshot_version=%s invocation=%s",
+                    caller_tag,
+                    version,
+                    self._legacy_greeks_invocations,
+                )
+                agg = await self._greeks_engine.enrich(snapshot, self._store.spot or 0.0)
+                ttm_seconds = float(agg.get("ttm_seconds", ttm_seconds) or ttm_seconds)
 
             data = {
                 "spot": self._store.spot,
@@ -489,7 +515,7 @@ class OptionChainBuilder:
                 "tier3_chain": self._tier3.cache,
                 "volume_map": self._store.volume_map,
                 "aggregate_greeks": agg,
-                "ttm_seconds": agg.get("ttm_seconds"),
+                "ttm_seconds": ttm_seconds,
                 "as_of": now,
                 "as_of_utc": now_utc.isoformat(),
                 "rust_active": self._rust_bridge.mm is not None,
@@ -647,6 +673,11 @@ class OptionChainBuilder:
             "initialized": self._initialized,
             "gateway": self._quote_runtime.diagnostics(),
             "store": self._store.diagnostics(),
+            "legacy_greeks_audit": {
+                "invocations": self._legacy_greeks_invocations,
+                "by_version": dict(self._legacy_greeks_by_version),
+                "by_caller": dict(self._legacy_greeks_by_caller),
+            },
         }
         diagnostics.update(self._store.diagnostics())
         return diagnostics

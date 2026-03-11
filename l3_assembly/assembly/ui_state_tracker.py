@@ -55,7 +55,7 @@ class UIStateTracker:
 
         svol_corr, svol_state = resolve_svol_fields(vanna_view)
 
-        wall_payload = self._to_wall_payload(wall_raw)
+        wall_payload = self._to_wall_payload(wall_raw, micro_state.get("wall_context"))
 
         mtf_consensus = self._extract_snapshot_mtf_consensus({"mtf_consensus": mtf_raw})
         if mtf_consensus is None:
@@ -117,6 +117,7 @@ class UIStateTracker:
             return {
                 "iv_velocity": getattr(ms, "iv_velocity", None),
                 "wall_migration": getattr(ms, "wall_migration", None),
+                "wall_context": getattr(ms, "wall_context", None),
                 "vanna_flow_result": getattr(ms, "vanna_flow_result", None),
                 "mtf_consensus": getattr(ms, "mtf_consensus", None),
                 "volume_imbalance": getattr(ms, "volume_imbalance", None),
@@ -157,7 +158,7 @@ class UIStateTracker:
         )
 
     @classmethod
-    def _to_wall_payload(cls, raw: Any) -> dict[str, Any]:
+    def _to_wall_payload(cls, raw: Any, fallback_context: Any = None) -> dict[str, Any]:
         if raw is None:
             return {}
 
@@ -173,6 +174,7 @@ class UIStateTracker:
         put_state = raw.get("put_wall_state")
         call_history = cls._normalize_wall_history(raw.get("call_wall_history"))
         put_history = cls._normalize_wall_history(raw.get("put_wall_history"))
+        wall_context = cls._normalize_wall_context(raw.get("wall_context", fallback_context))
 
         if call_state is None and put_state is None and not call_history and not put_history:
             return {}
@@ -182,6 +184,7 @@ class UIStateTracker:
             "put_wall_state": str(put_state) if put_state is not None else "UNAVAILABLE",
             "call_wall_history": call_history,
             "put_wall_history": put_history,
+            **({"wall_context": wall_context} if wall_context else {}),
         }
 
     @staticmethod
@@ -204,6 +207,37 @@ class UIStateTracker:
                 out.append(None)
             else:
                 out.append(num)
+        return out
+
+    @staticmethod
+    def _normalize_wall_context(value: Any) -> dict[str, Any]:
+        if value is None:
+            return {}
+        if hasattr(value, "model_dump"):
+            dumped = value.model_dump()
+            if isinstance(dumped, dict):
+                value = dumped
+        if not isinstance(value, dict):
+            return {}
+
+        out: dict[str, Any] = {}
+        gamma_regime = value.get("gamma_regime")
+        if gamma_regime is not None:
+            out["gamma_regime"] = str(gamma_regime)
+
+        for key in (
+            "hedge_flow_intensity",
+            "counterfactual_vol_impact_bps",
+            "near_wall_hedge_notional_m",
+            "near_wall_liquidity",
+        ):
+            raw = value.get(key)
+            try:
+                num = float(raw)
+            except (TypeError, ValueError):
+                continue
+            if math.isfinite(num):
+                out[key] = num
         return out
 
     @classmethod

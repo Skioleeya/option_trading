@@ -33,11 +33,19 @@ GEX_DEEP_NEGATIVE_THRESHOLD = float(getattr(settings, "gex_strong_negative", -50
 # Call Wall 状态集合 → 触发 SIEGE (围攻/大墙压顶)
 WALL_SIEGE_STATES     = {"REINFORCED_WALL", "REINFORCED_SUPPORT"}
 
-# Call Wall 撤退 → 上方空间打开
-WALL_RETREAT_STATES   = {"RETREATING_RESISTANCE"}
+# 墙体后撤（主语义，几何态）：
+# - RETREATING_RESISTANCE: call 阻力上移（上涨语义）
+# - RETREATING_SUPPORT:    put 支撑下移（下跌语义）
+WALL_RETREAT_UP_STATES = {"RETREATING_RESISTANCE"}
+WALL_RETREAT_DOWN_STATES = {"RETREATING_SUPPORT"}
+WALL_RETREAT_STATES = WALL_RETREAT_UP_STATES | WALL_RETREAT_DOWN_STATES
 
-# Put Wall 沦陷 → 下方支撑丢失
-WALL_COLLAPSE_STATES  = {"RETREATING_SUPPORT"}
+# 条件化风险升级（非几何主语义）：仅 put 后撤可触发 COLLAPSE 候选。
+WALL_COLLAPSE_STATES = {"RETREATING_SUPPORT"}
+WALL_COLLAPSE_GAMMA_REGIMES = {"SHORT_GAMMA"}
+WALL_COLLAPSE_FLOW_INTENSITY_THRESHOLD = float(
+    getattr(settings, "wall_collapse_flow_intensity_threshold", 0.35)
+)
 
 # 双墙对峙 → 两侧均被加固，做市商"人墙包围"
 WALL_PINCH_CALL_STATES = {"REINFORCED_WALL"}

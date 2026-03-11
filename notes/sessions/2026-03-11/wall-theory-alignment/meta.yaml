@@ -1,0 +1,57 @@
+﻿session_id: "2026-03-11/wall-theory-alignment"
+title: "Wall analysis theory alignment"
+scope: "retreat semantics + conditional collapse + wall_context"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-11 10:31:31 -04:00"
+updated_at_et: "2026-03-11 10:48:28 -04:00"
+parent_session: "2026-03-11/gpu-duplicate-compute-audit"
+
+branch: "master"
+base_commit: "fc174d4"
+head_commit: "fc174d4"
+
+files_changed:
+  - "shared/models/microstructure.py"
+  - "shared/config/market_structure.py"
+  - "l1_compute/output/enriched_snapshot.py"
+  - "l1_compute/reactor.py"
+  - "l2_decision/agents/agent_b.py"
+  - "l3_assembly/assembly/ui_state_tracker.py"
+  - "l3_assembly/assembly/payload_assembler.py"
+  - "l3_assembly/presenters/ui/micro_stats/thresholds.py"
+  - "l3_assembly/presenters/ui/micro_stats/wall_dynamics.py"
+  - "l3_assembly/presenters/ui/micro_stats/presenter.py"
+  - "l3_assembly/presenters/ui/micro_stats/mappings.py"
+  - "l3_assembly/tests/test_micro_stats_wall_dynamics.py"
+  - "l3_assembly/tests/test_ui_state_tracker.py"
+  - "l3_assembly/tests/test_assembly.py"
+  - "l1_compute/tests/test_reactor.py"
+  - "docs/SOP/L1_LOCAL_COMPUTATION.md"
+  - "docs/SOP/L3_OUTPUT_ASSEMBLY.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-11/wall-theory-alignment/project_state.md"
+  - "notes/sessions/2026-03-11/wall-theory-alignment/open_tasks.md"
+  - "notes/sessions/2026-03-11/wall-theory-alignment/handoff.md"
+  - "notes/sessions/2026-03-11/wall-theory-alignment/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId wall-theory-alignment -Title \"Wall analysis theory alignment\" -Scope \"retreat semantics + conditional collapse + wall_context\" -Owner \"Codex\" -ParentSession \"2026-03-11/gpu-duplicate-compute-audit\" -Timezone \"Eastern Standard Time\""
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l3_assembly/tests/test_micro_stats_wall_dynamics.py l3_assembly/tests/test_ui_state_tracker.py l3_assembly/tests/test_assembly.py l1_compute/tests/test_reactor.py l1_compute/tests/test_wall_migration_tracker.py -q"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l2_decision/tests/test_signals.py l2_decision/tests/test_feature_store.py l2_decision/tests/test_institutional_integration.py -q"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l3_assembly/tests -q"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "70 passed: l3 wall dynamics/ui_state + l1 reactor/wall tracker targeted set"
+  - "83 passed: l2_decision/tests/test_signals.py + test_feature_store.py + test_institutional_integration.py"
+  - "129 passed: l3_assembly/tests full suite"
+  - "scripts/validate_session.ps1 -Strict passed"
+tests_failed:
+  - "l2_decision/tests full suite: 9 failures in test_reactor_and_guards due Temp dir permission denied (environment issue)."
+  - "l1_compute/tests full suite: 1 failure in test_arrow expected column count drift (baseline mismatch)."
+blockers: []
+notes:
+  - "Strict validation pending at the end of session."
+
+

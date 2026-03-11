@@ -122,6 +122,7 @@ class AgentB1:
             m_dict = {
                 "iv_velocity": micro.iv_velocity,
                 "wall_migration": micro.wall_migration,
+                "wall_context": getattr(micro, "wall_context", None),
                 "vanna_flow_result": micro.vanna_flow_result,
                 "mtf_consensus": micro.mtf_consensus,
                 "volume_imbalance": micro.volume_imbalance,

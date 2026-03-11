@@ -64,6 +64,7 @@ class MicroSignals:
     
     # Wall Migration
     wall_migration: Optional[dict[str, Any]] = None
+    wall_context: Optional[dict[str, Any]] = None
     wall_confidence: float = 0.0
     
     # Vanna Flow

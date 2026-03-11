@@ -46,9 +46,9 @@ class APICredentialsConfig(BaseConfig):
     )
 
     # Longport API Flow Control (Hard Limits: 10 calls/s, 5 concurrent, 500 subs)
-    longport_api_rate_limit: float = Field(default=9.0)        # Max 10/s, leaving 1.0 margin
+    longport_api_rate_limit: float = Field(default=10.0)       # Official cap: <=10 req/s
     longport_api_burst: int = Field(default=10)
-    longport_api_max_concurrent: int = Field(default=4)        # Max 5, leaving 1 margin
+    longport_api_max_concurrent: int = Field(default=5)        # Official cap: <=5 in-flight
     longport_symbol_rate_per_min: float = Field(default=240.0) # Conservative symbol budget for option metadata APIs
     longport_symbol_burst: int = Field(default=50)             # Small startup burst to avoid minute quota spikes
 

@@ -20,7 +20,14 @@ from .anchor import (
     select_roll_anchor,
     validate_anchor,
 )
-from .models import ET, MAX_ANCHOR_DISTANCE, SPOT_STABILITY_MAX_RANGE, SPOT_STABILITY_MIN_SAMPLES, spot_distance
+from .models import (
+    ET,
+    MAX_ANCHOR_DISTANCE,
+    SPOT_STABILITY_MAX_RANGE,
+    SPOT_STABILITY_MIN_SAMPLES,
+    is_valid_spot,
+    spot_distance,
+)
 from .storage import AtmDecayStorage
 from .stitching import (
     advance_factor,
@@ -246,14 +253,15 @@ class AtmDecayTracker:
         self._pending_restore_anchor = None
         self._pending_restore_source = None
 
-    async def _try_restore_pending_anchor(self, spot: float) -> bool:
+    async def _try_restore_pending_anchor(self, spot: Any) -> bool:
         pending = self._pending_restore_anchor
         if pending is None:
             return False
-        if spot <= 0:
+        if not is_valid_spot(spot):
             return False
+        spot_f = float(spot)
 
-        dist = spot_distance(pending.get("strike"), spot)
+        dist = spot_distance(pending.get("strike"), spot_f)
         if dist is None:
             return False
         if dist > MAX_ANCHOR_DISTANCE:
@@ -262,7 +270,7 @@ class AtmDecayTracker:
                 self._today,
                 self._pending_restore_source or "unknown",
                 float(pending["strike"]),
-                float(spot),
+                spot_f,
                 dist,
                 MAX_ANCHOR_DISTANCE,
             )
@@ -276,7 +284,7 @@ class AtmDecayTracker:
             "[AtmDecayTracker] Deferred anchor restored: source=%s strike=%.2f spot=%.2f",
             self._pending_restore_source or "unknown",
             float(pending["strike"]),
-            float(spot),
+            spot_f,
         )
 
         if self.redis and self._pending_restore_source == "cold_json":
@@ -312,7 +320,7 @@ class AtmDecayTracker:
             f"C${anchor['call_price']:.2f} P${anchor['put_price']:.2f}"
         )
 
-    async def update(self, chain: list[dict[str, Any]], spot: float) -> dict[str, Any] | None:
+    async def update(self, chain: list[dict[str, Any]], spot: Any) -> dict[str, Any] | None:
         if not self.is_initialized:
             return None
 
@@ -327,10 +335,11 @@ class AtmDecayTracker:
         if now.hour > 16 or (now.hour == 16 and (now.minute > 0 or now.second > 0)):
             return None
 
-        record_spot_sample(self._recent_spots, spot)
+        spot_f = float(spot) if is_valid_spot(spot) else 0.0
+        record_spot_sample(self._recent_spots, spot_f)
 
         if not self.anchor and self._pending_restore_anchor is not None:
-            await self._try_restore_pending_anchor(spot)
+            await self._try_restore_pending_anchor(spot_f)
 
         if not self.anchor:
             if self._warmup_ticks_remaining > 0:
@@ -349,7 +358,7 @@ class AtmDecayTracker:
                         SPOT_STABILITY_MAX_RANGE,
                     )
                 else:
-                    await self._capture_anchor(chain, spot, now)
+                    await self._capture_anchor(chain, spot_f, now)
 
         if not self.anchor:
             return None
@@ -357,10 +366,10 @@ class AtmDecayTracker:
         alpha = 0.0035
         tau_ticks = 45
         current_strike = self.anchor["strike"]
-        if spot > 0 and abs(spot - current_strike) / spot > alpha:
+        if spot_f > 0 and abs(spot_f - current_strike) / spot_f > alpha:
             self._out_of_bounds_ticks += 1
             if self._out_of_bounds_ticks >= tau_ticks:
-                await self._roll_anchor(chain, spot, now)
+                await self._roll_anchor(chain, spot_f, now)
         else:
             self._out_of_bounds_ticks = 0
 

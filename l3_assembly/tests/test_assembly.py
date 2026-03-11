@@ -12,6 +12,7 @@ from l3_assembly.events.delta_events import DeltaPayload, DeltaType
 from l3_assembly.assembly.payload_assembler import PayloadAssemblerV2
 from l3_assembly.assembly.delta_encoder import FieldDeltaEncoder
 from l3_assembly.storage.timeseries_store import TimeSeriesStoreV2
+from l3_assembly.presenters.ui.micro_stats import presenter as micro_presenter_mod
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -40,6 +41,12 @@ def _make_frozen(version: int = 1, spot: float = 560.0) -> FrozenPayload:
         ui_state=UIState.zero_state(),
         atm=None,
     )
+
+
+def _reset_micro_stats_wall_debounce_state() -> None:
+    micro_presenter_mod._last_committed_wall_key = "STABLE"
+    micro_presenter_mod._pending_wall_key = ""
+    micro_presenter_mod._pending_wall_key_count = 0
 
 
 class _MockDecision:
@@ -114,6 +121,7 @@ class TestPayloadAssemblerV2:
         }
 
     def test_micro_stats_preserve_wall_dyn_and_badge_tokens(self):
+        _reset_micro_stats_wall_debounce_state()
         assembler = PayloadAssemblerV2()
         ui_metrics = {
             "gex_regime": "DAMPING",
@@ -135,6 +143,55 @@ class TestPayloadAssemblerV2:
         assert micro["net_gex"]["badge"] == "badge-hollow-green"
         assert micro["vanna"]["badge"] == "badge-red"
         assert micro["momentum"]["badge"] == "badge-red"
+
+    def test_micro_stats_wall_context_can_gate_collapse(self):
+        _reset_micro_stats_wall_debounce_state()
+        assembler = PayloadAssemblerV2()
+        ui_metrics = {
+            "gex_regime": "NEUTRAL",
+            "vanna_state": "NORMAL",
+            "momentum": "NEUTRAL",
+            "wall_migration_data": {
+                "call_wall_state": "STABLE",
+                "put_wall_state": "RETREATING_SUPPORT",
+                "wall_context": {
+                    "gamma_regime": "SHORT_GAMMA",
+                    "hedge_flow_intensity": 2.0,
+                },
+            },
+        }
+
+        assembler.assemble(_MockDecision(), _MockSnapshot(), None, (), ui_metrics)
+        result = assembler.assemble(_MockDecision(), _MockSnapshot(), None, (), ui_metrics)
+        micro = result.ui_state.micro_stats.to_dict()
+        assert micro["wall_dyn"]["label"] == "COLLAPSE"
+
+    def test_micro_stats_retreat_direction_matches_wall_migration_same_tick(self):
+        _reset_micro_stats_wall_debounce_state()
+        assembler = PayloadAssemblerV2()
+        ui_metrics = {
+            "gex_regime": "NEUTRAL",
+            "vanna_state": "NORMAL",
+            "momentum": "NEUTRAL",
+            "wall_migration_data": {
+                "call_wall_state": "STABLE",
+                "put_wall_state": "RETREATING_SUPPORT",
+                "call_wall_history": [602.0, 603.0, 604.0],
+                "put_wall_history": [595.0, 594.0, 593.0],
+                "wall_context": {
+                    "gamma_regime": "SHORT_GAMMA",
+                    "hedge_flow_intensity": 0.1,
+                },
+            },
+        }
+
+        result = assembler.assemble(_MockDecision(), _MockSnapshot(), None, (), ui_metrics)
+        micro = result.ui_state.micro_stats.to_dict()
+        wall_rows = result.ui_state.wall_migration
+        assert micro["wall_dyn"]["label"] == "RETREAT ↓"
+        assert micro["wall_dyn"]["badge"] == "badge-green"
+        assert len(wall_rows) == 2
+        assert wall_rows[1].lights.get("wall_dyn_badge") == "RETREAT ↓"
 
     def test_none_decision_produces_neutral(self):
         assembler = PayloadAssemblerV2()

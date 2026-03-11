@@ -8,7 +8,7 @@
  *   import { createChart, LineSeries } from 'lightweight-charts'
  *   const series = chart.addSeries(LineSeries, { color: 'red' })
  */
-import React, { useEffect, useRef, memo, useState } from 'react'
+import React, { useEffect, useRef, memo, useState, useCallback } from 'react'
 import {
     createChart,
     ColorType,
@@ -21,11 +21,19 @@ import {
     type Time,
     type SeriesMarker,
     type ISeriesMarkersPluginApi,
+    type MouseEventParams,
 } from 'lightweight-charts'
 import { useDashboardStore, selectAtmHistory } from '../../store/dashboardStore'
 import type { AtmDecay } from '../../types/dashboard'
-import { getHHMM, isMarketHours, toUnixSec } from './atmDecayTime'
+import { getHHMM, getMarketSessionWindowUnixSec, isMarketHours, toUnixSec } from './atmDecayTime'
 import { syncAtmSeriesData, type AtmSeriesPoint } from './atmDecayIncremental'
+import {
+    buildSeriesVisualState,
+    resolveHoveredFamilyAfterDataRefresh,
+    resolveNextHoveredFamily,
+    type DisplayMode,
+    type SeriesFamily,
+} from './atmDecayHover'
 
 // Extended AtmDecay to recognize the new L1 field gracefully
 type ExtendedAtmDecay = AtmDecay & { strike_changed?: boolean }
@@ -33,8 +41,6 @@ type ExtendedAtmDecay = AtmDecay & { strike_changed?: boolean }
 interface Props {
     data?: AtmDecay[]
 }
-
-type DisplayMode = 'smoothed' | 'raw' | 'both'
 
 // ── Theme ──────────────────────────────────────────────────────────────────────
 const BG = '#060606'
@@ -56,15 +62,9 @@ const SERIES_CFG = [
     { key: 'put_pct' as const, label: 'PUT', color: '#10b981' },
 ] as const
 
+const SERIES_FAMILIES: SeriesFamily[] = ['straddle', 'call', 'put']
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
-function hexToRgba(hex: string, alpha: number): string {
-    const h = hex.replace('#', '')
-    if (h.length !== 6) return hex
-    const r = parseInt(h.slice(0, 2), 16)
-    const g = parseInt(h.slice(2, 4), 16)
-    const b = parseInt(h.slice(4, 6), 16)
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`
-}
 
 function buildPoints(data: ExtendedAtmDecay[], key: keyof AtmDecay) {
     const seen = new Set<number>()
@@ -115,8 +115,50 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
     const rawMarkersPluginRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null)
     const smoothMarkersPluginRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null)
     const markersRef = useRef<SeriesMarker<Time>[]>([])
+    const seriesFamilyByApiRef = useRef<Map<unknown, SeriesFamily>>(new Map())
+    const hoveredFamilyRef = useRef<SeriesFamily | null>(null)
+    const displayModeRef = useRef<DisplayMode>(displayMode)
     const initialised = useRef(false)
     const hasAddedCliff = useRef(false)
+
+    const applySeriesVisualState = useCallback(
+        (mode: DisplayMode, hoveredFamily: SeriesFamily | null) => {
+            const rawSeries = rawSeriesRef.current
+            const smoothSeries = smoothSeriesRef.current
+            if (!rawSeries.length || !smoothSeries.length) return
+
+            SERIES_CFG.forEach(({ color }, i) => {
+                const family = SERIES_FAMILIES[i]
+                const raw = rawSeries[i]
+                const smooth = smoothSeries[i]
+
+                if (raw && typeof raw.applyOptions === 'function') {
+                    raw.applyOptions(
+                        buildSeriesVisualState({
+                            displayMode: mode,
+                            hoveredFamily,
+                            family,
+                            layer: 'raw',
+                            baseColor: color,
+                        })
+                    )
+                }
+
+                if (smooth && typeof smooth.applyOptions === 'function') {
+                    smooth.applyOptions(
+                        buildSeriesVisualState({
+                            displayMode: mode,
+                            hoveredFamily,
+                            family,
+                            layer: 'smooth',
+                            baseColor: color,
+                        })
+                    )
+                }
+            })
+        },
+        []
+    )
 
     // ── Chart init (mount only) ──────────────────────────────────────────────
     useEffect(() => {
@@ -210,6 +252,12 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
         chartRef.current = chart
         rawSeriesRef.current = rawSeries
         smoothSeriesRef.current = smoothSeries
+        const byApi = new Map<unknown, SeriesFamily>()
+        SERIES_FAMILIES.forEach((family, i) => {
+            if (rawSeries[i]) byApi.set(rawSeries[i], family)
+            if (smoothSeries[i]) byApi.set(smoothSeries[i], family)
+        })
+        seriesFamilyByApiRef.current = byApi
 
         if (rawSeries[0]) {
             rawMarkersPluginRef.current = createSeriesMarkers(rawSeries[0])
@@ -217,6 +265,25 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
         if (smoothSeries[0]) {
             smoothMarkersPluginRef.current = createSeriesMarkers(smoothSeries[0])
         }
+
+        const handleCrosshairMove = (event: MouseEventParams<Time>) => {
+            const nextFamily = resolveNextHoveredFamily({
+                event,
+                currentHoveredFamily: hoveredFamilyRef.current,
+                seriesFamilyByApi: seriesFamilyByApiRef.current,
+            })
+            if (hoveredFamilyRef.current === nextFamily) return
+            hoveredFamilyRef.current = nextFamily
+            applySeriesVisualState(displayModeRef.current, nextFamily)
+        }
+        const handleMouseLeave = () => {
+            if (hoveredFamilyRef.current === null) return
+            hoveredFamilyRef.current = null
+            applySeriesVisualState(displayModeRef.current, null)
+        }
+        chart.subscribeCrosshairMove(handleCrosshairMove)
+        el.addEventListener('mouseleave', handleMouseLeave)
+        applySeriesVisualState(displayModeRef.current, hoveredFamilyRef.current)
 
         // Responsive resize via ResizeObserver
         const ro = new ResizeObserver(entries => {
@@ -237,12 +304,16 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
             smoothSeriesPointsRef.current = []
             rawMarkersPluginRef.current?.detach()
             smoothMarkersPluginRef.current?.detach()
+            chart.unsubscribeCrosshairMove(handleCrosshairMove)
+            el.removeEventListener('mouseleave', handleMouseLeave)
             rawMarkersPluginRef.current = null
             smoothMarkersPluginRef.current = null
             markersRef.current = []
+            seriesFamilyByApiRef.current = new Map()
+            hoveredFamilyRef.current = null
             initialised.current = false
         }
-    }, [])
+    }, [applySeriesVisualState])
 
     // Persist display mode preference
     useEffect(() => {
@@ -255,34 +326,9 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
 
     // Display mode controls visibility and styling only (data remains raw in store/backend)
     useEffect(() => {
-        const rawSeries = rawSeriesRef.current
-        const smoothSeries = smoothSeriesRef.current
-        if (!rawSeries.length || !smoothSeries.length) return
-
-        const rawVisible = displayMode === 'raw' || displayMode === 'both'
-        const smoothVisible = displayMode === 'smoothed' || displayMode === 'both'
-
-        SERIES_CFG.forEach(({ color }, i) => {
-            const raw = rawSeries[i]
-            const smooth = smoothSeries[i]
-            if (raw && typeof raw.applyOptions === 'function') {
-                raw.applyOptions({
-                    visible: rawVisible,
-                    color: displayMode === 'both' ? hexToRgba(color, 0.35) : color,
-                    priceLineVisible: displayMode === 'raw',
-                    lastValueVisible: displayMode === 'raw',
-                })
-            }
-            if (smooth && typeof smooth.applyOptions === 'function') {
-                smooth.applyOptions({
-                    visible: smoothVisible,
-                    color,
-                    priceLineVisible: displayMode !== 'raw',
-                    lastValueVisible: displayMode !== 'raw',
-                })
-            }
-        })
-    }, [displayMode])
+        displayModeRef.current = displayMode
+        applySeriesVisualState(displayMode, hoveredFamilyRef.current)
+    }, [displayMode, applySeriesVisualState])
 
     // ── Data sync ─────────────────────────────────────────────────────────────
     useEffect(() => {
@@ -311,6 +357,14 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
             if (sp && typeof sp.setMarkers === 'function') sp.setMarkers([])
             markersRef.current = []
             initialised.current = false
+            const nextHoveredFamily = resolveHoveredFamilyAfterDataRefresh({
+                hasRenderableData: false,
+                currentHoveredFamily: hoveredFamilyRef.current,
+            })
+            if (nextHoveredFamily !== hoveredFamilyRef.current) {
+                hoveredFamilyRef.current = nextHoveredFamily
+                applySeriesVisualState(displayModeRef.current, nextHoveredFamily)
+            }
             return
         }
 
@@ -379,8 +433,35 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
         if (sp && typeof sp.setMarkers === 'function') sp.setMarkers(nextMarkers)
         markersRef.current = nextMarkers
 
-        if (anyDataLoaded && !initialised.current) {
-            chart.timeScale().fitContent()
+        if (!anyDataLoaded) {
+            initialised.current = false
+            const nextHoveredFamily = resolveHoveredFamilyAfterDataRefresh({
+                hasRenderableData: false,
+                currentHoveredFamily: hoveredFamilyRef.current,
+            })
+            if (nextHoveredFamily !== hoveredFamilyRef.current) {
+                hoveredFamilyRef.current = nextHoveredFamily
+                applySeriesVisualState(displayModeRef.current, nextHoveredFamily)
+            }
+            return
+        }
+
+        if (!initialised.current) {
+            const lastMarketTick = [...data]
+                .reverse()
+                .find((d) => d.timestamp && isMarketHours(d.timestamp))
+            const sessionWindow = lastMarketTick?.timestamp
+                ? getMarketSessionWindowUnixSec(lastMarketTick.timestamp)
+                : null
+
+            if (sessionWindow) {
+                chart.timeScale().setVisibleRange({
+                    from: sessionWindow.from as Time,
+                    to: sessionWindow.to as Time,
+                })
+            } else {
+                chart.timeScale().fitContent()
+            }
             initialised.current = true
         }
     }, [data])

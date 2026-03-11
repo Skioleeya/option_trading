@@ -1,22 +1,13 @@
 ﻿# Open Tasks (Index)
 
 ## Active Session Tasks
-- Path: notes/sessions/2026-03-10/coupling_point_audit_repair/open_tasks.md
-- Status: P0/P1 completed; pending only P2（跨语言状态枚举契约统一）
+- Path: notes/sessions/2026-03-11/atm-decay-hover-crosshair-strict/open_tasks.md
+- Status: P0 修复与回归已完成，strict gate 已通过
 
 ## Global Backlog (Cross-Session)
 - [ ] P2: Stage2 remove `DecisionOutput.to_legacy_agent_result` and migrate compute-loop/L3 to typed-contract direct path (Owner: Codex, DUE: 2026-03-12).
-- [x] P0: ATM decay storage append path O(N^2) fixed via JSONL append mirror (`SUPERSEDED-BY: 2026-03-06/1702/1702_p0_timestamp_atm_storage_hotfix_mod`).
-- [x] P0: L0-L4 timestamp contract hardened with L0 `as_of_utc` source-of-truth (`SUPERSEDED-BY: 2026-03-06/1702/1702_p0_timestamp_atm_storage_hotfix_mod`).
-- [x] P1: Add runtime observability probe for `snapshot_version` vs `spy_atm_iv` drift (`SUPERSEDED-BY: 2026-03-06/1908_p1_probe_nav_chart_hotfix_mod`).
-- [x] P1: Resolve dead `l4:nav_*` command path (registry wiring + integration test) (`SUPERSEDED-BY: 2026-03-06/1908_p1_probe_nav_chart_hotfix_mod`).
-- [x] P1: Add `new_session.ps1 -NoPointerUpdate` path for session bootstrap control (`SUPERSEDED-BY: 2026-03-06/1908_p1_probe_nav_chart_hotfix_mod`).
-- [x] P2: ATM chart incremental render optimization at 5k history (`SUPERSEDED-BY: 2026-03-06/1908_p1_probe_nav_chart_hotfix_mod`).
-- [x] P2: Add `new_session.ps1 -Timezone` with IANA/Windows support (`SUPERSEDED-BY: 2026-03-06/1818_p2_process_tooling_followup_mod`).
-- [x] P2: Add strict gate to `validate_session.ps1` (`SUPERSEDED-BY: 2026-03-06/1818_p2_process_tooling_followup_mod`).
-- [x] P2: Add pre-merge session validation CI workflow (`SUPERSEDED-BY: 2026-03-06/1818_p2_process_tooling_followup_mod`).
-- [x] P2: Enforce runtime artifact hygiene in strict validation (`SUPERSEDED-BY: 2026-03-06/1818_p2_process_tooling_followup_mod`).
-- [x] P2: Add focused UI regressions for DecisionEngine/Header/debug hotkey chain (`SUPERSEDED-BY: 2026-03-06/1818_p2_process_tooling_followup_mod`).
+- [ ] P2: Calibrate `wall_collapse_flow_intensity_threshold` with historical/live samples (Owner: Codex, DUE: 2026-03-16).
+- [ ] P2: Resolve existing l4_ui TypeScript build baseline errors (`debugHotkey.integration.test.tsx`, `App.tsx`, `activeOptionsModel.ts`) (Owner: Codex, DUE: 2026-03-13).
 
 ## Process
 - Task details and completion evidence belong in the session-local open_tasks.md.

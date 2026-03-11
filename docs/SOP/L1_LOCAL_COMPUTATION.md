@@ -1,6 +1,6 @@
 # L1 SOP — LOCAL COMPUTATION
 
-> Version: 2026-03-07
+> Version: 2026-03-11
 > Layer: L1 Local Computation
 
 ## 1. Responsibility
@@ -38,12 +38,19 @@ flowchart LR
 
 - `version` 必须透传 L0 真实版本
 - `extra_metadata.source_data_timestamp_utc` 必须绑定 L0 `as_of_utc`
+- `microstructure.wall_context` 为可选合同字段，必须包含：
+  - `gamma_regime`（`LONG_GAMMA|SHORT_GAMMA|NEUTRAL`）
+  - `hedge_flow_intensity`
+  - `counterfactual_vol_impact_bps`（诊断）
+- `microstructure.wall_migration.wall_context` 应与 `microstructure.wall_context` 同源
 
 ## 4. Performance Contract
 
 - 重计算路径必须可异步卸载（`asyncio.to_thread`）
 - 避免 GIL 阻塞主循环
 - 大规模链路优先 GPU / 向量化
+- 同一 `snapshot_version` 在计算环不得重复提交 GPU 任务；重复 tick 必须跳过并输出审计字段（`tick_id/snapshot_version/compute_id/gpu_task_id`）
+- 禁止在微结构分支对 `RecordBatch` 做无效 `to_pylist()` 拷贝（仅在确有行级字段消费时允许）
 
 ## 5. Boundary Rules
 
@@ -58,6 +65,7 @@ flowchart LR
 - Opening ATM 在启动阶段若 `spot` 不可用，已持久化 anchor 必须进入 deferred-restore，待首个有效 `spot` 再执行严格距离校验恢复，禁止直接新开锚覆盖盘中历史
 - Wall Migration 历史必须支持后端冷存储恢复（按交易日 JSONL），服务重启后恢复最近窗口，保证盘中历史连续
 - Wall Migration 持久化失败必须显式日志降级，不得阻断 L1->L4 广播链路
+- 墙体风险语义分层：`RETREAT` 为几何态（墙位后撤），`COLLAPSE` 为条件化风险态（需结合 short-gamma 与 flow-intensity）
 - MTFIVEngine 必须采用几何状态机（`state=-1|0|1` + `relative_displacement/pressure_gradient/distance_to_vacuum/kinetic_level`），禁止输出统计语义字段（如 `zscore/z/strength`）
 - 多周期输入必须独立封帧（1m/5m/15m 各自始末向量），禁止将同一瞬时 `atm_iv` 同步喂入所有周期
 - MTFIVEngine 几何帧状态必须支持后端冷存储恢复（按交易日 JSONL 快照）；重启后恢复最近状态，减少 1m/5m/15m 暖机失真

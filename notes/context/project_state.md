@@ -1,17 +1,17 @@
 ﻿# Project State (Index)
 
 ## Active Session
-- Path: notes/sessions/2026-03-10/coupling_point_audit_repair/project_state.md
-- Meta: notes/sessions/2026-03-10/coupling_point_audit_repair/meta.yaml
+- Path: notes/sessions/2026-03-11/atm-decay-hover-crosshair-strict/project_state.md
+- Meta: notes/sessions/2026-03-11/atm-decay-hover-crosshair-strict/meta.yaml
 - Status: ACTIVE
-- Focus: 耦合点专项审计与修复已完成 P0/P1，进入 strict gate 收尾
+- Focus: P0 悬停命中语义收紧（仅十字星命中对应族才高亮）
 
 ## Recent Sessions
-- notes/sessions/2026-03-10/coupling_point_audit_repair/
-- notes/sessions/2026-03-10/history_v2_columnar_upgrade/
-- notes/sessions/2026-03-10/mtf_flow_geometry_refactor/
-- notes/sessions/2026-03-10/decisionengine_gex_mirror_sync/
-- notes/sessions/2026-03-10/decisionengine_guard_jitter_fix/
+- notes/sessions/2026-03-11/atm-decay-hover-crosshair-strict/
+- notes/sessions/2026-03-11/atm-decay-hover-round2-audit-fix/
+- notes/sessions/2026-03-11/atm-decay-hover-focus/
+- notes/sessions/2026-03-11/wall-dyn-force-consistency-fix/
+- notes/sessions/2026-03-11/wall-theory-alignment/
 
 ## Global Rules
 - Session folders are immutable records; do not overwrite prior sessions.

@@ -159,6 +159,31 @@ def test_tick_wall_payload_preserves_history_series() -> None:
     assert wall["put_wall_history"] == [660.0, None, 659.0]
 
 
+def test_tick_wall_payload_preserves_wall_context() -> None:
+    tracker = UIStateTracker()
+    out = tracker.tick(
+        _make_snapshot(
+            microstructure={
+                "wall_context": {
+                    "gamma_regime": "SHORT_GAMMA",
+                    "hedge_flow_intensity": 0.88,
+                },
+                "wall_migration": {
+                    "call_wall_state": "STABLE",
+                    "put_wall_state": "RETREATING_SUPPORT",
+                    "call_wall_history": [668.0, 669.0, 670.0],
+                    "put_wall_history": [660.0, 659.0, 658.0],
+                },
+            }
+        ),
+        decision=None,
+    )
+
+    wall = out["wall_migration_data"]
+    assert wall["wall_context"]["gamma_regime"] == "SHORT_GAMMA"
+    assert wall["wall_context"]["hedge_flow_intensity"] == pytest.approx(0.88)
+
+
 @pytest.mark.asyncio
 async def test_set_redis_client_is_noop() -> None:
     tracker = UIStateTracker()

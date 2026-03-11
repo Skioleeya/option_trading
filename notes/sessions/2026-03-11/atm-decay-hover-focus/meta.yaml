@@ -1,0 +1,44 @@
+session_id: "2026-03-11/atm-decay-hover-focus"
+title: "AtmDecayChart hover focus-context"
+scope: "put/call/straddle hover de-emphasis"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-11 11:30:26 -04:00"
+updated_at_et: "2026-03-11 12:06:20 -04:00"
+parent_session: "2026-03-11/wall-dyn-force-consistency-fix"
+
+branch: "master"
+base_commit: "fc174d4"
+head_commit: "fc174d4"
+
+files_changed:
+  - "l4_ui/src/components/center/AtmDecayChart.tsx"
+  - "l4_ui/src/components/center/atmDecayHover.ts"
+  - "l4_ui/src/components/center/__tests__/atmDecayHover.test.ts"
+  - "docs/SOP/L4_FRONTEND.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-11/atm-decay-hover-focus/project_state.md"
+  - "notes/sessions/2026-03-11/atm-decay-hover-focus/open_tasks.md"
+  - "notes/sessions/2026-03-11/atm-decay-hover-focus/handoff.md"
+  - "notes/sessions/2026-03-11/atm-decay-hover-focus/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId atm-decay-hover-focus -Title \"AtmDecayChart hover focus-context\" -Scope \"put/call/straddle hover de-emphasis\" -Owner \"Codex\" -ParentSession \"2026-03-11/wall-dyn-force-consistency-fix\" -Timezone \"Eastern Standard Time\""
+  - "cd l4_ui; npm run test -- atmDecayHover"
+  - "cd l4_ui; npm run test -- atmDecayTime atmDecayIncremental microStatsTheme"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l3_assembly/tests/test_micro_stats_wall_dynamics.py l3_assembly/tests/test_ui_state_tracker.py l3_assembly/tests/test_assembly.py l1_compute/tests/test_reactor.py -q"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "5 passed: atmDecayHover"
+  - "12 passed: atmDecayTime + atmDecayIncremental + microStatsTheme"
+  - "67 passed: l3/l1 target pytest set"
+  - "scripts/validate_session.ps1 -Strict passed"
+tests_failed:
+  - "none"
+blockers: []
+notes:
+  - "Hover focus uses hoveredSeries first; when absent with valid seriesData, nearest-family fallback is selected by pixel distance."
+  - "BOTH mode applies same-family dual-line highlight and hides non-focused families."
+  - "If hoveredSeries is briefly absent while cursor stays inside chart and nearest-family inference is unavailable, previous focus is retained to avoid flicker."
+  - "Focused family no longer increases line width."

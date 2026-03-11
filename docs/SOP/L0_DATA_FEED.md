@@ -1,6 +1,6 @@
 # L0 SOP — DATA FEED
 
-> Version: 2026-03-09
+> Version: 2026-03-10
 > Layer: L0 Data Ingestion
 
 ## 1. Responsibility
@@ -72,6 +72,8 @@ flowchart LR
 
 - `version` 单调递增，用于下游缓存失效
 - `as_of_utc` 是链路主数据时间戳
+- `fetch_chain()` 默认不得触发 legacy Greeks 重算；若确需兼容路径，必须显式传入 `include_legacy_greeks=true` 并记录调用来源（caller tag）
+- `ttm_seconds` 必须持续输出（即使 legacy Greeks 关闭），不得影响下游 ActiveOptions/Presenter 契约
 
 ## 6. Boundary Rules
 
@@ -108,7 +110,11 @@ flowchart LR
   - Request rate 不得超过 `10 calls/s`（运行时 limiter 自动钳制配置）。
   - 并发请求不得超过 `5`（运行时 limiter 自动钳制配置）。
   - 同时订阅 symbol 不得超过 `500`（订阅池强制裁剪）。
+  - 默认速率配置与官方上限对齐：`longport_api_rate_limit=10`、`longport_api_max_concurrent=5`、`subscription_max=500`。
 - SHM 不可用: `rust_active=false` 并保留 fallback
+- 重复计算治理:
+  - 禁止 `compute_loop` 与 `housekeeping_loop` 在同一 L0 `version` 上重复触发 legacy Greeks
+  - 兼容 legacy 路径应提供按 `snapshot_version/caller` 的审计计数，便于定位重复算力消耗
 
 ## 9. Verification
 

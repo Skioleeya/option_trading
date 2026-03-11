@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getHHMM, isMarketHours, toUnixSec } from '../atmDecayTime'
+import { getHHMM, getMarketSessionWindowUnixSec, isMarketHours, toUnixSec } from '../atmDecayTime'
 
 describe('atmDecayTime', () => {
     it('parses HHMM in ET timezone from ISO timestamp', () => {
@@ -21,5 +21,12 @@ describe('atmDecayTime', () => {
         // 21:00 UTC = 16:00 ET
         expect(isMarketHours('2026-03-06T20:59:59Z')).toBe(true)
         expect(isMarketHours('2026-03-06T21:00:01Z')).toBe(false)
+    })
+
+    it('derives fixed ET session window [09:30, 16:00] from any in-session timestamp', () => {
+        const win = getMarketSessionWindowUnixSec('2026-03-10T15:40:24.731376-04:00')
+        expect(win).not.toBeNull()
+        expect(win!.from).toBe(toUnixSec('2026-03-10T09:30:00-04:00'))
+        expect(win!.to).toBe(toUnixSec('2026-03-10T16:00:00-04:00'))
     })
 })

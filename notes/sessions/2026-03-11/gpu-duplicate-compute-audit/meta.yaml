@@ -1,0 +1,41 @@
+session_id: "2026-03-11/gpu-duplicate-compute-audit"
+title: "GPU duplicate compute and capacity waste audit"
+scope: "audit + p0p1 fixes"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-11 09:06:58 -04:00"
+updated_at_et: "2026-03-11 09:28:17 -04:00"
+parent_session: "2026-03-11/startup_doc_rewrite_live_boot"
+
+branch: "master"
+base_commit: "fc174d4"
+head_commit: "fc174d4"
+
+files_changed:
+  - "app/loops/compute_loop.py"
+  - "app/loops/housekeeping_loop.py"
+  - "app/loops/shared_state.py"
+  - "app/loops/tests/test_compute_loop_gpu_dedup.py"
+  - "app/loops/tests/test_housekeeping_gpu_dedup.py"
+  - "l0_ingest/feeds/option_chain_builder.py"
+  - "l1_compute/reactor.py"
+  - "l1_compute/tests/test_reactor.py"
+  - "docs/SOP/L0_DATA_FEED.md"
+  - "docs/SOP/L1_LOCAL_COMPUTATION.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-11/gpu-duplicate-compute-audit/project_state.md"
+  - "notes/sessions/2026-03-11/gpu-duplicate-compute-audit/open_tasks.md"
+  - "notes/sessions/2026-03-11/gpu-duplicate-compute-audit/handoff.md"
+  - "notes/sessions/2026-03-11/gpu-duplicate-compute-audit/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId gpu-duplicate-compute-audit -Title \"GPU duplicate compute and capacity waste audit\" -Scope \"audit + p0p1 fixes\" -Owner \"Codex\" -ParentSession \"2026-03-11/startup_doc_rewrite_live_boot\" -Timezone \"Eastern Standard Time\""
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/loops/tests/test_compute_loop_helpers.py app/loops/tests/test_compute_loop_gpu_dedup.py app/loops/tests/test_housekeeping_gpu_dedup.py l1_compute/tests/test_reactor.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "28 passed: app/loops/tests/test_compute_loop_helpers.py + app/loops/tests/test_compute_loop_gpu_dedup.py + app/loops/tests/test_housekeeping_gpu_dedup.py + l1_compute/tests/test_reactor.py"
+tests_failed:
+  - "First run had 1 failing test in app/loops/tests/test_compute_loop_gpu_dedup.py; fixed in same session and rerun green."
+blockers: []
+notes: []

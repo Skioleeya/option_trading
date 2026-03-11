@@ -65,14 +65,20 @@ def _normalize_source_timestamp_utc(snapshot: dict[str, Any]) -> str | None:
     return dt.isoformat()
 
 
-def _build_l1_extra_metadata(snapshot: dict[str, Any]) -> dict[str, Any]:
+def _build_l1_extra_metadata(
+    snapshot: dict[str, Any],
+    compute_audit: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Build the L0->L1 metadata pass-through contract."""
-    return {
+    metadata = {
         "rust_active": snapshot.get("rust_active", False),
         "shm_stats": snapshot.get("shm_stats"),
         "volume_map": _normalize_volume_map(snapshot.get("volume_map")),
         "source_data_timestamp_utc": _normalize_source_timestamp_utc(snapshot),
     }
+    if compute_audit:
+        metadata["compute_audit"] = dict(compute_audit)
+    return metadata
 
 
 def _extract_snapshot_version(snapshot: dict[str, Any]) -> int:
@@ -330,6 +336,9 @@ async def run_compute_loop(ctr: 'AppContainer', state: SharedLoopState) -> None:
     Runs at a constant cadence defined by websocket_update_interval.
     """
     next_tick = time.monotonic()
+    tick_id = 0
+    compute_id = 0
+    last_processed_version: int | None = None
     version_iv_probe = _SnapshotVersionIvDriftProbe(
         confirm_ticks=max(1, int(settings.snapshot_iv_probe_confirm_ticks)),
         epsilon=max(0.0, float(settings.snapshot_iv_probe_epsilon)),
@@ -340,86 +349,121 @@ async def run_compute_loop(ctr: 'AppContainer', state: SharedLoopState) -> None:
     while True:
         try:
             start = time.monotonic()
+            tick_id += 1
             compute_interval = settings.websocket_update_interval
             state.current_compute_interval = compute_interval
 
             # 1. Fetch snapshot
-            snapshot = await ctr.option_chain_builder.fetch_chain()
+            snapshot = await ctr.option_chain_builder.fetch_chain(
+                include_legacy_greeks=False,
+                caller_tag="compute_loop",
+            )
             snapshot_time = time.monotonic() - start
             
             logger.info(f"[Debug] L0 Fetch: rust_active={snapshot.get('rust_active')} shm_stats={snapshot.get('shm_stats') is not None}")
 
             chain_size = len(snapshot.get("chain", []))
             snapshot_version = _extract_snapshot_version(snapshot)
+            state.record_compute_tick(snapshot_version)
             iv_sync_obj = getattr(ctr.option_chain_builder, "_iv_sync", None)
             iv_cache_size = len(iv_sync_obj.iv_cache) if iv_sync_obj else 0
 
-            # 2. Run L1 -> L2 pipeline
-            agent_start = time.monotonic()
-            iv_cache = getattr(iv_sync_obj, "iv_cache", {}) if iv_sync_obj else {}
-            spot_sync = getattr(iv_sync_obj, "spot_at_sync", {}) if iv_sync_obj else {}
-
-            l1_snap = await ctr.l1_reactor.compute(
-                chain_snapshot=snapshot.get("chain", []),
-                spot=snapshot.get("spot", 0.0),
-                l0_version=snapshot_version,
-                iv_cache=iv_cache,
-                spot_at_sync=spot_sync,
-                extra_metadata=_build_l1_extra_metadata(snapshot),
+            is_duplicate_snapshot = (
+                snapshot_version > 0
+                and last_processed_version is not None
+                and snapshot_version == last_processed_version
             )
+            if is_duplicate_snapshot:
+                state.record_duplicate_snapshot_skip(snapshot_version)
+                logger.info(
+                    "[GPU-AUDIT] duplicate snapshot skipped tick_id=%s snapshot_version=%s last_compute_id=%s",
+                    tick_id,
+                    snapshot_version,
+                    compute_id,
+                )
+            else:
+                # 2. Run L1 -> L2 pipeline
+                agent_start = time.monotonic()
+                iv_cache = getattr(iv_sync_obj, "iv_cache", {}) if iv_sync_obj else {}
+                spot_sync = getattr(iv_sync_obj, "spot_at_sync", {}) if iv_sync_obj else {}
+                compute_id += 1
+                gpu_task_id = f"gpu-task-{snapshot_version}-{compute_id}"
+                compute_audit = {
+                    "tick_id": tick_id,
+                    "snapshot_version": snapshot_version,
+                    "compute_id": compute_id,
+                    "gpu_task_id": gpu_task_id,
+                }
 
-            decision = await ctr.l2_reactor.decide(l1_snap)
-            result = decision.to_legacy_agent_result()
+                l1_snap = await ctr.l1_reactor.compute(
+                    chain_snapshot=snapshot.get("chain", []),
+                    spot=snapshot.get("spot", 0.0),
+                    l0_version=snapshot_version,
+                    iv_cache=iv_cache,
+                    spot_at_sync=spot_sync,
+                    extra_metadata=_build_l1_extra_metadata(snapshot, compute_audit),
+                )
+                state.record_l1_compute(
+                    snapshot_version=snapshot_version,
+                    compute_id=compute_id,
+                    gpu_task_id=gpu_task_id,
+                )
+                state.update_latest_l1_snapshot(l1_snap)
 
-            logger.debug(
-                f"[L2] direction={decision.direction}, "
-                f"conf={decision.confidence:.2f}, "
-                f"lat={decision.latency_ms:.1f}ms"
-            )
+                decision = await ctr.l2_reactor.decide(l1_snap)
+                result = decision.to_legacy_agent_result()
 
-            probe_diag = version_iv_probe.observe(
-                snapshot_version=snapshot_version,
-                spy_atm_iv=_extract_runtime_spy_atm_iv(l1_snap, decision, result),
-                now_monotonic=time.monotonic(),
-            )
-            state.update_snapshot_version_iv_probe(probe_diag)
+                logger.debug(
+                    f"[L2] direction={decision.direction}, "
+                    f"conf={decision.confidence:.2f}, "
+                    f"lat={decision.latency_ms:.1f}ms"
+                )
 
-            # 2.5 Calculate ATM Decay via Tracker
-            atm_decay_payload = await ctr.atm_decay_tracker.update(
-                snapshot.get("chain", []),
-                snapshot.get("spot", 0.0)
-            )
+                probe_diag = version_iv_probe.observe(
+                    snapshot_version=snapshot_version,
+                    spy_atm_iv=_extract_runtime_spy_atm_iv(l1_snap, decision, result),
+                    now_monotonic=time.monotonic(),
+                )
+                state.update_snapshot_version_iv_probe(probe_diag)
 
-            agent_time = time.monotonic() - agent_start
+                # 2.5 Calculate ATM Decay via Tracker
+                atm_decay_payload = await ctr.atm_decay_tracker.update(
+                    snapshot.get("chain", []),
+                    snapshot.get("spot", 0.0)
+                )
 
-            logger.info(
-                f"[PERF] build_payload breakdown: "
-                f"snapshot={snapshot_time*1000:.1f}ms, "
-                f"agent={agent_time*1000:.1f}ms, "
-                f"interval={compute_interval}s"
-            )
-            logger.debug(
-                f"[RACE_PROBE] runner tick: chain_size={chain_size}, "
-                f"iv_cache_size={iv_cache_size}, "
-                f"spot={snapshot.get('spot')}"
-            )
+                agent_time = time.monotonic() - agent_start
 
-            # 3. Build and cache payload via L3 Reactor
-            active_opts = ctr.active_options_service.get_latest()
+                logger.info(
+                    f"[PERF] build_payload breakdown: "
+                    f"snapshot={snapshot_time*1000:.1f}ms, "
+                    f"agent={agent_time*1000:.1f}ms, "
+                    f"interval={compute_interval}s"
+                )
+                logger.debug(
+                    f"[RACE_PROBE] runner tick: chain_size={chain_size}, "
+                    f"iv_cache_size={iv_cache_size}, "
+                    f"spot={snapshot.get('spot')}"
+                )
 
-            frozen = await ctr.l3_reactor.tick(
-                decision=decision,
-                snapshot=l1_snap,
-                atm_decay=atm_decay_payload,
-                active_options=active_opts
-            )
+                # 3. Build and cache payload via L3 Reactor
+                active_opts = ctr.active_options_service.get_latest()
 
-            # Atomically update global state
-            state.update(frozen, snapshot.get("spot"))
+                frozen = await ctr.l3_reactor.tick(
+                    decision=decision,
+                    snapshot=l1_snap,
+                    atm_decay=atm_decay_payload,
+                    active_options=active_opts
+                )
 
-            # 4. Periodically flush L2 audit logs
-            if state.total_computations > 0 and state.total_computations % 60 == 0:
-                ctr.l2_reactor.flush_audit()
+                # Atomically update global state
+                state.update(frozen, snapshot.get("spot"))
+
+                last_processed_version = snapshot_version
+
+                # 4. Periodically flush L2 audit logs
+                if state.total_computations > 0 and state.total_computations % 60 == 0:
+                    ctr.l2_reactor.flush_audit()
 
         except asyncio.CancelledError:
             raise

@@ -1,0 +1,42 @@
+session_id: "2026-03-11/atm-decay-hover-round2-audit-fix"
+title: "ATM Decay Hover extension audit & fix round2"
+scope: "deep audit + bugfix + regression"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-11 12:15:40 -04:00"
+updated_at_et: "2026-03-11 12:27:19 -04:00"
+parent_session: "2026-03-11/atm-decay-hover-focus"
+
+branch: "master"
+base_commit: "fc174d4"
+head_commit: "fc174d4"
+
+files_changed:
+  - "l4_ui/src/components/center/AtmDecayChart.tsx"
+  - "l4_ui/src/components/center/atmDecayHover.ts"
+  - "l4_ui/src/components/center/__tests__/atmDecayHover.test.ts"
+  - "docs/SOP/L4_FRONTEND.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-11/atm-decay-hover-round2-audit-fix/project_state.md"
+  - "notes/sessions/2026-03-11/atm-decay-hover-round2-audit-fix/open_tasks.md"
+  - "notes/sessions/2026-03-11/atm-decay-hover-round2-audit-fix/handoff.md"
+  - "notes/sessions/2026-03-11/atm-decay-hover-round2-audit-fix/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId atm-decay-hover-round2-audit-fix -Title \"ATM Decay Hover extension audit & fix round2\" -Scope \"deep audit + bugfix + regression\" -Owner \"Codex\" -ParentSession \"2026-03-11/atm-decay-hover-focus\" -Timezone \"Eastern Standard Time\""
+  - "cd l4_ui; npm run test -- atmDecayHover"
+  - "cd l4_ui; npm run test -- atmDecayTime atmDecayIncremental microStatsTheme"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l3_assembly/tests/test_micro_stats_wall_dynamics.py l3_assembly/tests/test_ui_state_tracker.py l3_assembly/tests/test_assembly.py l1_compute/tests/test_reactor.py -q"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "8 passed: atmDecayHover"
+  - "12 passed: atmDecayTime + atmDecayIncremental + microStatsTheme"
+  - "67 passed: l3/l1 target pytest set"
+  - "scripts/validate_session.ps1 -Strict passed"
+tests_failed: []
+blockers: []
+notes:
+  - "Round 2 fixed two hover-state regressions: invalid point retention and no-data residual focus."
+  - "Strict failed once due template session records; auto-debug loop repaired session metadata/context and strict passed on rerun."

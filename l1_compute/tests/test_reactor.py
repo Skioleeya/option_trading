@@ -189,6 +189,48 @@ class TestL1ComputeReactor:
         assert "atm_iv" in d
 
     @pytest.mark.asyncio
+    async def test_chain_includes_computed_gamma_and_vanna_columns(self):
+        reactor = L1ComputeReactor(sabr_enabled=False)
+        chain = _make_chain_entries(30)
+        snap = await reactor.compute(chain, spot=560.0, l0_version=3)
+        assert hasattr(snap.chain, "schema")
+        names = set(snap.chain.schema.names)
+        assert "computed_gamma" in names
+        assert "computed_vanna" in names
+
+    @pytest.mark.asyncio
+    async def test_compute_audit_metadata_passthrough(self):
+        reactor = L1ComputeReactor(sabr_enabled=False)
+        chain = _make_chain_entries(20)
+        audit = {
+            "tick_id": 12,
+            "snapshot_version": 88,
+            "compute_id": 4,
+            "gpu_task_id": "gpu-task-88-4",
+        }
+        snap = await reactor.compute(
+            chain,
+            spot=560.0,
+            l0_version=88,
+            extra_metadata={"compute_audit": audit},
+        )
+        assert snap.extra_metadata.get("compute_audit") == audit
+
+    @pytest.mark.asyncio
+    async def test_wall_context_emitted_for_l3_contract(self):
+        reactor = L1ComputeReactor(sabr_enabled=False)
+        chain = _make_chain_entries(40)
+        snap = await reactor.compute(chain, spot=560.0, l0_version=21)
+
+        assert isinstance(snap.microstructure.wall_context, dict)
+        assert "gamma_regime" in snap.microstructure.wall_context
+        assert "hedge_flow_intensity" in snap.microstructure.wall_context
+
+        wall = snap.microstructure.wall_migration or {}
+        assert isinstance(wall, dict)
+        assert "wall_context" in wall
+
+    @pytest.mark.asyncio
     async def test_microstructure_depth_update(self):
         """update_microstructure_depth should not crash."""
         reactor = L1ComputeReactor(sabr_enabled=False)

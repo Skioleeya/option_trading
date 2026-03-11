@@ -62,3 +62,14 @@ export function toUnixSec(ts: string): number | null {
     if (!Number.isFinite(ms)) return null
     return Math.floor(ms / 1000)
 }
+
+export function getMarketSessionWindowUnixSec(ts: string): { from: number; to: number } | null {
+    const unix = toUnixSec(ts)
+    const secFromMidnight = getSecondsFromEtMidnight(ts)
+    if (unix === null || secFromMidnight === null) return null
+
+    // Derive the same ET trade-date session bounds from one timestamp.
+    const from = unix - (secFromMidnight - MARKET_OPEN_SEC)
+    const to = unix + (MARKET_CLOSE_SEC - secFromMidnight)
+    return { from, to }
+}

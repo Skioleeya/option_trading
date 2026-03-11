@@ -88,9 +88,9 @@ class APICredentialsConfig(BaseConfig):
         default=False,
         description="Enable Tier 3 (Weekly) REST polling",
     )
-    # LongPort API Rate Limits (User-defined per 2026-03-03 policy)
+    # LongPort API Rate Limits (official caps)
     longport_api_rate_limit: float = Field(
-        default=8.0,
+        default=10.0,
         description="Global rate limit (requests/sec) for LongPort OpenAPI REST calls",
     )
     longport_api_burst: int = Field(

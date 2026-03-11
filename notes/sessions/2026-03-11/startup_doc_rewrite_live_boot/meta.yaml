@@ -1,0 +1,36 @@
+﻿session_id: "2026-03-11/startup_doc_rewrite_live_boot"
+title: "startup steps doc rewrite from live boot"
+scope: "ops doc only"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-11 08:57:55 -04:00"
+updated_at_et: "2026-03-11 08:59:05 -04:00"
+parent_session: "2026-03-10/coupling_point_audit_repair"
+
+branch: "master"
+base_commit: "fc174d4"
+head_commit: "fc174d4"
+
+files_changed:
+  - "启动步骤.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-11/startup_doc_rewrite_live_boot/project_state.md"
+  - "notes/sessions/2026-03-11/startup_doc_rewrite_live_boot/open_tasks.md"
+  - "notes/sessions/2026-03-11/startup_doc_rewrite_live_boot/handoff.md"
+  - "notes/sessions/2026-03-11/startup_doc_rewrite_live_boot/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId startup_doc_rewrite_live_boot -Title \"startup steps doc rewrite from live boot\" -Scope \"ops doc only\" -Owner \"Codex\" -ParentSession \"2026-03-10/coupling_point_audit_repair\" -Timezone \"Eastern Standard Time\""
+  - "probe checks for /health, 5173, and 6380"
+  - "rewrite 启动步骤.md"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "DOC-ONLY: startup guide rewrite validated against live successful startup flow"
+tests_failed:
+  - "initial scripts/validate_session.ps1 -Strict failed due missing command evidence in meta.yaml"
+blockers: []
+notes:
+  - "SOP-EXEMPT: runtime behavior unchanged, documentation-only update"
+
+

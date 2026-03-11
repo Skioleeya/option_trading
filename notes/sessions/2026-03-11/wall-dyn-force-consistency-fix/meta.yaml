@@ -1,0 +1,43 @@
+session_id: "2026-03-11/wall-dyn-force-consistency-fix"
+title: "WALL DYN forced consistency repair"
+scope: "micro stats wall dyn semantic parity + asian style fidelity"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-11 11:00:53 -04:00"
+updated_at_et: "2026-03-11 11:12:33 -04:00"
+parent_session: "2026-03-11/wall-theory-alignment"
+
+branch: "master"
+base_commit: "fc174d4"
+head_commit: "fc174d4"
+
+files_changed:
+  - "l3_assembly/presenters/ui/micro_stats/thresholds.py"
+  - "l3_assembly/presenters/ui/micro_stats/wall_dynamics.py"
+  - "l3_assembly/presenters/ui/micro_stats/palette.py"
+  - "l3_assembly/presenters/ui/micro_stats/mappings.py"
+  - "l3_assembly/presenters/ui/micro_stats/presenter.py"
+  - "l3_assembly/tests/test_micro_stats_wall_dynamics.py"
+  - "l3_assembly/tests/test_assembly.py"
+  - "docs/SOP/L3_OUTPUT_ASSEMBLY.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-11/wall-dyn-force-consistency-fix/project_state.md"
+  - "notes/sessions/2026-03-11/wall-dyn-force-consistency-fix/open_tasks.md"
+  - "notes/sessions/2026-03-11/wall-dyn-force-consistency-fix/handoff.md"
+  - "notes/sessions/2026-03-11/wall-dyn-force-consistency-fix/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId wall-dyn-force-consistency-fix -Title \"WALL DYN forced consistency repair\" -Scope \"micro stats wall dyn semantic parity + asian style fidelity\" -Owner \"Codex\" -ParentSession \"2026-03-11/wall-theory-alignment\" -Timezone \"Eastern Standard Time\""
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l3_assembly/tests/test_micro_stats_wall_dynamics.py l3_assembly/tests/test_ui_state_tracker.py l3_assembly/tests/test_assembly.py l1_compute/tests/test_reactor.py -q"
+  - "cd l4_ui; npm run test -- microStatsTheme"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "67 passed: required l1/l3 targeted regression set"
+  - "vitest: microStatsTheme 1 file passed, 4 tests passed"
+  - "scripts/validate_session.ps1 -Strict passed"
+tests_failed: []
+blockers: []
+notes:
+  - "Runtime repro pre-fix showed same-input divergence: WallMigration RETREAT ↓ vs MicroStats STABLE/RETREAT(red)."
+  - "Post-fix runtime repro shows same-tick RETREAT ↓ parity with badge-green."

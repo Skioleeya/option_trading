@@ -1,6 +1,6 @@
 # L3 SOP — OUTPUT ASSEMBLY
 
-> Version: 2026-03-10
+> Version: 2026-03-11
 > Layer: L3 Payload Assembly & Broadcast
 
 ## 1. Responsibility
@@ -57,6 +57,12 @@ flowchart LR
 - 历史查询接口支持版本协商：`schema=v1|v2`（默认 `v2`，`v1` 仅兼容保留）
 - `schema=v2` 统一返回列式 JSON 包络：`{schema:"v2", encoding:"columnar-json", columns, rows, count, ...meta}`
 - `format=parquet` 路径优先级高于 schema（保持现有二进制下载语义不变）
+- `wall_migration_data.wall_context` 为可选透传字段；缺失时必须安全回退，不得抛错
+- `micro_stats.wall_dyn` 语义规则：
+  - 主语义 `RETREAT` 表示墙体后撤（含 `RETREATING_RESISTANCE` 与 `RETREATING_SUPPORT`）
+  - 展示层必须区分方向：`RETREAT ↑`（call wall 上移，红）与 `RETREAT ↓`（put wall 下移，绿）
+  - `COLLAPSE` 仅在 put 后撤且 `wall_context.gamma_regime=SHORT_GAMMA` 且 `hedge_flow_intensity` 超阈值时触发
+  - Debounce 仅允许作用于 `PINCH/SIEGE` 噪声态；`BREACH/RETREAT ↑/RETREAT ↓/COLLAPSE` 必须同 tick 生效
 
 ### 3.2 Research Feature Store
 

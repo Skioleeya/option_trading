@@ -21,6 +21,7 @@ _last_committed_wall_key: str = "STABLE"
 _pending_wall_key: str = ""
 _pending_wall_key_count: int = 0
 _WALL_KEY_DEBOUNCE_TICKS: int = 2  # must see same key this many times before committing
+_WALL_KEY_DEBOUNCE_KEYS: set[str] = {"PINCH", "SIEGE"}
 
 
 class MicroStatsPresenter:
@@ -56,7 +57,8 @@ class MicroStatsPresenter:
         global _last_committed_wall_key, _pending_wall_key, _pending_wall_key_count
         call_st = str(wall_dyn.get("call_wall_state", "") if wall_dyn else "")
         put_st = str(wall_dyn.get("put_wall_state", "") if wall_dyn else "")
-        candidate_key = classify_wall_key(call_st, put_st)
+        wall_ctx = wall_dyn.get("wall_context", {}) if isinstance(wall_dyn, dict) else {}
+        candidate_key = classify_wall_key(call_st, put_st, wall_ctx)
 
         # PP-L3C+: Critical states must bypass debounce.
         if candidate_key in URGENT_WALL_KEYS:
@@ -64,15 +66,25 @@ class MicroStatsPresenter:
             _pending_wall_key_count = _WALL_KEY_DEBOUNCE_TICKS
             _last_committed_wall_key = candidate_key
         else:
-            # PP-L3C: Debounce — only commit when candidate is stable for N ticks.
-            if candidate_key == _pending_wall_key:
-                _pending_wall_key_count += 1
-            else:
-                _pending_wall_key = candidate_key
-                _pending_wall_key_count = 1  # reset counter, first observed tick
+            should_debounce = (
+                candidate_key in _WALL_KEY_DEBOUNCE_KEYS
+                or _last_committed_wall_key in _WALL_KEY_DEBOUNCE_KEYS
+            )
+            if should_debounce:
+                # PP-L3C: Debounce only noisy structural states (PINCH/SIEGE).
+                if candidate_key == _pending_wall_key:
+                    _pending_wall_key_count += 1
+                else:
+                    _pending_wall_key = candidate_key
+                    _pending_wall_key_count = 1  # reset counter, first observed tick
 
-            if _pending_wall_key_count >= _WALL_KEY_DEBOUNCE_TICKS:
-                _last_committed_wall_key = _pending_wall_key
+                if _pending_wall_key_count >= _WALL_KEY_DEBOUNCE_TICKS:
+                    _last_committed_wall_key = _pending_wall_key
+            else:
+                # Directional states should commit immediately to avoid cross-panel lag.
+                _pending_wall_key = candidate_key
+                _pending_wall_key_count = _WALL_KEY_DEBOUNCE_TICKS
+                _last_committed_wall_key = candidate_key
 
         wall_key = _last_committed_wall_key
 

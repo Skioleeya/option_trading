@@ -1,12 +1,12 @@
 ﻿# Handoff (Index)
 
 ## Active Handoff
-- Path: notes/sessions/2026-03-10/coupling_point_audit_repair/handoff.md
-- Meta: notes/sessions/2026-03-10/coupling_point_audit_repair/meta.yaml
+- Path: notes/sessions/2026-03-11/atm-decay-hover-crosshair-strict/handoff.md
+- Meta: notes/sessions/2026-03-11/atm-decay-hover-crosshair-strict/meta.yaml
 
 ## Latest Outcome
-- Session: 2026-03-10/coupling_point_audit_repair
-- Summary: 已完成耦合点专项修复（L4 跨日隔离、右栏本地主题映射、L3 ActiveOptions 契约收敛、L2 guard 配置化）并通过定向回归与 strict 校验。
+- Session: 2026-03-11/atm-decay-hover-crosshair-strict
+- Summary: 已完成 P0 悬停 strict-hit 修复与回归，strict gate 全绿通过。
 
 ## Next Session Bootstrap
 1. Read this file.

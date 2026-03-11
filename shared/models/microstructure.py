@@ -151,6 +151,24 @@ class WallMigrationPutState(str, Enum):
     UNAVAILABLE = "UNAVAILABLE"
 
 
+class WallGammaRegime(str, Enum):
+    """Gamma regime for contextual wall-risk interpretation."""
+
+    LONG_GAMMA = "LONG_GAMMA"
+    SHORT_GAMMA = "SHORT_GAMMA"
+    NEUTRAL = "NEUTRAL"
+
+
+class WallContext(BaseModel):
+    """Contextual factors for wall-risk interpretation."""
+
+    gamma_regime: WallGammaRegime = WallGammaRegime.NEUTRAL
+    hedge_flow_intensity: float = 0.0
+    counterfactual_vol_impact_bps: float = 0.0
+    near_wall_hedge_notional_m: float = 0.0
+    near_wall_liquidity: float = 0.0
+
+
 # ============================================================================
 # IV Regime Classification
 # ============================================================================
@@ -227,6 +245,7 @@ class WallMigrationResult(BaseModel):
     put_wall_delta: float | None = None
     call_wall_history: list[float | None] = Field(default_factory=list)
     put_wall_history: list[float | None] = Field(default_factory=list)
+    wall_context: WallContext | None = None
 
 
 class MicroStructureState(BaseModel):
@@ -239,6 +258,7 @@ class MicroStructureState(BaseModel):
     mtf_consensus: dict[str, Any] = Field(default_factory=dict)
     volume_imbalance: VIBResult | None = None
     jump_detection: JumpResult | None = None
+    wall_context: WallContext | None = None
     # Practice 3: Dealer Squeeze alert (vol_accel > threshold AND net_gex < 0)
     dealer_squeeze_alert: bool = False
     # Practice 2: VPIN score propagated from DepthEngine (ATM contracts average)

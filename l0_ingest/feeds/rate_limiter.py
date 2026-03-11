@@ -36,9 +36,9 @@ class APIRateLimiter:
 
     def __init__(
         self,
-        rate: float = 8.0,            # requests per second
+        rate: float = 10.0,           # requests per second (official cap)
         burst: int = 10,              # max request burst
-        max_concurrent: int = 4,      # max in-flight
+        max_concurrent: int = 5,      # max in-flight (official cap)
         symbol_rate: float = 240.0,   # symbols per 60 seconds (conservative startup quota)
         symbol_burst: int = 50        # max symbol burst
     ) -> None:

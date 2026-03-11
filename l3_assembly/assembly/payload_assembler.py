@@ -409,13 +409,17 @@ class PayloadAssemblerV2:
 
         call_state = raw.get("call_wall_state")
         put_state = raw.get("put_wall_state")
+        wall_context = raw.get("wall_context")
         if call_state is None and put_state is None:
             return {}
 
-        return {
+        payload = {
             "call_wall_state": str(call_state) if call_state is not None else "",
             "put_wall_state": str(put_state) if put_state is not None else "",
         }
+        if isinstance(wall_context, dict) and wall_context:
+            payload["wall_context"] = dict(wall_context)
+        return payload
 
 
 # ─────────────────────────────────────────────────────────────────────────────

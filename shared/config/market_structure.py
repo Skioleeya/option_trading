@@ -6,6 +6,10 @@ class MarketStructureConfig(BaseConfig):
     wall_snapshot_interval_seconds: int = Field(default=300)
     wall_displacement_threshold: float = Field(default=0.01)
     volume_reinforcement_threshold: float = Field(default=1000)
+    wall_liquidity_bandwidth: float = Field(default=1.0)
+    wall_collapse_flow_intensity_threshold: float = Field(default=0.35)
+    wall_gamma_neutral_abs_threshold: float = Field(default=20000.0)
+    wall_counterfactual_impact_cap_bps: float = Field(default=2000.0)
 
     # Vanna Flow
     vanna_danger_zone_threshold: float = Field(default=0.8)

@@ -42,8 +42,14 @@ WALL_DYNAMICS_MAP: dict[str, dict] = {
     # 正上方/正下方大 OI 加固 → 被大墙压制，需要强烈买盘或卖盘才能突破
     "SIEGE":              {"label": "SIEGE",    "badge": palette.BADGE_WALL_SIEGE},
 
-    # 上方阻力墙撤退 → Call Wall 上移，上方空间打开，做市商 Call Delta 减少
-    "RETREAT":            {"label": "RETREAT",  "badge": palette.BADGE_WALL_RETREAT},
+    # 几何态 RETREAT（兼容键，方向不确定时保留）
+    "RETREAT":            {"label": "RETREAT",    "badge": palette.BADGE_WALL_RETREAT},
+
+    # 上方阻力墙撤退 → Call Wall 上移（上涨语义）
+    "RETREAT_UP":         {"label": "RETREAT ↑",  "badge": palette.BADGE_WALL_RETREAT_UP},
+
+    # 下方支撑墙后撤 → Put Wall 下移（下跌语义）
+    "RETREAT_DOWN":       {"label": "RETREAT ↓",  "badge": palette.BADGE_WALL_RETREAT_DOWN},
 
     # 下方支撑墙沦陷 → Put Wall 下移，支撑丢失，做市商 Put Delta 减少  
     "COLLAPSE":           {"label": "COLLAPSE", "badge": palette.BADGE_WALL_COLLAPSE},
@@ -60,8 +66,8 @@ WALL_DYNAMICS_MAP: dict[str, dict] = {
     # 兼容旧版字段名
     "REINFORCED_WALL":       {"label": "SIEGE",    "badge": palette.BADGE_WALL_SIEGE},
     "REINFORCED_SUPPORT":    {"label": "SIEGE",    "badge": palette.BADGE_WALL_SIEGE},
-    "RETREATING_RESISTANCE": {"label": "RETREAT",  "badge": palette.BADGE_WALL_RETREAT},
-    "RETREATING_SUPPORT":    {"label": "COLLAPSE", "badge": palette.BADGE_WALL_COLLAPSE},
+    "RETREATING_RESISTANCE": {"label": "RETREAT ↑", "badge": palette.BADGE_WALL_RETREAT_UP},
+    "RETREATING_SUPPORT":    {"label": "RETREAT ↓", "badge": palette.BADGE_WALL_RETREAT_DOWN},
     "BREACHED":              {"label": "BREACH",   "badge": palette.BADGE_WALL_BREACH},
     "DECAYING":              {"label": "DECAY",    "badge": palette.BADGE_WALL_DECAY},
     "UNAVAILABLE":           {"label": "WARM↑",    "badge": palette.BADGE_WALL_UNAVAILABLE},

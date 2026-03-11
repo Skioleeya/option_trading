@@ -285,6 +285,17 @@ class L1ComputeReactor:
                 spots_arr, strikes_arr, ivs_arr, ttm_years, is_call_arr,
                 r=self._r, q=self._q, ois=ois_arr, mults=mults_arr,
             )
+        compute_audit = extra_metadata.get("compute_audit", {}) if isinstance(extra_metadata, dict) else {}
+        if isinstance(compute_audit, dict):
+            logger.info(
+                "[GPU-AUDIT] l1_dispatch tick_id=%s snapshot_version=%s compute_id=%s gpu_task_id=%s tier=%s chain_size=%s",
+                compute_audit.get("tick_id"),
+                compute_audit.get("snapshot_version", l0_version),
+                compute_audit.get("compute_id"),
+                compute_audit.get("gpu_task_id"),
+                decision.tier.value,
+                n_valid,
+            )
         greeks_ms = (time.monotonic() - t_greeks) * 1000.0
         self._inst.record_greeks_latency(greeks_ms / 1000.0)
         self._inst.record_compute_tier(decision.tier.value)
@@ -307,6 +318,8 @@ class L1ComputeReactor:
         # In a fully unified world we would append Greeks as Arrow columns. Keep original RB.
         out_batch = rb.append_column("computed_iv", pa.array(ivs_arr))
         out_batch = out_batch.append_column("computed_delta", pa.array(matrix.delta))
+        out_batch = out_batch.append_column("computed_gamma", pa.array(matrix.gamma))
+        out_batch = out_batch.append_column("computed_vanna", pa.array(matrix.vanna))
         out_batch = out_batch.append_column("gex", pa.array(matrix.gex_per_contract))
 
         # Split into call_gex / put_gex for legacy consumers
@@ -322,7 +335,9 @@ class L1ComputeReactor:
                 atm_iv=atm_iv,
                 net_gex=agg.net_gex,
                 call_wall=agg.call_wall,
-                put_wall=agg.put_wall
+                call_wall_gex=agg.call_wall_gex,
+                put_wall_gex=agg.put_wall_gex,
+                put_wall=agg.put_wall,
             )
 
         # ── Step 7: Quality report ─────────────────────────────────────────────
@@ -397,7 +412,9 @@ class L1ComputeReactor:
         atm_iv: float,
         net_gex: float,
         call_wall: float,
+        call_wall_gex: float,
         put_wall: float,
+        put_wall_gex: float,
     ) -> MicroSignals:
         """Assemble microstructure signals from VPIN, BBO, VolAccel, and trackers."""
         sim_clock_mono = time.monotonic()
@@ -457,6 +474,17 @@ class L1ComputeReactor:
             sim_clock_mono=sim_clock_mono,
             displacement_multiplier=wall_mult,
         )
+        wall_context = self._build_wall_context(
+            chain_snapshot=chain_snapshot,
+            net_gex=net_gex,
+            call_wall=call_wall,
+            put_wall=put_wall,
+            call_wall_gex=call_wall_gex,
+            put_wall_gex=put_wall_gex,
+        )
+        wall_payload = wall_result.model_dump() if wall_result else None
+        if isinstance(wall_payload, dict):
+            wall_payload["wall_context"] = wall_context
 
         # 2c. IV Velocity & MTF Engine
         iv_result = self._iv_tracker.update(
@@ -529,7 +557,8 @@ class L1ComputeReactor:
             iv_velocity=iv_result.model_dump() if iv_result else None,
             mtf_consensus=mtf_consensus,
             iv_confidence=self._iv_tracker.get_confidence(),
-            wall_migration=wall_result.model_dump() if wall_result else None,
+            wall_migration=wall_payload,
+            wall_context=wall_context,
             wall_confidence=self._wall_tracker.get_confidence(),
             vanna_flow_result=vanna_result.model_dump() if vanna_result else None,
             vanna_confidence=self._vanna_analyzer.get_confidence(),
@@ -538,6 +567,93 @@ class L1ComputeReactor:
             dealer_squeeze_alert=dealer_squeeze_alert,
             avg_atm_vpin_score=0.0,
         )
+
+    @staticmethod
+    def _classify_wall_gamma_regime(net_gex: float) -> str:
+        neutral_abs = float(getattr(settings, "wall_gamma_neutral_abs_threshold", 20000.0))
+        if abs(float(net_gex)) <= neutral_abs:
+            return "NEUTRAL"
+        return "SHORT_GAMMA" if float(net_gex) < 0.0 else "LONG_GAMMA"
+
+    def _estimate_near_wall_liquidity(
+        self,
+        chain_snapshot: Union[list[dict], pa.RecordBatch],
+        *,
+        call_wall: float,
+        put_wall: float,
+    ) -> float:
+        band = float(getattr(settings, "wall_liquidity_bandwidth", 1.0))
+        if band <= 0:
+            band = 1.0
+
+        if isinstance(chain_snapshot, pa.RecordBatch):
+            strikes = chain_snapshot.column("strike").to_numpy()
+            volumes = chain_snapshot.column("volume").to_numpy()
+            mask = np.zeros(len(strikes), dtype=np.bool_)
+            if call_wall > 0.0:
+                mask = mask | (np.abs(strikes - call_wall) <= band)
+            if put_wall > 0.0:
+                mask = mask | (np.abs(strikes - put_wall) <= band)
+            near_liq = float(np.sum(volumes[mask])) if np.any(mask) else float(np.sum(volumes))
+            return max(near_liq, 1.0)
+
+        near_liq = 0.0
+        total_vol = 0.0
+        for row in chain_snapshot:
+            if not isinstance(row, dict):
+                continue
+            strike = float(row.get("strike", 0.0) or 0.0)
+            volume = float(row.get("volume", 0.0) or 0.0)
+            total_vol += volume
+            if strike <= 0.0:
+                continue
+            if call_wall > 0.0 and abs(strike - call_wall) <= band:
+                near_liq += volume
+                continue
+            if put_wall > 0.0 and abs(strike - put_wall) <= band:
+                near_liq += volume
+
+        if near_liq <= 0.0:
+            near_liq = total_vol
+        return max(near_liq, 1.0)
+
+    def _build_wall_context(
+        self,
+        chain_snapshot: Union[list[dict], pa.RecordBatch],
+        *,
+        net_gex: float,
+        call_wall: float,
+        put_wall: float,
+        call_wall_gex: float,
+        put_wall_gex: float,
+    ) -> dict[str, float | str]:
+        gamma_regime = self._classify_wall_gamma_regime(net_gex)
+        near_wall_hedge_notional_m = (
+            abs(float(call_wall_gex or 0.0)) + abs(float(put_wall_gex or 0.0))
+        ) / 1_000_000.0
+        near_wall_liquidity = self._estimate_near_wall_liquidity(
+            chain_snapshot,
+            call_wall=float(call_wall or 0.0),
+            put_wall=float(put_wall or 0.0),
+        )
+        hedge_flow_intensity = near_wall_hedge_notional_m / max(near_wall_liquidity, 1.0)
+
+        cap_bps = float(getattr(settings, "wall_counterfactual_impact_cap_bps", 2000.0))
+        if gamma_regime == "SHORT_GAMMA":
+            direction = 1.0
+        elif gamma_regime == "LONG_GAMMA":
+            direction = -0.5
+        else:
+            direction = 0.0
+        counterfactual_vol_impact_bps = direction * min(cap_bps, hedge_flow_intensity * 100.0)
+
+        return {
+            "gamma_regime": gamma_regime,
+            "hedge_flow_intensity": float(hedge_flow_intensity),
+            "counterfactual_vol_impact_bps": float(counterfactual_vol_impact_bps),
+            "near_wall_hedge_notional_m": float(near_wall_hedge_notional_m),
+            "near_wall_liquidity": float(near_wall_liquidity),
+        }
 
     @staticmethod
     def _extract_atm_iv(
