@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app.loops.compute_loop import (
     _SnapshotVersionIvDriftProbe,
+    _extract_runtime_spy_atm_iv,
     _extract_snapshot_version,
 )
 
@@ -99,3 +100,39 @@ def test_snapshot_iv_probe_requires_lag_seconds_before_activation() -> None:
     assert diag["drift_active"] is True
     assert diag["current_lag_seconds"] == 10.0
     assert diag["mismatch_count"] == 1
+
+
+def test_extract_runtime_spy_atm_iv_prefers_l1_aggregates() -> None:
+    class _Aggregates:
+        atm_iv = 0.33
+
+    class _L1Snapshot:
+        aggregates = _Aggregates()
+
+    class _Decision:
+        data = {"spy_atm_iv": 0.25, "atm_iv": 0.24}
+
+    value = _extract_runtime_spy_atm_iv(_L1Snapshot(), _Decision())
+    assert value == 0.33
+
+
+def test_extract_runtime_spy_atm_iv_falls_back_to_decision_data() -> None:
+    class _L1Snapshot:
+        aggregates = None
+
+    class _Decision:
+        data = {"spy_atm_iv": 0.27}
+
+    value = _extract_runtime_spy_atm_iv(_L1Snapshot(), _Decision())
+    assert value == 0.27
+
+
+def test_extract_runtime_spy_atm_iv_returns_none_when_missing() -> None:
+    class _L1Snapshot:
+        aggregates = None
+
+    class _Decision:
+        data = {}
+
+    value = _extract_runtime_spy_atm_iv(_L1Snapshot(), _Decision())
+    assert value is None

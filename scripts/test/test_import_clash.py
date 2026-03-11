@@ -16,7 +16,7 @@ def test_import_clash():
     
     # 1. IMPORT RUST MODULE (But don't init class)
     print("[*] Importing l0_rust module...")
-    import l0_rust
+from l0_ingest import l0_rust
     print("[+] l0_rust module imported.")
 
     # 2. Initialize Python QuoteContext

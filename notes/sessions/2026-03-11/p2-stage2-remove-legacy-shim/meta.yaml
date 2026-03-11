@@ -1,0 +1,47 @@
+﻿session_id: "2026-03-11/p2-stage2-remove-legacy-shim"
+title: "P2 Stage2 remove legacy shim"
+scope: "remove DecisionOutput legacy shim and typed-contract direct path"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-11 18:38:33 -04:00"
+updated_at_et: "2026-03-11 18:45:45 -04:00"
+parent_session: "2026-03-11/l0-rust-folder-optimization"
+
+branch: "master"
+base_commit: "ddc8e77"
+head_commit: "ddc8e77"
+
+files_changed:
+  - "l2_decision/events/decision_events.py"
+  - "app/loops/compute_loop.py"
+  - "app/loops/tests/test_compute_loop_gpu_dedup.py"
+  - "app/loops/tests/test_compute_loop_helpers.py"
+  - "docs/SOP/L2_DECISION_ANALYSIS.md"
+  - "清单.md"
+  - "notes/context/open_tasks.md"
+  - "notes/sessions/2026-03-11/p2-stage2-remove-legacy-shim/project_state.md"
+  - "notes/sessions/2026-03-11/p2-stage2-remove-legacy-shim/open_tasks.md"
+  - "notes/sessions/2026-03-11/p2-stage2-remove-legacy-shim/handoff.md"
+  - "notes/sessions/2026-03-11/p2-stage2-remove-legacy-shim/meta.yaml"
+commands:
+  - "rg -n \"to_legacy_agent_result\" app l2_decision l3_assembly -S"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/loops/tests/test_compute_loop_gpu_dedup.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/loops/tests/test_compute_loop_helpers.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l2_decision/tests/test_reactor_and_guards.py"
+  - "$env:TEMP='e:\\US.market\\Option_v3\\tmp'; $env:TMP='e:\\US.market\\Option_v3\\tmp'; powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l2_decision/tests/test_reactor_and_guards.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l3_assembly/tests/test_assembly.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 scripts/test/test_l0_l4_pipeline.py"
+tests_passed:
+  - "app/loops/tests/test_compute_loop_gpu_dedup.py"
+  - "app/loops/tests/test_compute_loop_helpers.py"
+  - "l3_assembly/tests/test_assembly.py"
+  - "scripts/test/test_l0_l4_pipeline.py"
+tests_failed:
+  - "l2_decision/tests/test_reactor_and_guards.py (PermissionError WinError 5 on temp dir cleanup/write, reproduced with redirected TMP/TEMP)"
+blockers:
+  - "Temporary directory ACL/chmod restriction causes L2 guard/audit tempfile tests to fail."
+notes:
+  - "P2 Stage2 runtime shim removed; compute_loop now uses typed contract direct path."
+  - "Strict session validation was intentionally not run in this session per user constraint in prior turn."
+
+

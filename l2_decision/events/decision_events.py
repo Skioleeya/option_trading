@@ -222,23 +222,6 @@ class DecisionOutput:
             }
         }
 
-    def to_legacy_agent_result(self) -> dict[str, Any]:
-        """Convert to legacy AgentG result dict for L3 / PayloadAssemblerV2 compatibility.
-
-        L3 PayloadAssemblerV2 reads from result["data"]["fused_signal"] and
-        result["data"]["ui_state"]. This shim ensures zero changes needed in L3.
-        """
-        return {
-            "direction": self.direction,
-            "confidence": self.confidence,
-            "data": {
-                **self.data,   # includes fused_signal
-                # ui_state sub-blocks will be populated by L3 presenters
-                # from the L1 EnrichedSnapshot — no data needed here
-                "ui_state": {},
-            },
-        }
-
     def is_actionable(self) -> bool:
         """Returns True if signal is directional, confident, and not halted."""
         return (

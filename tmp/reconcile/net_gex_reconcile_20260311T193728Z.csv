@@ -1,6 +1,0 @@
-tick,msg_type,raw_net_gex,expected_ui_text,observed_ui_text,observed_ui_class,match,ui_converged_ms,ws_timestamp,captured_at_utc
-1,dashboard_init,-604265.16,-604.27B,-604.27B,font-mono text-[13px] font-black tracking-tight text-[#10b981],True,0,2026-03-11T19:37:32.760189+00:00,2026-03-11T19:37:33.375Z
-2,dashboard_delta,-604351.2765949473,-604.35B,-604.35B,font-mono text-[13px] font-black tracking-tight text-[#10b981],True,0,2026-03-11T19:37:33.748678+00:00,2026-03-11T19:37:34.320Z
-3,dashboard_delta,-604439.4743060737,-604.44B,-604.44B,font-mono text-[13px] font-black tracking-tight text-[#10b981],True,0,2026-03-11T19:37:34.763641+00:00,2026-03-11T19:37:35.237Z
-4,dashboard_delta,-604526.3269575855,-604.53B,-604.53B,font-mono text-[13px] font-black tracking-tight text-[#10b981],True,0,2026-03-11T19:37:35.757508+00:00,2026-03-11T19:37:36.342Z
-5,dashboard_delta,-604613.7034933678,-604.61B,-604.61B,font-mono text-[13px] font-black tracking-tight text-[#10b981],True,0,2026-03-11T19:37:36.762979+00:00,2026-03-11T19:37:37.319Z

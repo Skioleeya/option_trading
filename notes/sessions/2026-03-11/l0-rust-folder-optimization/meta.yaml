@@ -1,0 +1,41 @@
+session_id: "2026-03-11/l0-rust-folder-optimization"
+title: "l0_rust folder optimization"
+scope: "host l0_rust binary and shim under l0_ingest; avoid root-level files"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-11 18:00:13 -04:00"
+updated_at_et: "2026-03-11 18:11:41 -04:00"
+parent_session: "2026-03-11/scripts-reorg-classification"
+
+branch: "master"
+base_commit: "ddc8e77"
+head_commit: "ddc8e77"
+
+files_changed:
+  - "l0_ingest/_native/l0_rust.pyd"
+  - "l0_ingest/_native/__init__.py"
+  - "l0_ingest/l0_rust.py"
+  - "l0_ingest/feeds/quote_runtime.py"
+  - "scripts/test/diag_rust_gateway.py"
+  - "scripts/test/repro_panic.py"
+  - "scripts/test/test_import_clash.py"
+  - "scripts/test/test_ingest_clash.py"
+  - "scripts/test/test_rust_bridge.py"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-11/l0-rust-folder-optimization/project_state.md"
+  - "notes/sessions/2026-03-11/l0-rust-folder-optimization/open_tasks.md"
+  - "notes/sessions/2026-03-11/l0-rust-folder-optimization/handoff.md"
+  - "notes/sessions/2026-03-11/l0-rust-folder-optimization/meta.yaml"
+commands:
+  - "Move-Item -Path l0_rust.pyd -Destination l0_ingest/_native/l0_rust.pyd -Force"
+  - "python -c \"from l0_ingest import l0_rust; print('ok', hasattr(l0_rust, 'RustIngestGateway'), getattr(l0_rust, '__file__', 'n/a'))\""
+  - "python -c \"from l0_ingest._native import l0_rust as ext; print(ext.__file__)\""
+tests_passed:
+  - "from l0_ingest import l0_rust smoke check"
+  - "native binary location check under l0_ingest/_native"
+tests_failed: []
+blockers: []
+notes:
+  - "User requested no root-level file creation; artifacts were moved under l0_ingest."

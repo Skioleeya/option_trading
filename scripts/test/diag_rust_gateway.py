@@ -2,7 +2,7 @@
 import os
 import sys
 import time
-import l0_rust
+from l0_ingest import l0_rust
 from l1_compute.rust_bridge import RustBridge
 
 def test_rust_gateway_direct():

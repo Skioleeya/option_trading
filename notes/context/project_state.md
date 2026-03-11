@@ -1,16 +1,19 @@
 ﻿# Project State (Index)
 
 ## Active Session
-- Path: notes/sessions/2026-03-11/eod-bucket-schedule-1601/project_state.md
-- Meta: notes/sessions/2026-03-11/eod-bucket-schedule-1601/meta.yaml
+- Path: notes/sessions/2026-03-11/agents-new-session-pointer-policy/project_state.md
+- Meta: notes/sessions/2026-03-11/agents-new-session-pointer-policy/meta.yaml
 - Status: ACTIVE
 
+## Latest Update
+- 2026-03-11 ET: Session bootstrap policy updated: `new_session.ps1` defaults to delayed context sync; explicit `-UpdatePointer` now controls pointer mutation.
+
 ## Recent Sessions
+- notes/sessions/2026-03-11/agents-new-session-pointer-policy/
+- notes/sessions/2026-03-11/p2-stage2-remove-legacy-shim/
+- notes/sessions/2026-03-11/l0-rust-folder-optimization/
+- notes/sessions/2026-03-11/scripts-reorg-classification/
 - notes/sessions/2026-03-11/eod-bucket-schedule-1601/
-- notes/sessions/2026-03-11/eod-bucket-7class-primary-only/
-- notes/sessions/2026-03-11/eod-bucket-remove-event-day-research/
-- notes/sessions/2026-03-11/eod-bucket-archive-automation/
-- notes/sessions/2026-03-11/tradingview-active-options-dash-bug/
 
 ## Global Rules
 - Session folders are immutable records; do not overwrite prior sessions.

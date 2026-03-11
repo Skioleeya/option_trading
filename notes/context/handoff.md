@@ -1,12 +1,12 @@
 ﻿# Handoff (Index)
 
 ## Active Handoff
-- Path: notes/sessions/2026-03-11/eod-bucket-schedule-1601/handoff.md
-- Meta: notes/sessions/2026-03-11/eod-bucket-schedule-1601/meta.yaml
+- Path: notes/sessions/2026-03-11/agents-new-session-pointer-policy/handoff.md
+- Meta: notes/sessions/2026-03-11/agents-new-session-pointer-policy/meta.yaml
 
 ## Latest Outcome
-- Session: 2026-03-11/eod-bucket-schedule-1601
-- Summary: EOD 自动分类任务已实际更新到系统计划任务（Primary 16:01 / Retry 17:00）并完成查询核验。
+- Session: 2026-03-11/agents-new-session-pointer-policy
+- Summary: AGENTS policy and `new_session.ps1` updated to support delayed context sync by default with explicit `-UpdatePointer`.
 
 ## Next Session Bootstrap
 1. Read this file.

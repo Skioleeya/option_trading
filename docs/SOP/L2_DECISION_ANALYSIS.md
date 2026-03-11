@@ -26,6 +26,12 @@ flowchart LR
 - 融合后的主信号
 - 护栏裁决结果
 - `feature_vector`（含前端关键观测字段）
+- 下游兼容字段 `data.fused_signal`（供 L3 typed assembler 直连消费）
+
+### 3.1 Legacy Shim Removal (P2 Stage2)
+
+- `DecisionOutput.to_legacy_agent_result` 已移除。
+- `compute_loop` 与 L3 仅通过 typed contract（`DecisionOutput` + `DecisionOutput.data`）直通，不再构造 legacy 中间结果。
 
 ## 4. Guard Priority
 

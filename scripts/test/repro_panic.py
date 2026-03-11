@@ -2,7 +2,7 @@
 import os
 import sys
 import time
-import l0_rust
+from l0_ingest import l0_rust
 
 def repro():
     # Set RUST_BACKTRACE=1 in the environment

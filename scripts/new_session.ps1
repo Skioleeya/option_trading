@@ -7,7 +7,7 @@ param(
     [string]$ParentSession = "",
     [string]$Timezone = "America/New_York",
     [switch]$UseTimeBucket,
-    [switch]$NoPointerUpdate
+    [switch]$UpdatePointer
 )
 
 $ErrorActionPreference = "Stop"
@@ -37,9 +37,30 @@ function Resolve-TimeZoneInfo {
     }
 
     $windowsId = $null
-    if ([System.TimeZoneInfo]::TryConvertIanaIdToWindowsId($TimeZoneId, [ref]$windowsId)) {
+    $converted = $false
+    try {
+        $converted = [System.TimeZoneInfo]::TryConvertIanaIdToWindowsId($TimeZoneId, [ref]$windowsId)
+    } catch {
+        # API is unavailable in older Windows PowerShell/.NET environments.
+        $converted = $false
+    }
+    if ($converted -and -not [string]::IsNullOrWhiteSpace($windowsId)) {
         try {
             return [System.TimeZoneInfo]::FindSystemTimeZoneById($windowsId)
+        } catch {
+            # Fall through to terminal error below.
+        }
+    }
+
+    $fallbackMap = @{
+        "America/New_York" = "Eastern Standard Time"
+        "Etc/UTC" = "UTC"
+        "UTC" = "UTC"
+    }
+    if ($fallbackMap.ContainsKey($TimeZoneId)) {
+        $fallbackWindowsId = $fallbackMap[$TimeZoneId]
+        try {
+            return [System.TimeZoneInfo]::FindSystemTimeZoneById($fallbackWindowsId)
         } catch {
             # Fall through to terminal error below.
         }
@@ -154,7 +175,7 @@ $contextProjectPath = Join-Path $repoRoot "notes/context/project_state.md"
 $contextTasksPath = Join-Path $repoRoot "notes/context/open_tasks.md"
 $contextHandoffPath = Join-Path $repoRoot "notes/context/handoff.md"
 
-if (-not $NoPointerUpdate) {
+if ($UpdatePointer) {
     $currentRecent = "- $sessionRel/"
     $recent = @($currentRecent)
     foreach ($line in (Get-RecentSessionLines -ContextProjectPath $contextProjectPath)) {
@@ -221,11 +242,11 @@ $backlogText
 
 Write-Host "Session created: $sessionRel"
 Write-Host "Timezone: $Timezone"
-if ($NoPointerUpdate) {
-    Write-Host "Context pointer update: skipped (-NoPointerUpdate)"
-} else {
+if ($UpdatePointer) {
     Write-Host "Updated context pointers:"
     Write-Host " - notes/context/project_state.md"
     Write-Host " - notes/context/open_tasks.md"
     Write-Host " - notes/context/handoff.md"
+} else {
+    Write-Host "Context pointer update: skipped (default; use -UpdatePointer to sync)"
 }

@@ -1,0 +1,48 @@
+﻿session_id: "2026-03-11/scripts-reorg-classification"
+title: "scripts directory reorg and classification"
+scope: "scripts file taxonomy and compatibility stubs"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-11 17:34:53 -04:00"
+updated_at_et: "2026-03-11 17:46:40 -04:00"
+parent_session: "2026-03-11/eod-bucket-schedule-1601"
+
+branch: "master"
+base_commit: "ddc8e77"
+head_commit: "ddc8e77"
+
+files_changed:
+  - "scripts/README.md"
+  - "scripts/policy/check_layer_boundaries.ps1"
+  - "scripts/diagnostics/check_payload_size.py"
+  - "scripts/diagnostics/check_redis_atm.py"
+  - "scripts/diagnostics/diag_env.py"
+  - "scripts/diagnostics/final_history_check.py"
+  - "scripts/perf/check_top_cpu.py"
+  - "scripts/perf/diag_hardware.py"
+  - "scripts/test/live_market_test.py"
+  - "scripts/test/test_rust_bridge.py"
+  - "scripts/test/verify_institutional_live.py"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-11/scripts-reorg-classification/project_state.md"
+  - "notes/sessions/2026-03-11/scripts-reorg-classification/open_tasks.md"
+  - "notes/sessions/2026-03-11/scripts-reorg-classification/handoff.md"
+  - "notes/sessions/2026-03-11/scripts-reorg-classification/meta.yaml"
+commands:
+  - "rg --files scripts | sort"
+  - "git status --short -- scripts"
+  - "powershell -ExecutionPolicy Bypass -File scripts/policy/check_layer_boundaries.ps1"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "powershell -ExecutionPolicy Bypass -File scripts/policy/check_layer_boundaries.ps1"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_failed:
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict (first run: strict metadata gates)"
+blockers: []
+notes:
+  - "Moved legacy root scripts into diagnostics/perf/test/policy folders."
+  - "Fixed repo root resolution after moving check_layer_boundaries.ps1 into scripts/policy."
+
+

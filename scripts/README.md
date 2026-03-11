@@ -17,6 +17,10 @@
 - `reconcile_net_gex_online.py`: WS 原始 `net_gex` 与前端展示逐 tick 对账证据导出。
 - `reconcile_depth_profile_online.py`: Depth Profile 逐 tick 对账证据导出。
 - `eod_bucket_archive.py`: 收盘后按规则阈值分桶（7 类，主标签唯一：`high_vol_open/gap_trend_day/vol_crush_day/pinning_day/whipsaw_day/trend_day/range_day`），输出 `daily/by_regime` manifest 与质量报告。
+- `check_payload_size.py`: Redis 快照 payload 体积与 UI 关键字段规模核查。
+- `check_redis_atm.py`: Redis 中 ATM 开盘锚点与序列键状态核查。
+- `final_history_check.py`: ATM 历史序列长度与单条体积抽检。
+- `diag_env.py`: 运行时导入路径与关键模块加载诊断。
 
 ### ⏱️ [ops/](./ops/) — 运维调度脚本
 - `register_eod_bucket_task.ps1`: 生成/注册 EOD 分桶计划任务（16:01 主任务 + 17:00 重试）。
@@ -26,6 +30,12 @@
 - `perf_monitor.py`: 监控后端计算循环延迟与 WebSocket 推送频率。
 - `cpu_certify.py`: CPU 计算耗时基线验证。
 - `check_resource_usage.py`: 显存/内存/句柄等系统资源占用统计。
+- `check_top_cpu.py`: 进程 CPU 占用 Top-N 快速巡检。
+- `diag_hardware.py`: NumPy/CuPy/Numba 与 CUDA 可用性巡检。
+
+### 📏 [policy/](./policy/) — 架构边界规则
+- `layer_boundary_rules.json`: L0-L4 与 app 跨层导入约束规则。
+- `check_layer_boundaries.ps1`: 全仓库导入边界扫描执行器。
 
 ### 🧪 [test/](./test/) — 开发验证与回归测试
 - `test_depth_profile.py`: **推荐**。WebSocket 端到端 GEX 计算流 live 验证。
@@ -37,6 +47,9 @@
 - `test_ui_tracker.py`: 前端状态追踪器逻辑验证。
 - `test_presenter.py`: 简单 Presenter 数据转换测试。
 - `run_pytest.ps1`: 统一 `pytest` 入口，强制使用独立缓存目录 `tmp/pytest_cache`，并拒绝管理员上下文执行（防权限混用残留临时目录）。
+- `live_market_test.py`: Rust ingest gateway 实盘连通性验证。
+- `test_rust_bridge.py`: Rust IPC bridge 冒烟测试与压力测试入口。
+- `verify_institutional_live.py`: 机构流（OFII/Sweep）实时观测验证。
 
 ## 运行建议
 

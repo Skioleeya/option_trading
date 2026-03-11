@@ -54,9 +54,6 @@ class _FakeDecision:
     latency_ms = 0.0
     data: dict[str, Any] = {"spy_atm_iv": 0.22}
 
-    def to_legacy_agent_result(self) -> dict[str, Any]:
-        return {"spy_atm_iv": 0.22}
-
 
 class _FakeL2Reactor:
     async def decide(self, snapshot: Any) -> _FakeDecision:

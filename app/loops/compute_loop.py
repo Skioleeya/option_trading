@@ -106,7 +106,6 @@ def _extract_snapshot_version(snapshot: dict[str, Any]) -> int:
 def _extract_runtime_spy_atm_iv(
     l1_snapshot: Any,
     decision: Any,
-    result: Any,
 ) -> float | None:
     """Best-effort extract current tick SPY ATM IV from runtime objects."""
     aggregates = getattr(l1_snapshot, "aggregates", None)
@@ -116,20 +115,6 @@ def _extract_runtime_spy_atm_iv(
             return float(value)
 
     candidates: list[Any] = []
-    if isinstance(result, dict):
-        candidates.extend(
-            [
-                result.get("spy_atm_iv"),
-                result.get("atm_iv"),
-                (result.get("data") or {}).get("spy_atm_iv")
-                if isinstance(result.get("data"), dict)
-                else None,
-            ]
-        )
-    data_obj = getattr(result, "data", None)
-    if isinstance(data_obj, dict):
-        candidates.extend([data_obj.get("spy_atm_iv"), data_obj.get("atm_iv")])
-
     decision_data = getattr(decision, "data", None)
     if isinstance(decision_data, dict):
         candidates.extend([decision_data.get("spy_atm_iv"), decision_data.get("atm_iv")])
@@ -411,7 +396,6 @@ async def run_compute_loop(ctr: 'AppContainer', state: SharedLoopState) -> None:
                 state.update_latest_l1_snapshot(l1_snap)
 
                 decision = await ctr.l2_reactor.decide(l1_snap)
-                result = decision.to_legacy_agent_result()
 
                 logger.debug(
                     f"[L2] direction={decision.direction}, "
@@ -421,7 +405,7 @@ async def run_compute_loop(ctr: 'AppContainer', state: SharedLoopState) -> None:
 
                 probe_diag = version_iv_probe.observe(
                     snapshot_version=snapshot_version,
-                    spy_atm_iv=_extract_runtime_spy_atm_iv(l1_snap, decision, result),
+                    spy_atm_iv=_extract_runtime_spy_atm_iv(l1_snap, decision),
                     now_monotonic=time.monotonic(),
                 )
                 state.update_snapshot_version_iv_probe(probe_diag)

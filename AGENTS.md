@@ -129,6 +129,11 @@ Agent MUST manage the following as a single consistency unit:
 - `notes/sessions/YYYY-MM-DD/<task-id>/handoff.md`
 - `notes/sessions/YYYY-MM-DD/<task-id>/meta.yaml`
 
+Execution policy for this consistency unit:
+
+- During implementation, agent MAY update only session-local files under `notes/sessions/...`.
+- Before handoff completion (and before strict validation), agent MUST synchronize `notes/context/*` with the active session in one final pass.
+
 ## 5.2 Session Boot Sequence (Read First)
 
 1. Read the 3 context index files under `notes/context/`.
@@ -146,7 +151,8 @@ Agent MUST manage the following as a single consistency unit:
 ## 5.3 Session Creation Rule
 
 - One substantive change set = one dedicated session folder.
-- Use `scripts/new_session.ps1`.
+- Use `scripts/new_session.ps1` (default: create session without updating `notes/context/*` pointers).
+- If immediate pointer switch is needed, call `scripts/new_session.ps1 -UpdatePointer`.
 - Completed session folders are immutable; never repurpose old session history.
 
 ---
@@ -157,6 +163,8 @@ Agent MUST manage the following as a single consistency unit:
 3. Apply (`/opsx-apply`): implement with boundary discipline.
 4. Verify: pipeline and targeted regressions.
 5. Archive (`/opsx-archive`): only after strict validation passes.
+
+Context pointer sync is a handoff-gate action, not a mandatory per-step mutation during implementation.
 
 ### 6.1 Test Entry and Cache Isolation
 

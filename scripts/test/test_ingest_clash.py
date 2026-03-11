@@ -3,7 +3,7 @@ import os
 import sys
 import time
 from longport.openapi import QuoteContext, Config
-import l0_rust
+from l0_ingest import l0_rust
 
 def test_dual_stack_clash():
     print("--- [DIAG] Dual-Stack Ingest Clash Test ---")

@@ -11,6 +11,7 @@ from typing import Any, Iterable, Protocol
 from longport.openapi import CalcIndex, Config, SubType
 
 from l0_ingest.feeds.market_data_gateway import MarketDataGateway
+from l0_ingest import l0_rust
 
 logger = logging.getLogger(__name__)
 
@@ -176,7 +177,6 @@ class RustQuoteRuntime:
     async def _ensure_gateway(self) -> None:
         if self._gateway is None:
             self._apply_active_endpoint_profile()
-            import l0_rust
 
             self._gateway = l0_rust.RustIngestGateway()
 

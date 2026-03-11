@@ -1,0 +1,45 @@
+﻿session_id: "2026-03-11/agents-new-session-pointer-policy"
+title: "AGENTS and new_session pointer policy"
+scope: "default delayed context sync and timezone compatibility"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-11 18:55:37 -04:00"
+updated_at_et: "2026-03-11 19:24:02 -04:00"
+parent_session: "2026-03-11/p2-stage2-remove-legacy-shim"
+
+branch: "master"
+base_commit: "ddc8e77"
+head_commit: "ddc8e77"
+
+files_changed:
+  - "AGENTS.md"
+  - "scripts/new_session.ps1"
+  - "scripts/validate_session.ps1"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-11/l0-rust-folder-optimization/open_tasks.md"
+  - "notes/sessions/2026-03-11/p2-stage2-remove-legacy-shim/open_tasks.md"
+  - "notes/sessions/2026-03-11/agents-new-session-pointer-policy/project_state.md"
+  - "notes/sessions/2026-03-11/agents-new-session-pointer-policy/open_tasks.md"
+  - "notes/sessions/2026-03-11/agents-new-session-pointer-policy/handoff.md"
+  - "notes/sessions/2026-03-11/agents-new-session-pointer-policy/meta.yaml"
+commands:
+  - "rg -n \"NoPointerUpdate|UpdatePointer\" scripts/new_session.ps1"
+  - "rg -n \"UpdatePointer|handoff-gate action\" AGENTS.md"
+  - "rg -n \"duplicate unresolved debt entries found across sessions without supersede marker|Get-UncheckedOpenTaskItems\" scripts/validate_session.ps1"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict -FullRepoArchitectureScan"
+  - "Measure-Command timings for validate_session default/strict/strict+fullrepo"
+  - "unchecked-item duplicate scan across notes/sessions/**/open_tasks.md"
+  - "functional script check: default create (no context mutation), explicit -UpdatePointer update, pointer verification, cleanup, context restore"
+tests_passed:
+  - "static and functional checks for new_session pointer policy"
+  - "validate_session strict fast path and optional full-repo path both execute successfully"
+tests_failed: []
+blockers: []
+notes:
+  - "Default pointer update behavior intentionally changed (breaking old -NoPointerUpdate usage)."
+  - "Strict full-repo architecture scan now opt-in via -FullRepoArchitectureScan."
+
+

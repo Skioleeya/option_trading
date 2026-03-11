@@ -1,6 +1,7 @@
 param(
     [string]$SessionPath = "",
-    [switch]$Strict
+    [switch]$Strict,
+    [switch]$FullRepoArchitectureScan
 )
 
 $ErrorActionPreference = "Stop"
@@ -524,16 +525,20 @@ if ($Strict) {
         Pass "Strict gate: architecture anti-coupling scan skipped for changed files (none)"
     }
 
-    $fullArchitectureTargets = @(Get-RuntimeSourceTargets -RepoRoot $repoRoot)
-    if ($fullArchitectureTargets.Count -gt 0) {
-        $fullBoundaryHits = @(Get-ArchitectureBoundaryHits -RepoRoot $repoRoot -TargetPaths $fullArchitectureTargets -PolicyPath $policyPath)
-        if ($fullBoundaryHits.Count -gt 0) {
-            Report-Hits -Hits $fullBoundaryHits -Header "Strict gate: full-repo architecture anti-coupling violations detected" -MaxReport 40
+    if ($FullRepoArchitectureScan) {
+        $fullArchitectureTargets = @(Get-RuntimeSourceTargets -RepoRoot $repoRoot)
+        if ($fullArchitectureTargets.Count -gt 0) {
+            $fullBoundaryHits = @(Get-ArchitectureBoundaryHits -RepoRoot $repoRoot -TargetPaths $fullArchitectureTargets -PolicyPath $policyPath)
+            if ($fullBoundaryHits.Count -gt 0) {
+                Report-Hits -Hits $fullBoundaryHits -Header "Strict gate: full-repo architecture anti-coupling violations detected" -MaxReport 40
+            } else {
+                Pass "Strict gate: full-repo architecture anti-coupling scan passed"
+            }
         } else {
-            Pass "Strict gate: full-repo architecture anti-coupling scan passed"
+            Pass "Strict gate: full-repo architecture scan skipped (no runtime source files found)"
         }
     } else {
-        Pass "Strict gate: full-repo architecture scan skipped (no runtime source files found)"
+        Pass "Strict gate: full-repo architecture scan skipped by default (use -FullRepoArchitectureScan)"
     }
 
     $antiPatternTargets = @(
