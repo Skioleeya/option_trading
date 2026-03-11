@@ -8,7 +8,10 @@ import type { MtfFlowState } from '../../types/dashboard'
 import type { FlowState } from './mtfFlowModel'
 import { normalizeMtfFlowState } from './mtfFlowModel'
 
-interface Props { uiState?: MtfFlowState | null }
+interface Props {
+    uiState?: MtfFlowState | null
+    preferProp?: boolean
+}
 
 const CONSENSUS_BAR: Record<FlowState, string> = {
     1: 'bg-accent-red',
@@ -16,9 +19,9 @@ const CONSENSUS_BAR: Record<FlowState, string> = {
     [-1]: 'bg-accent-green',
 }
 
-export const MtfFlow: React.FC<Props> = memo(({ uiState: propState }) => {
+export const MtfFlow: React.FC<Props> = memo(({ uiState: propState, preferProp = false }) => {
     const storeState = useDashboardStore(selectUiStateMtfFlow)
-    const s = normalizeMtfFlowState(storeState ?? propState)
+    const s = normalizeMtfFlowState(preferProp ? (propState ?? storeState) : (storeState ?? propState))
 
     const timeframes = [
         { label: '1M', data: s.m1 },

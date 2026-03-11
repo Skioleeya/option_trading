@@ -31,6 +31,7 @@ interface Props {
         vanna: MetricCell
         momentum: MetricCell
     }
+    preferProp?: boolean
 }
 
 const ZERO_CELL: MetricCell = { label: '—', badge: 'badge-neutral' }
@@ -77,12 +78,14 @@ const StatCard: React.FC<{
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const MicroStats: React.FC<Props> = memo(({ uiState: propUiState }) => {
+export const MicroStats: React.FC<Props> = memo(({ uiState: propUiState, preferProp = false }) => {
     // Store selector — fine-grained subscription (only this slice)
     const storeData = useDashboardStore(selectUiStateMicroStats)
 
     // Store takes priority; fall back to prop; then zero-state
-    const raw = storeData ?? propUiState ?? null
+    const raw = preferProp
+        ? (propUiState ?? storeData ?? null)
+        : (storeData ?? propUiState ?? null)
     const safe = {
         net_gex: normalizeCell(raw?.net_gex ?? ZERO_CELL),
         wall_dyn: normalizeCell(raw?.wall_dyn ?? ZERO_CELL),

@@ -8,11 +8,17 @@ import type { ActiveOption } from '../../types/dashboard'
 import { useDashboardStore, selectUiStateActiveOptions } from '../../store/dashboardStore'
 import { normalizeActiveOptions } from './activeOptionsModel'
 
-interface Props { options?: ActiveOption[] }
+interface Props {
+    options?: ActiveOption[]
+    preferProp?: boolean
+}
 
-export const ActiveOptions: React.FC<Props> = memo(({ options: propOptions }) => {
+export const ActiveOptions: React.FC<Props> = memo(({ options: propOptions, preferProp = false }) => {
     const storeOptions = useDashboardStore(selectUiStateActiveOptions)
-    const options: ActiveOption[] = normalizeActiveOptions(storeOptions ?? propOptions ?? [], 5)
+    const source = preferProp
+        ? (propOptions ?? storeOptions ?? [])
+        : (storeOptions ?? propOptions ?? [])
+    const options: ActiveOption[] = normalizeActiveOptions(source, 5)
 
     // THE BACKEND ALREADY SORTS BY IMPACT_INDEX. 
     // We preserve the order provided by the L3 Presenter.
@@ -48,6 +54,8 @@ export const ActiveOptions: React.FC<Props> = memo(({ options: propOptions }) =>
 
                         return (
                             <tr key={`slot-${slot}`}
+                                data-slot={slot}
+                                data-placeholder={isPlaceholder ? 'true' : 'false'}
                                 className={`border-b border-bg-border/50 hover:bg-bg-card transition-colors ${rowGlow}`}>
                                 <td className="py-1 relative">
                                     {!isPlaceholder && (

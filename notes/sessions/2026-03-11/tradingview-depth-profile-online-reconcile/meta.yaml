@@ -1,0 +1,37 @@
+﻿session_id: "2026-03-11/tradingview-depth-profile-online-reconcile"
+title: "TradingView depth profile online reconcile"
+scope: "verification"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-11 15:45:08 -04:00"
+updated_at_et: "2026-03-11 15:48:56 -04:00"
+parent_session: "2026-03-11/tradingview-net-gex-online-reconcile"
+
+branch: "master"
+base_commit: "d5a961a"
+head_commit: "d5a961a"
+
+files_changed:
+  - "scripts/diagnostics/reconcile_depth_profile_online.py"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-11/tradingview-depth-profile-online-reconcile/project_state.md"
+  - "notes/sessions/2026-03-11/tradingview-depth-profile-online-reconcile/open_tasks.md"
+  - "notes/sessions/2026-03-11/tradingview-depth-profile-online-reconcile/handoff.md"
+  - "notes/sessions/2026-03-11/tradingview-depth-profile-online-reconcile/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId tradingview-depth-profile-online-reconcile -Title \"TradingView depth profile online reconcile\" -Scope \"verification\" -Owner \"Codex\" -ParentSession \"2026-03-11/tradingview-net-gex-online-reconcile\" -Timezone \"Eastern Standard Time\""
+  - "python scripts/diagnostics/reconcile_depth_profile_online.py --samples 30 --out-dir tmp/reconcile"
+  - "python scripts/diagnostics/reconcile_depth_profile_online.py --samples 5 --out-dir tmp/reconcile"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "depth_profile reconcile 30 ticks: captured=30 match=30 mismatch=0"
+  - "depth_profile changed parity: expected_changed=29 observed_changed=29"
+  - "depth_profile reconcile 5 ticks: captured=5 match=5 mismatch=0"
+tests_failed: []
+blockers: []
+notes:
+  - "Browser launch for reconciliation requires elevated execution outside sandbox."
+
+

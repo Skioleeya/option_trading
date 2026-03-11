@@ -1,0 +1,46 @@
+﻿session_id: "2026-03-11/tradingview-hard-cut-phase-d-left-impl"
+title: "TradingView hard-cut phase D left implementation"
+scope: "feature"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-11 14:38:38 -04:00"
+updated_at_et: "2026-03-11 14:58:02 -04:00"
+parent_session: "2026-03-11/tradingview-hard-cut-openspec-parent-child"
+
+branch: "master"
+base_commit: "d5a961a"
+head_commit: "d5a961a"
+
+files_changed:
+  - "l4_ui/src/components/App.tsx"
+  - "l4_ui/src/components/left/LeftPanel.tsx"
+  - "l4_ui/src/components/left/leftPanelModel.ts"
+  - "l4_ui/src/components/left/WallMigration.tsx"
+  - "l4_ui/src/components/left/DepthProfile.tsx"
+  - "l4_ui/src/components/left/MicroStats.tsx"
+  - "l4_ui/src/components/left/wallMigrationTheme.ts"
+  - "l4_ui/src/components/left/__tests__/leftPanelModel.test.ts"
+  - "l4_ui/src/components/left/__tests__/leftPanelMode.test.tsx"
+  - "l4_ui/src/components/left/__tests__/wallMigrationTheme.test.ts"
+  - "openspec/changes/l4-tradingview-hard-cut-phase-d-left-module/tasks.md"
+  - "docs/SOP/L4_FRONTEND.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-11/tradingview-hard-cut-phase-d-left-impl/project_state.md"
+  - "notes/sessions/2026-03-11/tradingview-hard-cut-phase-d-left-impl/open_tasks.md"
+  - "notes/sessions/2026-03-11/tradingview-hard-cut-phase-d-left-impl/handoff.md"
+  - "notes/sessions/2026-03-11/tradingview-hard-cut-phase-d-left-impl/meta.yaml"
+commands:
+  - "npm --prefix l4_ui run test -- leftPanelMode leftPanelModel depthProfileNav wallMigrationTheme microStatsTheme debugHotkey"
+  - "npm --prefix l4_ui run test"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "npm --prefix l4_ui run test -- leftPanelMode leftPanelModel depthProfileNav wallMigrationTheme microStatsTheme debugHotkey (17 passed)"
+  - "npm --prefix l4_ui run test (145 passed)"
+tests_failed: []
+blockers: []
+notes:
+  - "Strict validation initially failed due to empty meta lists; fixed by backfilling session evidence."
+
+

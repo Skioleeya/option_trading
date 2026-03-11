@@ -27,4 +27,22 @@ describe('wallMigrationTheme', () => {
         expect(getHistoryValue([565, NaN], 1)).toBeNull()
         expect(getHistoryValue(undefined, 0)).toBeNull()
     })
+
+    it('ignores backend style injection and keeps local visual mapping', () => {
+        const tokens = getWallMigrationRowTokens({
+            label: 'C',
+            state: 'REINFORCED',
+            lights: {
+                wall_dyn_color: '#000000',
+                current_border: '#000000',
+                current_bg: '#000000',
+                current_shadow: '0 0 0 #000000',
+            },
+        })
+
+        expect(tokens.badgeColor).toBe('#ef4444')
+        expect(tokens.currentBorder).toContain('239,68,68')
+        expect(tokens.currentBg).toContain('239,68,68')
+        expect(tokens.currentShadow).toContain('239,68,68')
+    })
 })

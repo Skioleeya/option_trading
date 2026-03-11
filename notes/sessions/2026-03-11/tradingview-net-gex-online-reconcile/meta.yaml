@@ -1,0 +1,37 @@
+﻿session_id: "2026-03-11/tradingview-net-gex-online-reconcile"
+title: "TradingView net gex online reconcile"
+scope: "verification"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-11 15:29:31 -04:00"
+updated_at_et: "2026-03-11 15:40:49 -04:00"
+parent_session: "2026-03-11/tradingview-hard-cut-archive-proposals"
+
+branch: "master"
+base_commit: "d5a961a"
+head_commit: "d5a961a"
+
+files_changed:
+  - "scripts/diagnostics/reconcile_net_gex_online.py"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-11/tradingview-net-gex-online-reconcile/project_state.md"
+  - "notes/sessions/2026-03-11/tradingview-net-gex-online-reconcile/open_tasks.md"
+  - "notes/sessions/2026-03-11/tradingview-net-gex-online-reconcile/handoff.md"
+  - "notes/sessions/2026-03-11/tradingview-net-gex-online-reconcile/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId tradingview-net-gex-online-reconcile -Title \"TradingView net gex online reconcile\" -Scope \"verification\" -Owner \"Codex\" -ParentSession \"2026-03-11/tradingview-hard-cut-archive-proposals\" -Timezone \"Eastern Standard Time\""
+  - "python scripts/diagnostics/reconcile_net_gex_online.py --samples 30 --out-dir tmp/reconcile"
+  - "python scripts/diagnostics/reconcile_net_gex_online.py --samples 5 --out-dir tmp/reconcile"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "online reconcile 30 ticks: captured=30 match=30 mismatch=0"
+  - "smoke reconcile 5 ticks: captured=5 match=5 mismatch=0"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict (Session validation passed)"
+tests_failed: []
+blockers: []
+notes:
+  - "Playwright browser launch requires elevated execution outside sandbox."
+
+

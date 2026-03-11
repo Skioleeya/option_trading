@@ -25,6 +25,7 @@ import type { DashboardState } from '../store/dashboardStore'
 import type { DashboardPayload } from '../types/dashboard'
 import { DeltaDecoder } from './deltaDecoder'
 import { ConnectionMonitor } from '../observability/connectionMonitor'
+import { L4Rum } from '../observability/l4_rum'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Config
@@ -121,6 +122,7 @@ export class ProtocolAdapter {
 
     private handleMessage = (evt: MessageEvent) => {
         if (!this.active) return
+        L4Rum.markMsgReceived()
 
         // Binary frame detection (Phase 1: log only; Phase 3 will add Protobuf)
         if (evt.data instanceof ArrayBuffer) {
@@ -142,6 +144,7 @@ export class ProtocolAdapter {
         console.warn(
             `[L4 ProtocolAdapter] Disconnected. Reconnecting in ${delay}ms.`
         )
+        L4Rum.recordReconnect()
         this.reconnectDelayMs = Math.min(delay * 1.5, this.maxReconnectDelayMs)
         this._scheduleReconnect(delay)
         ConnectionMonitor.onWsClose(evt.code)
@@ -196,6 +199,7 @@ export class ProtocolAdapter {
 
             if (result.ok) {
                 this.store.applyMergedPayload(result.value)
+                L4Rum.markMsgProcessed()
             } else {
                 console.error(
                     '[L4 ProtocolAdapter] Failed to apply delta:',
@@ -209,6 +213,7 @@ export class ProtocolAdapter {
 
         // ── dashboard_update / dashboard_init (full snapshot) ────────────────────
         this.store.applyFullUpdate(msg as DashboardPayload)
+        L4Rum.markMsgProcessed()
         ConnectionMonitor.onFullPayload()
     }
 

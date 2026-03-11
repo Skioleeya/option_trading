@@ -116,6 +116,21 @@ function normalizeFlowColor(raw: unknown, direction: ActiveFlowDirection): strin
     return ASIAN_FLOW_COLOR_BY_DIRECTION[direction]
 }
 
+function normalizeFlowDisplayLabel(raw: unknown, flow: number): string | undefined {
+    const text = typeof raw === 'string' ? raw.trim() : ''
+    if (!text) return undefined
+    const parsed = parseCompactNumber(text)
+    if (parsed === null) return text
+
+    // For neutral flow, avoid signed zero text like "-$0".
+    if (flow === 0) return '$0'
+    // If backend display text conflicts with numeric sign, discard and let UI format from normalized flow.
+    if ((flow > 0 && parsed < 0) || (flow < 0 && parsed > 0)) {
+        return undefined
+    }
+    return text
+}
+
 export function normalizeActiveOption(input: unknown): ActiveOption {
     const row = (input && typeof input === 'object') ? (input as Partial<ActiveOption>) : {}
     const isPlaceholder = Boolean(row.is_placeholder)
@@ -148,7 +163,7 @@ export function normalizeActiveOption(input: unknown): ActiveOption {
         flow_score: flowScore,
         impact_index: toFiniteNumber(row.impact_index, 0),
         is_sweep: isSweep,
-        flow_deg_formatted: typeof row.flow_deg_formatted === 'string' ? row.flow_deg_formatted : undefined,
+        flow_deg_formatted: normalizeFlowDisplayLabel(row.flow_deg_formatted, flow),
         flow_volume_label: typeof row.flow_volume_label === 'string' ? row.flow_volume_label : undefined,
         flow_color: flowColor,
         flow_glow: normalizedGlow,
@@ -162,7 +177,7 @@ export function normalizeActiveOption(input: unknown): ActiveOption {
 export function normalizeActiveOptions(input: unknown, limit = 5): ActiveOption[] {
     const target = Math.max(0, limit)
     const source = Array.isArray(input) ? input : []
-    const normalized = source
+    const normalized: ActiveOption[] = source
         .map((row) => normalizeActiveOption(row))
         .slice(0, target)
         .map((row, idx) => ({

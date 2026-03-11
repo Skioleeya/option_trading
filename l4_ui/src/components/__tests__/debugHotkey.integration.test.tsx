@@ -1,4 +1,3 @@
-import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useDashboardStore } from '../../store/dashboardStore'
@@ -35,7 +34,7 @@ vi.mock('../AlertToast', () => ({ AlertToast: () => <div data-testid="stub-toast
 import { App } from '../App'
 
 beforeEach(() => {
-    vi.stubEnv('DEV', 'true')
+    vi.stubEnv('DEV', true)
     vi.stubGlobal(
         'fetch',
         vi.fn().mockResolvedValue({

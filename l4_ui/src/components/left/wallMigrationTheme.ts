@@ -34,7 +34,6 @@ export function getHistoryValue(history: unknown, index: number): number | null 
 export function getWallMigrationRowTokens(row: WallMigrationRowLike): WallMigrationRowTokens {
     const label = String(row.label ?? '').toUpperCase()
     const state = String(row.state ?? 'UNAVAILABLE').toUpperCase()
-    const lights = row.lights ?? {}
 
     const isCall = label.startsWith('C')
     const isBreached = state.includes('BREACHED')
@@ -48,6 +47,60 @@ export function getWallMigrationRowTokens(row: WallMigrationRowLike): WallMigrat
         ? THEME.defense.wallMigration.callLabelBg
         : THEME.defense.wallMigration.putLabelBg
 
+    const neutralBorder = 'rgba(255,255,255,0.10)'
+    const neutralBg = 'rgba(18,18,20,0.80)'
+    const neutralShadow = 'none'
+
+    const retreatBorder = 'rgba(245,158,11,0.45)'
+    const retreatBg = 'rgba(245,158,11,0.08)'
+    const retreatShadow = '0 0 6px rgba(245,158,11,0.25)'
+
+    const reinforceBorder = isCall ? 'rgba(239,68,68,0.45)' : 'rgba(16,185,129,0.45)'
+    const reinforceBg = isCall ? 'rgba(239,68,68,0.12)' : 'rgba(16,185,129,0.12)'
+    const reinforceShadow = isCall
+        ? '0 0 8px rgba(239,68,68,0.30)'
+        : '0 0 8px rgba(16,185,129,0.30)'
+
+    const breachBorder = 'rgba(245,158,11,0.6)'
+    const breachBg = 'rgba(245,158,11,0.14)'
+    const breachShadow = '0 0 8px rgba(245,158,11,0.35)'
+
+    const decayingBorder = 'rgba(113,113,122,0.25)'
+    const decayingBg = '#060606'
+    const decayingShadow = 'none'
+
+    const badgeColor = isBreached
+        ? THEME.accent.amber
+        : isReinforced
+            ? (isCall ? THEME.market.up : THEME.market.down)
+            : isRetreating
+                ? THEME.accent.amber
+                : isDecaying
+                    ? THEME.text.secondary
+                    : THEME.text.secondary
+
+    let currentBorder = neutralBorder
+    let currentBg = neutralBg
+    let currentShadow = neutralShadow
+
+    if (isDecaying) {
+        currentBorder = decayingBorder
+        currentBg = decayingBg
+        currentShadow = decayingShadow
+    } else if (isBreached) {
+        currentBorder = breachBorder
+        currentBg = breachBg
+        currentShadow = breachShadow
+    } else if (isReinforced) {
+        currentBorder = reinforceBorder
+        currentBg = reinforceBg
+        currentShadow = reinforceShadow
+    } else if (isRetreating) {
+        currentBorder = retreatBorder
+        currentBg = retreatBg
+        currentShadow = retreatShadow
+    }
+
     return {
         isCall,
         state,
@@ -58,10 +111,10 @@ export function getWallMigrationRowTokens(row: WallMigrationRowLike): WallMigrat
         labelColor,
         labelBorder,
         labelBg,
-        badgeColor: lights.wall_dyn_color || THEME.text.secondary,
+        badgeColor,
         retreatColor: THEME.accent.amber,
-        currentBorder: lights.current_border || 'rgba(255,255,255,0.10)',
-        currentBg: lights.current_bg || (isDecaying ? '#060606' : 'rgba(18,18,20,0.80)'),
-        currentShadow: lights.current_shadow || 'none',
+        currentBorder,
+        currentBg,
+        currentShadow,
     }
 }

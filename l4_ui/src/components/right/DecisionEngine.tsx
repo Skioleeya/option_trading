@@ -16,9 +16,12 @@ import {
     resolveWeightBarWidth,
     resolveWeightPercent,
 } from './decisionEngineModel'
+import type { NetGexBadgeState } from './rightPanelModel'
 
 interface Props {
     fused?: FusedSignal | null
+    netGex?: NetGexBadgeState | null
+    preferProp?: boolean
 }
 
 function stripGexPrefix(label: string): string {
@@ -32,10 +35,15 @@ const Zap: React.FC = () => (
     </svg>
 )
 
-export const DecisionEngine: React.FC<Props> = memo(({ fused: propFused }) => {
+export const DecisionEngine: React.FC<Props> = memo(({ fused: propFused, netGex: propNetGex, preferProp = false }) => {
     const storeFused = useDashboardStore(selectFused)
     const storeNetGex = useDashboardStore(selectUiStateMicroStats)?.net_gex ?? null
-    const fused = storeFused ?? propFused ?? null
+    const fused = preferProp
+        ? (propFused ?? storeFused ?? null)
+        : (storeFused ?? propFused ?? null)
+    const netGex = preferProp
+        ? (propNetGex ?? storeNetGex)
+        : (storeNetGex ?? propNetGex)
 
     const dir = normalizeDecisionTone(fused?.direction)
     const conf = confidenceToPercent(fused?.confidence)
@@ -43,13 +51,13 @@ export const DecisionEngine: React.FC<Props> = memo(({ fused: propFused }) => {
     const comps = fused?.components ?? {}
     const regime = fused?.regime ?? ''
     const gexInt = fused?.gex_intensity ?? ''
-    const netGexLabelRaw = String(storeNetGex?.label ?? '').trim()
+    const netGexLabelRaw = String(netGex?.label ?? '').trim()
     const hasNetGex = netGexLabelRaw !== '' && netGexLabelRaw !== '—'
     const gexLabelCore = hasNetGex
         ? stripGexPrefix(netGexLabelRaw)
         : formatRegimeLabel(gexInt)
     const gexBadgeClass = hasNetGex
-        ? normalizeBadgeToken(storeNetGex?.badge, gexLabelCore)
+        ? normalizeBadgeToken(netGex?.badge, gexLabelCore)
         : resolveGexIntensityBadgeClass(gexInt)
     const gexLabel = gexLabelCore ? `GEX ${gexLabelCore}` : ''
 

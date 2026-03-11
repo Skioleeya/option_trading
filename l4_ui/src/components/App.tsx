@@ -16,14 +16,8 @@ import { useDashboardStore } from '../store/dashboardStore'
 import { Header } from './center/Header'
 import { GexStatusBar } from './center/GexStatusBar'
 import { AtmDecayOverlay } from './center/AtmDecayOverlay'
-import { WallMigration } from './left/WallMigration'
-import { DepthProfile } from './left/DepthProfile'
-import { MicroStats } from './left/MicroStats'
-import { DecisionEngine } from './right/DecisionEngine'
-import { TacticalTriad } from './right/TacticalTriad'
-import { SkewDynamics } from './right/SkewDynamics'
-import { ActiveOptions } from './right/ActiveOptions'
-import { MtfFlow } from './right/MtfFlow'
+import { LeftPanel } from './left/LeftPanel'
+import { RightPanel } from './right/RightPanel'
 import { AtmDecayChart } from './center/AtmDecayChart'
 import { L4Rum } from '../observability/l4_rum'
 import { AlertEngine } from '../alerts/alertEngine'
@@ -33,6 +27,46 @@ import { DebugOverlay } from './DebugOverlay'
 import { deriveMarketStatus } from './center/headerState'
 import { decodeHistoryRows } from '../lib/historyColumnar'
 import type { AtmDecay } from '../types/dashboard'
+import { runtimeConfig } from '../config/runtime'
+
+function toNullableNumber(raw: unknown): number | null {
+    if (raw === null || raw === undefined) return null
+    if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null
+    if (typeof raw === 'string' && raw.trim()) {
+        const num = Number(raw)
+        return Number.isFinite(num) ? num : null
+    }
+    return null
+}
+
+function toOptionalIsoString(raw: unknown): string | undefined {
+    if (typeof raw !== 'string' || !raw.trim()) return undefined
+    const d = new Date(raw)
+    if (Number.isNaN(d.getTime())) return undefined
+    return raw
+}
+
+function toOptionalBoolean(raw: unknown): boolean | undefined {
+    if (typeof raw === 'boolean') return raw
+    if (typeof raw !== 'string') return undefined
+    const text = raw.trim().toLowerCase()
+    if (text === 'true' || text === '1') return true
+    if (text === 'false' || text === '0') return false
+    return undefined
+}
+
+function normalizeAtmHistoryRows(rows: Record<string, unknown>[]): AtmDecay[] {
+    return rows.map((row) => ({
+        strike: toNullableNumber(row.strike),
+        base_strike: toNullableNumber(row.base_strike),
+        locked_at: typeof row.locked_at === 'string' ? row.locked_at : null,
+        straddle_pct: toNullableNumber(row.straddle_pct),
+        call_pct: toNullableNumber(row.call_pct),
+        put_pct: toNullableNumber(row.put_pct),
+        timestamp: toOptionalIsoString(row.timestamp),
+        strike_changed: toOptionalBoolean(row.strike_changed),
+    }))
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // App
@@ -41,10 +75,20 @@ import type { AtmDecay } from '../types/dashboard'
 export const App: React.FC = () => {
     useDashboardWS()
     const [debugOpen, setDebugOpen] = React.useState(false)
+    const moduleFlags = runtimeConfig.flags
 
     useEffect(() => {
         L4Rum.markFmp()
         AlertEngine.start()
+        console.info(
+            '[L4 Runtime] center_v2=%s right_v2=%s left_v2=%s chart_engine=%s ws=%s api=%s',
+            moduleFlags.centerV2,
+            moduleFlags.rightV2,
+            moduleFlags.leftV2,
+            runtimeConfig.chartEngine,
+            runtimeConfig.wsUrl,
+            runtimeConfig.apiBase,
+        )
 
         const handleOverlayToggle = () => setDebugOpen(prev => !prev)
         window.addEventListener('l4:toggle_debug_overlay', handleOverlayToggle)
@@ -52,12 +96,12 @@ export const App: React.FC = () => {
         // Cold boot: hydrate chart with minimal ATM history fields before websocket.
         const atmHistoryFields = 'timestamp,straddle_pct,call_pct,put_pct,strike_changed'
         const fetchAtmHistoryV2 = async (): Promise<AtmDecay[] | null> => {
-            const url = `http://localhost:8001/api/atm-decay/history?fields=${encodeURIComponent(atmHistoryFields)}&schema=v2`
+            const url = `${runtimeConfig.apiBase}/api/atm-decay/history?fields=${encodeURIComponent(atmHistoryFields)}&schema=v2`
             try {
                 const res = await fetch(url)
                 const data = await res.json()
                 const rows = decodeHistoryRows(data, 'history')
-                return rows ? (rows as AtmDecay[]) : null
+                return rows ? normalizeAtmHistoryRows(rows) : null
             } catch (err) {
                 console.warn('[App] ATM history fetch failed (schema=v2):', err)
                 return null
@@ -75,7 +119,7 @@ export const App: React.FC = () => {
             AlertEngine.stop()
             window.removeEventListener('l4:toggle_debug_overlay', handleOverlayToggle)
         }
-    }, [])
+    }, [moduleFlags.centerV2, moduleFlags.leftV2, moduleFlags.rightV2])
 
     const marketStatus = deriveMarketStatus()
 
@@ -87,26 +131,17 @@ export const App: React.FC = () => {
             <AlertToast />
 
             {/* ─── Main layout ───────────────────────────────────────────────── */}
-            <div className="flex flex-col h-screen w-screen overflow-hidden bg-bg-primary">
+            <div
+                className="flex flex-col h-screen w-screen overflow-hidden bg-bg-primary"
+                data-center-module={moduleFlags.centerV2 ? 'v2' : 'stable'}
+                data-right-module={moduleFlags.rightV2 ? 'v2' : 'stable'}
+                data-left-module={moduleFlags.leftV2 ? 'v2' : 'stable'}
+            >
                 <Header marketStatus={marketStatus} />
 
                 <div className="flex flex-1 overflow-hidden">
                     {/* LEFT PANEL */}
-                    <div className="flex flex-col border-r panel-border-right overflow-hidden"
-                        style={{ width: '280px', minWidth: '280px' }}>
-                        <WallMigration />
-                        <div className="flex-1 overflow-hidden border-t border-bg-border flex flex-col">
-                            <div className="shrink-0 flex items-center justify-between px-2 py-1.5 border-b border-bg-border bg-[#0a0a0a]">
-                                <span className="section-header text-[#e0e0e0] font-bold tracking-widest text-[11px] uppercase">DEPTH PROFILE</span>
-                                <div className="flex items-center gap-3 text-3xs font-medium tracking-wide pr-1 text-white/80">
-                                    <span className="flex items-center gap-1.5"><div className="w-[5px] h-[5px] rounded-full bg-market-down"></div>Put</span>
-                                    <span className="flex items-center gap-1.5"><div className="w-[5px] h-[5px] rounded-full bg-market-up"></div>Call</span>
-                                </div>
-                            </div>
-                            <DepthProfile />
-                        </div>
-                        <div className="shrink-0 flex-none border-t border-bg-border"><MicroStats /></div>
-                    </div>
+                    <LeftPanel mode={moduleFlags.leftV2 ? 'v2' : 'stable'} />
 
                     {/* CENTER PANEL */}
                     <div className="relative flex flex-col flex-1 overflow-hidden bg-[#090a0c]">
@@ -122,11 +157,7 @@ export const App: React.FC = () => {
                     {/* RIGHT PANEL */}
                     <div className="flex flex-col border-l border-bg-border overflow-y-auto"
                         style={{ width: '320px', minWidth: '320px' }}>
-                        <DecisionEngine />
-                        <TacticalTriad />
-                        <SkewDynamics />
-                        <div className="border-t border-bg-border flex-1"><ActiveOptions /></div>
-                        <MtfFlow />
+                        <RightPanel mode={moduleFlags.rightV2 ? 'v2' : 'stable'} />
                     </div>
                 </div>
             </div>

@@ -1,0 +1,43 @@
+﻿session_id: "2026-03-11/tradingview-hard-cut-parent-governance-closeout"
+title: "TradingView hard-cut parent governance closeout"
+scope: "governance"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-11 15:04:36 -04:00"
+updated_at_et: "2026-03-11 15:11:10 -04:00"
+parent_session: "2026-03-11/tradingview-hard-cut-phase-d-left-impl"
+
+branch: "master"
+base_commit: "d5a961a"
+head_commit: "d5a961a"
+
+files_changed:
+  - "openspec/changes/l4-tradingview-hard-cut-phase-d-left-module/tasks.md"
+  - "openspec/changes/archive/2026-03-11-l4-tradingview-hard-cut-parent-governance/design.md"
+  - "openspec/changes/archive/2026-03-11-l4-tradingview-hard-cut-parent-governance/proposal.md"
+  - "openspec/changes/archive/2026-03-11-l4-tradingview-hard-cut-parent-governance/tasks.md"
+  - "openspec/changes/archive/2026-03-11-l4-tradingview-hard-cut-parent-governance/specs/l4-tradingview-hard-cut-governance/spec.md"
+  - "openspec/specs/l4-tradingview-hard-cut-governance/spec.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-11/tradingview-hard-cut-parent-governance-closeout/project_state.md"
+  - "notes/sessions/2026-03-11/tradingview-hard-cut-parent-governance-closeout/open_tasks.md"
+  - "notes/sessions/2026-03-11/tradingview-hard-cut-parent-governance-closeout/handoff.md"
+  - "notes/sessions/2026-03-11/tradingview-hard-cut-parent-governance-closeout/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId tradingview-hard-cut-parent-governance-closeout -Title \"TradingView hard-cut parent governance closeout\" -Scope \"governance\" -Owner \"Codex\" -ParentSession \"2026-03-11/tradingview-hard-cut-phase-d-left-impl\" -Timezone \"Eastern Standard Time\""
+  - "openspec.cmd list"
+  - "openspec.cmd archive l4-tradingview-hard-cut-parent-governance -y"
+  - "openspec.cmd list"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "openspec.cmd list (phase-a/phase-b/phase-c/phase-d are all ✓ Complete)"
+  - "openspec.cmd archive l4-tradingview-hard-cut-parent-governance -y (archived successfully)"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict (Session validation passed)"
+tests_failed: []
+blockers: []
+notes:
+  - "openspec CLI emitted PostHog network flush errors in sandbox; command primary actions still completed successfully."
+
+

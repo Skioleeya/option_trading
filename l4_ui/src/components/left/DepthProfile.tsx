@@ -30,6 +30,9 @@ interface Props {
     rows?: PropTableRow[]
     macroVolumeMap?: Record<string, number>
     spot?: number | null
+    gammaWalls?: { call_wall: number | null; put_wall: number | null } | null
+    flipLevel?: number | null
+    preferProp?: boolean
 }
 
 const DepthProfileRow: React.FC<{
@@ -113,16 +116,35 @@ const DepthProfileRow: React.FC<{
 
 DepthProfileRow.displayName = 'DepthProfileRow'
 
-export const DepthProfile: React.FC<Props> = memo(({ rows: propRows, macroVolumeMap: propMap, spot: propSpot }) => {
+export const DepthProfile: React.FC<Props> = memo(({
+    rows: propRows,
+    macroVolumeMap: propMap,
+    spot: propSpot,
+    gammaWalls: propGammaWalls,
+    flipLevel: propFlipLevel,
+    preferProp = false,
+}) => {
     const storeRows = useDashboardStore(selectUiStateDepthProfile) as PropTableRow[] | null
     const storeMap = useDashboardStore(selectUiStateMacroVolumeMap) as Record<string, number> | null
     const storeSpot = useDashboardStore(selectSpot)
     const storeGammaWalls = useDashboardStore(selectGammaWalls)
     const storeFlipLevel = useDashboardStore(selectFlipLevel)
 
-    const rows = storeRows ?? propRows ?? []
-    const macroVolumeMap = storeMap ?? propMap ?? {}
-    const spot = storeSpot ?? propSpot ?? null
+    const rows = preferProp
+        ? (propRows ?? storeRows ?? [])
+        : (storeRows ?? propRows ?? [])
+    const macroVolumeMap = preferProp
+        ? (propMap ?? storeMap ?? {})
+        : (storeMap ?? propMap ?? {})
+    const spot = preferProp
+        ? (propSpot ?? storeSpot ?? null)
+        : (storeSpot ?? propSpot ?? null)
+    const gammaWalls = preferProp
+        ? (propGammaWalls ?? storeGammaWalls ?? null)
+        : (storeGammaWalls ?? propGammaWalls ?? null)
+    const flipLevelRaw = preferProp
+        ? (propFlipLevel ?? storeFlipLevel ?? null)
+        : (storeFlipLevel ?? propFlipLevel ?? null)
 
     const safeRows = rows ?? []
     const spotRef = useRef<HTMLDivElement>(null)
@@ -132,9 +154,9 @@ export const DepthProfile: React.FC<Props> = memo(({ rows: propRows, macroVolume
     const [navHighlightStrike, setNavHighlightStrike] = useState<number | null>(null)
     const currentSpot = React.useMemo(() => safeRows.find(r => r.is_spot)?.strike, [safeRows])
     const rowStrikes = React.useMemo(() => safeRows.map((row) => row.strike), [safeRows])
-    const callWall = storeGammaWalls?.call_wall ?? null
-    const putWall = storeGammaWalls?.put_wall ?? null
-    const flipLevel = storeFlipLevel ?? null
+    const callWall = gammaWalls?.call_wall ?? null
+    const putWall = gammaWalls?.put_wall ?? null
+    const flipLevel = flipLevelRaw
 
     const registerRowRef = useCallback((strike: number, node: HTMLDivElement | null) => {
         if (node) {

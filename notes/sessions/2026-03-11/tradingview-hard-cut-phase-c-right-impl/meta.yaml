@@ -1,0 +1,48 @@
+session_id: "2026-03-11/tradingview-hard-cut-phase-c-right-impl"
+title: "TradingView hard-cut phase C right implementation"
+scope: "feature"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-11 14:16:40 -04:00"
+updated_at_et: "2026-03-11 14:34:58 -04:00"
+parent_session: "2026-03-11/tradingview-hard-cut-openspec-parent-child"
+
+branch: "master"
+base_commit: "d5a961a"
+head_commit: "d5a961a"
+
+files_changed:
+  - "docs/SOP/L4_FRONTEND.md"
+  - "l4_ui/src/components/App.tsx"
+  - "l4_ui/src/components/right/RightPanel.tsx"
+  - "l4_ui/src/components/right/rightPanelModel.ts"
+  - "l4_ui/src/components/right/DecisionEngine.tsx"
+  - "l4_ui/src/components/right/TacticalTriad.tsx"
+  - "l4_ui/src/components/right/SkewDynamics.tsx"
+  - "l4_ui/src/components/right/MtfFlow.tsx"
+  - "l4_ui/src/components/right/ActiveOptions.tsx"
+  - "l4_ui/src/components/__tests__/activeOptions.render.test.tsx"
+  - "l4_ui/src/components/__tests__/rightPanelModel.test.ts"
+  - "openspec/changes/l4-tradingview-hard-cut-phase-c-right-module/tasks.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-11/tradingview-hard-cut-phase-c-right-impl/project_state.md"
+  - "notes/sessions/2026-03-11/tradingview-hard-cut-phase-c-right-impl/open_tasks.md"
+  - "notes/sessions/2026-03-11/tradingview-hard-cut-phase-c-right-impl/handoff.md"
+  - "notes/sessions/2026-03-11/tradingview-hard-cut-phase-c-right-impl/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId tradingview-hard-cut-phase-c-right-impl -Title \"TradingView hard-cut phase C right implementation\" -Scope \"feature\" -Owner \"Codex\" -ParentSession \"2026-03-11/tradingview-hard-cut-openspec-parent-child\" -Timezone \"Eastern Standard Time\""
+  - "npm --prefix l4_ui run test -- activeOptions rightPanelModel rightPanelContract debugHotkey decisionEngine.render"
+  - "npm --prefix l4_ui run test"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "22 passed: focused Right vitest set"
+  - "140 passed: l4_ui full vitest run"
+  - "scripts/validate_session.ps1 -Strict passed"
+tests_failed: []
+blockers: []
+notes:
+  - "Right panel now supports v2/stable entry boundary with typed contract derivation in rightPanelModel."

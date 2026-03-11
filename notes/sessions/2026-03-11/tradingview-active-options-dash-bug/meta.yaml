@@ -1,0 +1,37 @@
+﻿session_id: "2026-03-11/tradingview-active-options-dash-bug"
+title: "TradingView active options dash bug analysis"
+scope: "bugfix"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-11 15:55:02 -04:00"
+updated_at_et: "2026-03-11 15:57:46 -04:00"
+parent_session: "2026-03-11/tradingview-depth-profile-online-reconcile"
+
+branch: "master"
+base_commit: "d5a961a"
+head_commit: "d5a961a"
+
+files_changed:
+  - "l4_ui/src/components/right/activeOptionsModel.ts"
+  - "l4_ui/src/components/__tests__/activeOptions.model.test.ts"
+  - "l4_ui/src/components/__tests__/activeOptions.render.test.tsx"
+  - "docs/SOP/L4_FRONTEND.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-11/tradingview-active-options-dash-bug/project_state.md"
+  - "notes/sessions/2026-03-11/tradingview-active-options-dash-bug/open_tasks.md"
+  - "notes/sessions/2026-03-11/tradingview-active-options-dash-bug/handoff.md"
+  - "notes/sessions/2026-03-11/tradingview-active-options-dash-bug/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId tradingview-active-options-dash-bug -Title \"TradingView active options dash bug analysis\" -Scope \"bugfix\" -Owner \"Codex\" -ParentSession \"2026-03-11/tradingview-depth-profile-online-reconcile\" -Timezone \"Eastern Standard Time\""
+  - "npm --prefix l4_ui run test -- activeOptions.model activeOptions.render"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "npm --prefix l4_ui run test -- activeOptions.model activeOptions.render (2 files, 16 tests passed)"
+tests_failed: []
+blockers: []
+notes:
+  - "Root cause: conflicting backend flow_deg_formatted text could bypass normalized flow sign semantics in UI display."
+
+

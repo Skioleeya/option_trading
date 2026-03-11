@@ -8,11 +8,14 @@ import { useDashboardStore, selectUiStateTacticalTriad } from '../../store/dashb
 import type { TacticalTriadState } from '../../types/dashboard'
 import { normalizeTacticalTriadState } from './tacticalTriadModel'
 
-interface Props { uiState?: TacticalTriadState | null }
+interface Props {
+    uiState?: TacticalTriadState | null
+    preferProp?: boolean
+}
 
-export const TacticalTriad: React.FC<Props> = memo(({ uiState: propState }) => {
+export const TacticalTriad: React.FC<Props> = memo(({ uiState: propState, preferProp = false }) => {
     const storeState = useDashboardStore(selectUiStateTacticalTriad)
-    const state = normalizeTacticalTriadState(storeState ?? propState)
+    const state = normalizeTacticalTriadState(preferProp ? (propState ?? storeState) : (storeState ?? propState))
     const { vrp, charm, svol } = state
 
     return (

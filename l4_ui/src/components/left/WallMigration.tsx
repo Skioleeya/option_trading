@@ -17,11 +17,14 @@ interface PropTableRow {
 
 interface Props {
     rows?: PropTableRow[]
+    preferProp?: boolean
 }
 
-export const WallMigration: React.FC<Props> = memo(({ rows: propRows }) => {
+export const WallMigration: React.FC<Props> = memo(({ rows: propRows, preferProp = false }) => {
     const storeRows = useDashboardStore(selectUiStateWallMigration) as PropTableRow[] | null
-    const rows = storeRows ?? propRows ?? []
+    const rows = preferProp
+        ? (propRows ?? storeRows ?? [])
+        : (storeRows ?? propRows ?? [])
 
     if (!rows || rows.length === 0) {
         return (

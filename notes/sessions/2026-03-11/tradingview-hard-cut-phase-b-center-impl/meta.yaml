@@ -1,0 +1,40 @@
+session_id: "2026-03-11/tradingview-hard-cut-phase-b-center-impl"
+title: "TradingView hard-cut phase B center implementation"
+scope: "feature"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-11 13:46:22 -04:00"
+updated_at_et: "2026-03-11 14:11:20 -04:00"
+parent_session: "2026-03-11/tradingview-hard-cut-openspec-parent-child"
+
+branch: "master"
+base_commit: "d5a961a"
+head_commit: "d5a961a"
+
+files_changed:
+  - "docs/SOP/L4_FRONTEND.md"
+  - "l4_ui/src/components/center/AtmDecayChart.tsx"
+  - "l4_ui/src/components/center/__tests__/atmDecayChart.degrade.test.tsx"
+  - "openspec/changes/l4-tradingview-hard-cut-phase-b-center-module/tasks.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-11/tradingview-hard-cut-phase-b-center-impl/project_state.md"
+  - "notes/sessions/2026-03-11/tradingview-hard-cut-phase-b-center-impl/open_tasks.md"
+  - "notes/sessions/2026-03-11/tradingview-hard-cut-phase-b-center-impl/handoff.md"
+  - "notes/sessions/2026-03-11/tradingview-hard-cut-phase-b-center-impl/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId tradingview-hard-cut-phase-b-center-impl -Title \"TradingView hard-cut phase B center implementation\" -Scope \"feature\" -Owner \"Codex\" -ParentSession \"2026-03-11/tradingview-hard-cut-openspec-parent-child\" -Timezone \"Eastern Standard Time\""
+  - "npm --prefix l4_ui run test -- atmDecay"
+  - "npm --prefix l4_ui run test"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "20 passed: atmDecay center test set"
+  - "136 passed: l4_ui full vitest run"
+  - "scripts/validate_session.ps1 -Strict passed"
+tests_failed: []
+blockers: []
+notes:
+  - "Strict validation failed twice during debug loop (session template fields + SOP sync gate), then passed after metadata/handoff/SOP synchronization."

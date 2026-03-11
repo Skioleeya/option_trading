@@ -124,4 +124,25 @@ describe('activeOptionsModel', () => {
         expect(row.flow_direction).toBe('NEUTRAL')
         expect(row.flow_color).toBe('text-text-secondary')
     })
+
+    it('normalizes signed zero flow label to neutral $0', () => {
+        const row = normalizeActiveOption({
+            flow: 0,
+            flow_deg_formatted: '-$0',
+            flow_direction: 'BEARISH',
+            flow_color: 'text-accent-green',
+        })
+        expect(row.flow_direction).toBe('NEUTRAL')
+        expect(row.flow_color).toBe('text-text-secondary')
+        expect(row.flow_deg_formatted).toBe('$0')
+    })
+
+    it('drops conflicting formatted sign when numeric flow is positive', () => {
+        const row = normalizeActiveOption({
+            flow: 1000,
+            flow_deg_formatted: '-$1K',
+        })
+        expect(row.flow).toBe(1000)
+        expect(row.flow_deg_formatted).toBeUndefined()
+    })
 })

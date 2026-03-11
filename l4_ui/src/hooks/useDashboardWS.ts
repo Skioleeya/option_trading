@@ -22,12 +22,12 @@ import {
     selectConnectionStatus,
 } from '../store/dashboardStore'
 import { ConnectionMonitor } from '../observability/connectionMonitor'
+import { runtimeConfig } from '../config/runtime'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Config (kept identical to original for easy comparison)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const WS_URL = 'ws://localhost:8001/ws/dashboard'
 const RECONNECT_DELAY_MS = 2000
 const MAX_RECONNECT_DELAY_MS = 30_000
 
@@ -52,7 +52,7 @@ export function useDashboardWS() {
         } = useDashboardStore.getState()
 
         const adapter = new ProtocolAdapter({
-            url: WS_URL,
+            url: runtimeConfig.wsUrl,
             store: { setConnectionStatus, applyFullUpdate, applyMergedPayload },
             initialReconnectDelayMs: RECONNECT_DELAY_MS,
             maxReconnectDelayMs: MAX_RECONNECT_DELAY_MS,

@@ -8,12 +8,14 @@ import { useDashboardStore, selectUiStateSkewDynamics } from '../../store/dashbo
 import type { SkewDynamicsState } from '../../types/dashboard'
 import { normalizeSkewDynamicsState } from './skewDynamicsModel'
 
-interface Props { uiState?: SkewDynamicsState | null }
+interface Props {
+    uiState?: SkewDynamicsState | null
+    preferProp?: boolean
+}
 
-export const SkewDynamics: React.FC<Props> = memo(({ uiState: propState }) => {
+export const SkewDynamics: React.FC<Props> = memo(({ uiState: propState, preferProp = false }) => {
     const storeState = useDashboardStore(selectUiStateSkewDynamics)
-    const preferStore = !!(storeState && typeof storeState === 'object' && Object.keys(storeState).length > 0)
-    const state = normalizeSkewDynamicsState(preferStore ? storeState : propState)
+    const state = normalizeSkewDynamicsState(preferProp ? (propState ?? storeState) : (storeState ?? propState))
 
     return (
         <div className="border-t border-bg-border p-2">
