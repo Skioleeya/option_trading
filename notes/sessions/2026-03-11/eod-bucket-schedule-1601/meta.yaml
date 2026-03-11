@@ -1,0 +1,34 @@
+﻿session_id: "2026-03-11/eod-bucket-schedule-1601"
+title: "eod bucket schedule 1601"
+scope: "ops scheduler time tweak"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-11 17:18:17 -04:00"
+updated_at_et: "2026-03-11 17:27:00 -04:00"
+parent_session: "2026-03-11/eod-bucket-7class-primary-only"
+
+branch: "master"
+base_commit: "fecc2ae"
+head_commit: "fecc2ae"
+
+files_changed:
+  - scripts/ops/register_eod_bucket_task.ps1
+  - scripts/README.md
+  - notes/sessions/2026-03-11/eod-bucket-schedule-1601/project_state.md
+  - notes/sessions/2026-03-11/eod-bucket-schedule-1601/open_tasks.md
+  - notes/sessions/2026-03-11/eod-bucket-schedule-1601/handoff.md
+  - notes/context/handoff.md
+commands:
+  - powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId "eod-bucket-schedule-1601" -Title "eod bucket schedule 1601" -Scope "ops scheduler time tweak" -Owner "Codex" -ParentSession "2026-03-11/eod-bucket-7class-primary-only" -Timezone "Eastern Standard Time"
+  - powershell -ExecutionPolicy Bypass -File scripts/ops/register_eod_bucket_task.ps1
+  - powershell -ExecutionPolicy Bypass -File scripts/ops/register_eod_bucket_task.ps1 -Apply; schtasks /Query /TN "EODBucketPrimary" /V /FO LIST; schtasks /Query /TN "EODBucketRetry" /V /FO LIST
+  - powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict
+tests_passed:
+  - scheduler preview shows EODBucketPrimary /ST 16:01 and EODBucketRetry /ST 17:00
+  - scheduler apply + query confirms Start Time Primary=16:01:00, Retry=17:00:00
+tests_failed: []
+blockers: []
+notes:
+  - only scheduling time changed, no classifier/runtime behavior change
+
+

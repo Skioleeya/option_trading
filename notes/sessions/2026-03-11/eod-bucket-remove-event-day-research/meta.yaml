@@ -1,0 +1,37 @@
+﻿session_id: "2026-03-11/eod-bucket-remove-event-day-research"
+title: "remove event_day and research regime taxonomy"
+scope: "diagnostics script + thresholds + tests + research notes"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-11 16:53:26 -04:00"
+updated_at_et: "2026-03-11 17:02:00 -04:00"
+parent_session: "2026-03-11/eod-bucket-archive-automation"
+
+branch: "master"
+base_commit: "fecc2ae"
+head_commit: "fecc2ae"
+
+files_changed:
+  - scripts/diagnostics/eod_bucket_archive.py
+  - scripts/diagnostics/config/eod_bucket_thresholds.json
+  - scripts/test/test_eod_bucket_archive.py
+  - scripts/README.md
+  - notes/sessions/2026-03-11/eod-bucket-remove-event-day-research/project_state.md
+  - notes/sessions/2026-03-11/eod-bucket-remove-event-day-research/open_tasks.md
+  - notes/sessions/2026-03-11/eod-bucket-remove-event-day-research/handoff.md
+  - notes/context/handoff.md
+commands:
+  - powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId "eod-bucket-remove-event-day-research" -Title "remove event_day and research regime taxonomy" -Scope "diagnostics script + thresholds + tests + research notes" -Owner "Codex" -ParentSession "2026-03-11/eod-bucket-archive-automation" -Timezone "Eastern Standard Time"
+  - powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 scripts/test/test_eod_bucket_archive.py -q
+  - python scripts/diagnostics/eod_bucket_archive.py --date 20260311 --config scripts/diagnostics/config/eod_bucket_thresholds.json --root data --out-root data/cold --strict-quality
+  - powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict
+tests_passed:
+  - scripts/test/test_eod_bucket_archive.py (3 passed)
+  - eod_bucket_archive dry-run 20260311 without event_day tag
+tests_failed: []
+blockers: []
+notes:
+  - event_day tag removed from classifier and config.
+  - max_abs_jump retained as diagnostic metric only.
+
+

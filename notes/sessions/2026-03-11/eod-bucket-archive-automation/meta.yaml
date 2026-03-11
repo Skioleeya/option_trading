@@ -1,0 +1,41 @@
+﻿session_id: "2026-03-11/eod-bucket-archive-automation"
+title: "eod bucket archive automation"
+scope: "scripts diagnostics + scheduler + tests"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-11 16:33:32 -04:00"
+updated_at_et: "2026-03-11 16:46:00 -04:00"
+parent_session: "2026-03-11/tradingview-active-options-dash-bug"
+
+branch: "master"
+base_commit: "fecc2ae"
+head_commit: "fecc2ae"
+
+files_changed:
+  - scripts/diagnostics/eod_bucket_archive.py
+  - scripts/diagnostics/config/eod_bucket_thresholds.json
+  - scripts/ops/register_eod_bucket_task.ps1
+  - scripts/ops/run_eod_bucket.ps1
+  - scripts/test/test_eod_bucket_archive.py
+  - scripts/README.md
+  - notes/sessions/2026-03-11/eod-bucket-archive-automation/project_state.md
+  - notes/sessions/2026-03-11/eod-bucket-archive-automation/open_tasks.md
+  - notes/sessions/2026-03-11/eod-bucket-archive-automation/handoff.md
+  - notes/context/handoff.md
+commands:
+  - powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId "eod-bucket-archive-automation" -Title "eod bucket archive automation" -Scope "scripts diagnostics + scheduler + tests" -Owner "Codex" -ParentSession "2026-03-11/tradingview-active-options-dash-bug" -Timezone "Eastern Standard Time"
+  - powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 scripts/test/test_eod_bucket_archive.py -q
+  - python scripts/diagnostics/eod_bucket_archive.py --date 20260311 --config scripts/diagnostics/config/eod_bucket_thresholds.json --root data --out-root data/cold --strict-quality
+  - python scripts/diagnostics/eod_bucket_archive.py --date 20260311 --config scripts/diagnostics/config/eod_bucket_thresholds.json --root data --out-root data/cold --strict-quality
+  - powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict
+  - powershell -ExecutionPolicy Bypass -File scripts/ops/register_eod_bucket_task.ps1
+tests_passed:
+  - scripts/test/test_eod_bucket_archive.py (3 passed)
+  - eod_bucket_archive dry-run idempotent check for 20260311 (2 runs consistent)
+tests_failed: []
+blockers: []
+notes:
+  - Manifest indexing mode implemented (no source file copy).
+  - Task registration script provides preview and optional apply mode.
+
+

@@ -1,0 +1,38 @@
+﻿session_id: "2026-03-11/eod-bucket-7class-primary-only"
+title: "eod bucket 7-class primary-only"
+scope: "diagnostics thresholds classifier tests"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-11 17:05:45 -04:00"
+updated_at_et: "2026-03-11 17:15:00 -04:00"
+parent_session: "2026-03-11/eod-bucket-remove-event-day-research"
+
+branch: "master"
+base_commit: "fecc2ae"
+head_commit: "fecc2ae"
+
+files_changed:
+  - scripts/diagnostics/config/eod_bucket_thresholds.json
+  - scripts/diagnostics/eod_bucket_archive.py
+  - scripts/test/test_eod_bucket_archive.py
+  - scripts/README.md
+  - notes/sessions/2026-03-11/eod-bucket-7class-primary-only/project_state.md
+  - notes/sessions/2026-03-11/eod-bucket-7class-primary-only/open_tasks.md
+  - notes/sessions/2026-03-11/eod-bucket-7class-primary-only/handoff.md
+  - notes/context/handoff.md
+commands:
+  - powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId "eod-bucket-7class-primary-only" -Title "eod bucket 7-class primary-only" -Scope "diagnostics thresholds classifier tests" -Owner "Codex" -ParentSession "2026-03-11/eod-bucket-remove-event-day-research" -Timezone "Eastern Standard Time"
+  - powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 scripts/test/test_eod_bucket_archive.py -q
+  - python scripts/diagnostics/eod_bucket_archive.py --date 20260311 --config scripts/diagnostics/config/eod_bucket_thresholds.json --root data --out-root data/cold --strict-quality
+  - python scripts/diagnostics/eod_bucket_archive.py --date 20260311 --config scripts/diagnostics/config/eod_bucket_thresholds.json --root data --out-root data/cold --strict-quality
+  - powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict
+tests_passed:
+  - scripts/test/test_eod_bucket_archive.py (12 passed)
+  - eod_bucket_archive dry-run idempotent check for 20260311
+tests_failed: []
+blockers: []
+notes:
+  - classification_mode set to primary_only
+  - primary priority chain implemented for 7 categories
+
+

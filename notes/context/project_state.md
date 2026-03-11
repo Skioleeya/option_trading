@@ -1,16 +1,16 @@
 ﻿# Project State (Index)
 
 ## Active Session
-- Path: notes/sessions/2026-03-11/tradingview-active-options-dash-bug/project_state.md
-- Meta: notes/sessions/2026-03-11/tradingview-active-options-dash-bug/meta.yaml
+- Path: notes/sessions/2026-03-11/eod-bucket-schedule-1601/project_state.md
+- Meta: notes/sessions/2026-03-11/eod-bucket-schedule-1601/meta.yaml
 - Status: ACTIVE
 
 ## Recent Sessions
+- notes/sessions/2026-03-11/eod-bucket-schedule-1601/
+- notes/sessions/2026-03-11/eod-bucket-7class-primary-only/
+- notes/sessions/2026-03-11/eod-bucket-remove-event-day-research/
+- notes/sessions/2026-03-11/eod-bucket-archive-automation/
 - notes/sessions/2026-03-11/tradingview-active-options-dash-bug/
-- notes/sessions/2026-03-11/tradingview-depth-profile-online-reconcile/
-- notes/sessions/2026-03-11/tradingview-net-gex-online-reconcile/
-- notes/sessions/2026-03-11/tradingview-hard-cut-archive-proposals/
-- notes/sessions/2026-03-11/tradingview-hard-cut-parent-governance-closeout/
 
 ## Global Rules
 - Session folders are immutable records; do not overwrite prior sessions.
