@@ -1,0 +1,38 @@
+{
+  "date": "20260312",
+  "classification_mode": "primary_only",
+  "primary_tag": "unclassified",
+  "matched_tags": [],
+  "status": "LOW_QUALITY_DAY",
+  "reasons": [
+    "missing required source: research_raw",
+    "missing required source: research_feature",
+    "missing required source: research_label",
+    "raw rows below minimum: 0 < 5000",
+    "feature rows below minimum: 0 < 5000",
+    "label rows below minimum: 0 < 5000"
+  ],
+  "rows": {},
+  "raw_metrics": {
+    "rows": 0,
+    "net_return": 0.0,
+    "intraday_followthrough": 0.0,
+    "overnight_gap": 0.0,
+    "overnight_gap_available": false,
+    "realized_range": 0.0,
+    "open_rv_1m": 0.0,
+    "ofi_persistence": 0.0,
+    "max_abs_jump": 0.0,
+    "state_switch_rate": 0.0,
+    "atm_iv_change_pct": 0.0,
+    "atm_iv_available": false,
+    "pin_band_ratio": 0.0,
+    "close_to_key_level": 1.0,
+    "key_level_coverage": 0.0,
+    "start_timestamp": "",
+    "end_timestamp": "",
+    "ofi_source": "missing",
+    "prev_trade_day": ""
+  },
+  "generated_at_utc": "2026-03-12T10:44:35Z"
+}

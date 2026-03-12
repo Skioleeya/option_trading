@@ -1,0 +1,98 @@
+{
+  "version": "v2",
+  "classification_mode": "primary_only",
+  "date": "20260311",
+  "primary_tag": "range_day",
+  "tags": [
+    "range_day"
+  ],
+  "matched_tags": [
+    "range_day"
+  ],
+  "source_files": [
+    {
+      "role": "research_raw",
+      "path": "data/research/raw/raw_20260311.parquet",
+      "size_bytes": 1129041,
+      "sha256": "509c3adc666c9f7cf4de730a71808026b6cda37ea6fa49ae9aa1eb4a9ac8f860"
+    },
+    {
+      "role": "research_feature",
+      "path": "data/research/feature/feature_20260311.parquet",
+      "size_bytes": 2394330,
+      "sha256": "ae4e943dcd87bff04006b5d65aa640a940fd2903f88c63d48be5289f24c20598"
+    },
+    {
+      "role": "research_label",
+      "path": "data/research/label/label_20260311.parquet",
+      "size_bytes": 642365,
+      "sha256": "0d0018c542299d023c21d8907aa3a1f81b8e2142026eb1b70d92be0e7486c33f"
+    },
+    {
+      "role": "atm_series",
+      "path": "data/atm_decay/atm_series_20260311.jsonl",
+      "size_bytes": 3811935,
+      "sha256": "bce96277b3a66df41d0ebaaad1780cfa7f2b6ea040328f6dee57a02aada20661"
+    },
+    {
+      "role": "mtf_iv_series",
+      "path": "data/mtf_iv/mtf_iv_series_20260311.jsonl",
+      "size_bytes": 1844406,
+      "sha256": "c193698639147ee61ae13dfb80aee530dd42e1cec28d3008bdd8246209573700"
+    },
+    {
+      "role": "wall_series",
+      "path": "data/wall_migration/wall_series_20260311.jsonl",
+      "size_bytes": 21750,
+      "sha256": "4d396d7d2d05dcc8db356dee9daf0fd324c0957ee7f9787d402a61f871622bf7"
+    }
+  ],
+  "metrics": {
+    "rows": {
+      "research_raw": 18292,
+      "research_feature": 18290,
+      "research_label": 21622
+    },
+    "raw_day": {
+      "rows": 18292,
+      "net_return": -0.001255205410673542,
+      "intraday_followthrough": -0.001255205410673542,
+      "overnight_gap": 0.0,
+      "overnight_gap_available": true,
+      "realized_range": 0.17716116837473056,
+      "open_rv_1m": 8.566817969106112e-05,
+      "ofi_persistence": 0.0,
+      "max_abs_jump": 0.20846428571428574,
+      "state_switch_rate": 0.00016402405686167306,
+      "atm_iv_change_pct": -0.9306426332288401,
+      "atm_iv_available": true,
+      "pin_band_ratio": 0.32402143013339163,
+      "close_to_key_level": 0.013795040882409534,
+      "key_level_coverage": 1.0,
+      "start_timestamp": "2026-03-11T12:55:26.935Z",
+      "end_timestamp": "2026-03-11T23:42:55.754Z",
+      "ofi_source": "bbo_imbalance_raw",
+      "prev_trade_day": "20260310"
+    },
+    "source_count": 6
+  },
+  "quality": {
+    "status": "PASS",
+    "reasons": [],
+    "min_rows": {
+      "raw": 5000,
+      "feature": 5000,
+      "label": 5000
+    },
+    "key_null_pct": {
+      "data_timestamp": 0.0,
+      "spot": 0.0,
+      "atm_iv": 0.0,
+      "net_gex": 0.0
+    }
+  },
+  "rule_hits": [
+    "range_day: realized_range high with capped net_return"
+  ],
+  "generated_at_utc": "2026-03-12T10:44:24Z"
+}
