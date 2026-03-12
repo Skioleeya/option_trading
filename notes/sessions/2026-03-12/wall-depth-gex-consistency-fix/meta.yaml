@@ -1,0 +1,40 @@
+session_id: "2026-03-12/wall-depth-gex-consistency-fix"
+title: "wall-depth-gex-consistency-fix"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-12 10:17:30 -04:00"
+updated_at_et: "2026-03-12 10:25:22 -04:00"
+parent_session: "2026-03-12/gex-formula-consistency-fix"
+
+branch: "master"
+base_commit: "352c306"
+head_commit: "352c306"
+
+files_changed:
+  - "l4_ui/src/store/dashboardStore.ts"
+  - "l4_ui/src/components/left/leftPanelModel.ts"
+  - "l4_ui/src/store/__tests__/dashboardStore.test.ts"
+  - "l4_ui/src/components/left/__tests__/leftPanelModel.test.ts"
+  - "docs/SOP/L4_FRONTEND.md"
+  - "notes/sessions/2026-03-12/wall-depth-gex-consistency-fix/project_state.md"
+  - "notes/sessions/2026-03-12/wall-depth-gex-consistency-fix/open_tasks.md"
+  - "notes/sessions/2026-03-12/wall-depth-gex-consistency-fix/handoff.md"
+  - "notes/sessions/2026-03-12/wall-depth-gex-consistency-fix/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+commands:
+  - "npm --prefix l4_ui run test -- src/store/__tests__/dashboardStore.test.ts src/components/left/__tests__/leftPanelModel.test.ts src/components/left/__tests__/leftPanelMode.test.tsx src/components/center/__tests__/gexStatus.test.ts"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "src/store/__tests__/dashboardStore.test.ts"
+  - "src/components/left/__tests__/leftPanelModel.test.ts"
+  - "src/components/left/__tests__/leftPanelMode.test.tsx"
+  - "src/components/center/__tests__/gexStatus.test.ts"
+  - "vitest summary: 4 files / 28 tests passed"
+tests_failed: []
+blockers: []
+notes:
+  - "wall_migration/depth_profile empty array now means explicit clear."
+  - "stable wall adapter now supports canonical and legacy row formats."

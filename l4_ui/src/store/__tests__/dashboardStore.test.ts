@@ -168,7 +168,7 @@ describe('DashboardStore', () => {
 
     // ── Sticky-key protection ───────────────────────────────────────────────────
 
-    it('applyFullUpdate sticky-merge keeps wall_migration when new is empty', () => {
+    it('applyFullUpdate clears wall_migration when new payload explicitly sends empty array', () => {
         const first = makePayload()
         useDashboardStore.getState().applyFullUpdate(first)
         const wallMigration = useDashboardStore.getState().payload!.agent_g!.data.ui_state.wall_migration
@@ -179,7 +179,20 @@ describe('DashboardStore', () => {
             ; (second.agent_g!.data.ui_state as any).wall_migration = []
         useDashboardStore.getState().applyFullUpdate(second)
 
-        // Should retain previous data
+        // Empty array is explicit clear signal
+        const retained = useDashboardStore.getState().payload!.agent_g!.data.ui_state.wall_migration
+        expect(retained).toHaveLength(0)
+    })
+
+    it('applyFullUpdate keeps wall_migration when key is null (partial payload guard)', () => {
+        const first = makePayload()
+        useDashboardStore.getState().applyFullUpdate(first)
+        expect(useDashboardStore.getState().payload!.agent_g!.data.ui_state.wall_migration).toHaveLength(1)
+
+        const second = makePayload()
+        ;(second.agent_g!.data.ui_state as any).wall_migration = null
+        useDashboardStore.getState().applyFullUpdate(second)
+
         const retained = useDashboardStore.getState().payload!.agent_g!.data.ui_state.wall_migration
         expect(retained).toHaveLength(1)
     })
@@ -262,10 +275,18 @@ describe('smartMergeUiState', () => {
         expect(merged.micro_stats).toEqual({ net_gex: {} }) // non-sticky = overwrite
     })
 
-    it('preserves sticky keys when new value is empty array', () => {
+    it('treats depth_profile empty array as explicit clear', () => {
         const prev = { depth_profile: [{ strike: 560 }] }
         const next = { depth_profile: [] }
-        expect(smartMergeUiState(prev, next).depth_profile).toEqual([{ strike: 560 }])
+        expect(smartMergeUiState(prev, next).depth_profile).toEqual([])
+    })
+
+    it('preserves wall_migration when key missing from next payload', () => {
+        const prev = { wall_migration: [{ strike: 560 }], depth_profile: [{ strike: 560 }] }
+        const next = { depth_profile: [] }
+        const merged = smartMergeUiState(prev, next)
+        expect(merged.wall_migration).toEqual([{ strike: 560 }])
+        expect(merged.depth_profile).toEqual([])
     })
 
     it('allows non-sticky key overwrite with empty value', () => {

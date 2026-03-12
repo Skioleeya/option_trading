@@ -51,6 +51,14 @@ class APICredentialsConfig(BaseConfig):
     longport_api_max_concurrent: int = Field(default=5)        # Official cap: <=5 in-flight
     longport_symbol_rate_per_min: float = Field(default=240.0) # Conservative symbol budget for option metadata APIs
     longport_symbol_burst: int = Field(default=50)             # Small startup burst to avoid minute quota spikes
+    longport_startup_symbol_rate_per_min: float = Field(default=180.0)
+    longport_startup_symbol_burst: int = Field(default=20)
+    longport_steady_symbol_rate_per_min: float = Field(default=240.0)
+    longport_steady_symbol_burst: int = Field(default=50)
+    longport_metadata_weight: int = Field(default=5)
+    longport_metadata_ttl_sec: int = Field(default=30)
+    longport_warmup_merge_window_sec: int = Field(default=20)
+    longport_research_startup_stable_sec: int = Field(default=120)
 
     # System Control
     log_level: str = Field(default="INFO")

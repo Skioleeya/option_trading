@@ -1,12 +1,12 @@
 ﻿# Handoff (Index)
 
 ## Active Handoff
-- Path: notes/sessions/2026-03-11/agents-new-session-pointer-policy/handoff.md
-- Meta: notes/sessions/2026-03-11/agents-new-session-pointer-policy/meta.yaml
+- Path: notes/sessions/2026-03-12/wall-depth-gex-consistency-fix/handoff.md
+- Meta: notes/sessions/2026-03-12/wall-depth-gex-consistency-fix/meta.yaml
 
 ## Latest Outcome
-- Session: 2026-03-11/agents-new-session-pointer-policy
-- Summary: AGENTS policy and `new_session.ps1` updated to support delayed context sync by default with explicit `-UpdatePointer`.
+- Session: 2026-03-12/wall-depth-gex-consistency-fix
+- Summary: 已完成 Wall/Depth/GEX 组件一致性修复：wall/depth 空数组显式清空，stable 适配兼容 canonical/legacy。
 
 ## Next Session Bootstrap
 1. Read this file.

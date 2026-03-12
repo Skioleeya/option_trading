@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import date, datetime, timedelta
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
@@ -41,8 +42,12 @@ class OptionSubscriptionManager:
             rate=settings.longport_api_rate_limit,
             burst=settings.longport_api_burst,
             max_concurrent=settings.longport_api_max_concurrent,
-            symbol_rate=settings.longport_symbol_rate_per_min,
-            symbol_burst=settings.longport_symbol_burst,
+            symbol_rate=settings.longport_steady_symbol_rate_per_min,
+            symbol_burst=settings.longport_steady_symbol_burst,
+            startup_symbol_rate=settings.longport_startup_symbol_rate_per_min,
+            startup_symbol_burst=settings.longport_startup_symbol_burst,
+            steady_symbol_rate=settings.longport_steady_symbol_rate_per_min,
+            steady_symbol_burst=settings.longport_steady_symbol_burst,
         )
         configured_cap = int(getattr(settings, "subscription_max", LONGPORT_MAX_SUBSCRIPTIONS))
         self._subscription_cap = max(1, min(configured_cap, LONGPORT_MAX_SUBSCRIPTIONS))
@@ -54,6 +59,11 @@ class OptionSubscriptionManager:
             )
 
         self._routing: dict[str, str] = {}
+        self._metadata_weight = max(1, int(getattr(settings, "longport_metadata_weight", 5)))
+        self._metadata_ttl_sec = max(1.0, float(getattr(settings, "longport_metadata_ttl_sec", 30)))
+        self._metadata_cache: dict[date, tuple[float, list[Any]]] = {}
+        self._metadata_cache_hits = 0
+        self._metadata_cache_misses = 0
 
     @property
     def subscribed_symbols(self) -> set[str]:
@@ -73,6 +83,54 @@ class OptionSubscriptionManager:
 
     def resolve_strike(self, symbol: str) -> float | None:
         return self._symbol_to_strike.get(symbol)
+
+    @property
+    def metadata_cache_hit_rate(self) -> float:
+        total = self._metadata_cache_hits + self._metadata_cache_misses
+        if total <= 0:
+            return 0.0
+        return self._metadata_cache_hits / float(total)
+
+    def metadata_cache_diagnostics(self) -> dict[str, float | int]:
+        return {
+            "hit_rate": self.metadata_cache_hit_rate,
+            "hits": self._metadata_cache_hits,
+            "misses": self._metadata_cache_misses,
+            "entries": len(self._metadata_cache),
+            "ttl_sec": self._metadata_ttl_sec,
+            "weight": self._metadata_weight,
+        }
+
+    def _prune_metadata_cache(self, now_mono: float) -> None:
+        stale_dates = [
+            d
+            for d, (cached_at, _) in self._metadata_cache.items()
+            if (now_mono - cached_at) > self._metadata_ttl_sec
+        ]
+        for d in stale_dates:
+            self._metadata_cache.pop(d, None)
+
+    async def _option_chain_info_by_date_cached(
+        self,
+        symbol: str,
+        check_date: date,
+    ) -> list[Any]:
+        now_mono = time.monotonic()
+        self._prune_metadata_cache(now_mono)
+        cached = self._metadata_cache.get(check_date)
+        if cached is not None:
+            self._metadata_cache_hits += 1
+            return cached[1]
+
+        self._metadata_cache_misses += 1
+        async with self._limiter.acquire(weight=self._metadata_weight):
+            chain_info = await self._runtime.option_chain_info_by_date(
+                symbol,
+                check_date,
+            )
+        cached_rows = list(chain_info or [])
+        self._metadata_cache[check_date] = (time.monotonic(), cached_rows)
+        return cached_rows
 
     async def connect(self) -> None:
         await self._runtime.connect()
@@ -105,22 +163,18 @@ class OptionSubscriptionManager:
         valid_dates: list[tuple[date, list[Any]]] = []
         for i in range(7):
             check_date = now_date + timedelta(days=i)
-            async with self._limiter.acquire(weight=1):
-                try:
-                    chain_info = await self._runtime.option_chain_info_by_date(
-                        "SPY.US",
-                        check_date,
-                    )
-                    if chain_info:
-                        valid_dates.append((check_date, chain_info))
-                        if len(valid_dates) >= 3:
-                            break
-                except Exception as exc:
-                    logger.debug(
-                        "[SubscriptionManager] option_chain_info_by_date failed for %s: %s",
-                        check_date,
-                        exc,
-                    )
+            try:
+                chain_info = await self._option_chain_info_by_date_cached("SPY.US", check_date)
+                if chain_info:
+                    valid_dates.append((check_date, chain_info))
+                    if len(valid_dates) >= 3:
+                        break
+            except Exception as exc:
+                logger.debug(
+                    "[SubscriptionManager] option_chain_info_by_date failed for %s: %s",
+                    check_date,
+                    exc,
+                )
 
         target_symbols = set()
         new_symbol_to_strike: dict[str, float] = {}

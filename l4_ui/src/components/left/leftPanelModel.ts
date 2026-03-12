@@ -49,21 +49,43 @@ function toBoolean(raw: unknown): boolean {
     return raw === true || raw === 'true' || raw === 1 || raw === '1'
 }
 
+function normalizeWallHistory(raw: unknown): number[] {
+    if (!Array.isArray(raw)) return []
+    return raw
+        .map((v) => toOptionalFiniteNumber(v))
+        .filter((v): v is number => v !== null)
+}
+
+function normalizeLights(raw: unknown): Record<string, string> | undefined {
+    if (!raw || typeof raw !== 'object') return undefined
+    const out: Record<string, string> = {}
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+        if (typeof v === 'string') out[k] = v
+    }
+    return Object.keys(out).length > 0 ? out : undefined
+}
+
 function normalizeWallMigrationRows(raw: unknown): LeftWallMigrationRow[] {
     if (!Array.isArray(raw)) return []
     return raw.map((row): LeftWallMigrationRow => {
         const src = row && typeof row === 'object' ? (row as Record<string, unknown>) : {}
+        const canonicalHistory = normalizeWallHistory(src.history)
+        const legacyHistory = [
+            toFiniteNumber(src.h1, 0),
+            toFiniteNumber(src.h2, 0),
+        ]
+        const canonicalLabel = typeof src.label === 'string' ? src.label : null
+        const legacyLabel = typeof src.type_label === 'string' ? src.type_label : null
         return {
-            label: typeof src.type_label === 'string' ? src.type_label : '—',
-            strike: toOptionalFiniteNumber(src.current),
+            // Canonical L3 contract: label/strike/history/lights.
+            // Legacy fallback: type_label/current/h1/h2.
+            label: canonicalLabel ?? legacyLabel ?? '—',
+            strike: toOptionalFiniteNumber(src.strike ?? src.current),
             state: typeof src.state === 'string'
                 ? src.state
-                : (typeof src.type_label === 'string' ? src.type_label : 'UNAVAILABLE'),
-            history: [
-                toFiniteNumber(src.h1, 0),
-                toFiniteNumber(src.h2, 0),
-            ],
-            lights: null,
+                : (canonicalLabel ?? legacyLabel ?? 'UNAVAILABLE'),
+            history: canonicalHistory.length > 0 ? canonicalHistory : legacyHistory,
+            lights: normalizeLights(src.lights),
         }
     })
 }

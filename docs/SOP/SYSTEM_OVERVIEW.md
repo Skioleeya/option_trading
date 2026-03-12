@@ -152,6 +152,8 @@ sequenceDiagram
   - 同时订阅 symbols <= 500（超限自动裁剪）
   - REST 调用频率 <= 10/s（配置超限时运行时钳制）
   - REST 并发 <= 5（配置超限时运行时钳制）
+  - Symbol budget 必须支持 startup/steady 双阶段治理并在 `301607` 后自动回落 startup
+  - 启动期重操作必须去冲击（refresh 间隔、warm-up 聚合、research 延后、Tier2/Tier3 延后）
 
 ## 6. Observability
 

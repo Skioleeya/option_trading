@@ -42,7 +42,11 @@ flowchart LR
   - `gamma_regime`（`LONG_GAMMA|SHORT_GAMMA|NEUTRAL`）
   - `hedge_flow_intensity`
   - `counterfactual_vol_impact_bps`（诊断）
+  - `near_wall_hedge_notional_m` 单位必须是 `Million USD`，不得二次缩放
 - `microstructure.wall_migration.wall_context` 应与 `microstructure.wall_context` 同源
+- GEX 统一口径（主链路与 legacy 一致）：
+  - `gex_per_contract = gamma * open_interest * contract_multiplier * spot^2 / 1_000_000`
+  - `net_gex = total_call_gex - total_put_gex`（输出单位：`Million USD`）
 
 ## 4. Performance Contract
 

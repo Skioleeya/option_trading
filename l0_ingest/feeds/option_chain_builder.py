@@ -315,8 +315,12 @@ class OptionChainBuilder:
             rate=settings.longport_api_rate_limit,
             burst=settings.longport_api_burst,
             max_concurrent=settings.longport_api_max_concurrent,
-            symbol_rate=settings.longport_symbol_rate_per_min,
-            symbol_burst=settings.longport_symbol_burst,
+            symbol_rate=settings.longport_steady_symbol_rate_per_min,
+            symbol_burst=settings.longport_steady_symbol_burst,
+            startup_symbol_rate=settings.longport_startup_symbol_rate_per_min,
+            startup_symbol_burst=settings.longport_startup_symbol_burst,
+            steady_symbol_rate=settings.longport_steady_symbol_rate_per_min,
+            steady_symbol_burst=settings.longport_steady_symbol_burst,
         )
 
         runtime_mode = str(getattr(settings, "longport_runtime_mode", "rust_only")).strip().lower()
@@ -528,6 +532,10 @@ class OptionChainBuilder:
                 "governor_telemetry": {
                     "symbols_per_min": self._rate_limiter.symbol_tokens,
                     "cooldown_active": self._rate_limiter.cooldown_active,
+                    "limiter_profile": self._rate_limiter.symbol_profile,
+                    "cooldown_hits_5m": self._rate_limiter.cooldown_hits_5m,
+                    "warmup_pending_symbols": self._orchestrator.pending_warmup_count,
+                    "metadata_cache_hit_rate": self._sub_mgr.metadata_cache_hit_rate,
                 },
             }
             if not data["rust_active"]:
@@ -673,6 +681,13 @@ class OptionChainBuilder:
             "initialized": self._initialized,
             "gateway": self._quote_runtime.diagnostics(),
             "store": self._store.diagnostics(),
+            "governor": {
+                "limiter_profile": self._rate_limiter.symbol_profile,
+                "cooldown_active": self._rate_limiter.cooldown_active,
+                "cooldown_hits_5m": self._rate_limiter.cooldown_hits_5m,
+                "pending_warmup_symbols": self._orchestrator.pending_warmup_count,
+            },
+            "subscription_metadata_cache": self._sub_mgr.metadata_cache_diagnostics(),
             "legacy_greeks_audit": {
                 "invocations": self._legacy_greeks_invocations,
                 "by_version": dict(self._legacy_greeks_by_version),

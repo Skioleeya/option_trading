@@ -62,6 +62,8 @@ flowchart LR
 - 历史接口默认以 `schema=v2`（columnar-json）消费；`schema=v1` 仅用于兼容/回放验证
 - 前端对 columnar 包络仅负责解码为对象行，不得改变既有图表/store 业务语义
 - `dashboardStore` 的 sticky merge 与 `atmHistory` 必须按 ET 交易日隔离；跨日不得保留旧帧或旧日历史点。
+- `dashboardStore.smartMergeUiState` 对 `wall_migration/depth_profile` 必须采用“空数组显式清空”语义；仅 `null/undefined`（字段缺失）允许 sticky 兜底，避免与 `GexStatusBar` 同 tick 口径漂移。
+- Left `stable` 适配层必须优先消费 canonical wall 行字段（`label/strike/history/lights`），并兼容 legacy 字段（`type_label/current/h1/h2`），禁止在 stable 路径锁死旧合同。
 
 ### 4.1 Right Panel Typed Contract
 

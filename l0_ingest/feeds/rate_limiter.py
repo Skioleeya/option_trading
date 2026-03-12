@@ -14,9 +14,11 @@ Usage:
 from __future__ import annotations
 
 import asyncio
-import time
 import logging
+import time
 from contextlib import asynccontextmanager
+from collections import deque
+from typing import Literal
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +41,12 @@ class APIRateLimiter:
         rate: float = 10.0,           # requests per second (official cap)
         burst: int = 10,              # max request burst
         max_concurrent: int = 5,      # max in-flight (official cap)
-        symbol_rate: float = 240.0,   # symbols per 60 seconds (conservative startup quota)
-        symbol_burst: int = 50        # max symbol burst
+        symbol_rate: float = 240.0,   # compatibility steady symbols / min
+        symbol_burst: int = 50,       # compatibility steady max symbol burst
+        startup_symbol_rate: float | None = None,
+        startup_symbol_burst: int | None = None,
+        steady_symbol_rate: float | None = None,
+        steady_symbol_burst: int | None = None,
     ) -> None:
         requested_rate = float(rate)
         requested_burst = int(burst)
@@ -65,18 +71,56 @@ class APIRateLimiter:
                 self._max_concurrent,
             )
 
-        safe_symbol_rate = max(float(symbol_rate), 1.0)
-        safe_symbol_burst = max(int(symbol_burst), 1)
+        steady_rate = float(symbol_rate if steady_symbol_rate is None else steady_symbol_rate)
+        steady_burst = int(symbol_burst if steady_symbol_burst is None else steady_symbol_burst)
+        startup_rate = float(steady_rate if startup_symbol_rate is None else startup_symbol_rate)
+        startup_burst = int(steady_burst if startup_symbol_burst is None else startup_symbol_burst)
+
+        self._startup_symbol_rate_per_sec = max(startup_rate, 1.0) / 60.0
+        self._startup_symbol_burst = max(startup_burst, 1)
+        self._steady_symbol_rate_per_sec = max(steady_rate, 1.0) / 60.0
+        self._steady_symbol_burst = max(steady_burst, 1)
+
         self._tokens = float(self._burst)
-        
-        self._symbol_rate_per_sec = safe_symbol_rate / 60.0
-        self._symbol_burst = safe_symbol_burst
+        self._created_at = time.monotonic()
+        self._symbol_profile: Literal["startup", "steady"] = "startup"
+        self._symbol_rate_per_sec = self._startup_symbol_rate_per_sec
+        self._symbol_burst = self._startup_symbol_burst
         self._symbol_tokens = float(self._symbol_burst)
-        
-        self._last_refill = time.monotonic()
+
+        self._last_refill = self._created_at
         self._lock = asyncio.Lock()
         self._semaphore = asyncio.Semaphore(self._max_concurrent)
         self._cooldown_until = 0.0
+        self._last_cooldown_ts = self._created_at
+        self._profile_entered_at = self._created_at
+        self._cooldown_hits: deque[float] = deque()
+
+    def _prune_cooldown_hits(self, now: float | None = None) -> None:
+        current = time.monotonic() if now is None else now
+        cutoff = current - 300.0
+        while self._cooldown_hits and self._cooldown_hits[0] < cutoff:
+            self._cooldown_hits.popleft()
+
+    def _switch_symbol_profile(self, profile: Literal["startup", "steady"]) -> None:
+        if profile == self._symbol_profile:
+            return
+        if profile == "steady":
+            self._symbol_profile = "steady"
+            self._symbol_rate_per_sec = self._steady_symbol_rate_per_sec
+            self._symbol_burst = self._steady_symbol_burst
+        else:
+            self._symbol_profile = "startup"
+            self._symbol_rate_per_sec = self._startup_symbol_rate_per_sec
+            self._symbol_burst = self._startup_symbol_burst
+        self._symbol_tokens = min(self._symbol_tokens, float(self._symbol_burst))
+        self._profile_entered_at = time.monotonic()
+        logger.info(
+            "[RateLimiter] Symbol profile switched to %s (rate/min=%.1f burst=%d)",
+            self._symbol_profile,
+            self._symbol_rate_per_sec * 60.0,
+            self._symbol_burst,
+        )
 
     @property
     def tokens(self) -> float:
@@ -91,6 +135,10 @@ class APIRateLimiter:
         return self._symbol_burst
 
     @property
+    def symbol_profile(self) -> str:
+        return self._symbol_profile
+
+    @property
     def max_concurrent(self) -> int:
         return self._max_concurrent
 
@@ -102,11 +150,53 @@ class APIRateLimiter:
     def cooldown_active(self) -> bool:
         return time.monotonic() < self._cooldown_until
 
+    @property
+    def cooldown_hits_5m(self) -> int:
+        now = time.monotonic()
+        self._prune_cooldown_hits(now)
+        return len(self._cooldown_hits)
+
+    def seconds_since_last_cooldown(self) -> float:
+        return max(0.0, time.monotonic() - self._last_cooldown_ts)
+
+    def cooldown_stable_for(self, seconds: float) -> bool:
+        return (not self.cooldown_active) and self.seconds_since_last_cooldown() >= max(seconds, 0.0)
+
+    def force_startup_profile(self, reason: str = "manual") -> bool:
+        if self._symbol_profile == "startup":
+            return False
+        self._switch_symbol_profile("startup")
+        logger.warning("[RateLimiter] Startup profile enforced: reason=%s", reason)
+        return True
+
+    def maybe_promote_to_steady(
+        self,
+        *,
+        warmup_done: bool,
+        warming_up: bool,
+        stable_for_sec: float = 120.0,
+    ) -> bool:
+        if self._symbol_profile == "steady":
+            return False
+        if not warmup_done or warming_up or self.cooldown_active:
+            return False
+        now = time.monotonic()
+        stable_since = max(self._profile_entered_at, self._last_cooldown_ts)
+        if (now - stable_since) < max(0.0, stable_for_sec):
+            return False
+        self._switch_symbol_profile("steady")
+        return True
+
     def trigger_cooldown(self, seconds: int = 60) -> None:
         """Triggers a global quiet period."""
-        new_until = time.monotonic() + seconds
+        now = time.monotonic()
+        new_until = now + seconds
         if new_until > self._cooldown_until:
             self._cooldown_until = new_until
+            self._last_cooldown_ts = now
+            self._cooldown_hits.append(now)
+            self._prune_cooldown_hits(now)
+            self.force_startup_profile(reason="cooldown")
             logger.warning(f"[RateLimiter] Global Cooldown triggered for {seconds}s")
 
     async def _wait_for_tokens(self, num_symbols: int = 1) -> None:
@@ -169,6 +259,10 @@ longport_limiter = APIRateLimiter(
     rate=settings.longport_api_rate_limit,
     burst=settings.longport_api_burst,
     max_concurrent=settings.longport_api_max_concurrent,
-    symbol_rate=settings.longport_symbol_rate_per_min,
-    symbol_burst=settings.longport_symbol_burst,
+    symbol_rate=settings.longport_steady_symbol_rate_per_min,
+    symbol_burst=settings.longport_steady_symbol_burst,
+    startup_symbol_rate=settings.longport_startup_symbol_rate_per_min,
+    startup_symbol_burst=settings.longport_startup_symbol_burst,
+    steady_symbol_rate=settings.longport_steady_symbol_rate_per_min,
+    steady_symbol_burst=settings.longport_steady_symbol_burst,
 )

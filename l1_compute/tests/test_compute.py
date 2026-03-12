@@ -21,6 +21,7 @@ sys.path.insert(0, "e:\\US.market\\Option_v3\\backend")
 
 from l1_compute.compute.gpu_greeks_kernel import GPUGreeksKernel, GreeksMatrix, _compute_numpy
 from l1_compute.compute.compute_router import ComputeRouter, ComputeTier
+from l1_compute.analysis.bsm_fast import _aggregate_greeks_cpu
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -174,3 +175,43 @@ class TestComputeRouter:
         spots, strikes, ivs, is_call, ois, mults = _make_chain(n)
         _, decision = router.compute(spots, strikes, ivs, 0.002, is_call, ois=ois, mults=mults)
         assert decision.chain_size == n
+
+    @pytest.mark.parametrize("shape", ["mixed", "calls_only", "puts_only"])
+    def test_legacy_aggregate_gex_formula_matches_mainline(self, shape: str):
+        """Legacy bsm_fast aggregate must match mainline GEX formula and units."""
+        router = ComputeRouter(force_tier=ComputeTier.NUMPY)
+        n = 64
+        t_years = 0.002
+        spots, strikes, ivs, is_call, ois, mults = _make_chain(n, t=t_years)
+
+        if shape == "calls_only":
+            is_call = np.ones(n, dtype=np.bool_)
+        elif shape == "puts_only":
+            is_call = np.zeros(n, dtype=np.bool_)
+
+        matrix, _ = router.compute(spots, strikes, ivs, t_years, is_call, ois=ois, mults=mults)
+        legacy = _aggregate_greeks_cpu(
+            {"gamma": matrix.gamma, "vanna": matrix.vanna, "charm": matrix.charm},
+            spots,
+            strikes,
+            is_call,
+            ivs,
+            t_years,
+            ois,
+            mults,
+        )
+
+        expected_call = float(np.sum(matrix.call_gex))
+        expected_put = -float(np.sum(matrix.put_gex))
+        expected_net = expected_call + expected_put
+
+        assert legacy["total_call_gex"] == pytest.approx(expected_call, rel=1e-9, abs=1e-12)
+        assert legacy["total_put_gex"] == pytest.approx(expected_put, rel=1e-9, abs=1e-12)
+        assert legacy["net_gex"] == pytest.approx(expected_net, rel=1e-9, abs=1e-12)
+
+        if shape == "calls_only":
+            assert legacy["total_put_gex"] == 0.0
+            assert legacy["put_wall"] is None
+        if shape == "puts_only":
+            assert legacy["total_call_gex"] == 0.0
+            assert legacy["call_wall"] is None

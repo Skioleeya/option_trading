@@ -39,6 +39,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 logger = logging.getLogger(__name__)
+_GEX_SCALE_MILLION = 1_000_000.0
 
 # --------------------------------------------------------------------------- #
 # Tier 1: CuPy GPU availability probe
@@ -49,7 +50,7 @@ try:
     del _gpu_arr
     _CUPY_AVAILABLE = True
     logger.info("[bsm_fast] CuPy/CUDA detected — GPU engine is ACTIVE (Tier 1).")
-except Exception:
+except (ImportError, AttributeError, OSError, RuntimeError, ValueError):
     _CUPY_AVAILABLE = False
     logger.info(
         "[bsm_fast] CuPy not available — install `cupy-cuda12x` for GPU acceleration."
@@ -331,7 +332,9 @@ def _bsm_batch_cupy(
         cp_ois = cp.asarray(ois.astype(np.float64))
         cp_mults = cp.asarray(mults.astype(np.float64))
         
-        gex = gamma * cp_ois * (safe_S ** 2) * cp_mults * 0.01
+        # Keep GEX convention aligned with L1 mainline:
+        # gamma * OI * multiplier * S^2, then normalize to USD millions.
+        gex = gamma * cp_ois * (safe_S ** 2) * cp_mults
         gex = cp.where(valid, gex, 0.0)
         vanna_exp = cp.where(valid, vanna * cp_ois * cp_mults, 0.0)
         charm_exp = cp.where(valid, charm * cp_ois * cp_mults, 0.0)
@@ -355,15 +358,15 @@ def _bsm_batch_cupy(
         put_wall = float(cp_strikes[max_put_idx].item()) if max_put_gex > 0 else None
         
         agg = {
-            "net_gex": (total_call_gex + total_put_gex) / 1_000_000.0,
-            "total_call_gex": total_call_gex / 1_000_000.0,
-            "total_put_gex": total_put_gex / 1_000_000.0,
+            "net_gex": (total_call_gex + total_put_gex) / _GEX_SCALE_MILLION,
+            "total_call_gex": total_call_gex / _GEX_SCALE_MILLION,
+            "total_put_gex": total_put_gex / _GEX_SCALE_MILLION,
             "max_call_gex": max_call_gex,
             "max_put_gex": max_put_gex,
             "call_wall": call_wall,
             "put_wall": put_wall,
-            "net_vanna": float(cp.sum(vanna_exp).item()) / 1_000_000.0,
-            "net_charm": float(cp.sum(charm_exp).item()) / 1_000_000.0,
+            "net_vanna": float(cp.sum(vanna_exp).item()) / _GEX_SCALE_MILLION,
+            "net_charm": float(cp.sum(charm_exp).item()) / _GEX_SCALE_MILLION,
         }
 
     # Transfer back to CPU — the rest of the pipeline is CPU-side
@@ -390,7 +393,9 @@ def _aggregate_greeks_cpu(
 ) -> dict[str, float]:
     valid = (ivs > 0) & (spots > 0) & (strikes > 0) & (t_years > 0)
     
-    gex = greeks["gamma"] * ois * (spots ** 2) * mults * 0.01
+    # Keep GEX convention aligned with L1 mainline:
+    # gamma * OI * multiplier * S^2, then normalize to USD millions.
+    gex = greeks["gamma"] * ois * (spots ** 2) * mults
     gex = np.where(valid, gex, 0.0)
     vanna_exp = np.where(valid, greeks["vanna"] * ois * mults, 0.0)
     charm_exp = np.where(valid, greeks["charm"] * ois * mults, 0.0)
@@ -410,15 +415,15 @@ def _aggregate_greeks_cpu(
     put_wall  = float(strikes[max_put_idx]) if max_put_gex > 0 else None
     
     return {
-        "net_gex": (total_call_gex + total_put_gex) / 1_000_000.0,
-        "total_call_gex": total_call_gex / 1_000_000.0,
-        "total_put_gex": total_put_gex / 1_000_000.0,
+        "net_gex": (total_call_gex + total_put_gex) / _GEX_SCALE_MILLION,
+        "total_call_gex": total_call_gex / _GEX_SCALE_MILLION,
+        "total_put_gex": total_put_gex / _GEX_SCALE_MILLION,
         "max_call_gex": max_call_gex,
         "max_put_gex": max_put_gex,
         "call_wall": call_wall,
         "put_wall": put_wall,
-        "net_vanna": float(np.sum(vanna_exp)) / 1_000_000.0,
-        "net_charm": float(np.sum(charm_exp)) / 1_000_000.0,
+        "net_vanna": float(np.sum(vanna_exp)) / _GEX_SCALE_MILLION,
+        "net_charm": float(np.sum(charm_exp)) / _GEX_SCALE_MILLION,
     }
 
 def compute_greeks_batch(

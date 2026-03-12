@@ -30,3 +30,32 @@ async def test_acquire_rejects_weight_above_symbol_burst() -> None:
         async with limiter.acquire(weight=6):
             pass
 
+
+def test_symbol_profile_promotes_to_steady_and_falls_back_on_cooldown() -> None:
+    limiter = APIRateLimiter(
+        startup_symbol_rate=180.0,
+        startup_symbol_burst=20,
+        steady_symbol_rate=240.0,
+        steady_symbol_burst=50,
+    )
+
+    assert limiter.symbol_profile == "startup"
+    assert limiter.max_symbol_weight == 20
+
+    limiter._profile_entered_at -= 121.0
+    limiter._last_cooldown_ts -= 121.0
+    promoted = limiter.maybe_promote_to_steady(
+        warmup_done=True,
+        warming_up=False,
+        stable_for_sec=120.0,
+    )
+
+    assert promoted is True
+    assert limiter.symbol_profile == "steady"
+    assert limiter.max_symbol_weight == 50
+
+    limiter.trigger_cooldown(seconds=60)
+    assert limiter.cooldown_active is True
+    assert limiter.symbol_profile == "startup"
+    assert limiter.max_symbol_weight == 20
+    assert limiter.cooldown_hits_5m >= 1

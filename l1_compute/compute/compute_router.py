@@ -148,6 +148,9 @@ class ComputeRouter:
                     ois=_ois, mults=_mults,
                 )
                 gex_raw = (batch["gamma"] * _ois * _mults * spots ** 2 / 1_000_000.0)
+                logger.debug(
+                    "[ComputeRouter] legacy_batch aligned with mainline gex formula (gamma*OI*mult*S^2/1e6, MMUSD)"
+                )
                 return GreeksMatrix(
                     delta=batch["delta"],
                     gamma=batch["gamma"],

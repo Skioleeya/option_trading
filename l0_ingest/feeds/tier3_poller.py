@@ -68,11 +68,13 @@ class Tier3Poller:
 
     async def _loop(self) -> None:
         """Background loop with initial stagger delay."""
-        await asyncio.sleep(180)  # Stagger from Tier1/Tier2 convergence
+        await asyncio.sleep(300)  # Delay startup to reduce cold-start quota contention
         while True:
             try:
                 spot = self._get_spot()
-                if spot and not self._syncing:
+                if self._limiter.cooldown_active:
+                    logger.info("[Tier3Poller] Startup/stagger sync paused: global cooldown active.")
+                elif spot and not self._syncing:
                     await self._fetch(spot)
             except Exception as e:
                 logger.error(f"[Tier3Poller] Sync error: {e}")

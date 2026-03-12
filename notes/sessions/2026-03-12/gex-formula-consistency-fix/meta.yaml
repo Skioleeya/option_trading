@@ -1,0 +1,40 @@
+session_id: "2026-03-12/gex-formula-consistency-fix"
+title: "gex-formula-consistency-fix"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-12 09:54:26 -04:00"
+updated_at_et: "2026-03-12 10:01:14 -04:00"
+parent_session: "2026-03-12/301607-rate-limit-fix"
+
+branch: "master"
+base_commit: "352c306"
+head_commit: "352c306"
+
+files_changed:
+  - "l1_compute/analysis/bsm_fast.py"
+  - "l1_compute/compute/compute_router.py"
+  - "l1_compute/reactor.py"
+  - "l1_compute/tests/test_compute.py"
+  - "l1_compute/tests/test_reactor.py"
+  - "docs/SOP/L1_LOCAL_COMPUTATION.md"
+  - "notes/sessions/2026-03-12/gex-formula-consistency-fix/project_state.md"
+  - "notes/sessions/2026-03-12/gex-formula-consistency-fix/open_tasks.md"
+  - "notes/sessions/2026-03-12/gex-formula-consistency-fix/handoff.md"
+  - "notes/sessions/2026-03-12/gex-formula-consistency-fix/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_compute.py l1_compute/tests/test_reactor.py l1_compute/tests/test_streaming_aggregator.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "l1_compute/tests/test_compute.py"
+  - "l1_compute/tests/test_reactor.py"
+  - "l1_compute/tests/test_streaming_aggregator.py"
+  - "pytest summary: 40 passed"
+tests_failed: []
+blockers: []
+notes:
+  - "GEX formula unified to mainline convention (MMUSD)."
+  - "wall_context near_wall_hedge_notional_m double-scaling removed."

@@ -91,6 +91,7 @@ const STICKY_KEYS = [
 ] as const
 
 type StickyKey = (typeof STICKY_KEYS)[number]
+const EXPLICIT_CLEAR_ARRAY_KEYS = new Set<StickyKey>(['wall_migration', 'depth_profile'])
 
 /** Returns true if value is considered "empty" for sticky-key purposes. */
 function isEmpty(val: unknown): boolean {
@@ -112,6 +113,19 @@ export function smartMergeUiState(prev: any, next: any): any {
     for (const key of STICKY_KEYS as readonly StickyKey[]) {
         const newVal = next?.[key]
         const oldVal = prev?.[key]
+        // For wall/depth arrays, [] means explicit clear from backend.
+        if (
+            EXPLICIT_CLEAR_ARRAY_KEYS.has(key)
+            && Array.isArray(newVal)
+            && newVal.length === 0
+        ) {
+            continue
+        }
+        // Missing/null keeps previous sticky value to protect partial delta payloads.
+        if ((newVal === null || newVal === undefined) && !isEmpty(oldVal)) {
+            merged[key] = oldVal
+            continue
+        }
         if (isEmpty(newVal) && !isEmpty(oldVal)) {
             merged[key] = oldVal
         }

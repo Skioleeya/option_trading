@@ -12,6 +12,7 @@ Validates:
 from __future__ import annotations
 
 import asyncio
+import math
 import sys
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -258,3 +259,27 @@ class TestL1ComputeReactor:
         chain = _make_chain_entries(20)
         result = reactor._compute_sync(chain, spot=560.0, l0_version=1, iv_cache={}, spot_at_sync={})
         assert isinstance(result, EnrichedSnapshot)
+
+    def test_wall_context_uses_million_unit_without_double_scaling(self):
+        reactor = L1ComputeReactor(sabr_enabled=False)
+        chain = [
+            {"strike": 554.0, "volume": 120},
+            {"strike": 555.0, "volume": 360},
+            {"strike": 560.0, "volume": 220},
+            {"strike": 565.0, "volume": 340},
+            {"strike": 566.0, "volume": 110},
+        ]
+
+        ctx = reactor._build_wall_context(
+            chain_snapshot=chain,
+            net_gex=-12.0,
+            call_wall=565.0,
+            put_wall=555.0,
+            call_wall_gex=18.5,
+            put_wall_gex=11.25,
+        )
+
+        expected_notional_m = abs(18.5) + abs(11.25)
+        assert ctx["near_wall_hedge_notional_m"] == pytest.approx(expected_notional_m)
+        assert math.isfinite(float(ctx["hedge_flow_intensity"]))
+        assert math.isfinite(float(ctx["counterfactual_vol_impact_bps"]))

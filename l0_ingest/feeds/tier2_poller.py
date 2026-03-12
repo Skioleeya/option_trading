@@ -66,11 +66,13 @@ class Tier2Poller:
 
     async def _loop(self) -> None:
         """Background loop with initial stagger delay."""
-        await asyncio.sleep(60)  # Decouple from Tier 1 cold-start burst
+        await asyncio.sleep(180)  # Delay startup to reduce cold-start quota contention
         while True:
             try:
                 spot = self._get_spot()
-                if spot and not self._syncing:
+                if self._limiter.cooldown_active:
+                    logger.info("[Tier2Poller] Startup/stagger sync paused: global cooldown active.")
+                elif spot and not self._syncing:
                     await self._fetch(spot)
             except Exception as e:
                 logger.error(f"[Tier2Poller] Sync error: {e}")

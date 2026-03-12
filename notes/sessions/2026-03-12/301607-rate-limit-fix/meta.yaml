@@ -1,0 +1,48 @@
+﻿session_id: "2026-03-12/301607-rate-limit-fix"
+title: "301607-rate-limit-fix"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-03-12 09:34:40 -04:00"
+updated_at_et: "2026-03-12 09:42:27 -04:00"
+parent_session: "2026-03-11/agents-new-session-pointer-policy"
+
+branch: "master"
+base_commit: "352c306"
+head_commit: "352c306"
+
+files_changed:
+  - "shared/config/api_credentials.py"
+  - "l0_ingest/feeds/rate_limiter.py"
+  - "l0_ingest/feeds/feed_orchestrator.py"
+  - "l0_ingest/subscription_manager.py"
+  - "l0_ingest/feeds/tier2_poller.py"
+  - "l0_ingest/feeds/tier3_poller.py"
+  - "l0_ingest/feeds/option_chain_builder.py"
+  - "l0_ingest/tests/test_rate_limiter_guards.py"
+  - "l0_ingest/tests/test_subscription_metadata_cache.py"
+  - "l0_ingest/tests/test_feed_orchestrator_startup_stagger.py"
+  - "docs/SOP/L0_DATA_FEED.md"
+  - "docs/SOP/SYSTEM_OVERVIEW.md"
+  - "notes/sessions/2026-03-12/301607-rate-limit-fix/project_state.md"
+  - "notes/sessions/2026-03-12/301607-rate-limit-fix/open_tasks.md"
+  - "notes/sessions/2026-03-12/301607-rate-limit-fix/handoff.md"
+  - "notes/sessions/2026-03-12/301607-rate-limit-fix/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId 301607-rate-limit-fix -Timezone \"Eastern Standard Time\" -ParentSession \"2026-03-11/agents-new-session-pointer-policy\""
+  - "python -m compileall shared/config/api_credentials.py l0_ingest/feeds/rate_limiter.py l0_ingest/feeds/feed_orchestrator.py l0_ingest/subscription_manager.py l0_ingest/feeds/tier2_poller.py l0_ingest/feeds/tier3_poller.py l0_ingest/feeds/option_chain_builder.py l0_ingest/tests/test_subscription_metadata_cache.py l0_ingest/tests/test_feed_orchestrator_startup_stagger.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/test_rate_limiter_guards.py l0_ingest/tests/test_subscription_pool_guard.py l0_ingest/tests/test_subscription_metadata_cache.py l0_ingest/tests/test_feed_orchestrator_startup_stagger.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 scripts/test/test_l0_l4_pipeline.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "l0_ingest/tests/test_rate_limiter_guards.py"
+  - "l0_ingest/tests/test_subscription_pool_guard.py"
+  - "l0_ingest/tests/test_subscription_metadata_cache.py"
+  - "l0_ingest/tests/test_feed_orchestrator_startup_stagger.py"
+  - "scripts/test/test_l0_l4_pipeline.py"
+tests_failed: []
+blockers: []
+notes:
+  - "Governor telemetry now includes limiter profile, cooldown hits (5m), warmup queue size, and metadata cache hit-rate."
+
+

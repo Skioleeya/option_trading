@@ -1,14 +1,17 @@
 ﻿# Project State (Index)
 
 ## Active Session
-- Path: notes/sessions/2026-03-11/agents-new-session-pointer-policy/project_state.md
-- Meta: notes/sessions/2026-03-11/agents-new-session-pointer-policy/meta.yaml
+- Path: notes/sessions/2026-03-12/wall-depth-gex-consistency-fix/project_state.md
+- Meta: notes/sessions/2026-03-12/wall-depth-gex-consistency-fix/meta.yaml
 - Status: ACTIVE
 
 ## Latest Update
-- 2026-03-11 ET: Session bootstrap policy updated: `new_session.ps1` defaults to delayed context sync; explicit `-UpdatePointer` now controls pointer mutation.
+- 2026-03-12 ET: 已完成 Wall/Depth/GEX 一致性修复：`wall_migration/depth_profile` 空数组显式清空；stable 适配兼容 canonical/legacy wall 行结构。
 
 ## Recent Sessions
+- notes/sessions/2026-03-12/wall-depth-gex-consistency-fix/
+- notes/sessions/2026-03-12/gex-formula-consistency-fix/
+- notes/sessions/2026-03-12/301607-rate-limit-fix/
 - notes/sessions/2026-03-11/agents-new-session-pointer-policy/
 - notes/sessions/2026-03-11/p2-stage2-remove-legacy-shim/
 - notes/sessions/2026-03-11/l0-rust-folder-optimization/

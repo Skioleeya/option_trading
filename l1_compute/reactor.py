@@ -388,8 +388,11 @@ class L1ComputeReactor:
 
         total_ms = (time.monotonic() - t_start) * 1000.0
         logger.info(
-            "[L1ComputeReactor] compute n=%d tier=%s t=%.1fms gex=%.2f",
-            n_valid, decision.tier.value, total_ms, agg.net_gex,
+            "[L1ComputeReactor] compute n=%d tier=%s t=%.1fms gex=%.2f unit=MMUSD gex_formula=gamma*OI*mult*S^2/1e6",
+            n_valid,
+            decision.tier.value,
+            total_ms,
+            agg.net_gex,
         )
 
         return EnrichedSnapshot(
@@ -630,7 +633,7 @@ class L1ComputeReactor:
         gamma_regime = self._classify_wall_gamma_regime(net_gex)
         near_wall_hedge_notional_m = (
             abs(float(call_wall_gex or 0.0)) + abs(float(put_wall_gex or 0.0))
-        ) / 1_000_000.0
+        )
         near_wall_liquidity = self._estimate_near_wall_liquidity(
             chain_snapshot,
             call_wall=float(call_wall or 0.0),

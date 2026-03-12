@@ -103,9 +103,19 @@ flowchart LR
   - strict 关闭: 降级运行 + 明确日志
 - REST 限频: governor cooldown
 - 启动期限频保护:
+  - Symbol governor 采用双阶段 profile:
+    - `startup`: `startup_symbol_rate_per_min` / `startup_symbol_burst`（默认 180/min, burst 20）
+    - `steady`: `steady_symbol_rate_per_min` / `steady_symbol_burst`（默认 240/min, burst 50）
+  - 进入 steady 条件: Tier1 warm-up 完成且连续 120s 无 cooldown。
+  - 任何 `301607` 触发 `trigger_cooldown(60s)` 时，limiter 必须强制回落到 startup profile。
   - IV warm-up 启用去重窗口，避免启动阶段重复全量 warm-up。
+  - FeedOrchestrator 对重操作加节流:
+    - subscription refresh 最小间隔 30s
+    - 新 symbols warm-up 合并窗口 20s（批量 flush，避免 4-symbol 高频触发）
+    - volume research 仅在 warm-up 完成后且 cooldown 连续稳定 120s 才允许首轮执行
   - warm-up / Tier2 / Tier3 / research 批次大小受 `limiter.max_symbol_weight` 约束，禁止单次请求权重超过 `symbol_burst`。
-  - Volume research 仅在 IV bootstrap 完成后触发，避免与 warm-up 并发冲击分钟额度。
+  - Tier2/Tier3 启动延后并受 cooldown 门控（Tier2 首次 180s，Tier3 首次 300s）。
+  - Subscription metadata 请求使用 TTL 缓存（默认 30s）与独立权重（默认 5）降低分钟窗口冲击。
 - 官方硬限制守卫:
   - Request rate 不得超过 `10 calls/s`（运行时 limiter 自动钳制配置）。
   - 并发请求不得超过 `5`（运行时 limiter 自动钳制配置）。
@@ -115,6 +125,17 @@ flowchart LR
 - 重复计算治理:
   - 禁止 `compute_loop` 与 `housekeeping_loop` 在同一 L0 `version` 上重复触发 legacy Greeks
   - 兼容 legacy 路径应提供按 `snapshot_version/caller` 的审计计数，便于定位重复算力消耗
+
+## 8.1 Governor Telemetry Contract
+
+`fetch_chain().governor_telemetry` 必须持续包含并向后兼容:
+
+- `symbols_per_min`
+- `cooldown_active`
+- `limiter_profile` (`startup|steady`)
+- `cooldown_hits_5m`
+- `warmup_pending_symbols`
+- `metadata_cache_hit_rate`
 
 ## 9. Verification
 
