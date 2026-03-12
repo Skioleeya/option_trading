@@ -13,6 +13,5 @@ if ([string]::IsNullOrWhiteSpace($RepoRoot)) {
 }
 
 Set-Location $RepoRoot
-$date = (Get-Date).ToString("yyyyMMdd")
-& $PythonExe "scripts/diagnostics/eod_bucket_archive.py" --date $date --config $ConfigPath --root $DataRoot --out-root $OutRoot --strict-quality
+& $PythonExe "scripts/diagnostics/eod_bucket_archive.py" --config $ConfigPath --root $DataRoot --out-root $OutRoot --strict-quality
 exit $LASTEXITCODE

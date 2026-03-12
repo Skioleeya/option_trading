@@ -21,6 +21,7 @@ from pathlib import Path
 from statistics import pstdev
 from typing import Any
 
+import exchange_calendars as xc
 import pyarrow.parquet as pq
 from zoneinfo import ZoneInfo
 
@@ -29,6 +30,7 @@ DEFAULT_CONFIG = Path("scripts/diagnostics/config/eod_bucket_thresholds.json")
 DEFAULT_ROOT = Path("data")
 DEFAULT_OUT_ROOT = Path("data/cold")
 VERSION = "v2"
+XNYS_CAL = xc.get_calendar("XNYS")
 
 
 @dataclass(frozen=True)
@@ -44,6 +46,31 @@ def _utc_iso() -> str:
 
 def _today_et() -> str:
     return datetime.now(ZoneInfo("America/New_York")).strftime("%Y%m%d")
+
+
+def _parse_date_str(date_str: str) -> datetime:
+    text = str(date_str or "").strip()
+    if len(text) != 8 or not text.isdigit():
+        raise ValueError(f"Invalid date '{date_str}': expected YYYYMMDD.")
+    try:
+        return datetime.strptime(text, "%Y%m%d")
+    except ValueError as exc:
+        raise ValueError(f"Invalid date '{date_str}': expected YYYYMMDD.") from exc
+
+
+def _ensure_xnys_session(date_str: str) -> str:
+    dt = _parse_date_str(date_str)
+    iso = dt.strftime("%Y-%m-%d")
+    if not XNYS_CAL.is_session(iso):
+        raise ValueError(f"Date '{date_str}' is not an XNYS trading session.")
+    return dt.strftime("%Y%m%d")
+
+
+def _previous_xnys_session(date_str: str) -> str:
+    dt = _parse_date_str(date_str)
+    iso = dt.strftime("%Y-%m-%d")
+    prev = XNYS_CAL.previous_session(iso)
+    return prev.strftime("%Y%m%d")
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -120,21 +147,13 @@ def _read_rows(path: Path) -> int:
 
 
 def _find_prev_close_spot(root: Path, date_str: str) -> tuple[float | None, str | None]:
+    prev_day = _previous_xnys_session(date_str)
     raw_dir = root / "research" / "raw"
     if not raw_dir.exists():
-        return None, None
-    candidates: list[str] = []
-    for path in raw_dir.glob("raw_*.parquet"):
-        name = path.name
-        if len(name) != len("raw_YYYYMMDD.parquet"):
-            continue
-        day = name[4:12]
-        if day < date_str:
-            candidates.append(day)
-    if not candidates:
-        return None, None
-    prev_day = sorted(candidates)[-1]
+        return None, prev_day
     prev_path = raw_dir / f"raw_{prev_day}.parquet"
+    if not prev_path.exists():
+        return None, prev_day
     try:
         table = pq.read_table(prev_path, columns=["spot"])
     except Exception:
@@ -460,6 +479,7 @@ def run_archive(
     out_root: Path,
     strict_quality: bool,
 ) -> int:
+    date_str = _ensure_xnys_session(date_str)
     cfg = _load_json(config_path)
     thresholds = cfg["thresholds"]
     quality_gate = thresholds["quality_gate"]

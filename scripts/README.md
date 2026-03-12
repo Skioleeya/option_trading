@@ -16,7 +16,7 @@
 ### 🧾 [diagnostics/](./diagnostics/) — 在线对账与 EOD 归档
 - `reconcile_net_gex_online.py`: WS 原始 `net_gex` 与前端展示逐 tick 对账证据导出。
 - `reconcile_depth_profile_online.py`: Depth Profile 逐 tick 对账证据导出。
-- `eod_bucket_archive.py`: 收盘后按规则阈值分桶（7 类，主标签唯一：`high_vol_open/gap_trend_day/vol_crush_day/pinning_day/whipsaw_day/trend_day/range_day`），输出 `daily/by_regime` manifest 与质量报告。
+- `eod_bucket_archive.py`: 收盘后按规则阈值分桶（7 类，主标签唯一：`high_vol_open/gap_trend_day/vol_crush_day/pinning_day/whipsaw_day/trend_day/range_day`），输出 `daily/by_regime` manifest 与质量报告；交易日按 `XNYS` 日历校验，非交易日直接失败。
 - `check_payload_size.py`: Redis 快照 payload 体积与 UI 关键字段规模核查。
 - `check_redis_atm.py`: Redis 中 ATM 开盘锚点与序列键状态核查。
 - `final_history_check.py`: ATM 历史序列长度与单条体积抽检。
@@ -24,7 +24,7 @@
 
 ### ⏱️ [ops/](./ops/) — 运维调度脚本
 - `register_eod_bucket_task.ps1`: 生成/注册 EOD 分桶计划任务（16:01 主任务 + 17:00 重试）。
-- `run_eod_bucket.ps1`: 计划任务调用入口（按当天日期执行 EOD 分桶脚本）。
+- `run_eod_bucket.ps1`: 计划任务调用入口（日期由 Python 侧 ET + `XNYS` 日历逻辑统一判定，不再使用本地 PowerShell 日期注入）。
 
 ### ⚡ [perf/](./perf/) — 性能分析与资源监控
 - `perf_monitor.py`: 监控后端计算循环延迟与 WebSocket 推送频率。

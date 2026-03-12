@@ -367,3 +367,59 @@ def test_primary_manifest_is_idempotent_and_by_regime_aligned():
     assert reg.exists()
     reg_payload = json.loads(reg.read_text(encoding="utf-8"))
     assert reg_payload["source_files"] == first["source_files"]
+
+
+def test_non_trading_weekend_date_returns_1():
+    mod = _load_module()
+    rc = mod.run_cli(["--date", "20260314"])
+    assert rc == 1
+
+
+def test_non_trading_holiday_date_returns_1():
+    mod = _load_module()
+    rc = mod.run_cli(["--date", "20260703"])
+    assert rc == 1
+
+
+def test_missing_prev_session_file_does_not_fallback_to_older_day():
+    mod = _load_module()
+    root = _case_dir()
+    data_root = root / "data"
+    out_root = root / "cold"
+    date_str = "20260311"
+    _make_day_files(data_root, date_str, rows=120, include_feature_label=True, include_walls=True, with_prev_day=False)
+
+    # Intentionally provide an older file but keep the immediate previous session file absent.
+    _write_parquet(
+        data_root / "research/raw" / "raw_20260309.parquet",
+        {
+            "data_timestamp": ["2026-03-09T15:59:00-04:00", "2026-03-09T16:00:00-04:00"],
+            "spot": [99.0, 100.0],
+            "atm_iv": [0.20, 0.20],
+            "net_gex": [300.0, 300.0],
+            "bbo_imbalance_raw": [0.0, 0.0],
+        },
+    )
+
+    cfg = _default_cfg()
+    cfg_path = root / "cfg_prev_missing.json"
+    _write_cfg(cfg_path, cfg)
+
+    rc = mod.run_cli(
+        [
+            "--date",
+            date_str,
+            "--config",
+            str(cfg_path),
+            "--root",
+            str(data_root),
+            "--out-root",
+            str(out_root),
+            "--strict-quality",
+        ]
+    )
+    assert rc == 0
+    daily = json.loads((out_root / "daily" / date_str / "manifest.json").read_text(encoding="utf-8"))
+    raw_day = daily["metrics"]["raw_day"]
+    assert raw_day["prev_trade_day"] == "20260310"
+    assert raw_day["overnight_gap_available"] is False
