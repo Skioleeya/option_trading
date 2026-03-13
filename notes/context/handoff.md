@@ -1,12 +1,12 @@
 # Handoff (Index)
 
 ## Active Handoff
-- Path: notes/sessions/2026-03-13/formula-semantic-governance-archive-close-impl/handoff.md
-- Meta: notes/sessions/2026-03-13/formula-semantic-governance-archive-close-impl/meta.yaml
+- Path: notes/sessions/2026-03-13/atm-decay-interaction-null-guard-impl/handoff.md
+- Meta: notes/sessions/2026-03-13/atm-decay-interaction-null-guard-impl/meta.yaml
 
 ## Latest Outcome
-- Session: 2026-03-13/formula-semantic-governance-archive-close-impl
-- Summary: Final governance archive/close completed for formula-semantic family. Archived follow-up `E/F/G/H`, follow-up parent, old parent, and historical completed `A/B/D`; strict validation passed.
+- Session: 2026-03-13/atm-decay-interaction-null-guard-impl
+- Summary: AtmDecayChart interaction null-crash hotfix completed. Hover path now uses non-focus de-emphasis without visibility toggling; L4 SOP synced; targeted frontend tests passed; strict validation passed.
 
 ## Next Session Bootstrap
 1. Read this file.

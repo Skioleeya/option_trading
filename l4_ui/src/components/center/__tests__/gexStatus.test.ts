@@ -32,7 +32,8 @@ describe('gexStatus', () => {
     })
 
     it('exposes asian wall style tokens', () => {
-        expect(ASIAN_WALL_STYLE.call).toContain('#10b981')
-        expect(ASIAN_WALL_STYLE.put).toContain('#ef4444')
+        expect(ASIAN_WALL_STYLE.call).toContain('#ef4444')
+        expect(ASIAN_WALL_STYLE.put).toContain('#10b981')
     })
 })
+

@@ -1,7 +1,7 @@
-# Open Tasks (Index)
+﻿# Open Tasks (Index)
 
 ## Active Session Tasks
-- Path: notes/sessions/2026-03-13/formula-semantic-governance-archive-close-impl/open_tasks.md
+- Path: notes/sessions/2026-03-13/atm-decay-interaction-null-guard-impl/open_tasks.md
 
 ## Global Backlog (Cross-Session)
 - [ ] P1: Configure GitHub branch protection required check `validate-session` (Owner: Repo Admin, DUE: 2026-03-15, session: `2026-03-13/anti-garbage-code-gate-hardening`).

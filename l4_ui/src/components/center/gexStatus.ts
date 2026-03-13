@@ -20,10 +20,10 @@ export interface AsianGexTone {
 }
 
 export const ASIAN_WALL_STYLE = {
-    // Asian style: bearish/ceiling pressure uses green
-    call: 'bg-[#022c22] border border-[#065f46]/60 text-[#10b981]',
-    // Asian style: bullish/support pressure uses red
-    put: 'bg-[#450a0a] border border-[#7f1d1d]/60 text-[#ef4444]',
+    // Asian style: CALL uses red
+    call: 'bg-[#450a0a] border border-[#7f1d1d]/60 text-[#ef4444]',
+    // Asian style: PUT uses green
+    put: 'bg-[#022c22] border border-[#065f46]/60 text-[#10b981]',
     flip: 'bg-[#422006] border border-[#92400e]/60 text-[#f59e0b]',
 } as const
 
