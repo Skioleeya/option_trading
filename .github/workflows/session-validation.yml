@@ -1,0 +1,11 @@
+name: Session Validation
+
+on:
+  pull_request:
+
+jobs:
+  validate-session:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Intentional fail for gate test
+        run: exit 1
