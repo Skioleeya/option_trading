@@ -8,7 +8,7 @@
 import React, { memo } from 'react'
 import { Anchor, Activity, Minus, Zap } from 'lucide-react'
 import { useDashboardStore, selectUiStateMicroStats } from '../../store/dashboardStore'
-import { MICRO_STATS_THEME, normalizeBadgeToken } from './microStatsTheme'
+import { MICRO_STATS_THEME, normalizeBadgeToken, normalizeWallDynBadgeToken } from './microStatsTheme'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Store selector (field-level — only re-renders when micro_stats changes)
@@ -34,11 +34,22 @@ interface Props {
     preferProp?: boolean
 }
 
-const ZERO_CELL: MetricCell = { label: '—', badge: 'badge-neutral' }
+const MICRO_STATS_UI = {
+    emptyLabel: '—',
+    iconSize: 10,
+    neutralBadge: 'badge-neutral',
+} as const
+
+const ZERO_CELL: MetricCell = { label: MICRO_STATS_UI.emptyLabel, badge: MICRO_STATS_UI.neutralBadge }
 
 const normalizeCell = (cell?: MetricCell | null): MetricCell => ({
-    label: cell?.label ?? '—',
+    label: cell?.label ?? MICRO_STATS_UI.emptyLabel,
     badge: normalizeBadgeToken(cell?.badge, cell?.label),
+})
+
+const normalizeWallDynCell = (cell?: MetricCell | null): MetricCell => ({
+    label: cell?.label ?? MICRO_STATS_UI.emptyLabel,
+    badge: normalizeWallDynBadgeToken(cell?.badge, cell?.label),
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -88,7 +99,7 @@ export const MicroStats: React.FC<Props> = memo(({ uiState: propUiState, preferP
         : (storeData ?? propUiState ?? null)
     const safe = {
         net_gex: normalizeCell(raw?.net_gex ?? ZERO_CELL),
-        wall_dyn: normalizeCell(raw?.wall_dyn ?? ZERO_CELL),
+        wall_dyn: normalizeWallDynCell(raw?.wall_dyn ?? ZERO_CELL),
         vanna: normalizeCell(raw?.vanna ?? ZERO_CELL),
         momentum: normalizeCell(raw?.momentum ?? ZERO_CELL),
     }
@@ -107,28 +118,28 @@ export const MicroStats: React.FC<Props> = memo(({ uiState: propUiState, preferP
                 {/* NET GEX */}
                 <StatCard
                     title="NET GEX"
-                    icon={<Activity size={10} style={{ color: MICRO_STATS_THEME.icons.netGex }} />}
+                    icon={<Activity size={MICRO_STATS_UI.iconSize} style={{ color: MICRO_STATS_THEME.icons.netGex }} />}
                     badge={<span className={`badge ${safe.net_gex.badge}`}>{safe.net_gex.label}</span>}
                 />
 
                 {/* WALL DYN */}
                 <StatCard
                     title="WALL DYN"
-                    icon={<Anchor size={10} style={{ color: MICRO_STATS_THEME.icons.wallDyn }} />}
+                    icon={<Anchor size={MICRO_STATS_UI.iconSize} style={{ color: MICRO_STATS_THEME.icons.wallDyn }} />}
                     badge={<span className={`badge ${safe.wall_dyn.badge}`}>{safe.wall_dyn.label}</span>}
                 />
 
                 {/* MOMENTUM */}
                 <StatCard
                     title="MOMENTUM"
-                    icon={<Minus size={10} style={{ color: MICRO_STATS_THEME.icons.momentum }} />}
+                    icon={<Minus size={MICRO_STATS_UI.iconSize} style={{ color: MICRO_STATS_THEME.icons.momentum }} />}
                     badge={<span className={`badge ${safe.momentum.badge}`}>{safe.momentum.label}</span>}
                 />
 
                 {/* VANNA */}
                 <StatCard
                     title="VANNA"
-                    icon={<Zap size={10} style={{ color: MICRO_STATS_THEME.icons.vanna }} />}
+                    icon={<Zap size={MICRO_STATS_UI.iconSize} style={{ color: MICRO_STATS_THEME.icons.vanna }} />}
                     badge={<span className={`badge ${safe.vanna.badge}`}>{safe.vanna.label}</span>}
                 />
             </div>

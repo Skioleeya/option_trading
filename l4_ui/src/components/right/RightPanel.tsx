@@ -21,7 +21,7 @@ export const RightPanel: React.FC<RightPanelProps> = memo(({ mode }) => {
                 <DecisionEngine fused={stableContracts.fused} netGex={stableContracts.netGex} preferProp />
                 <TacticalTriad uiState={stableContracts.tacticalTriad} preferProp />
                 <SkewDynamics uiState={stableContracts.skewDynamics} preferProp />
-                <div className="border-t border-bg-border flex-1"><ActiveOptions options={stableContracts.activeOptions ?? []} preferProp /></div>
+                <div className="border-t border-bg-border flex-1"><ActiveOptions options={stableContracts.activeOptions} preferProp /></div>
                 <MtfFlow uiState={stableContracts.mtfFlow} preferProp />
             </>
         )

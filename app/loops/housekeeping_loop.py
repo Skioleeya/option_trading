@@ -29,10 +29,20 @@ def _to_float(value: Any, default: float = 0.0) -> float:
 def _normalize_active_options_row(raw: dict[str, Any]) -> dict[str, Any]:
     row = dict(raw)
     option_type = str(row.get("option_type", row.get("type", ""))).strip().upper()
-    if option_type not in {"CALL", "PUT"}:
+    if option_type == "C":
+        option_type = "CALL"
+    elif option_type == "P":
+        option_type = "PUT"
+    elif option_type not in {"CALL", "PUT"}:
         is_call = row.get("is_call")
         option_type = "CALL" if bool(is_call) else "PUT"
     row["option_type"] = option_type
+
+    # Prefer cumulative volume; fallback to current_volume when upstream omits volume.
+    if _to_float(row.get("volume"), 0.0) <= 0.0:
+        current_volume = _to_float(row.get("current_volume"), 0.0)
+        if current_volume > 0.0:
+            row["volume"] = int(current_volume)
 
     if _to_float(row.get("implied_volatility"), 0.0) <= 0.0:
         row["implied_volatility"] = _to_float(row.get("computed_iv"), 0.0)

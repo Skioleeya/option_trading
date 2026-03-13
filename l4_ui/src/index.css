@@ -16,8 +16,8 @@
   --market-neutral: #71717a;
 
   /* UI Accents */
-  --accent-green: #00d68f;
-  --accent-red: #ff4d6d;
+  --accent-green: var(--market-down);
+  --accent-red: var(--market-up);
   --accent-amber: #f59e0b;
   --accent-purple: #a855f7;
   --accent-cyan: #06b6d4;
@@ -113,15 +113,15 @@ body,
 }
 
 .badge-red {
-  background: rgba(255, 77, 109, 0.15);
-  color: #ff4d6d;
-  border: 1px solid rgba(255, 77, 109, 0.4);
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.4);
 }
 
 .badge-green {
-  background: rgba(0, 214, 143, 0.15);
-  color: #00d68f;
-  border: 1px solid rgba(0, 214, 143, 0.4);
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.4);
 }
 
 .badge-purple {
@@ -164,8 +164,8 @@ body,
 /* Badge: Hollow Green — DAMPING / 稳定对冲区 */
 .badge-hollow-green {
   background: transparent;
-  color: #00d68f;
-  border: 1px solid rgba(0, 214, 143, 0.6);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.6);
 }
 
 /* Badge: Red Dim — 上涨动能 (亚洲龙：红=涨) 暗调版 */

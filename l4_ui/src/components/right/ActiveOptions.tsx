@@ -7,6 +7,7 @@ import { fmtVolume, fmtFlow } from '../../lib/utils'
 import type { ActiveOption } from '../../types/dashboard'
 import { useDashboardStore, selectUiStateActiveOptions } from '../../store/dashboardStore'
 import { normalizeActiveOptions } from './activeOptionsModel'
+import { ACTIVE_OPTIONS_FIXED_ROWS } from './activeOptionsTheme'
 
 interface Props {
     options?: ActiveOption[]
@@ -18,17 +19,14 @@ export const ActiveOptions: React.FC<Props> = memo(({ options: propOptions, pref
     const source = preferProp
         ? (propOptions ?? storeOptions ?? [])
         : (storeOptions ?? propOptions ?? [])
-    const options: ActiveOption[] = normalizeActiveOptions(source, 5)
-
-    // THE BACKEND ALREADY SORTS BY IMPACT_INDEX. 
-    // We preserve the order provided by the L3 Presenter.
-    const sorted = options
+    const options: ActiveOption[] = normalizeActiveOptions(source, ACTIVE_OPTIONS_FIXED_ROWS)
+    const isDegraded = options.length > 0 && options.every((opt) => Boolean(opt.is_placeholder))
 
     return (
         <div className="p-2">
             <div className="flex items-center justify-between mb-1.5 px-0.5">
                 <span className="text-[10px] font-bold tracking-wider text-text-primary uppercase">Active Options</span>
-                <span className="text-[9px] font-medium text-[#ff9800]">TOP BY IMPACT (OFII)</span>
+                <span className={`text-[9px] font-medium ${isDegraded ? 'text-text-secondary' : 'text-accent-amber'}`}>{isDegraded ? 'DEGRADED' : 'TOP BY VOL'}</span>
             </div>
 
             <table className="w-full text-2xs mono">
@@ -44,7 +42,7 @@ export const ActiveOptions: React.FC<Props> = memo(({ options: propOptions, pref
                     </tr>
                 </thead>
                 <tbody>
-                    {sorted.map((opt, i) => {
+                    {options.map((opt, i) => {
                         const isPlaceholder = Boolean(opt.is_placeholder)
                         const isCall = !isPlaceholder && opt.option_type === 'CALL'
                         const flowNeg = opt.flow < 0
@@ -89,3 +87,4 @@ export const ActiveOptions: React.FC<Props> = memo(({ options: propOptions, pref
 })
 
 ActiveOptions.displayName = 'ActiveOptions'
+

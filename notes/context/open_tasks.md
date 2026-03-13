@@ -1,19 +1,16 @@
-﻿# Open Tasks (Index)
+# Open Tasks (Index)
 
 ## Active Session Tasks
-- Path: notes/sessions/2026-03-13/atm-decay-interaction-null-guard-impl/open_tasks.md
+- Path: notes/sessions/2026-03-13/activeoptions-freeze-rootcause-verifier/open_tasks.md
 
 ## Global Backlog (Cross-Session)
+- [ ] P1: 迁移剩余 `l4_ui` 非右侧测试到 Vitest globals API 或统一 compat shim，恢复全量 `npm --prefix l4_ui run test` 绿色 (Owner: Codex, DUE: 2026-03-15, session: `2026-03-13/l4-ui-asian-color-semantics-audit-fix`).
 - [ ] P1: Configure GitHub branch protection required check `validate-session` (Owner: Repo Admin, DUE: 2026-03-15, session: `2026-03-13/anti-garbage-code-gate-hardening`).
-- [x] P1: Execute formula semantic Phase B (`skew_25d` / raw Greek sum contract convergence) (Owner: Codex, DONE: 2026-03-12, session: `2026-03-12/formula-semantic-phase-b-impl`).
-- [x] P1: Complete formula semantic follow-up Phase F (`guard unit + reference sync`) (Owner: Codex, DONE: 2026-03-13, session: `2026-03-13/formula-semantic-followup-phase-f-guard-unit-and-reference-sync-impl`).
-- [x] P1: Complete formula semantic follow-up Phase G (`live canonical contract cutover`) (Owner: Codex, DONE: 2026-03-13, session: `2026-03-13/formula-semantic-followup-phase-g-live-canonical-contract-cutover-impl`).
-- [x] P1: Complete formula semantic follow-up Phase H (`openspec reconciliation`) (Owner: Codex, DONE: 2026-03-13, session: `2026-03-13/formula-semantic-followup-phase-h-openspec-reconciliation-impl`).
-- [x] P1: Final formula-semantic governance archive/close completed (Owner: Codex, DONE: 2026-03-13, session: `2026-03-13/formula-semantic-governance-archive-close-impl`).
-- [x] P2: Decide and implement official `historical_volatility_decimal` research-only integration (Owner: Codex, DONE: 2026-03-12, session: `2026-03-12/historical-vol-decimal-research-only-impl`).
-- [x] P2: Stage2 remove `DecisionOutput.to_legacy_agent_result` and migrate compute-loop/L3 to typed-contract direct path (Owner: Codex, DONE: 2026-03-11, session: `2026-03-11/p2-stage2-remove-legacy-shim`).
 - [ ] P2: Calibrate `wall_collapse_flow_intensity_threshold` with historical/live samples (Owner: Codex, DUE: 2026-03-16).
 
 ## Process
 - Task details and completion evidence belong in the session-local open_tasks.md.
 - Keep this file as the long-horizon queue and session pointer only.
+
+## Addendum (2026-03-13 16:23 ET)
+- ActiveOptions freeze hotfix session is validated in strict mode; remaining work is operational follow-up (fresh-log recheck +巡检接入).

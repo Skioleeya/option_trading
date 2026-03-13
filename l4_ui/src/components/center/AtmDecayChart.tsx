@@ -29,6 +29,7 @@ import {
 } from './atmDecayHover'
 import { runtimeConfig } from '../../config/runtime'
 import { createAtmChartRuntime } from './chartEngineAdapter'
+import { THEME } from '../../lib/theme'
 
 // Extended AtmDecay to recognize the new L1 field gracefully
 type ExtendedAtmDecay = AtmDecay & { strike_changed?: boolean }
@@ -49,9 +50,9 @@ const MODE_ITEMS: { key: DisplayMode; label: string }[] = [
 ]
 
 const SERIES_CFG = [
-    { key: 'straddle_pct' as const, label: 'STRADDLE', color: '#f59e0b' },
-    { key: 'call_pct' as const, label: 'CALL', color: '#ef4444' },
-    { key: 'put_pct' as const, label: 'PUT', color: '#10b981' },
+    { key: 'straddle_pct' as const, label: 'STRADDLE', color: THEME.accent.amber },
+    { key: 'call_pct' as const, label: 'CALL', color: THEME.market.up },
+    { key: 'put_pct' as const, label: 'PUT', color: THEME.market.down },
 ] as const
 
 const SERIES_FAMILIES: SeriesFamily[] = ['straddle', 'call', 'put']
@@ -385,7 +386,7 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
                     nextMarkers.push({
                         time: t,
                         position: 'aboveBar',
-                        color: '#fbbf24',
+                        color: THEME.accent.amber,
                         shape: 'arrowDown',
                         text: `Strike Switch`,
                     })
@@ -395,7 +396,7 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
                     nextMarkers.push({
                         time: t,
                         position: 'aboveBar',
-                        color: '#ef4444',
+                        color: THEME.market.up,
                         shape: 'arrowDown',
                         text: `15:30 CLIFF`,
                     })

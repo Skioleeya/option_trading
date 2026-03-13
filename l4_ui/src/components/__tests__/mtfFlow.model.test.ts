@@ -1,4 +1,3 @@
-import { describe, expect, it } from 'vitest'
 import { normalizeMtfFlowState, STATE_THEME } from '../right/mtfFlowModel'
 
 describe('mtfFlowModel', () => {
@@ -40,3 +39,4 @@ describe('mtfFlowModel', () => {
         expect(state.m5.tokens.borderColor).toBe(STATE_THEME[-1].borderColor)
     })
 })
+

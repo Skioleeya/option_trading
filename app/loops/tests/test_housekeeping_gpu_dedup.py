@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from app.loops.housekeeping_loop import run_housekeeping_loop
+from app.loops.housekeeping_loop import _normalize_active_options_row, run_housekeeping_loop
 from app.loops.shared_state import SharedLoopState
 from shared.config import settings
 
@@ -83,6 +83,31 @@ class _FakeContainer:
         self.redis_service = SimpleNamespace(client=None)
 
 
+
+def test_normalize_active_options_row_falls_back_to_current_volume() -> None:
+    row = _normalize_active_options_row(
+        {
+            "symbol": "SPY.TEST.C",
+            "type": "C",
+            "volume": 0,
+            "current_volume": 812.9,
+            "implied_volatility": 0.0,
+            "computed_iv": 0.23,
+            "delta": 0.0,
+            "computed_delta": 0.11,
+            "gamma": 0.0,
+            "computed_gamma": 0.01,
+            "vanna": 0.0,
+            "computed_vanna": -0.02,
+        }
+    )
+
+    assert row["option_type"] == "CALL"
+    assert row["volume"] == 812
+    assert row["implied_volatility"] == pytest.approx(0.23)
+    assert row["delta"] == pytest.approx(0.11)
+    assert row["gamma"] == pytest.approx(0.01)
+    assert row["vanna"] == pytest.approx(-0.02)
 @pytest.mark.asyncio
 async def test_housekeeping_reuses_latest_l1_snapshot_and_dedups(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "websocket_update_interval", 0.001, raising=False)

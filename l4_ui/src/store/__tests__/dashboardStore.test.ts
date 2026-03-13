@@ -11,7 +11,6 @@
  *   • Named selectors: selectSpot, selectAtm, selectIvPct etc.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
 import { useDashboardStore, smartMergeUiState } from '../../store/dashboardStore'
 import type { DashboardPayload } from '../../types/dashboard'
 
@@ -295,6 +294,12 @@ describe('smartMergeUiState', () => {
         expect(smartMergeUiState(prev, next).micro_stats).toEqual({})
     })
 
+
+    it('does not retain active_options when backend sends null', () => {
+        const prev = { active_options: [{ strike: 560 }] }
+        const next = { active_options: null }
+        expect(smartMergeUiState(prev, next).active_options).toBeNull()
+    })
     it('allows sticky key update when new value is non-empty', () => {
         const prev = { wall_migration: [{ strike: 555 }] }
         const next = { wall_migration: [{ strike: 560 }, { strike: 565 }] }

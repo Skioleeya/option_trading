@@ -1,4 +1,3 @@
-import { describe, expect, it } from 'vitest'
 import { normalizeActiveOption, normalizeActiveOptions } from '../right/activeOptionsModel'
 
 describe('activeOptionsModel', () => {
@@ -26,14 +25,20 @@ describe('activeOptionsModel', () => {
         expect(row.flow_glow).toContain('animate-pulse')
     })
 
-    it('returns bounded list in input order', () => {
+    it('returns bounded list sorted by VOL desc', () => {
         const rows = normalizeActiveOptions(
-            [{ strike: 1, option_type: 'C' }, { strike: 2, option_type: 'P' }],
-            1
+            [
+                { strike: 1, option_type: 'C', volume: 100 },
+                { strike: 2, option_type: 'P', volume: 900 },
+                { strike: 3, option_type: 'C', volume: 500 },
+            ],
+            2
         )
-        expect(rows).toHaveLength(1)
-        expect(rows[0].strike).toBe(1)
+        expect(rows).toHaveLength(2)
+        expect(rows[0].strike).toBe(2)
+        expect(rows[1].strike).toBe(3)
         expect(rows[0].slot_index).toBe(1)
+        expect(rows[1].slot_index).toBe(2)
     })
 
     it('pads to fixed 5 rows with placeholders when data is sparse', () => {
@@ -145,4 +150,36 @@ describe('activeOptionsModel', () => {
         expect(row.flow).toBe(1000)
         expect(row.flow_deg_formatted).toBeUndefined()
     })
+
+    it('ignores backend flow_glow and derives local glow from intensity/sweep', () => {
+        const high = normalizeActiveOption({
+            flow: 1200,
+            flow_intensity: 'HIGH',
+            flow_glow: 'shadow-backend-injected',
+            is_sweep: false,
+        })
+        const sweep = normalizeActiveOption({
+            flow: 1200,
+            flow_intensity: 'LOW',
+            flow_glow: 'shadow-backend-injected',
+            is_sweep: true,
+        })
+
+        expect(high.flow_glow).toContain('shadow-[0_0_8px_rgba(255,77,79,0.35)]')
+        expect(high.flow_glow).not.toContain('shadow-backend-injected')
+        expect(sweep.flow_glow).toContain('animate-pulse')
+        expect(sweep.flow_glow).toContain('shadow-[0_0_15px_rgba(255,255,255,0.7)]')
+    })
+    it('uses bearish green glow for high-intensity negative flow', () => {
+        const row = normalizeActiveOption({
+            flow: -1200,
+            flow_intensity: 'HIGH',
+            is_sweep: false,
+        })
+
+        expect(row.flow_direction).toBe('BEARISH')
+        expect(row.flow_glow).toContain('shadow-[0_0_8px_rgba(16,185,129,0.35)]')
+        expect(row.flow_glow).not.toContain('rgba(255,77,79')
+    })
 })
+

@@ -1,4 +1,3 @@
-import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import { useDashboardStore } from '../../store/dashboardStore'
 import type {
@@ -324,4 +323,5 @@ describe('Right panel typed contract integration', () => {
         expect(screen.getAllByText('—').length).toBeGreaterThan(0)
     })
 })
+
 

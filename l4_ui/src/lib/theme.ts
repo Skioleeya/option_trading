@@ -6,12 +6,16 @@
  * instead of hardcoding hex colors, ensuring consistency with the Asian Dragon style.
  */
 
+const ASIAN_MARKET_UP = '#ef4444'
+const ASIAN_MARKET_DOWN = '#10b981'
+const ASIAN_MARKET_NEUTRAL = '#71717a'
+
 export const THEME = {
     // Global Market Colors (Asian Dragon Standard)
     market: {
-        up: '#ef4444',        // Red -> Call / Price Up
-        down: '#10b981',      // Green -> Put / Price Down
-        neutral: '#71717a',   // Zinc -> Neutral / Stable
+        up: ASIAN_MARKET_UP,        // Red -> Call / Price Up
+        down: ASIAN_MARKET_DOWN,    // Green -> Put / Price Down
+        neutral: ASIAN_MARKET_NEUTRAL,   // Zinc -> Neutral / Stable
     },
 
     // Base Layout
@@ -30,8 +34,9 @@ export const THEME = {
 
     // Semantic UI Accents (Badges, Statuses)
     accent: {
-        green: '#00d68f',     // Success / Damping
-        red: '#ff4d6d',       // Danger / Retreat / Extreme Vel
+        // Keep accent red/green aligned with market semantics to avoid drift.
+        green: ASIAN_MARKET_DOWN,
+        red: ASIAN_MARKET_UP,
         amber: '#f59e0b',     // Warning / Siege / Spot Price / Super Pin
         purple: '#a855f7',    // Flip levels / Volatile
         cyan: '#06b6d4',      // Compression / Grind Stable
@@ -45,8 +50,8 @@ export const THEME = {
     // 1. Defense Area (Left Panel)
     defense: {
         depthProfile: {
-            callBar: '#ef4444',
-            putBar: '#10b981',
+            callBar: ASIAN_MARKET_UP,
+            putBar: ASIAN_MARKET_DOWN,
             spotHighlightBg: 'rgba(255, 255, 255, 0.05)',
             flipLine: '#a855f7',
         },
@@ -78,12 +83,12 @@ export const THEME = {
         crosshair: '#71717a',
         watermark: 'rgba(255,255,255, 0.03)',
         candlestick: {
-            upColor: '#ef4444',      // Asian Red
-            downColor: '#10b981',    // Asian Green
-            borderUpColor: '#ef4444',
-            borderDownColor: '#10b981',
-            wickUpColor: '#ef4444',
-            wickDownColor: '#10b981',
+            upColor: ASIAN_MARKET_UP,      // Asian Red
+            downColor: ASIAN_MARKET_DOWN,    // Asian Green
+            borderUpColor: ASIAN_MARKET_UP,
+            borderDownColor: ASIAN_MARKET_DOWN,
+            wickUpColor: ASIAN_MARKET_UP,
+            wickDownColor: ASIAN_MARKET_DOWN,
         }
     }
 } as const;
