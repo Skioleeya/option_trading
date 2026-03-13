@@ -1,0 +1,8 @@
+{
+  "status": "PASS",
+  "targets": [],
+  "violations": [],
+  "metrics": {
+    "analyzed_python_runtime_files": 0
+  }
+}

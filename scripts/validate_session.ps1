@@ -557,6 +557,35 @@ if ($Strict) {
     } else {
         Pass "Strict gate: anti-pattern scan skipped (no changed .py/.rs runtime files)"
     }
+
+    $gateDiagDir = Join-Path $repoRoot "tmp/session_validation_diag"
+    New-Item -ItemType Directory -Path $gateDiagDir -Force | Out-Null
+
+    $qualityGateScript = Join-Path $repoRoot "scripts/policy/check_quality_gates.py"
+    if (-not (Test-Path $qualityGateScript)) {
+        Fail "Strict gate: quality gate script missing ($qualityGateScript)"
+    } else {
+        $qualityOut = Join-Path $gateDiagDir "quality_gate.json"
+        & python $qualityGateScript --repo-root $repoRoot --config (Join-Path $repoRoot "scripts/policy/quality_thresholds.json") --meta-file $metaPath --output $qualityOut
+        if ($LASTEXITCODE -eq 0) {
+            Pass "Strict gate: quality thresholds passed (changed Python runtime files)"
+        } else {
+            Fail "Strict gate: quality thresholds failed (see $qualityOut)"
+        }
+    }
+
+    $openspecGateScript = Join-Path $repoRoot "scripts/policy/check_openspec_chain.py"
+    if (-not (Test-Path $openspecGateScript)) {
+        Fail "Strict gate: openspec chain script missing ($openspecGateScript)"
+    } else {
+        $openspecOut = Join-Path $gateDiagDir "openspec_gate.json"
+        & python $openspecGateScript --repo-root $repoRoot --meta-file $metaPath --handoff-file $handoffPath --output $openspecOut
+        if ($LASTEXITCODE -eq 0) {
+            Pass "Strict gate: openspec parent/child gate passed"
+        } else {
+            Fail "Strict gate: openspec parent/child gate failed (see $openspecOut)"
+        }
+    }
 } else {
     Pass "Architecture anti-coupling gate skipped (run with -Strict)"
 }

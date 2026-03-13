@@ -1,16 +1,16 @@
-﻿# Project State (Index)
+# Project State (Index)
 
 ## Active Session
-- Path: notes/sessions/2026-03-12/historical-vol-decimal-research-only-impl/project_state.md
-- Meta: notes/sessions/2026-03-12/historical-vol-decimal-research-only-impl/meta.yaml
+- Path: notes/sessions/2026-03-13/anti-garbage-code-gate-hardening/project_state.md
+- Meta: notes/sessions/2026-03-13/anti-garbage-code-gate-hardening/meta.yaml
 - Status: ACTIVE
 
 ## Recent Sessions
+- notes/sessions/2026-03-13/anti-garbage-code-gate-hardening/
+- notes/sessions/2026-03-13/option-chain-builder-fetch-chain-decouple/
+- notes/sessions/2026-03-13/option-chain-builder-decouple/
+- notes/sessions/2026-03-12/refactor-governance-20260312-system-deep-cleanup/
 - notes/sessions/2026-03-12/historical-vol-decimal-research-only-impl/
-- notes/sessions/2026-03-12/official-vol-field-phase-d-followup/
-- notes/sessions/2026-03-12/formula-semantic-phase-d-impl/
-- notes/sessions/2026-03-12/formula-semantic-phase-b-impl/
-- notes/sessions/2026-03-12/formula-semantic-phase-a-impl/
 
 ## Global Rules
 - Session folders are immutable records; do not overwrite prior sessions.

@@ -8,6 +8,7 @@ from app.loops.compute_loop import (
     _build_longport_option_diagnostics,
     _extract_runtime_spy_atm_iv,
     _extract_snapshot_version,
+    _get_iv_sync_context,
 )
 
 
@@ -214,3 +215,24 @@ def test_build_longport_option_diagnostics_handles_missing_official_hv() -> None
     assert diag["official_hv_synced_at_utc"] is None
     assert diag["official_hv_age_sec"] is None
 
+
+
+def test_get_iv_sync_context_uses_public_builder_api() -> None:
+    class _Builder:
+        def get_iv_sync_context(self) -> tuple[dict[str, float], dict[str, float]]:
+            return {"SPY.C": 0.22}, {"SPY.C": 560.0}
+
+    iv_cache, spot_sync = _get_iv_sync_context(_Builder())
+
+    assert iv_cache == {"SPY.C": 0.22}
+    assert spot_sync == {"SPY.C": 560.0}
+
+
+def test_get_iv_sync_context_returns_empty_when_api_missing() -> None:
+    class _Builder:
+        pass
+
+    iv_cache, spot_sync = _get_iv_sync_context(_Builder())
+
+    assert iv_cache == {}
+    assert spot_sync == {}

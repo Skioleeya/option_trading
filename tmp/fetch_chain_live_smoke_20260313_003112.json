@@ -1,0 +1,33 @@
+{
+  "run_id": "20260313_003112",
+  "started_at_et": "2026-03-13T00:31:12.156151-04:00",
+  "duration_target_sec": 120,
+  "sample_interval_sec": 1.0,
+  "status": "FAIL",
+  "precheck": {
+    "env_file_exists": true,
+    "required_env_present": true,
+    "missing_env": [],
+    "market_session_gate": false,
+    "market_session_checked_at_et": "2026-03-13T00:31:12.156151-04:00"
+  },
+  "thresholds": {
+    "samples_min": 100,
+    "interval_p95_max_sec": 1.3,
+    "interval_max_sec": 2.0,
+    "fetch_latency_p95_max_ms": 750.0,
+    "governor_completeness_ratio_eq": 1.0,
+    "governor_type_drift_eq": 0,
+    "rust_active_ratio_min": 0.99,
+    "shm_status_ok_ratio_min": 0.99,
+    "live_data_ratio_min": 0.8,
+    "runtime_exceptions_eq": 0
+  },
+  "samples": 0,
+  "metrics": {},
+  "gate_results": {},
+  "exceptions": [],
+  "failure_reasons": [
+    "market_session_gate_failed"
+  ]
+}

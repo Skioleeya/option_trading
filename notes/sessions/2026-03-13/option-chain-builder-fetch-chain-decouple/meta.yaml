@@ -1,0 +1,43 @@
+session_id: "2026-03-13/option-chain-builder-fetch-chain-decouple"
+title: "option-chain-builder-fetch-chain-decouple"
+scope: "refactor"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-13 00:11:40 -04:00"
+updated_at_et: "2026-03-13 00:31:12 -04:00"
+parent_session: "2026-03-13/option-chain-builder-decouple"
+
+branch: "master"
+base_commit: "8ad09df"
+head_commit: "8ad09df"
+
+files_changed:
+  - "l0_ingest/feeds/fetch_chain_components.py"
+  - "l0_ingest/feeds/option_chain_builder.py"
+  - "l0_ingest/tests/test_fetch_chain_components.py"
+  - "notes/sessions/2026-03-13/option-chain-builder-fetch-chain-decouple/project_state.md"
+  - "notes/sessions/2026-03-13/option-chain-builder-fetch-chain-decouple/open_tasks.md"
+  - "notes/sessions/2026-03-13/option-chain-builder-fetch-chain-decouple/handoff.md"
+  - "notes/sessions/2026-03-13/option-chain-builder-fetch-chain-decouple/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId \"option-chain-builder-fetch-chain-decouple\" -Title \"option-chain-builder-fetch-chain-decouple\" -Scope \"refactor\" -Owner \"Codex\" -ParentSession \"2026-03-13/option-chain-builder-decouple\" -Timezone \"America/New_York\" -UpdatePointer"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/test_fetch_chain_components.py l0_ingest/tests/test_chain_event_processor.py l0_ingest/tests/test_openapi_config_alignment.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/policy/check_layer_boundaries.ps1"
+  - "python - (inline Builder-direct fetch_chain live smoke, 120s strict gates)"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+
+tests_passed:
+  - "scripts/test/run_pytest.ps1 l0_ingest/tests/test_fetch_chain_components.py l0_ingest/tests/test_chain_event_processor.py l0_ingest/tests/test_openapi_config_alignment.py (18 passed)"
+  - "scripts/policy/check_layer_boundaries.ps1 ([OK] Layer boundary scan passed)"
+tests_failed:
+  - "live smoke strict precheck failed: market_session_gate_failed (artifact: tmp/fetch_chain_live_smoke_20260313_003112.json)"
+blockers:
+  - "US market closed at attempt time (2026-03-13 00:31 ET)"
+notes:
+  - "fetch_chain responsibilities split into composable L0 helpers without payload schema changes."
+  - "Legacy greeks audit state moved out of OptionChainBuilder into dedicated component."
+  - "Live smoke executed once and failed by strict market-session gate; rerun required during market hours."
