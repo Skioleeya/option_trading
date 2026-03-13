@@ -184,14 +184,22 @@ class IVBaselineSync:
                         n_res = len(results or [])
                         logger.warning(f"[IVSync] Batch SUCCESS: Received {n_res} results.")
                         for item in results:
-                            iv_raw = item.implied_volatility
                             iv = None
-                            if iv_raw:
+                            iv_normalized = getattr(item, "implied_volatility_decimal", None)
+                            if iv_normalized is not None:
                                 try:
-                                    f_iv = float(iv_raw)
+                                    f_iv = float(iv_normalized)
                                     if math.isfinite(f_iv):
-                                        iv = f_iv / 100.0
-                                except (ValueError, TypeError): pass
+                                        iv = f_iv
+                                except (ValueError, TypeError):
+                                    pass
+                            elif item.implied_volatility:
+                                try:
+                                    f_iv = float(item.implied_volatility)
+                                    if math.isfinite(f_iv):
+                                        iv = f_iv / 100.0 if f_iv > 1.0 else f_iv
+                                except (ValueError, TypeError):
+                                    pass
                                 
                             oi_raw = item.open_interest
                             oi = None
@@ -305,14 +313,22 @@ class IVBaselineSync:
                             [CalcIndex.ImpliedVolatility, CalcIndex.OpenInterest],
                         )
                         for item in results:
-                            iv_raw = item.implied_volatility
                             iv = None
-                            if iv_raw:
+                            iv_normalized = getattr(item, "implied_volatility_decimal", None)
+                            if iv_normalized is not None:
                                 try:
-                                    f_iv = float(iv_raw)
+                                    f_iv = float(iv_normalized)
                                     if math.isfinite(f_iv):
-                                        iv = f_iv / 100.0
-                                except (ValueError, TypeError): pass
+                                        iv = f_iv
+                                except (ValueError, TypeError):
+                                    pass
+                            elif item.implied_volatility:
+                                try:
+                                    f_iv = float(item.implied_volatility)
+                                    if math.isfinite(f_iv):
+                                        iv = f_iv / 100.0 if f_iv > 1.0 else f_iv
+                                except (ValueError, TypeError):
+                                    pass
                                 
                             oi_raw = item.open_interest
                             oi = None

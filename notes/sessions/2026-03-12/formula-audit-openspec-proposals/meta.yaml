@@ -1,0 +1,56 @@
+﻿session_id: "2026-03-12/formula-audit-openspec-proposals"
+title: "formula-audit-openspec-proposals"
+scope: "Create parent and child OpenSpec proposals for formula-audit remediation with file-level fields and tests"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-12 13:57:18 -04:00"
+updated_at_et: "2026-03-12 14:07:54 -04:00"
+parent_session: "2026-03-12/longport-option-contract-alignment"
+
+branch: "master"
+base_commit: "bc51cc7"
+head_commit: "bc51cc7"
+
+files_changed:
+  - "notes/context/handoff.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/project_state.md"
+  - "notes/sessions/2026-03-12/formula-audit-openspec-proposals/handoff.md"
+  - "notes/sessions/2026-03-12/formula-audit-openspec-proposals/meta.yaml"
+  - "notes/sessions/2026-03-12/formula-audit-openspec-proposals/open_tasks.md"
+  - "notes/sessions/2026-03-12/formula-audit-openspec-proposals/project_state.md"
+  - "openspec/changes/formula-semantic-contract-parent-governance/design.md"
+  - "openspec/changes/formula-semantic-contract-parent-governance/proposal.md"
+  - "openspec/changes/formula-semantic-contract-parent-governance/specs/formula-remediation-governance/spec.md"
+  - "openspec/changes/formula-semantic-contract-parent-governance/tasks.md"
+  - "openspec/changes/formula-semantic-phase-a-vrp-gex-stopgap/design.md"
+  - "openspec/changes/formula-semantic-phase-a-vrp-gex-stopgap/proposal.md"
+  - "openspec/changes/formula-semantic-phase-a-vrp-gex-stopgap/specs/metric-unit-and-proxy-semantics/spec.md"
+  - "openspec/changes/formula-semantic-phase-a-vrp-gex-stopgap/tasks.md"
+  - "openspec/changes/formula-semantic-phase-b-skew-and-raw-exposure-contracts/design.md"
+  - "openspec/changes/formula-semantic-phase-b-skew-and-raw-exposure-contracts/proposal.md"
+  - "openspec/changes/formula-semantic-phase-b-skew-and-raw-exposure-contracts/specs/skew-and-raw-greek-contracts/spec.md"
+  - "openspec/changes/formula-semantic-phase-b-skew-and-raw-exposure-contracts/tasks.md"
+  - "openspec/changes/formula-semantic-phase-c-provenance-and-heuristic-labels/design.md"
+  - "openspec/changes/formula-semantic-phase-c-provenance-and-heuristic-labels/proposal.md"
+  - "openspec/changes/formula-semantic-phase-c-provenance-and-heuristic-labels/specs/metric-provenance-registry/spec.md"
+  - "openspec/changes/formula-semantic-phase-c-provenance-and-heuristic-labels/tasks.md"
+  - "openspec/changes/formula-semantic-phase-d-research-metric-upgrades/design.md"
+  - "openspec/changes/formula-semantic-phase-d-research-metric-upgrades/proposal.md"
+  - "openspec/changes/formula-semantic-phase-d-research-metric-upgrades/specs/research-metric-upgrades/spec.md"
+  - "openspec/changes/formula-semantic-phase-d-research-metric-upgrades/tasks.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId formula-audit-openspec-proposals -Title \"formula-audit-openspec-proposals\" -Scope \"Create parent and child OpenSpec proposals for formula-audit remediation with file-level fields and tests\" -Owner \"Codex\" -ParentSession \"2026-03-12/longport-option-contract-alignment\" -Timezone \"America/New_York\" -UpdatePointer"
+  - "openspec list"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "openspec list"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_failed: []
+blockers: []
+notes:
+  - "Added one governance parent proposal and four ordered child proposals translating formula-audit findings into executable remediation phases."
+  - "OpenSpec locally recognized all new changes; PostHog telemetry upload failed under sandbox network restrictions after listing completed."
+  - "First strict validation failed because meta.yaml commands lacked validate_session evidence; corrected metadata before rerun."
+
+

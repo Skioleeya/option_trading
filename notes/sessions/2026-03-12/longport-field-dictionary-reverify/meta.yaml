@@ -1,0 +1,36 @@
+﻿session_id: "2026-03-12/longport-field-dictionary-reverify"
+title: "longport-field-dictionary-reverify"
+scope: "Verify L0 LongPort option field alignment and update LONGPORT_OPTION_FIELD_DICTIONARY.md from actual code"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-12 14:15:20 -04:00"
+updated_at_et: "2026-03-12 14:19:28 -04:00"
+parent_session: "2026-03-12/formula-audit-openspec-proposals"
+
+branch: "master"
+base_commit: "bc51cc7"
+head_commit: "bc51cc7"
+
+files_changed:
+  - "docs/LONGPORT_OPTION_FIELD_DICTIONARY.md"
+  - "notes/context/handoff.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/project_state.md"
+  - "notes/sessions/2026-03-12/longport-field-dictionary-reverify/handoff.md"
+  - "notes/sessions/2026-03-12/longport-field-dictionary-reverify/meta.yaml"
+  - "notes/sessions/2026-03-12/longport-field-dictionary-reverify/open_tasks.md"
+  - "notes/sessions/2026-03-12/longport-field-dictionary-reverify/project_state.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId longport-field-dictionary-reverify -Title \"longport-field-dictionary-reverify\" -Scope \"Verify L0 LongPort option field alignment and update LONGPORT_OPTION_FIELD_DICTIONARY.md from actual code\" -Owner \"Codex\" -ParentSession \"2026-03-12/formula-audit-openspec-proposals\" -Timezone \"America/New_York\" -UpdatePointer"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/test_quote_runtime.py l0_ingest/tests/test_longport_option_contracts.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/test_quote_runtime.py l0_ingest/tests/test_longport_option_contracts.py"
+tests_failed: []
+blockers: []
+notes:
+  - "Verified that option_quote.option_extend and optionchain-date-strike.standard are already aligned in L0 runtime contracts."
+  - "Rewrote the field dictionary to distinguish preserved contract fields from actively consumed downstream fields."
+  - "First strict validation failed because validate_session evidence was not yet recorded in session metadata; corrected bookkeeping before rerun."
+
+

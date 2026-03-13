@@ -12,37 +12,63 @@ from typing import Any
 
 
 class GammaQualAnalyzer:
-    """Consume L1 aggregate contract and map it to L2 qualitative outputs."""
+    """Consume L1 aggregate contract and map it to L2 qualitative outputs.
+
+    This service preserves L1 proxy semantics. It does not infer hidden dealer
+    inventory or upgrade wall/GEX fields into dealer-truth statements.
+    """
 
     def summarize(
         self,
         aggregate_greeks: dict[str, Any] | Any,
         spot: float,
     ) -> dict[str, Any]:
-        """Build qualitative gamma summary from L1 aggregate fields."""
+        """Build qualitative gamma summary from L1 aggregate proxy fields."""
         net_gex = self._to_float(self._agg_get(aggregate_greeks, "net_gex", 0.0), default=0.0)
         call_wall = self._finite_or_none(self._agg_get(aggregate_greeks, "call_wall"))
         put_wall = self._finite_or_none(self._agg_get(aggregate_greeks, "put_wall"))
-        flip_level = self._finite_or_none(self._agg_get(aggregate_greeks, "flip_level"))
+        legacy_flip_level = self._finite_or_none(self._agg_get(aggregate_greeks, "flip_level"))
+        flip_level_cumulative = self._finite_or_none(self._agg_get(aggregate_greeks, "flip_level_cumulative"))
+        zero_gamma_level = self._finite_or_none(self._agg_get(aggregate_greeks, "zero_gamma_level"))
         total_call_gex = self._to_float(self._agg_get(aggregate_greeks, "total_call_gex", 0.0), default=0.0)
         total_put_gex = self._to_float(self._agg_get(aggregate_greeks, "total_put_gex", 0.0), default=0.0)
-        net_vanna = self._to_float(self._agg_get(aggregate_greeks, "net_vanna", 0.0), default=0.0)
-        net_charm = self._to_float(self._agg_get(aggregate_greeks, "net_charm", 0.0), default=0.0)
+        net_vanna = self._to_float(
+            self._agg_get_first(aggregate_greeks, ("net_vanna_raw_sum", "net_vanna"), 0.0),
+            default=0.0,
+        )
+        net_charm = self._to_float(
+            self._agg_get_first(aggregate_greeks, ("net_charm_raw_sum", "net_charm"), 0.0),
+            default=0.0,
+        )
         atm_iv = self._finite_or_none(self._agg_get(aggregate_greeks, "atm_iv"))
 
         per_strike_raw = self._agg_get(aggregate_greeks, "per_strike_gex", [])
         per_strike_gex = self._normalize_per_strike(per_strike_raw)
 
+        if zero_gamma_level is None:
+            zero_gamma_level = legacy_flip_level
+        if flip_level_cumulative is None:
+            flip_level_cumulative = legacy_flip_level
+
+        gamma_flip = self._infer_gamma_flip(
+            spot=self._finite_or_none(spot),
+            net_gex=net_gex,
+            zero_gamma_level=zero_gamma_level,
+        )
+
         return {
             "net_gex": net_gex,
             "put_wall": put_wall,
             "call_wall": call_wall,
-            "gamma_flip_level": flip_level,
-            "gamma_flip": bool(net_gex < 0),
+            "gamma_flip_level": zero_gamma_level,
+            "flip_level_cumulative": flip_level_cumulative,
+            "gamma_flip": gamma_flip,
             "per_strike_gex": per_strike_gex,
             "total_call_gex": total_call_gex,
             "total_put_gex": total_put_gex,
+            "net_vanna_raw_sum": net_vanna,
             "net_vanna": net_vanna,
+            "net_charm_raw_sum": net_charm,
             "net_charm": net_charm,
             "atm_iv": atm_iv,
             "spot": self._to_float(spot, default=0.0),
@@ -56,6 +82,7 @@ class GammaQualAnalyzer:
         """Compatibility gamma profile view derived from L1 per-strike output.
 
         This does not re-price options and does not recompute gamma.
+        It simply reshapes the per-strike OI-based proxy profile for legacy consumers.
         """
         _ = spot  # Keep signature stable for legacy callers.
         profile: list[dict[str, float]] = []
@@ -76,6 +103,19 @@ class GammaQualAnalyzer:
         if isinstance(aggregate_greeks, dict):
             return aggregate_greeks.get(key, default)
         return getattr(aggregate_greeks, key, default)
+
+    @classmethod
+    def _agg_get_first(
+        cls,
+        aggregate_greeks: dict[str, Any] | Any,
+        keys: tuple[str, ...],
+        default: Any = None,
+    ) -> Any:
+        for key in keys:
+            value = cls._agg_get(aggregate_greeks, key, None)
+            if value is not None:
+                return value
+        return default
 
     @staticmethod
     def _to_float(value: Any, default: float = 0.0) -> float:
@@ -126,3 +166,24 @@ class GammaQualAnalyzer:
 
         out.sort(key=lambda x: x["strike"])
         return out
+
+    @staticmethod
+    def _infer_gamma_flip(
+        *,
+        spot: float | None,
+        net_gex: float,
+        zero_gamma_level: float | None,
+    ) -> bool:
+        """Infer whether the market is in negative-gamma regime.
+
+        Prefer zero-gamma proxy location when available, otherwise fall back to
+        aggregate net-GEX proxy sign.
+        """
+        if (
+            spot is not None
+            and spot > 0.0
+            and zero_gamma_level is not None
+            and zero_gamma_level > 0.0
+        ):
+            return bool(spot < zero_gamma_level)
+        return bool(net_gex < 0.0)

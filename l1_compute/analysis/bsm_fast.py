@@ -1,4 +1,4 @@
-"""BSM Fast Engine — 3-Tier GPU/JIT/NumPy Batch Greeks (0DTE Institutional Grade)
+"""BSM Fast Engine — 3-Tier GPU/JIT/NumPy Batch Greeks (0DTE Production Grade)
 
 Technology tier (priority order):
   1. CuPy GPU kernel  — GPU CUDA accelerated, 10-60x speedup over CPU for large chains.
@@ -40,6 +40,41 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 _GEX_SCALE_MILLION = 1_000_000.0
+
+def _select_walls_by_spot(
+    strikes: np.ndarray,
+    call_gex: np.ndarray,
+    put_gex: np.ndarray,
+    spot_ref: float,
+) -> tuple[float | None, float | None, float, float]:
+    """Select call/put walls with spot-side preference and global fallback."""
+    call_mask = call_gex > 0.0
+    put_mask = put_gex > 0.0
+
+    call_side = np.flatnonzero(call_mask & (strikes >= spot_ref))
+    put_side = np.flatnonzero(put_mask & (strikes <= spot_ref))
+    if call_side.size == 0:
+        call_side = np.flatnonzero(call_mask)
+    if put_side.size == 0:
+        put_side = np.flatnonzero(put_mask)
+
+    call_wall = None
+    put_wall = None
+    max_call_gex = 0.0
+    max_put_gex = 0.0
+
+    if call_side.size > 0:
+        call_idx = int(call_side[np.argmax(call_gex[call_side])])
+        max_call_gex = float(call_gex[call_idx])
+        call_wall = float(strikes[call_idx]) if max_call_gex > 0 else None
+
+    if put_side.size > 0:
+        put_idx = int(put_side[np.argmax(put_gex[put_side])])
+        max_put_gex = float(put_gex[put_idx])
+        put_wall = float(strikes[put_idx]) if max_put_gex > 0 else None
+
+    return call_wall, put_wall, max_call_gex, max_put_gex
+
 
 # --------------------------------------------------------------------------- #
 # Tier 1: CuPy GPU availability probe
@@ -332,9 +367,9 @@ def _bsm_batch_cupy(
         cp_ois = cp.asarray(ois.astype(np.float64))
         cp_mults = cp.asarray(mults.astype(np.float64))
         
-        # Keep GEX convention aligned with L1 mainline:
-        # gamma * OI * multiplier * S^2, then normalize to USD millions.
-        gex = gamma * cp_ois * (safe_S ** 2) * cp_mults
+        # Keep GEX convention aligned with L1 mainline (1% spot-move MMUSD):
+        # gamma * OI * multiplier * S^2 * 0.01, then normalize to USD millions.
+        gex = gamma * cp_ois * (safe_S ** 2) * cp_mults * 0.01
         gex = cp.where(valid, gex, 0.0)
         vanna_exp = cp.where(valid, vanna * cp_ois * cp_mults, 0.0)
         charm_exp = cp.where(valid, charm * cp_ois * cp_mults, 0.0)
@@ -346,19 +381,29 @@ def _bsm_batch_cupy(
         put_gex_arr = cp.where(put_mask, gex, cp.array(0.0, dtype=cp.float64))
         
         total_call_gex = float(cp.sum(call_gex_arr).item())
-        total_put_gex = -float(cp.sum(put_gex_arr).item())
+        total_put_gex = float(cp.sum(put_gex_arr).item())
         
-        max_call_idx = int(cp.argmax(call_gex_arr).item())
-        max_put_idx = int(cp.argmax(put_gex_arr).item())
-        
-        max_call_gex = float(call_gex_arr[max_call_idx].item())
-        max_put_gex = float(put_gex_arr[max_put_idx].item())
-        
-        call_wall = float(cp_strikes[max_call_idx].item()) if max_call_gex > 0 else None
-        put_wall = float(cp_strikes[max_put_idx].item()) if max_put_gex > 0 else None
+        strikes_np = cp.asnumpy(cp_strikes).astype(np.float64)
+        call_gex_np = cp.asnumpy(call_gex_arr).astype(np.float64)
+        put_gex_np = cp.asnumpy(put_gex_arr).astype(np.float64)
+        spots_np = cp.asnumpy(cp_spots).astype(np.float64)
+        valid_np = cp.asnumpy(valid).astype(np.bool_)
+        if valid_np.any():
+            spot_ref = float(np.median(spots_np[valid_np]))
+        elif spots_np.size > 0:
+            spot_ref = float(spots_np[0])
+        else:
+            spot_ref = 0.0
+
+        call_wall, put_wall, max_call_gex, max_put_gex = _select_walls_by_spot(
+            strikes=strikes_np,
+            call_gex=call_gex_np,
+            put_gex=put_gex_np,
+            spot_ref=spot_ref,
+        )
         
         agg = {
-            "net_gex": (total_call_gex + total_put_gex) / _GEX_SCALE_MILLION,
+            "net_gex": (total_call_gex - total_put_gex) / _GEX_SCALE_MILLION,
             "total_call_gex": total_call_gex / _GEX_SCALE_MILLION,
             "total_put_gex": total_put_gex / _GEX_SCALE_MILLION,
             "max_call_gex": max_call_gex,
@@ -393,9 +438,9 @@ def _aggregate_greeks_cpu(
 ) -> dict[str, float]:
     valid = (ivs > 0) & (spots > 0) & (strikes > 0) & (t_years > 0)
     
-    # Keep GEX convention aligned with L1 mainline:
-    # gamma * OI * multiplier * S^2, then normalize to USD millions.
-    gex = greeks["gamma"] * ois * (spots ** 2) * mults
+    # Keep GEX convention aligned with L1 mainline (1% spot-move MMUSD):
+    # gamma * OI * multiplier * S^2 * 0.01, then normalize to USD millions.
+    gex = greeks["gamma"] * ois * (spots ** 2) * mults * 0.01
     gex = np.where(valid, gex, 0.0)
     vanna_exp = np.where(valid, greeks["vanna"] * ois * mults, 0.0)
     charm_exp = np.where(valid, greeks["charm"] * ois * mults, 0.0)
@@ -404,18 +449,24 @@ def _aggregate_greeks_cpu(
     put_gex  = np.where(~is_call, gex, 0.0)
     
     total_call_gex = float(np.sum(call_gex))
-    total_put_gex  = -float(np.sum(put_gex))
+    total_put_gex  = float(np.sum(put_gex))
     
-    max_call_idx = int(np.argmax(call_gex))
-    max_put_idx  = int(np.argmax(put_gex))
-    max_call_gex = float(call_gex[max_call_idx])
-    max_put_gex  = float(put_gex[max_put_idx])
-    
-    call_wall = float(strikes[max_call_idx]) if max_call_gex > 0 else None
-    put_wall  = float(strikes[max_put_idx]) if max_put_gex > 0 else None
+    if valid.any():
+        spot_ref = float(np.median(spots[valid]))
+    elif spots.size > 0:
+        spot_ref = float(spots[0])
+    else:
+        spot_ref = 0.0
+
+    call_wall, put_wall, max_call_gex, max_put_gex = _select_walls_by_spot(
+        strikes=strikes,
+        call_gex=call_gex,
+        put_gex=put_gex,
+        spot_ref=spot_ref,
+    )
     
     return {
-        "net_gex": (total_call_gex + total_put_gex) / _GEX_SCALE_MILLION,
+        "net_gex": (total_call_gex - total_put_gex) / _GEX_SCALE_MILLION,
         "total_call_gex": total_call_gex / _GEX_SCALE_MILLION,
         "total_put_gex": total_put_gex / _GEX_SCALE_MILLION,
         "max_call_gex": max_call_gex,

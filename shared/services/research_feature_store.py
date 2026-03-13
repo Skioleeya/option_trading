@@ -18,6 +18,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from shared.config import settings
+from shared.system.tactical_triad_logic import compute_vrp
 
 logger = logging.getLogger(__name__)
 
@@ -58,8 +59,25 @@ _FEATURE_BASE_FIELDS = {
     "symbol",
     "spot",
     "atm_iv",
+    "skew_25d_normalized",
+    "rr25_call_minus_put",
+    "realized_volatility_15m",
+    "vol_risk_premium",
+    "vrp_realized_based",
+    "longport_tier2_contracts",
+    "longport_tier3_contracts",
+    "longport_tier2_standard_ratio",
+    "longport_tier3_standard_ratio",
+    "longport_tier2_avg_premium",
+    "longport_tier3_avg_premium",
+    "longport_official_hv_decimal",
+    "longport_official_hv_sample_count",
+    "longport_official_hv_age_sec",
+    "vrp_official_hv_based",
     "net_gex",
+    "net_vanna_raw_sum",
     "net_vanna",
+    "net_charm_raw_sum",
     "net_charm",
     "call_wall",
     "put_wall",
@@ -194,6 +212,14 @@ class ResearchFeatureStore:
 
         aggregates = getattr(snapshot, "aggregates", None)
         micro = getattr(snapshot, "microstructure", None)
+        net_vanna_raw_sum = self._to_float(
+            getattr(aggregates, "net_vanna_raw_sum", getattr(aggregates, "net_vanna", None)),
+            0.0,
+        )
+        net_charm_raw_sum = self._to_float(
+            getattr(aggregates, "net_charm_raw_sum", getattr(aggregates, "net_charm", None)),
+            0.0,
+        )
 
         direction = str(getattr(decision, "direction", "NEUTRAL"))
         guard_actions = list(getattr(decision, "guard_actions", []))
@@ -224,8 +250,10 @@ class ResearchFeatureStore:
             "spot": self._f32(spot),
             "atm_iv": self._f32(self._to_float(getattr(aggregates, "atm_iv", None), 0.0)),
             "net_gex": self._f32(net_gex),
-            "net_vanna": self._f32(self._to_float(getattr(aggregates, "net_vanna", None), 0.0)),
-            "net_charm": self._f32(self._to_float(getattr(aggregates, "net_charm", None), 0.0)),
+            "net_vanna_raw_sum": self._f32(net_vanna_raw_sum),
+            "net_vanna": self._f32(net_vanna_raw_sum),
+            "net_charm_raw_sum": self._f32(net_charm_raw_sum),
+            "net_charm": self._f32(net_charm_raw_sum),
             "call_wall": self._f32(self._to_float(getattr(aggregates, "call_wall", None), 0.0)),
             "put_wall": self._f32(self._to_float(getattr(aggregates, "put_wall", None), 0.0)),
             "flip_level": self._f32(self._to_float(getattr(aggregates, "flip_level", None), 0.0)),
@@ -248,8 +276,27 @@ class ResearchFeatureStore:
             "stored_at": datetime.now(_UTC).isoformat(),
         }
 
+        longport_cols = self._longport_option_columns(snapshot)
+        official_hv_decimal = self._to_float(
+            longport_cols.get("longport_official_hv_decimal"),
+            None,
+        )
+        atm_iv_value = self._to_float(raw_row.get("atm_iv"), None)
+        vrp_official_hv_based: float | None = None
+        if official_hv_decimal is not None and atm_iv_value is not None and atm_iv_value > 0.0:
+            vrp_official_hv_based = self._f32(
+                compute_vrp(atm_iv_value, official_hv_decimal)
+            )
+
         feature_row = {
             **raw_row,
+            "skew_25d_normalized": self._feature_value(decision, "skew_25d_normalized"),
+            "rr25_call_minus_put": self._feature_value(decision, "rr25_call_minus_put"),
+            "realized_volatility_15m": self._feature_value(decision, "realized_volatility_15m"),
+            "vol_risk_premium": self._feature_value(decision, "vol_risk_premium"),
+            "vrp_realized_based": self._feature_value(decision, "vrp_realized_based"),
+            **longport_cols,
+            "vrp_official_hv_based": vrp_official_hv_based,
             "direction": direction,
             "confidence": self._f32(self._to_float(getattr(decision, "confidence", None), 0.0)),
             "pre_guard_direction": str(getattr(decision, "pre_guard_direction", "NEUTRAL")),
@@ -454,6 +501,29 @@ class ResearchFeatureStore:
             return {"error": f"unknown fields: {','.join(sorted(unknown))}"}
 
         return [{k: row.get(k) for k in requested} for row in records]
+
+    def _feature_value(self, decision: Any, key: str) -> float | None:
+        features = getattr(decision, "feature_vector", {})
+        if not isinstance(features, dict):
+            return None
+        return self._f32(self._to_float(features.get(key), None))
+
+    def _longport_option_columns(self, snapshot: Any) -> dict[str, float | int | None]:
+        extra = getattr(snapshot, "extra_metadata", None)
+        diagnostics = extra.get("longport_option_diagnostics", {}) if isinstance(extra, dict) else {}
+        if not isinstance(diagnostics, dict):
+            diagnostics = {}
+        return {
+            "longport_tier2_contracts": self._coerce_int(diagnostics.get("tier2_contracts"), 0),
+            "longport_tier3_contracts": self._coerce_int(diagnostics.get("tier3_contracts"), 0),
+            "longport_tier2_standard_ratio": self._f32(self._to_float(diagnostics.get("tier2_standard_ratio"), 0.0)),
+            "longport_tier3_standard_ratio": self._f32(self._to_float(diagnostics.get("tier3_standard_ratio"), 0.0)),
+            "longport_tier2_avg_premium": self._f32(self._to_float(diagnostics.get("tier2_avg_premium"), 0.0)),
+            "longport_tier3_avg_premium": self._f32(self._to_float(diagnostics.get("tier3_avg_premium"), 0.0)),
+            "longport_official_hv_decimal": self._f32(self._to_float(diagnostics.get("official_hv_decimal"), None)),
+            "longport_official_hv_sample_count": self._coerce_int(diagnostics.get("official_hv_sample_count"), 0),
+            "longport_official_hv_age_sec": self._f32(self._to_float(diagnostics.get("official_hv_age_sec"), None)),
+        }
 
     def _apply_interval(self, records: list[dict[str, Any]], *, interval: str) -> list[dict[str, Any]]:
         step = _VALID_INTERVALS[interval]
@@ -741,3 +811,5 @@ class ResearchFeatureStore:
             return float(value)
         except (TypeError, ValueError):
             return None
+
+

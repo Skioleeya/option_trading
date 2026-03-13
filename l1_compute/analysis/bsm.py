@@ -1,4 +1,4 @@
-"""BSM Greeks Engine — 0DTE Institutional Grade
+"""BSM Greeks Engine — 0DTE Production Grade
  
 Pure-Python, zero-dependency Black-Scholes-Merton implementation.
 Includes:

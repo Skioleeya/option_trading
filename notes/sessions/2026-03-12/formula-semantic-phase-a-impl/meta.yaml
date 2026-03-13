@@ -1,0 +1,36 @@
+session_id: "2026-03-12/formula-semantic-phase-a-impl"
+title: "formula-semantic-phase-a-impl"
+scope: "Implement OpenSpec Phase A: unify VRP units and clarify GEX proxy semantics"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-12 14:28:07 -04:00"
+updated_at_et: "2026-03-12 14:36:10 -04:00"
+parent_session: "2026-03-12/longport-field-dictionary-reverify"
+
+branch: "master"
+base_commit: "bc51cc7"
+head_commit: "bc51cc7"
+
+files_changed:
+  - "l2_decision/feature_store/extractors.py"
+  - "shared/system/tactical_triad_logic.py"
+  - "shared/config/agent_g.py"
+  - "shared/models/microstructure.py"
+  - "l1_compute/output/enriched_snapshot.py"
+  - "l2_decision/agents/services/gamma_qual_analyzer.py"
+  - "l2_decision/tests/test_feature_store.py"
+  - "l2_decision/tests/test_reactor_and_guards.py"
+  - "docs/SOP/L1_LOCAL_COMPUTATION.md"
+  - "docs/SOP/L2_DECISION_ANALYSIS.md"
+commands:
+  - "git status --short"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l2_decision/tests/test_feature_store.py l2_decision/tests/test_reactor_and_guards.py l2_decision/tests/test_gamma_qual_analyzer.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "l2_decision/tests/test_feature_store.py"
+  - "l2_decision/tests/test_reactor_and_guards.py"
+  - "l2_decision/tests/test_gamma_qual_analyzer.py"
+tests_failed: []
+blockers: []
+notes:
+  - "Phase A keeps VRPVetoGuard decimal thresholds unchanged; only feature-level VRP was normalized to percent points."

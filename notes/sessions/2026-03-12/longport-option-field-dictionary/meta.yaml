@@ -1,0 +1,47 @@
+﻿session_id: "2026-03-12/longport-option-field-dictionary"
+title: "longport-option-field-dictionary"
+scope: "Drill into LongPort option quote/chain/calc-index docs and produce a precise option field dictionary"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-12 13:06:16 -04:00"
+updated_at_et: "2026-03-12 13:14:39 -04:00"
+parent_session: "2026-03-12/longport-llms-fields-doc"
+
+branch: "master"
+base_commit: "bc51cc7"
+head_commit: "bc51cc7"
+
+files_changed:
+  - "docs/LONGPORT_OPTION_FIELD_DICTIONARY.md"
+  - "notes/sessions/2026-03-12/longport-option-field-dictionary/project_state.md"
+  - "notes/sessions/2026-03-12/longport-option-field-dictionary/open_tasks.md"
+  - "notes/sessions/2026-03-12/longport-option-field-dictionary/handoff.md"
+  - "notes/sessions/2026-03-12/longport-option-field-dictionary/meta.yaml"
+  - "notes/context/handoff.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId longport-option-field-dictionary -Title \"longport-option-field-dictionary\" -Scope \"Drill into LongPort option quote/chain/calc-index docs and produce a precise option field dictionary\" -Owner \"Codex\" -ParentSession \"2026-03-12/longport-llms-fields-doc\" -Timezone \"America/New_York\" -UpdatePointer"
+  - "Get-Content notes/sessions/2026-03-12/longport-option-field-dictionary/project_state.md"
+  - "Get-Content notes/sessions/2026-03-12/longport-option-field-dictionary/open_tasks.md"
+  - "Get-Content notes/sessions/2026-03-12/longport-option-field-dictionary/handoff.md"
+  - "Get-Content notes/sessions/2026-03-12/longport-option-field-dictionary/meta.yaml"
+  - "rg -n \"option_quote|option_chain_info_by_date|calc_indexes|open_interest|implied_volatility|delta|gamma|theta|vega|call_symbol|put_symbol|strike_price|expiry_date\" l0_ingest l1_compute shared app"
+  - "Invoke-WebRequest -UseBasicParsing https://open.longportapp.com/docs/quote/pull/option-quote.md | Select-Object -ExpandProperty Content"
+  - "Invoke-WebRequest -UseBasicParsing https://open.longportapp.com/docs/quote/pull/optionchain-date-strike.md | Select-Object -ExpandProperty Content"
+  - "Invoke-WebRequest -UseBasicParsing https://open.longportapp.com/docs/quote/pull/calc-index.md | Select-Object -ExpandProperty Content"
+  - "Invoke-WebRequest -UseBasicParsing https://open.longportapp.com/docs/quote/objects.md | Select-Object -ExpandProperty Content"
+  - "git rev-parse --short HEAD"
+  - "git branch --show-current"
+  - "Get-Date -Format \"yyyy-MM-dd HH:mm:ss zzz\""
+  - "git status --short --branch"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict (first run failed: missing meta command evidence)"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict (rerun passed)"
+tests_passed:
+  - "Official LongPort option docs fetched and mapped into docs/LONGPORT_OPTION_FIELD_DICTIONARY.md"
+  - "scripts/validate_session.ps1 -Strict passed"
+tests_failed: []
+blockers: []
+notes:
+  - "No runtime code was changed in this session."
+  - "The dictionary distinguishes official fields from the subset currently retained by the repository."
+
+

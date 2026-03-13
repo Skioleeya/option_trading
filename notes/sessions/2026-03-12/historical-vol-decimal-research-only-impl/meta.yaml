@@ -1,0 +1,40 @@
+session_id: "2026-03-12/historical-vol-decimal-research-only-impl"
+title: "historical-vol-decimal-research-only-impl"
+scope: "feature"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-12 22:18:57 -04:00"
+updated_at_et: "2026-03-12 22:30:58 -04:00"
+parent_session: "2026-03-12/official-vol-field-phase-d-followup"
+
+branch: "master"
+base_commit: "bc51cc7"
+head_commit: "bc51cc7"
+
+files_changed:
+  - "l0_ingest/feeds/feed_orchestrator.py"
+  - "l0_ingest/feeds/option_chain_builder.py"
+  - "app/loops/compute_loop.py"
+  - "shared/services/research_feature_store.py"
+  - "l0_ingest/tests/test_feed_orchestrator_startup_stagger.py"
+  - "app/loops/tests/test_compute_loop_helpers.py"
+  - "l3_assembly/tests/test_research_feature_store.py"
+  - "docs/SOP/L0_DATA_FEED.md"
+  - "notes/sessions/2026-03-12/historical-vol-decimal-research-only-impl/project_state.md"
+  - "notes/sessions/2026-03-12/historical-vol-decimal-research-only-impl/open_tasks.md"
+  - "notes/sessions/2026-03-12/historical-vol-decimal-research-only-impl/handoff.md"
+  - "notes/sessions/2026-03-12/historical-vol-decimal-research-only-impl/meta.yaml"
+
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId historical-vol-decimal-research-only-impl -Title \"historical-vol-decimal-research-only-impl\" -Scope \"feature\" -Owner \"Codex\" -ParentSession \"2026-03-12/official-vol-field-phase-d-followup\" -Timezone \"America/New_York\" -UpdatePointer"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/test_feed_orchestrator_startup_stagger.py app/loops/tests/test_compute_loop_helpers.py l3_assembly/tests/test_research_feature_store.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+
+tests_passed:
+  - "scripts/test/run_pytest.ps1 l0_ingest/tests/test_feed_orchestrator_startup_stagger.py app/loops/tests/test_compute_loop_helpers.py l3_assembly/tests/test_research_feature_store.py (24 passed)"
+tests_failed:
+  - "scripts/validate_session.ps1 -Strict (first run failed before session docs/meta synchronization)"
+blockers: []
+notes:
+  - "Implemented official HV diagnostics as research-only metadata path; no new LongPort REST call surfaces."
+  - "Live decision semantics unchanged; `vol_risk_premium` and `vrp_realized_based` preserved."

@@ -537,6 +537,7 @@ class OptionChainBuilder:
                     "warmup_pending_symbols": self._orchestrator.pending_warmup_count,
                     "metadata_cache_hit_rate": self._sub_mgr.metadata_cache_hit_rate,
                 },
+                "official_hv_diagnostics": self._orchestrator.official_hv_diagnostics,
             }
             if not data["rust_active"]:
                 logger.warning("[OptionChainBuilder] fetch_chain rust_active=FALSE")

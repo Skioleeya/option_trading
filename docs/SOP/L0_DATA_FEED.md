@@ -75,6 +75,46 @@ flowchart LR
 - `fetch_chain()` 默认不得触发 legacy Greeks 重算；若确需兼容路径，必须显式传入 `include_legacy_greeks=true` 并记录调用来源（caller tag）
 - `ttm_seconds` 必须持续输出（即使 legacy Greeks 关闭），不得影响下游 ActiveOptions/Presenter 契约
 
+## 5.1 LongPort REST Runtime Contract
+
+LongPort 期权 REST 契约在 `L0QuoteRuntime` 内统一对齐，当前只发生在 L0 runtime 边界，不自动进入 L1/L2/L3 计算链。
+
+`option_quote()` 现保留官方期权行情字段，并统一返回同构对象：
+
+- 顶层字段：`symbol`, `last_done`, `prev_close`, `open`, `high`, `low`, `timestamp`, `volume`, `turnover`, `trade_status`
+- 兼容别名：`open_interest`, `implied_volatility`, `expiry_date`, `strike_price`, `contract_multiplier`, `contract_type`, `contract_size`, `direction`, `historical_volatility`, `underlying_symbol`
+- nested 保真字段：`option_extend.{implied_volatility, open_interest, expiry_date, strike_price, contract_multiplier, contract_type, contract_size, direction, historical_volatility, underlying_symbol}`
+
+`option_chain_info_by_date()` 现保留：
+
+- `price`, `call_symbol`, `put_symbol`, `standard`
+- 兼容语义别名：`strike_price`
+
+`calc_indexes()` 现保留：
+
+- `symbol`, `last_done`, `change_val`, `change_rate`, `volume`, `turnover`
+- `expiry_date`, `strike_price`, `premium`
+- `implied_volatility`, `open_interest`, `delta`, `gamma`, `theta`, `vega`, `rho`
+
+研究/诊断透传规则：
+
+- Tier2/Tier3 metadata 刷新阶段可保留 `standard`
+- Tier2/Tier3 `calc_indexes()` 同次请求可保留 `premium`
+- FeedOrchestrator 既有 `option_quote()` research 轮询可在不新增调用面的前提下聚合 `historical_volatility_decimal`
+- 上述字段当前只允许进入 diagnostics / research 汇总，不得直接改写 L1 live compute 主合同
+
+Raw + Normalized 规则：
+
+- `*_raw`：保留官方原始字符串/原始表现，例如 `implied_volatility_raw`, `expiry_date_raw`
+- `*_decimal`：明确为十进制比例，例如 `implied_volatility_decimal=0.2051`
+- `*_iso`：明确为 `YYYY-MM-DD`，例如 `expiry_date_iso`
+
+约束：
+
+- L0 消费者应优先读取 `implied_volatility_decimal` 与 `expiry_date_iso`
+- 旧字段继续保留用于兼容现有调用方，不允许在本轮替换式改名
+- 本轮不修改 `fetch_chain()`、SHM schema、`CleanQuoteEvent` / `EnrichedSnapshot` 契约
+
 ## 6. Boundary Rules
 
 - L0 不得依赖 L2/L3/L4。

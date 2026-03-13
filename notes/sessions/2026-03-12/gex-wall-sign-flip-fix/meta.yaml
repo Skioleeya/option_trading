@@ -1,0 +1,47 @@
+﻿session_id: "2026-03-12/gex-wall-sign-flip-fix"
+title: "gex-wall-sign-flip-fix"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-12 10:45:07 -04:00"
+updated_at_et: "2026-03-12 10:53:27 -04:00"
+parent_session: "2026-03-12/wall-depth-gex-consistency-fix"
+
+branch: "master"
+base_commit: "bc51cc7"
+head_commit: "bc51cc7"
+
+files_changed:
+  - "l1_compute/analysis/bsm_fast.py"
+  - "l1_compute/aggregation/streaming_aggregator.py"
+  - "l1_compute/output/enriched_snapshot.py"
+  - "l2_decision/feature_store/extractors.py"
+  - "l1_compute/tests/test_compute.py"
+  - "l1_compute/tests/test_streaming_aggregator.py"
+  - "l2_decision/tests/test_feature_store.py"
+  - "l2_decision/tests/test_gamma_qual_analyzer.py"
+  - "docs/SOP/L1_LOCAL_COMPUTATION.md"
+  - "docs/SOP/L2_DECISION_ANALYSIS.md"
+  - "notes/sessions/2026-03-12/gex-wall-sign-flip-fix/project_state.md"
+  - "notes/sessions/2026-03-12/gex-wall-sign-flip-fix/open_tasks.md"
+  - "notes/sessions/2026-03-12/gex-wall-sign-flip-fix/handoff.md"
+  - "notes/sessions/2026-03-12/gex-wall-sign-flip-fix/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId gex-wall-sign-flip-fix -Title \"gex-wall-sign-flip-fix\" -Scope \"hotfix + modularization\" -Owner \"Codex\" -ParentSession \"2026-03-12/wall-depth-gex-consistency-fix\" -Timezone \"America/New_York\""
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_compute.py l1_compute/tests/test_streaming_aggregator.py l1_compute/tests/test_reactor.py l2_decision/tests/test_feature_store.py l2_decision/tests/test_gamma_qual_analyzer.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "l1_compute/tests/test_compute.py"
+  - "l1_compute/tests/test_streaming_aggregator.py"
+  - "l1_compute/tests/test_reactor.py"
+  - "l2_decision/tests/test_feature_store.py"
+  - "l2_decision/tests/test_gamma_qual_analyzer.py"
+  - "pytest summary: 89 passed"
+tests_failed: []
+blockers: []
+notes:
+  - "total_put_gex unified to non-negative gross MMUSD; net_gex remains call-put."
+  - "flip_level now uses first cumulative net GEX zero-crossing with interpolation."
+  - "net_gex_normalized fixed to MMUSD / 1000 for $1B scaling."
+
+

@@ -1,6 +1,6 @@
 # L2 SOP — DECISION ANALYSIS
 
-> Version: 2026-03-10
+> Version: 2026-03-12
 > Layer: L2 Decision & Risk
 
 ## 1. Responsibility
@@ -66,12 +66,22 @@ flowchart LR
 
 - L2 不重写 L0/L1 时间语义
 - 不在 L2 引入展示层样式/配色语义
-- `skew_25d_normalized` 必须基于真 25Δ 口径：
+- L2 必须将 `net_gex/call_wall/put_wall/zero_gamma_level` 视为 L1 输出的 `OI-based proxy` 结构语义；在缺少逐笔库存标签的数据源上，不得升级表述为 dealer inventory 真值
+- `net_gex_normalized` 必须以 L1 `net_gex`（单位 `Million USD`）为输入，并按 `$1B` 口径归一：`net_gex / 1000`
+- `gamma_flip` 必须优先基于 `spot` 与 L1 `zero_gamma_level` 判定（`spot < zero_gamma_level` 视为负 gamma），仅在缺失 `zero_gamma_level` 时回退 `net_gex < 0`
+- `call_wall_distance` 仅描述 spot 到 `call_wall` 代理位的几何距离，不得被解释为真实 dealer ceiling
+- `vol_risk_premium` 必须输出 `% points`，并复用统一标准化逻辑处理 `0.15`/`15.0` 两类 baseline HV 输入
+- `skew_25d_normalized` 与 `rr25_call_minus_put` 必须共享同一组真 25Δ 选腿：
   - CALL 使用 `+0.25`，PUT 使用 `-0.25`
   - 仅当两侧 delta 距离均在容差 `±0.10` 内时才判定有效
   - IV 读取优先级：`computed_iv` > `iv` > `implied_volatility`
   - delta 读取优先级：`computed_delta` > `delta`
+- `skew_25d_normalized` 明确定义为 legacy 工程字段 `(put_iv - call_iv) / atm_iv`
+- `rr25_call_minus_put` 明确定义为 canonical 25Δ risk reversal `call_iv - put_iv`
 - L2 必须同时输出 `skew_25d_valid`（1/0）以区分“真实 0”与“不可计算”
+- L2 对 `net_vanna_raw_sum` / `net_charm_raw_sum` 必须优先消费 canonical raw-sum 字段；`net_vanna` / `net_charm` 仅作兼容 alias，不得在文案中表述为 inventory exposure
+- `vrp_realized_based` 仅允许进入 research / diagnostics / optional feature path；现网默认决策继续使用 proxy `vol_risk_premium`
+- `realized_volatility_15m` 必须由本地 rolling spot log-return 计算得到，按 decimal annualized vol 输出；`vrp_realized_based` 必须先将该 RV 显式换算到 `%` 后再进入 `compute_vrp()`
 
 ## 7. Observability
 

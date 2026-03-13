@@ -7,49 +7,88 @@
     "unclassified"
   ],
   "matched_tags": [],
-  "source_files": [],
-  "metrics": {
-    "rows": {},
-    "raw_day": {
-      "rows": 0,
-      "net_return": 0.0,
-      "intraday_followthrough": 0.0,
-      "overnight_gap": 0.0,
-      "overnight_gap_available": false,
-      "realized_range": 0.0,
-      "open_rv_1m": 0.0,
-      "ofi_persistence": 0.0,
-      "max_abs_jump": 0.0,
-      "state_switch_rate": 0.0,
-      "atm_iv_change_pct": 0.0,
-      "atm_iv_available": false,
-      "pin_band_ratio": 0.0,
-      "close_to_key_level": 1.0,
-      "key_level_coverage": 0.0,
-      "start_timestamp": "",
-      "end_timestamp": "",
-      "ofi_source": "missing",
-      "prev_trade_day": ""
+  "source_files": [
+    {
+      "role": "research_raw",
+      "path": "data/research/raw/raw_20260312.parquet",
+      "size_bytes": 1140327,
+      "sha256": "ebb7232b86d7c3c5b96bc1054d1bbe02a53595ccb3fdc35eb1a5ffcecc434cc8"
     },
-    "source_count": 0
+    {
+      "role": "research_feature",
+      "path": "data/research/feature/feature_20260312.parquet",
+      "size_bytes": 2448221,
+      "sha256": "eec012c290a84bd614a7b2afbde4d470882a593ae93d6cffa189f8ace7fa46b4"
+    },
+    {
+      "role": "research_label",
+      "path": "data/research/label/label_20260312.parquet",
+      "size_bytes": 584456,
+      "sha256": "b1c7f2912ac89d72828fe8ddda005d41984e5b7103281f109805dfdef3c59bfe"
+    },
+    {
+      "role": "atm_series",
+      "path": "data/atm_decay/atm_series_20260312.jsonl",
+      "size_bytes": 4272168,
+      "sha256": "96483c577434829f374485759d4bad72e23ddc74be3ebf874e8b2f31b69949b3"
+    },
+    {
+      "role": "mtf_iv_series",
+      "path": "data/mtf_iv/mtf_iv_series_20260312.jsonl",
+      "size_bytes": 1683479,
+      "sha256": "7212dbd13b4715226d11ce577dc7f9cda2b08702057ef2883991a21676adceba"
+    },
+    {
+      "role": "wall_series",
+      "path": "data/wall_migration/wall_series_20260312.jsonl",
+      "size_bytes": 17375,
+      "sha256": "310df348cb7ea68819b4f90f1ef625d34824a6c600645c07cf0dc75bbcb55f1c"
+    }
+  ],
+  "metrics": {
+    "rows": {
+      "research_raw": 18110,
+      "research_feature": 18110,
+      "research_label": 19672
+    },
+    "raw_day": {
+      "rows": 18110,
+      "net_return": -0.01521446631082471,
+      "intraday_followthrough": -0.01521446631082471,
+      "overnight_gap": 0.0,
+      "overnight_gap_available": true,
+      "realized_range": 0.015301701831946011,
+      "open_rv_1m": 0.00021879881676673912,
+      "ofi_persistence": 0.0,
+      "max_abs_jump": 0.008620052341312733,
+      "state_switch_rate": 0.0,
+      "atm_iv_change_pct": -0.7705744651945267,
+      "atm_iv_available": true,
+      "pin_band_ratio": 0.0,
+      "close_to_key_level": 0.016575581046183358,
+      "key_level_coverage": 1.0,
+      "start_timestamp": "2026-03-12T13:15:00.936Z",
+      "end_timestamp": "2026-03-12T20:01:04.206Z",
+      "ofi_source": "bbo_imbalance_raw",
+      "prev_trade_day": "20260311"
+    },
+    "source_count": 6
   },
   "quality": {
-    "status": "LOW_QUALITY_DAY",
-    "reasons": [
-      "missing required source: research_raw",
-      "missing required source: research_feature",
-      "missing required source: research_label",
-      "raw rows below minimum: 0 < 5000",
-      "feature rows below minimum: 0 < 5000",
-      "label rows below minimum: 0 < 5000"
-    ],
+    "status": "PASS",
+    "reasons": [],
     "min_rows": {
       "raw": 5000,
       "feature": 5000,
       "label": 5000
     },
-    "key_null_pct": {}
+    "key_null_pct": {
+      "data_timestamp": 0.0,
+      "spot": 0.0,
+      "atm_iv": 0.0,
+      "net_gex": 0.0
+    }
   },
   "rule_hits": [],
-  "generated_at_utc": "2026-03-12T10:44:35Z"
+  "generated_at_utc": "2026-03-12T20:01:04Z"
 }

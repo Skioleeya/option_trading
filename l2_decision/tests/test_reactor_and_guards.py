@@ -16,11 +16,14 @@ from __future__ import annotations
 
 import sys
 import asyncio
+import shutil
 import threading
 import tempfile
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from unittest.mock import mock_open, patch
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -44,12 +47,24 @@ from l2_decision.guards.rail_engine import (
 from l2_decision.audit.audit_trail import AuditTrail
 from l2_decision.observability.l2_instrumentation import L2Instrumentation
 from l2_decision.reactor import L2DecisionReactor
+from shared.system.tactical_triad_logic import compute_vrp
 
 _ET = ZoneInfo("US/Eastern")
+_TEST_TMP_ROOT = Path("tmp/pytest_runtime")
 
 
 def _now():
     return datetime.now(_ET)
+
+
+@contextmanager
+def _workspace_tempdir():
+    _TEST_TMP_ROOT.mkdir(parents=True, exist_ok=True)
+    path = Path(tempfile.mkdtemp(dir=_TEST_TMP_ROOT))
+    try:
+        yield path
+    finally:
+        shutil.rmtree(path, ignore_errors=True)
 
 
 def _fv(**features) -> FeatureVector:
@@ -258,38 +273,52 @@ class TestAttentionFusionEngine:
 class TestManualKillSwitch:
 
     def test_initially_inactive(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            ks = ManualKillSwitch(flag_file=Path(tmp) / "ks.flag")
+        with _workspace_tempdir() as tmp:
+            ks = ManualKillSwitch(flag_file=tmp / "ks.flag")
             assert not ks.is_active()
 
     def test_activate_sets_active(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            ks = ManualKillSwitch(flag_file=Path(tmp) / "ks.flag")
+        with _workspace_tempdir() as tmp:
+            ks = ManualKillSwitch(flag_file=tmp / "ks.flag")
             ks.activate("test_reason")
             assert ks.is_active()
             assert ks.reason == "test_reason"
 
     def test_deactivate_clears(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            ks = ManualKillSwitch(flag_file=Path(tmp) / "ks.flag")
+        with _workspace_tempdir() as tmp:
+            ks = ManualKillSwitch(flag_file=tmp / "ks.flag")
             ks.activate("r")
             ks.deactivate()
             assert not ks.is_active()
 
-    def test_persists_to_file(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            flag = Path(tmp) / "ks.flag"
-            ks = ManualKillSwitch(flag_file=flag)
-            ks.activate("persistent")
-            # New instance should restore state
-            ks2 = ManualKillSwitch(flag_file=flag)
-            assert ks2.is_active()
-            assert "persistent" in ks2.reason
+    def test_persists_to_file(self, monkeypatch):
+        flag = Path("tmp/pytest_runtime/mock_kill_switch.flag")
+        persisted: dict[str, str] = {}
+
+        def _write_text(path: Path, data: str, encoding: str = "utf-8") -> int:
+            persisted[str(path)] = data
+            return len(data)
+
+        def _exists(path: Path) -> bool:
+            return str(path) in persisted
+
+        def _read_text(path: Path, encoding: str = "utf-8") -> str:
+            return persisted[str(path)]
+
+        monkeypatch.setattr(Path, "write_text", _write_text)
+        monkeypatch.setattr(Path, "exists", _exists)
+        monkeypatch.setattr(Path, "read_text", _read_text)
+
+        ks = ManualKillSwitch(flag_file=flag)
+        ks.activate("persistent")
+        ks2 = ManualKillSwitch(flag_file=flag)
+        assert ks2.is_active()
+        assert "persistent" in ks2.reason
 
     def test_thread_safe_concurrent_reads(self):
         """Concurrent reads should not raise."""
-        with tempfile.TemporaryDirectory() as tmp:
-            ks = ManualKillSwitch(flag_file=Path(tmp) / "ks.flag")
+        with _workspace_tempdir() as tmp:
+            ks = ManualKillSwitch(flag_file=tmp / "ks.flag")
             ks.activate("concurrent")
             errors = []
 
@@ -327,8 +356,8 @@ def _make_fused(direction="BULLISH", confidence=0.8) -> FusedDecision:
 class TestGuardRailEngine:
 
     def test_kill_switch_produces_halt(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            ks = ManualKillSwitch(flag_file=Path(tmp) / "ks.flag")
+        with _workspace_tempdir() as tmp:
+            ks = ManualKillSwitch(flag_file=tmp / "ks.flag")
             ks.activate("test halt")
             engine = GuardRailEngine([KillSwitchGuard(ks)])
             guarded = engine.process(_make_fused())
@@ -344,16 +373,16 @@ class TestGuardRailEngine:
         assert not guarded.guard_actions
 
     def test_was_modified_by_guards(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            ks = ManualKillSwitch(flag_file=Path(tmp) / "ks.flag")
+        with _workspace_tempdir() as tmp:
+            ks = ManualKillSwitch(flag_file=tmp / "ks.flag")
             ks.activate("test")
             engine = GuardRailEngine([KillSwitchGuard(ks)])
             guarded = engine.process(_make_fused())
             assert guarded.was_modified_by_guards()
 
     def test_pre_guard_direction_preserved(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            ks = ManualKillSwitch(flag_file=Path(tmp) / "ks.flag")
+        with _workspace_tempdir() as tmp:
+            ks = ManualKillSwitch(flag_file=tmp / "ks.flag")
             ks.activate("test")
             engine = GuardRailEngine([KillSwitchGuard(ks)])
             guarded = engine.process(_make_fused("BEARISH"))
@@ -446,6 +475,10 @@ class TestGuardRailEngine:
         guard.reset_session()
         fused.feature_vector.features["atm_iv"] = 0.140
         assert guard.check(fused, {})[0] is False
+
+    def test_phase_a_vrp_feature_contract_is_percent_points(self):
+        assert compute_vrp(0.18, 0.15) == pytest.approx(3.0)
+        assert compute_vrp(18.0, 15.0) == pytest.approx(3.0)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -593,15 +626,16 @@ class TestAuditTrail:
         assert trail.memory_size == 3  # ring buffer
 
     def test_flush_to_disk(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with patch("builtins.open", mock_open()) as mocked_open:
             trail = AuditTrail(
-                log_dir=Path(tmp),
+                log_dir=Path("."),
                 enable_disk_persistence=True,
             )
             for _ in range(5):
                 trail.append(self._make_entry())
             written = trail.flush_to_disk()
             assert written == 5
+            assert mocked_open().write.call_count == 5
 
     def test_clear(self):
         trail = AuditTrail(enable_disk_persistence=False)

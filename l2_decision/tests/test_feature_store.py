@@ -43,15 +43,17 @@ _ET = ZoneInfo("US/Eastern")
 
 @dataclass
 class _FakeAggregates:
-    net_gex: float = 1_500_000_000.0  # $1.5B
+    net_gex: float = 1_500.0  # MMUSD, i.e. $1.5B
+    net_vanna_raw_sum: float = 0.0
     net_vanna: float = 0.0
+    net_charm_raw_sum: float = 0.0
     net_charm: float = 0.0
     call_wall: float = 565.0
     put_wall: float = 555.0
     flip_level: float = 560.0
     atm_iv: float = 0.18
-    total_call_gex: float = 2e9
-    total_put_gex: float = -1e9
+    total_call_gex: float = 2_000.0
+    total_put_gex: float = 1_000.0
     num_contracts: int = 200
 
 @dataclass
@@ -302,7 +304,9 @@ class TestDefaultExtractors:
             "spot_roc_1m", "atm_iv", "net_gex_normalized", "vpin_composite",
             "bbo_imbalance_ewma", "call_wall_distance", "iv_velocity_1m",
             "wall_migration_speed", "svol_correlation_15m", "vol_accel_ratio",
-            "skew_25d_normalized", "skew_25d_valid", "mtf_consensus_score",
+            "skew_25d_normalized", "rr25_call_minus_put", "skew_25d_valid", "mtf_consensus_score",
+            "realized_volatility_15m", "vol_risk_premium", "vrp_realized_based",
+            "net_vanna_raw_sum", "net_vanna", "net_charm_raw_sum", "net_charm",
         }
         assert expected.issubset(set(self._store.registered_names))
 
@@ -324,6 +328,12 @@ class TestDefaultExtractors:
         fv = self._store.compute_all(snap)
         assert fv.get("net_gex_normalized") <= 1.0
 
+    def test_gex_normalized_uses_mmusd_to_1b_scale(self):
+        snap = _make_snap()
+        snap.aggregates.net_gex = 500.0  # MMUSD = $0.5B
+        fv = self._store.compute_all(snap)
+        assert fv.get("net_gex_normalized") == pytest.approx(0.5)
+
     def test_vpin_in_unit_interval(self):
         snap = _make_snap()
         fv = self._store.compute_all(snap)
@@ -343,6 +353,38 @@ class TestDefaultExtractors:
         fv = self._store.compute_all(snap)
         dist = fv.get("call_wall_distance")
         assert dist > 0  # wall is above spot
+
+    def test_vol_risk_premium_uses_percent_point_contract(self):
+        snap = _make_snap()
+        snap.aggregates.atm_iv = 0.18
+        fv = self._store.compute_all(snap)
+        assert fv.get("vol_risk_premium") == pytest.approx(3.0)
+
+    def test_vrp_realized_based_uses_rolling_realized_vol_baseline(self):
+        snap = _make_snap()
+        snap.aggregates.atm_iv = 0.18
+
+        prices = [100.0, 100.4, 99.8, 100.7, 101.0, 100.6]
+        result = None
+        original_monotonic = time.monotonic
+        clock = {"now": 0.0}
+
+        def _fake_monotonic() -> float:
+            return clock["now"]
+
+        time.monotonic = _fake_monotonic
+        try:
+            for idx, price in enumerate(prices):
+                clock["now"] = float(idx * 180.0)
+                snap.spot = price
+                result = self._store.compute_all(snap)
+        finally:
+            time.monotonic = original_monotonic
+
+        assert result is not None
+        realized_vol = result.get("realized_volatility_15m")
+        assert realized_vol > 0.0
+        assert result.get("vrp_realized_based") == pytest.approx((0.18 * 100.0) - (realized_vol * 100.0))
 
     def test_reset_clears_stateful_extractors(self):
         """After reset, ROC-based features should return 0."""
@@ -369,6 +411,7 @@ class TestDefaultExtractors:
         fv = self._store.compute_all(snap)
         assert fv.get("skew_25d_valid") == pytest.approx(1.0)
         assert fv.get("skew_25d_normalized") == pytest.approx((0.31 - 0.22) / 0.25)
+        assert fv.get("rr25_call_minus_put") == pytest.approx(0.22 - 0.31)
 
     def test_skew_25d_marks_invalid_when_delta_outside_tolerance(self):
         snap = _make_snap(spot=100.0)
@@ -387,6 +430,20 @@ class TestDefaultExtractors:
         fv = self._store.compute_all(snap)
         assert fv.get("skew_25d_valid") == pytest.approx(0.0)
         assert fv.get("skew_25d_normalized") == pytest.approx(0.0)
+        assert fv.get("rr25_call_minus_put") == pytest.approx(0.0)
+
+    def test_raw_sum_features_prefer_canonical_aggregate_fields(self):
+        snap = _make_snap()
+        snap.aggregates.net_vanna_raw_sum = 12.5
+        snap.aggregates.net_vanna = -99.0
+        snap.aggregates.net_charm_raw_sum = -4.0
+        snap.aggregates.net_charm = 88.0
+
+        fv = self._store.compute_all(snap)
+        assert fv.get("net_vanna_raw_sum") == pytest.approx(12.5)
+        assert fv.get("net_vanna") == pytest.approx(12.5)
+        assert fv.get("net_charm_raw_sum") == pytest.approx(-4.0)
+        assert fv.get("net_charm") == pytest.approx(-4.0)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

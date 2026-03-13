@@ -1,0 +1,44 @@
+﻿session_id: "2026-03-12/official-vol-field-phase-d-followup"
+title: "official-vol-field-phase-d-followup"
+scope: "feature"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-12 15:07:00 -04:00"
+updated_at_et: "2026-03-12 15:13:45 -04:00"
+parent_session: "2026-03-12/formula-semantic-phase-d-impl"
+
+branch: "master"
+base_commit: "bc51cc7"
+head_commit: "bc51cc7"
+
+files_changed:
+  - "l0_ingest/feeds/tier2_poller.py"
+  - "l0_ingest/feeds/tier3_poller.py"
+  - "app/loops/compute_loop.py"
+  - "app/loops/tests/test_compute_loop_helpers.py"
+  - "shared/services/research_feature_store.py"
+  - "l3_assembly/tests/test_research_feature_store.py"
+  - "docs/SOP/L0_DATA_FEED.md"
+  - "docs/IV_METRICS_MAP.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-12/official-vol-field-phase-d-followup/project_state.md"
+  - "notes/sessions/2026-03-12/official-vol-field-phase-d-followup/open_tasks.md"
+  - "notes/sessions/2026-03-12/official-vol-field-phase-d-followup/handoff.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId official-vol-field-phase-d-followup -Title \"official-vol-field-phase-d-followup\" -Scope \"feature\" -Owner \"Codex\" -ParentSession \"2026-03-12/formula-semantic-phase-d-impl\" -Timezone \"America/New_York\" -UpdatePointer"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/loops/tests/test_compute_loop_helpers.py l3_assembly/tests/test_research_feature_store.py l2_decision/tests/test_feature_store.py shared/tests/test_realized_volatility.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "app/loops/tests/test_compute_loop_helpers.py"
+  - "l3_assembly/tests/test_research_feature_store.py"
+  - "l2_decision/tests/test_feature_store.py"
+  - "shared/tests/test_realized_volatility.py"
+tests_failed: []
+blockers: []
+notes:
+  - "This session intentionally adopted official premium/standard only because they fit into existing Tier2/Tier3 call surfaces without extra REST expansion."
+  - "Official historical_volatility_decimal remains deferred pending a decision on additional option_quote-based runtime complexity."
+
+

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
@@ -55,6 +56,9 @@ class FeedOrchestrator:
         )
         self._pending_warmup_symbols: set[str] = set()
         self._pending_warmup_since_mono: float | None = None
+        self._official_hv_decimal: float | None = None
+        self._official_hv_sample_count: int = 0
+        self._official_hv_synced_at_utc: str | None = None
 
     async def run(self) -> None:
         self._running = True
@@ -80,6 +84,14 @@ class FeedOrchestrator:
     @property
     def pending_warmup_count(self) -> int:
         return len(self._pending_warmup_symbols)
+
+    @property
+    def official_hv_diagnostics(self) -> dict[str, float | int | str | None]:
+        return {
+            "official_hv_decimal": self._official_hv_decimal,
+            "official_hv_sample_count": self._official_hv_sample_count,
+            "official_hv_synced_at_utc": self._official_hv_synced_at_utc,
+        }
 
     def _subscription_refresh_due(self, now_mono: float) -> bool:
         return (now_mono - self._last_refresh_mono) >= self._refresh_min_interval_sec
@@ -212,6 +224,7 @@ class FeedOrchestrator:
                     strike_lookup[put_symbol] = strike
 
             new_map: dict[float, int] = {}
+            hv_samples: list[float] = []
             batch_size = max(1, min(50, self._limiter.max_symbol_weight))
             for i in range(0, len(research_symbols), batch_size):
                 batch = research_symbols[i : i + batch_size]
@@ -225,11 +238,46 @@ class FeedOrchestrator:
                                 if strike is not None:
                                     vol = int(getattr(quote, "volume", 0) or 0)
                                     new_map[strike] = new_map.get(strike, 0) + vol
+                                hv_decimal = self._extract_hv_decimal(quote)
+                                if hv_decimal is not None:
+                                    hv_samples.append(hv_decimal)
                     except Exception as exc:
                         logger.error("[FeedOrchestrator] Research batch failed: %s", exc)
 
             self._store.update_volume_map(new_map)
+            self._update_official_hv_diagnostics(hv_samples)
             logger.info("[FeedOrchestrator] Volume map updated: %d strikes", len(new_map))
 
         except Exception as exc:
             logger.error("[FeedOrchestrator] Volume research failed: %s", exc)
+
+    @staticmethod
+    def _extract_hv_decimal(quote: object) -> float | None:
+        raw = getattr(quote, "historical_volatility_decimal", None)
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            raw_fallback = getattr(quote, "historical_volatility", None)
+            try:
+                value = float(raw_fallback)
+            except (TypeError, ValueError):
+                return None
+
+        if not math.isfinite(value) or value <= 0.0:
+            return None
+        if value > 1.0:
+            value = value / 100.0
+        if value <= 0.0 or value > 3.0:
+            return None
+        return value
+
+    def _update_official_hv_diagnostics(self, hv_samples: list[float]) -> None:
+        if not hv_samples:
+            if self._official_hv_decimal is None:
+                self._official_hv_sample_count = 0
+                self._official_hv_synced_at_utc = None
+            return
+
+        self._official_hv_decimal = sum(hv_samples) / len(hv_samples)
+        self._official_hv_sample_count = len(hv_samples)
+        self._official_hv_synced_at_utc = datetime.now(timezone.utc).isoformat()

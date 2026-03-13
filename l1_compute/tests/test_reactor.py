@@ -72,8 +72,9 @@ class TestEnrichedSnapshot:
         snap = self._make_snap()
         d = snap.to_legacy_dict()
         required_keys = [
-            "net_gex", "net_vanna", "net_charm", "call_wall", "put_wall",
-            "flip_level", "atm_iv", "spy_atm_iv", "vpin_score",
+            "net_gex", "net_vanna_raw_sum", "net_vanna", "net_charm_raw_sum", "net_charm", "call_wall", "put_wall",
+            "flip_level", "flip_level_cumulative", "zero_gamma_level",
+            "atm_iv", "spy_atm_iv", "vpin_score",
             "bbo_imbalance", "vol_accel_ratio", "ttm_seconds", "version",
         ]
         for k in required_keys:
@@ -188,6 +189,8 @@ class TestL1ComputeReactor:
         d = snap.to_legacy_dict()
         assert "net_gex" in d
         assert "atm_iv" in d
+        assert d["net_vanna_raw_sum"] == pytest.approx(d["net_vanna"])
+        assert d["net_charm_raw_sum"] == pytest.approx(d["net_charm"])
 
     @pytest.mark.asyncio
     async def test_chain_includes_computed_gamma_and_vanna_columns(self):

@@ -1,6 +1,6 @@
 # L1 SOP — LOCAL COMPUTATION
 
-> Version: 2026-03-11
+> Version: 2026-03-12
 > Layer: L1 Local Computation
 
 ## 1. Responsibility
@@ -44,9 +44,17 @@ flowchart LR
   - `counterfactual_vol_impact_bps`（诊断）
   - `near_wall_hedge_notional_m` 单位必须是 `Million USD`，不得二次缩放
 - `microstructure.wall_migration.wall_context` 应与 `microstructure.wall_context` 同源
-- GEX 统一口径（主链路与 legacy 一致）：
-  - `gex_per_contract = gamma * open_interest * contract_multiplier * spot^2 / 1_000_000`
+- `AggregateGreeks` 中的 `net_gex/call_wall/put_wall/flip_level_cumulative/zero_gamma_level` 一律视为 `OI-based structural proxy`，不得在合同注释或展示文案中升级为 dealer inventory truth
+- `AggregateGreeks.net_vanna_raw_sum` / `net_charm_raw_sum` 是全链 raw Greek sum，明确不是 position-weighted / inventory exposure；`net_vanna` / `net_charm` 仅作为一阶段兼容 alias 保留
+- GEX 统一口径（主链路与 legacy 一致，当前为基于 `open_interest` 的代理语义而非 dealer inventory 真值）：
+  - `gex_per_contract = gamma * open_interest * contract_multiplier * spot^2 * 0.01 / 1_000_000`
+  - `total_call_gex` 与 `total_put_gex` 必须是非负幅度值（单位：`Million USD`）
   - `net_gex = total_call_gex - total_put_gex`（输出单位：`Million USD`）
+  - `flip_level_cumulative` 必须基于按 strike 排序后的 cumulative net GEX 首次过零点（深度图语义）
+  - `zero_gamma_level` 必须基于 spot 网格重算 `net_gex(S)` 后的过零插值（真实 zero-gamma 语义）
+  - `flip_level` 作为兼容别名，等于 `flip_level_cumulative`
+  - 数据源未提供逐笔 `customer/dealer`、`open_close`、`aggressor_side` 标签时，不得将上述字段表述为“真实做市商库存”或“dealer truth”
+- `vol_risk_premium` 在下游统一使用 `% points` 口径：`ATM_IV(%) - baseline_HV(%)`；`0.15` 与 `15.0` 基线输入必须视为同义
 
 ## 4. Performance Contract
 

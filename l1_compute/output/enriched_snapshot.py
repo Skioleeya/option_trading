@@ -18,18 +18,26 @@ import pyarrow as pa
 
 @dataclass(frozen=True)
 class AggregateGreeks:
-    """Aggregated risk exposure metrics from the full option chain."""
-    net_gex: float = 0.0          # Net GEX: positive = dealer long gamma
-    net_vanna: float = 0.0
-    net_charm: float = 0.0
-    call_wall: float = 0.0        # Strike with peak call GEX (resistance)
+    """Aggregated risk exposure metrics from the full option chain.
+
+    GEX/wall fields in this contract are OI-based structural proxies, not
+    proprietary dealer inventory truth.
+    """
+    net_gex: float = 0.0          # Net GEX proxy: positive = call gross minus put gross in the current OI-based proxy
+    net_vanna_raw_sum: float = 0.0  # Canonical raw chain sum; not position-weighted exposure
+    net_vanna: float = 0.0          # Legacy alias for net_vanna_raw_sum
+    net_charm_raw_sum: float = 0.0  # Canonical raw chain sum; not position-weighted exposure
+    net_charm: float = 0.0          # Legacy alias for net_charm_raw_sum
+    call_wall: float = 0.0        # Trading-practice call-wall proxy: strike with peak call GEX
     call_wall_gex: float = 0.0
-    put_wall: float = 0.0         # Strike with peak put GEX (support)
+    put_wall: float = 0.0         # Trading-practice put-wall proxy: strike with peak put GEX
     put_wall_gex: float = 0.0
-    flip_level: float = 0.0       # Strike nearest GEX sign change
+    flip_level: float = 0.0       # Legacy alias for cumulative flip proxy level
+    flip_level_cumulative: float = 0.0
+    zero_gamma_level: float = 0.0 # OI-based zero-gamma proxy level from spot-grid recomputation
     atm_iv: float = 0.0           # IV of nearest-ATM option
     total_call_gex: float = 0.0
-    total_put_gex: float = 0.0
+    total_put_gex: float = 0.0    # Non-negative gross put GEX (MMUSD)
     num_contracts: int = 0
     per_strike_gex: list[dict] = field(default_factory=list)
 
@@ -150,6 +158,14 @@ class EnrichedSnapshot:
         return self.aggregates.flip_level
 
     @property
+    def flip_level_cumulative(self) -> float:
+        return self.aggregates.flip_level_cumulative
+
+    @property
+    def zero_gamma_level(self) -> float:
+        return self.aggregates.zero_gamma_level
+
+    @property
     def per_strike_gex(self) -> list[dict]:
         return self.aggregates.per_strike_gex
 
@@ -166,11 +182,15 @@ class EnrichedSnapshot:
 
         return {
             "net_gex":        self.aggregates.net_gex,
+            "net_vanna_raw_sum": self.aggregates.net_vanna_raw_sum,
             "net_vanna":      self.aggregates.net_vanna,
+            "net_charm_raw_sum": self.aggregates.net_charm_raw_sum,
             "net_charm":      self.aggregates.net_charm,
             "call_wall":      self.aggregates.call_wall,
             "put_wall":       self.aggregates.put_wall,
             "flip_level":     self.aggregates.flip_level,
+            "flip_level_cumulative": self.aggregates.flip_level_cumulative,
+            "zero_gamma_level": self.aggregates.zero_gamma_level,
             "atm_iv":         self.aggregates.atm_iv,
             "total_call_gex": self.aggregates.total_call_gex,
             "total_put_gex":  self.aggregates.total_put_gex,

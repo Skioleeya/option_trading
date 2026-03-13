@@ -39,6 +39,7 @@ def normalize_vrp_baseline_hv_pct(raw_baseline_hv: Any) -> float:
     """Normalize VRP baseline HV to percentage points.
 
     If a decimal-like value slips in (<= 1.0), interpret it as fraction.
+    This keeps `0.15` and `15.0` semantically identical for Phase A.
     """
     baseline = _to_float(raw_baseline_hv)
     if baseline is None or baseline <= 0:
@@ -47,7 +48,10 @@ def normalize_vrp_baseline_hv_pct(raw_baseline_hv: Any) -> float:
 
 
 def compute_vrp(atm_iv: Any, baseline_hv: Any) -> float | None:
-    """Compute VRP = ATM_IV(%) - baseline_HV(%)."""
+    """Compute VRP = ATM_IV(%) - baseline_HV(%).
+
+    Return value is always in percentage points, not decimal fraction.
+    """
     atm_iv_pct = normalize_iv_percent(atm_iv)
     if atm_iv_pct is None:
         return None

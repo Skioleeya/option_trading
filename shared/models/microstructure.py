@@ -54,11 +54,11 @@ class JumpResult(BaseModel):
 class GexRegime(str, Enum):
     """GEX regime classification.
 
-    Thresholds (in Millions, from config.py):
-    - SUPER_PIN:   |GEX| >= 1000M (Frozen market)
-    - DAMPING:     200M <= |GEX| < 500M (positive GEX, mean reversion)
-    - NEUTRAL:     |GEX| < 200M
-    - ACCELERATION: net_gex < 0 (any negative, trend following)
+    Thresholds are expressed in Million USD (MMUSD) and sourced from config:
+    - SUPER_PIN:   net_gex >= 100000M (100B+, strongest positive pinning proxy)
+    - DAMPING:     20000M <= net_gex < 100000M (positive OI-based proxy damping)
+    - NEUTRAL:     |net_gex| < 20000M
+    - ACCELERATION: net_gex < 0 (negative OI-based proxy, trend-following risk)
     """
 
     SUPER_PIN = "SUPER_PIN"

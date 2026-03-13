@@ -59,7 +59,9 @@ class GreeksMatrix:
     charm: np.ndarray
     theta: np.ndarray
     # Derived exposure arrays
-    gex_per_contract: np.ndarray   # gamma × OI × multiplier × spot² / scale
+    # 1% spot-move hedging notional in MMUSD:
+    # gamma × OI × multiplier × spot² × 0.01 / scale
+    gex_per_contract: np.ndarray
     call_gex: np.ndarray           # gex for calls (0.0 for puts)
     put_gex: np.ndarray            # gex for puts  (0.0 for calls)
     iv_used: np.ndarray            # actual IV used in computation
@@ -139,8 +141,8 @@ def _compute_numpy(
                  - q * spots * eq_t * Nd1_put) / 365.0
     theta = np.where(is_call, theta_call, theta_put)
 
-    # GEX exposure per contract
-    gex_raw = gamma * ois * mults * spots ** 2 / _GEX_SCALE
+    # GEX exposure per contract: 1% spot-move hedging notional (MMUSD)
+    gex_raw = gamma * ois * mults * spots ** 2 * 0.01 / _GEX_SCALE
     call_gex = np.where(is_call, gex_raw, 0.0)
     put_gex = np.where(~is_call, gex_raw, 0.0)
 
@@ -250,7 +252,8 @@ def _compute_cupy(
     if random.random() < 0.1: 
         logger.info(f"[GPUGreeksKernel] Active Work Verified: Kernel Latency = {gpu_ms:.4f}ms (Batch Size: {len(g_is_call)})")
 
-    gex_raw = gamma * g_ois * g_mults * g_spots ** 2 / _GEX_SCALE
+    # GEX exposure per contract: 1% spot-move hedging notional (MMUSD)
+    gex_raw = gamma * g_ois * g_mults * g_spots ** 2 * 0.01 / _GEX_SCALE
     call_gex = cp.where(g_is_call, gex_raw, 0.0)
     put_gex  = cp.where(~g_is_call, gex_raw, 0.0)
 

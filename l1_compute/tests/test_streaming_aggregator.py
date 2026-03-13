@@ -18,7 +18,7 @@ import pytest
 sys.path.insert(0, "e:\\US.market\\Option_v3")
 
 from l1_compute.aggregation.streaming_aggregator import StreamingAggregator, AggregateGreeks
-from l1_compute.compute.gpu_greeks_kernel import _compute_numpy
+from l1_compute.compute.gpu_greeks_kernel import GreeksMatrix, _compute_numpy
 
 
 def _make_matrix(n: int, spot: float = 560.0, t: float = 0.002):
@@ -117,3 +117,79 @@ class TestStreamingAggregator:
             agg.update_contract("S0", 0.0, 0.0, 0.0, 0.0, float(strikes[0]), bool(is_call[0]))
 
         assert agg._dirty_walls is True
+
+    def test_flip_level_exact_zero_on_cumulative_path(self):
+        agg = StreamingAggregator()
+        flip = agg._find_flip_level([(100.0, -5.0), (101.0, 5.0), (102.0, 1.0)])
+        assert flip == pytest.approx(101.0)
+
+    def test_flip_level_interpolates_when_cumulative_crosses_between_strikes(self):
+        agg = StreamingAggregator()
+        flip = agg._find_flip_level([(100.0, -5.0), (101.0, 10.0)])
+        assert flip == pytest.approx(100.5)
+
+    def test_flip_level_returns_zero_when_no_cumulative_cross(self):
+        agg = StreamingAggregator()
+        flip = agg._find_flip_level([(100.0, 3.0), (101.0, 2.0), (102.0, 1.0)])
+        assert flip == 0.0
+
+    def test_walls_prefer_spot_side_with_global_fallback(self):
+        agg = StreamingAggregator()
+        n = 4
+        strikes = np.array([95.0, 100.0, 105.0, 110.0], dtype=np.float64)
+        is_call = np.array([True, False, True, False], dtype=np.bool_)
+        call_gex = np.array([200.0, 0.0, 100.0, 0.0], dtype=np.float64)
+        put_gex = np.array([0.0, 300.0, 0.0, 500.0], dtype=np.float64)
+        matrix = GreeksMatrix(
+            delta=np.zeros(n, dtype=np.float64),
+            gamma=np.zeros(n, dtype=np.float64),
+            vega=np.zeros(n, dtype=np.float64),
+            vanna=np.zeros(n, dtype=np.float64),
+            charm=np.zeros(n, dtype=np.float64),
+            theta=np.zeros(n, dtype=np.float64),
+            gex_per_contract=call_gex + put_gex,
+            call_gex=call_gex,
+            put_gex=put_gex,
+            iv_used=np.full(n, 0.2, dtype=np.float64),
+        )
+        agg.full_recompute(matrix, strikes, is_call, spot=102.0)
+        snap = agg.snapshot()
+        assert snap.call_wall == pytest.approx(105.0)  # prefer strike >= spot
+        assert snap.put_wall == pytest.approx(100.0)   # prefer strike <= spot
+
+    def test_zero_gamma_level_differs_from_cumulative_flip(self):
+        agg = StreamingAggregator()
+        spot = 100.0
+        strikes = np.array([90.0, 100.0, 110.0], dtype=np.float64)
+        is_call = np.array([False, False, True], dtype=np.bool_)
+        ivs = np.array([0.18, 0.20, 0.22], dtype=np.float64)
+        ois = np.array([8000.0, 3000.0, 6000.0], dtype=np.float64)
+        mults = np.array([100.0, 100.0, 100.0], dtype=np.float64)
+        t_years = 0.01
+        matrix = _compute_numpy(
+            np.full(strikes.size, spot, dtype=np.float64),
+            strikes,
+            ivs,
+            t_years,
+            is_call,
+            r=0.05,
+            q=0.0,
+            ois=ois,
+            mults=mults,
+        )
+        agg.full_recompute(
+            matrix,
+            strikes,
+            is_call,
+            spot=spot,
+            ivs=ivs,
+            ois=ois,
+            mults=mults,
+            t_years=t_years,
+            r=0.05,
+            q=0.0,
+        )
+        snap = agg.snapshot()
+        assert snap.flip_level_cumulative == pytest.approx(0.0)
+        assert snap.zero_gamma_level > 0.0
+        assert snap.zero_gamma_level != pytest.approx(snap.flip_level_cumulative)

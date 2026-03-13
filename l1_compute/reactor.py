@@ -304,7 +304,17 @@ class L1ComputeReactor:
         t_agg = time.monotonic()
         with self._inst.span_aggregation():
             self._aggregator.full_recompute(
-                matrix, strikes_arr, is_call_arr, symbols=symbols
+                matrix,
+                strikes_arr,
+                is_call_arr,
+                symbols=symbols,
+                spot=spot,
+                ivs=ivs_arr,
+                ois=ois_arr,
+                mults=mults_arr,
+                t_years=ttm_years,
+                r=self._r,
+                q=self._q,
             )
             agg = self._aggregator.snapshot()
         agg_ms = (time.monotonic() - t_agg) * 1000.0
@@ -370,13 +380,17 @@ class L1ComputeReactor:
         # ── Assemble EnrichedSnapshot ──────────────────────────────────────────
         out_agg = OutAggregateGreeks(
             net_gex=agg.net_gex,
+            net_vanna_raw_sum=agg.net_vanna_raw_sum,
             net_vanna=agg.net_vanna,
+            net_charm_raw_sum=agg.net_charm_raw_sum,
             net_charm=agg.net_charm,
             call_wall=agg.call_wall,
             call_wall_gex=agg.call_wall_gex,
             put_wall=agg.put_wall,
             put_wall_gex=agg.put_wall_gex,
             flip_level=agg.flip_level,
+            flip_level_cumulative=agg.flip_level_cumulative,
+            zero_gamma_level=agg.zero_gamma_level,
             atm_iv=atm_iv,
             total_call_gex=agg.total_call_gex,
             total_put_gex=agg.total_put_gex,
@@ -388,7 +402,7 @@ class L1ComputeReactor:
 
         total_ms = (time.monotonic() - t_start) * 1000.0
         logger.info(
-            "[L1ComputeReactor] compute n=%d tier=%s t=%.1fms gex=%.2f unit=MMUSD gex_formula=gamma*OI*mult*S^2/1e6",
+            "[L1ComputeReactor] compute n=%d tier=%s t=%.1fms gex=%.2f unit=MMUSD gex_formula=gamma*OI*mult*S^2*0.01/1e6",
             n_valid,
             decision.tier.value,
             total_ms,

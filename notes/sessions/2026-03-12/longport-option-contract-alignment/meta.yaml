@@ -1,0 +1,48 @@
+﻿session_id: "2026-03-12/longport-option-contract-alignment"
+title: "longport-option-contract-alignment"
+scope: "Implement L0-only LongPort option runtime contract alignment with additive raw+normalized fields"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-12 13:29:44 -04:00"
+updated_at_et: "2026-03-12 13:48:47 -04:00"
+parent_session: "2026-03-12/longport-option-field-dictionary"
+
+branch: "master"
+base_commit: "bc51cc7"
+head_commit: "bc51cc7"
+
+files_changed:
+  - "docs/SOP/L0_DATA_FEED.md"
+  - "l0_ingest/feeds/iv_baseline_sync.py"
+  - "l0_ingest/feeds/longport_option_contracts.py"
+  - "l0_ingest/feeds/quote_runtime.py"
+  - "l0_ingest/feeds/sanitization.py"
+  - "l0_ingest/feeds/tier2_poller.py"
+  - "l0_ingest/feeds/tier3_poller.py"
+  - "l0_ingest/l0_rust/src/lib.rs"
+  - "l0_ingest/tests/test_longport_option_contracts.py"
+  - "l0_ingest/tests/test_quote_runtime.py"
+  - "notes/context/handoff.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/project_state.md"
+  - "notes/sessions/2026-03-12/longport-option-contract-alignment/handoff.md"
+  - "notes/sessions/2026-03-12/longport-option-contract-alignment/open_tasks.md"
+  - "notes/sessions/2026-03-12/longport-option-contract-alignment/project_state.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId longport-option-contract-alignment -Title \"longport-option-contract-alignment\" -Scope \"Implement L0-only LongPort option runtime contract alignment with additive raw+normalized fields\" -Owner \"Codex\" -ParentSession \"2026-03-12/longport-option-field-dictionary\" -Timezone \"America/New_York\" -UpdatePointer"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/test_quote_runtime.py l0_ingest/tests/test_longport_option_contracts.py"
+  - "cargo test"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "l0_ingest/tests/test_quote_runtime.py"
+  - "l0_ingest/tests/test_longport_option_contracts.py"
+  - "l0_ingest/tests"
+  - "cargo test (l0_ingest/l0_rust)"
+tests_failed: []
+blockers: []
+notes:
+  - "Rust/Python option REST runtimes now share aligned additive contracts with raw+normalized IV/date aliases."
+  - "First strict validation failed because meta.yaml commands lacked validate_session evidence; fixed and reran to green."
+
+

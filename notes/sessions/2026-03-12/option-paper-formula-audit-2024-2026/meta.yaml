@@ -1,0 +1,54 @@
+﻿session_id: "2026-03-12/option-paper-formula-audit-2024-2026"
+title: "option-paper-formula-audit-2024-2026"
+scope: "Audit option formula consistency against 2024-2026 academic papers and produce docs reports"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-12 12:28:48 -04:00"
+updated_at_et: "2026-03-12 12:28:48 -04:00"
+parent_session: "2026-03-12/iv-metrics-doc"
+
+branch: "master"
+base_commit: "bc51cc7"
+head_commit: "bc51cc7"
+
+files_changed:
+  - "docs/OPTION_PAPER_FORMULA_AUDIT_2024_2026.md"
+  - "docs/OPTION_PAPER_FORMULA_SOURCEBOOK_2024_2026.md"
+  - "notes/sessions/2026-03-12/option-paper-formula-audit-2024-2026/project_state.md"
+  - "notes/sessions/2026-03-12/option-paper-formula-audit-2024-2026/open_tasks.md"
+  - "notes/sessions/2026-03-12/option-paper-formula-audit-2024-2026/handoff.md"
+  - "notes/sessions/2026-03-12/option-paper-formula-audit-2024-2026/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+commands:
+  - "git status --short --branch"
+  - "Get-Content -Raw notes/context/project_state.md"
+  - "Get-Content -Raw notes/context/open_tasks.md"
+  - "Get-Content -Raw notes/context/handoff.md"
+  - "Get-Content -Raw notes/sessions/2026-03-12/iv-metrics-doc/project_state.md"
+  - "Get-Content -Raw notes/sessions/2026-03-12/iv-metrics-doc/open_tasks.md"
+  - "Get-Content -Raw notes/sessions/2026-03-12/iv-metrics-doc/handoff.md"
+  - "Get-Content -Raw notes/sessions/2026-03-12/iv-metrics-doc/meta.yaml"
+  - "Get-Content -Raw docs/SOP/SYSTEM_OVERVIEW.md"
+  - "Get-Content -Raw docs/SOP/L0_DATA_FEED.md"
+  - "Get-Content -Raw docs/SOP/L1_LOCAL_COMPUTATION.md"
+  - "Get-Content -Raw docs/SOP/L2_DECISION_ANALYSIS.md"
+  - "Get-Content -Raw docs/SOP/L3_OUTPUT_ASSEMBLY.md"
+  - "Get-Content -Raw docs/SOP/L4_FRONTEND.md"
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId option-paper-formula-audit-2024-2026 -Title \"option-paper-formula-audit-2024-2026\" -Scope \"Audit option formula consistency against 2024-2026 academic papers and produce docs reports\" -Owner \"Codex\" -ParentSession \"2026-03-12/iv-metrics-doc\" -Timezone \"America/New_York\" -UpdatePointer"
+  - "rg -n \"delta|gamma|vega|vanna|charm|theta|gex_per_contract|call_gex|put_gex|net_gex|call_wall|put_wall|flip_level_cumulative|zero_gamma_level|net_vanna|net_charm|iv_velocity|mtf_consensus|vanna_flow_result|svol_corr|svol_state|net_gex_normalized|call_wall_distance|wall_migration_speed|iv_velocity_1m|svol_correlation_15m|skew_25d_normalized|skew_25d_valid|mtf_consensus_score|vol_risk_premium|iv_regime|gamma_flip|VRPVetoGuard|FLOW_D|FLOW_E|FLOW_G\" l1_compute l2_decision shared l3_assembly app"
+  - "web search using Google-style site queries for 2024-2026 option research papers"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict (first run failed: missing meta command evidence)"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict (rerun passed)"
+tests_passed:
+  - "Local implementation scan completed for all requested metrics"
+  - "Research audit docs written under docs/"
+  - "scripts/validate_session.ps1 -Strict passed"
+tests_failed: []
+blockers: []
+notes:
+  - "No runtime code was changed in this session."
+  - "Google result-page rendering was unavailable in this environment; equivalent site-query web search was used."
+
+

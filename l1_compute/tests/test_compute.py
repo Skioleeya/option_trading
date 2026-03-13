@@ -121,6 +121,22 @@ class TestGPUGreeksKernel:
         assert np.all(m.call_gex[~is_call] == 0)
         assert np.all(m.put_gex[is_call] == 0)
 
+    def test_gex_uses_one_percent_spot_move_notional(self):
+        """GEX per contract must include the 0.01 (1% spot move) factor."""
+        spot = np.array([560.0], dtype=np.float64)
+        strike = np.array([560.0], dtype=np.float64)
+        iv = np.array([0.22], dtype=np.float64)
+        is_call = np.array([True], dtype=np.bool_)
+        oi = np.array([1500.0], dtype=np.float64)
+        mult = np.array([100.0], dtype=np.float64)
+
+        m = _compute_numpy(
+            spot, strike, iv, 0.01, is_call,
+            r=0.05, q=0.0, ois=oi, mults=mult,
+        )
+        expected = float(m.gamma[0] * oi[0] * mult[0] * (spot[0] ** 2) * 0.01 / 1_000_000.0)
+        assert m.gex_per_contract[0] == pytest.approx(expected, rel=1e-10, abs=1e-12)
+
 
 # ── Tests: ComputeRouter ──────────────────────────────────────────────────────
 
@@ -202,8 +218,8 @@ class TestComputeRouter:
         )
 
         expected_call = float(np.sum(matrix.call_gex))
-        expected_put = -float(np.sum(matrix.put_gex))
-        expected_net = expected_call + expected_put
+        expected_put = float(np.sum(matrix.put_gex))
+        expected_net = expected_call - expected_put
 
         assert legacy["total_call_gex"] == pytest.approx(expected_call, rel=1e-9, abs=1e-12)
         assert legacy["total_put_gex"] == pytest.approx(expected_put, rel=1e-9, abs=1e-12)

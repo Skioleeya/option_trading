@@ -1,0 +1,53 @@
+﻿session_id: "2026-03-12/longport-llms-fields-doc"
+title: "longport-llms-fields-doc"
+scope: "Fetch LongPort llms.txt, extract useful fields, and save as markdown"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-12 12:54:18 -04:00"
+updated_at_et: "2026-03-12 12:54:18 -04:00"
+parent_session: "2026-03-12/option-paper-formula-audit-2024-2026"
+
+branch: "master"
+base_commit: "bc51cc7"
+head_commit: "bc51cc7"
+
+files_changed:
+  - "docs/LONGPORT_LLMS_EFFECTIVE_FIELDS.md"
+  - "notes/sessions/2026-03-12/longport-llms-fields-doc/project_state.md"
+  - "notes/sessions/2026-03-12/longport-llms-fields-doc/open_tasks.md"
+  - "notes/sessions/2026-03-12/longport-llms-fields-doc/handoff.md"
+  - "notes/sessions/2026-03-12/longport-llms-fields-doc/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+commands:
+  - "git status --short --branch"
+  - "Get-Content -Raw notes/context/project_state.md"
+  - "Get-Content -Raw notes/context/open_tasks.md"
+  - "Get-Content -Raw notes/context/handoff.md"
+  - "Get-Content -Raw notes/sessions/2026-03-12/option-paper-formula-audit-2024-2026/project_state.md"
+  - "Get-Content -Raw notes/sessions/2026-03-12/option-paper-formula-audit-2024-2026/open_tasks.md"
+  - "Get-Content -Raw notes/sessions/2026-03-12/option-paper-formula-audit-2024-2026/handoff.md"
+  - "Get-Content -Raw notes/sessions/2026-03-12/option-paper-formula-audit-2024-2026/meta.yaml"
+  - "Get-Content -Raw docs/SOP/SYSTEM_OVERVIEW.md"
+  - "Get-Content -Raw docs/SOP/L0_DATA_FEED.md"
+  - "Get-Content -Raw docs/SOP/L1_LOCAL_COMPUTATION.md"
+  - "Get-Content -Raw docs/SOP/L2_DECISION_ANALYSIS.md"
+  - "Get-Content -Raw docs/SOP/L3_OUTPUT_ASSEMBLY.md"
+  - "Get-Content -Raw docs/SOP/L4_FRONTEND.md"
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId longport-llms-fields-doc -Title \"longport-llms-fields-doc\" -Scope \"Fetch LongPort llms.txt, extract useful fields, and save as markdown\" -Owner \"Codex\" -ParentSession \"2026-03-12/option-paper-formula-audit-2024-2026\" -Timezone \"America/New_York\" -UpdatePointer"
+  - "rg --files docs | sort"
+  - "web open https://open.longportapp.com/llms.txt"
+  - "web open https://open.longportapp.com/docs/llm.md"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict (first run failed: missing meta command evidence)"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict (rerun passed)"
+tests_passed:
+  - "LongPort llms.txt fetched and summarized into docs/LONGPORT_LLMS_EFFECTIVE_FIELDS.md"
+  - "scripts/validate_session.ps1 -Strict passed"
+tests_failed: []
+blockers: []
+notes:
+  - "No runtime code was changed in this session."
+  - "llms.txt was treated as a navigation/summary source, not as a full API field contract."
+
+

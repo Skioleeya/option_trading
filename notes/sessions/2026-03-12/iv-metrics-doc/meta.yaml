@@ -1,0 +1,37 @@
+﻿session_id: "2026-03-12/iv-metrics-doc"
+title: "iv-metrics-doc"
+scope: "Document IV-dependent metrics across L1-L3 with source references"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-12 12:13:12 -04:00"
+updated_at_et: "2026-03-12 12:19:15 -04:00"
+parent_session: "2026-03-12/gex-oi-wording-sync"
+
+branch: "master"
+base_commit: "bc51cc7"
+head_commit: "bc51cc7"
+
+files_changed:
+  - "docs/IV_METRICS_MAP.md"
+  - "notes/sessions/2026-03-12/iv-metrics-doc/project_state.md"
+  - "notes/sessions/2026-03-12/iv-metrics-doc/open_tasks.md"
+  - "notes/sessions/2026-03-12/iv-metrics-doc/handoff.md"
+  - "notes/sessions/2026-03-12/iv-metrics-doc/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId iv-metrics-doc -Title \"iv-metrics-doc\" -Scope \"Document IV-dependent metrics across L1-L3 with source references\" -Owner \"Codex\" -ParentSession \"2026-03-12/gex-oi-wording-sync\" -Timezone \"America/New_York\""
+  - "rg -n \"atm_iv|computed_iv|implied_volatility|historical_volatility|iv_velocity|zero_gamma_level|net_vanna|net_charm|skew_25d|vol_risk_premium|vrp|iv_regime|mtf_consensus|svol_corr|svol_state|counterfactual_vol_impact_bps|dealer_squeeze_alert|wall_migration_speed|call_wall_distance\" l1_compute l2_decision l3_assembly shared"
+  - "Get-Content docs/IV_METRICS_MAP.md"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict (first run failed: missing meta command evidence)"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict (rerun passed)"
+tests_passed:
+  - "Targeted source scan completed for IV-dependent metrics across L1/L2/L3/shared"
+  - "scripts/validate_session.ps1 -Strict passed"
+tests_failed: []
+blockers: []
+notes:
+  - "This session adds a read-oriented IV metrics inventory document only; no runtime behavior changed."
+
+

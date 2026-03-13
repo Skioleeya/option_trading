@@ -1,0 +1,44 @@
+﻿session_id: "2026-03-12/formula-semantic-phase-d-impl"
+title: "formula-semantic-phase-d-impl"
+scope: "feature"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-12 14:58:53 -04:00"
+updated_at_et: "2026-03-12 15:04:09 -04:00"
+parent_session: "2026-03-12/formula-semantic-phase-b-impl"
+
+branch: "master"
+base_commit: "bc51cc7"
+head_commit: "bc51cc7"
+
+files_changed:
+  - "shared/services/realized_volatility.py"
+  - "shared/tests/test_realized_volatility.py"
+  - "l2_decision/feature_store/extractors.py"
+  - "l2_decision/tests/test_feature_store.py"
+  - "shared/services/research_feature_store.py"
+  - "l3_assembly/tests/test_research_feature_store.py"
+  - "docs/SOP/L2_DECISION_ANALYSIS.md"
+  - "docs/IV_METRICS_MAP.md"
+  - "openspec/changes/formula-semantic-phase-d-research-metric-upgrades/tasks.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-12/formula-semantic-phase-d-impl/project_state.md"
+  - "notes/sessions/2026-03-12/formula-semantic-phase-d-impl/open_tasks.md"
+  - "notes/sessions/2026-03-12/formula-semantic-phase-d-impl/handoff.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId formula-semantic-phase-d-impl -Title \"formula-semantic-phase-d-impl\" -Scope \"feature\" -Owner \"Codex\" -ParentSession \"2026-03-12/formula-semantic-phase-b-impl\" -Timezone \"America/New_York\" -UpdatePointer"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l2_decision/tests/test_feature_store.py shared/tests/test_realized_volatility.py l3_assembly/tests/test_research_feature_store.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "l2_decision/tests/test_feature_store.py"
+  - "shared/tests/test_realized_volatility.py"
+  - "l3_assembly/tests/test_research_feature_store.py"
+tests_failed: []
+blockers: []
+notes:
+  - "Phase D was implemented as a research-path extension only; live vol_risk_premium semantics remain unchanged."
+  - "L3 payload/tactical-triad consumers still use net_charm as a presentation contract, so alias retirement remains deferred."
+
+

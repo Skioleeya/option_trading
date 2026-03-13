@@ -1,7 +1,7 @@
 use crate::schema::InstitutionalMarketEvent;
 use crate::threat::ThreatEngine;
 use longport::{
-    quote::{CalcIndex, PushEventDetail, SubFlags},
+    quote::{CalcIndex, OptionDirection, OptionType, PushEventDetail, SubFlags},
     Config, QuoteContext,
 };
 use num_traits::ToPrimitive;
@@ -84,6 +84,44 @@ fn parse_iso_date(value: &str) -> PyResult<Date> {
     Date::parse(value, &format).map_err(|e| PyRuntimeError::new_err(format!("invalid date '{value}': {e}")))
 }
 
+fn format_iso_date(value: Date) -> String {
+    match parse_time_format("[year]-[month]-[day]") {
+        Ok(format) => value.format(&format).unwrap_or_else(|_| value.to_string()),
+        Err(_) => value.to_string(),
+    }
+}
+
+fn format_compact_date(value: Date) -> String {
+    match parse_time_format("[year][month][day]") {
+        Ok(format) => value.format(&format).unwrap_or_else(|_| format_iso_date(value)),
+        Err(_) => format_iso_date(value),
+    }
+}
+
+fn option_type_code(value: OptionType) -> Option<&'static str> {
+    match value {
+        OptionType::American => Some("A"),
+        OptionType::Europe => Some("U"),
+        OptionType::Unknown => None,
+    }
+}
+
+fn option_direction_code(value: OptionDirection) -> Option<&'static str> {
+    match value {
+        OptionDirection::Put => Some("P"),
+        OptionDirection::Call => Some("C"),
+        OptionDirection::Unknown => None,
+    }
+}
+
+fn decimal_to_f64<T: ToPrimitive>(value: T) -> f64 {
+    value.to_f64().unwrap_or_default()
+}
+
+fn option_string(value: Option<&str>) -> Option<String> {
+    value.map(str::to_owned)
+}
+
 #[derive(Serialize)]
 struct QuoteRow {
     symbol: String,
@@ -94,27 +132,74 @@ struct QuoteRow {
 }
 
 #[derive(Serialize)]
+struct OptionExtendRow {
+    implied_volatility: String,
+    open_interest: i64,
+    expiry_date: String,
+    strike_price: String,
+    contract_multiplier: String,
+    contract_type: Option<String>,
+    contract_size: String,
+    direction: Option<String>,
+    historical_volatility: String,
+    underlying_symbol: String,
+}
+
+#[derive(Serialize)]
 struct OptionQuoteRow {
     symbol: String,
     last_done: f64,
+    prev_close: f64,
+    open: f64,
+    high: f64,
+    low: f64,
+    timestamp: i64,
     volume: i64,
+    turnover: f64,
+    trade_status: i32,
+    option_extend: OptionExtendRow,
     open_interest: i64,
     implied_volatility: f64,
+    implied_volatility_raw: String,
+    expiry_date: String,
+    expiry_date_raw: String,
+    strike_price: f64,
+    strike_price_raw: String,
+    contract_multiplier: f64,
+    contract_type: Option<String>,
+    contract_size: f64,
+    direction: Option<String>,
+    historical_volatility: f64,
+    historical_volatility_raw: String,
+    underlying_symbol: String,
 }
 
 #[derive(Serialize)]
 struct OptionChainInfoRow {
     price: f64,
+    price_raw: String,
+    strike_price: f64,
     call_symbol: String,
     put_symbol: String,
+    standard: bool,
 }
 
 #[derive(Serialize)]
 struct CalcIndexRow {
     symbol: String,
+    last_done: Option<f64>,
+    change_val: Option<f64>,
+    change_rate: Option<f64>,
     volume: Option<i64>,
+    turnover: Option<f64>,
+    expiry_date: Option<String>,
+    expiry_date_raw: Option<String>,
+    strike_price: Option<f64>,
+    strike_price_raw: Option<String>,
+    premium: Option<f64>,
     open_interest: Option<i64>,
     implied_volatility: Option<f64>,
+    implied_volatility_raw: Option<String>,
     delta: Option<f64>,
     gamma: Option<f64>,
     theta: Option<f64>,
@@ -339,10 +424,41 @@ impl RustIngestGateway {
             .into_iter()
             .map(|q| OptionQuoteRow {
                 symbol: q.symbol,
-                last_done: q.last_done.to_f64().unwrap_or_default(),
+                last_done: decimal_to_f64(q.last_done),
+                prev_close: decimal_to_f64(q.prev_close),
+                open: decimal_to_f64(q.open),
+                high: decimal_to_f64(q.high),
+                low: decimal_to_f64(q.low),
+                timestamp: q.timestamp.unix_timestamp(),
                 volume: q.volume,
+                turnover: decimal_to_f64(q.turnover),
+                trade_status: q.trade_status as i32,
+                option_extend: OptionExtendRow {
+                    implied_volatility: q.implied_volatility.to_string(),
+                    open_interest: q.open_interest,
+                    expiry_date: format_compact_date(q.expiry_date),
+                    strike_price: q.strike_price.to_string(),
+                    contract_multiplier: q.contract_multiplier.to_string(),
+                    contract_type: option_string(option_type_code(q.contract_type)),
+                    contract_size: q.contract_size.to_string(),
+                    direction: option_string(option_direction_code(q.direction)),
+                    historical_volatility: q.historical_volatility.to_string(),
+                    underlying_symbol: q.underlying_symbol.clone(),
+                },
                 open_interest: q.open_interest,
-                implied_volatility: q.implied_volatility.to_f64().unwrap_or_default(),
+                implied_volatility: decimal_to_f64(q.implied_volatility),
+                implied_volatility_raw: q.implied_volatility.to_string(),
+                expiry_date: format_compact_date(q.expiry_date),
+                expiry_date_raw: format_compact_date(q.expiry_date),
+                strike_price: decimal_to_f64(q.strike_price),
+                strike_price_raw: q.strike_price.to_string(),
+                contract_multiplier: decimal_to_f64(q.contract_multiplier),
+                contract_type: option_string(option_type_code(q.contract_type)),
+                contract_size: decimal_to_f64(q.contract_size),
+                direction: option_string(option_direction_code(q.direction)),
+                historical_volatility: decimal_to_f64(q.historical_volatility),
+                historical_volatility_raw: q.historical_volatility.to_string(),
+                underlying_symbol: q.underlying_symbol,
             })
             .collect::<Vec<_>>();
         serde_json::to_string(&payload).map_err(|e| PyRuntimeError::new_err(format!("json encode failed: {e}")))
@@ -359,9 +475,12 @@ impl RustIngestGateway {
         let payload = rows
             .into_iter()
             .map(|v| OptionChainInfoRow {
-                price: v.price.to_f64().unwrap_or_default(),
+                price: decimal_to_f64(v.price),
+                price_raw: v.price.to_string(),
+                strike_price: decimal_to_f64(v.price),
                 call_symbol: v.call_symbol,
                 put_symbol: v.put_symbol,
+                standard: v.standard,
             })
             .collect::<Vec<_>>();
         serde_json::to_string(&payload).map_err(|e| PyRuntimeError::new_err(format!("json encode failed: {e}")))
@@ -385,9 +504,19 @@ impl RustIngestGateway {
             .into_iter()
             .map(|r| CalcIndexRow {
                 symbol: r.symbol,
+                last_done: r.last_done.and_then(|v| v.to_f64()),
+                change_val: r.change_value.and_then(|v| v.to_f64()),
+                change_rate: r.change_rate.and_then(|v| v.to_f64()),
                 volume: r.volume,
+                turnover: r.turnover.and_then(|v| v.to_f64()),
+                expiry_date: r.expiry_date.map(format_compact_date),
+                expiry_date_raw: r.expiry_date.map(format_compact_date),
+                strike_price: r.strike_price.and_then(|v| v.to_f64()),
+                strike_price_raw: r.strike_price.map(|v| v.to_string()),
+                premium: r.premium.and_then(|v| v.to_f64()),
                 open_interest: r.open_interest,
                 implied_volatility: r.implied_volatility.and_then(|v| v.to_f64()),
+                implied_volatility_raw: r.implied_volatility.map(|v| v.to_string()),
                 delta: r.delta.and_then(|v| v.to_f64()),
                 gamma: r.gamma.and_then(|v| v.to_f64()),
                 theta: r.theta.and_then(|v| v.to_f64()),

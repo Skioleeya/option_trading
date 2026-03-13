@@ -3,7 +3,7 @@
 Extracts the _enrich_chain_with_local_greeks() monster function from
 OptionChainBuilder and runs it as an independently schedulable async task.
 
-Key institutional improvements over the original:
+Key production improvements over the original:
   1. CPU-bound Numba/CuPy work moved off the asyncio event loop via
      `asyncio.to_thread()`, preventing WS tick drops during 200+ contract chains.
   2. Results written back through ChainStateStore.apply_greeks() rather than
@@ -210,6 +210,6 @@ class GreeksEngine:
         for symbol, greeks in results:
             self._store.apply_greeks(symbol, greeks)
 
-        # Include precise TTM for downstream L2/L3 institutional calculations
+        # Include precise TTM for downstream L2/L3 proxy-based calculations
         agg["ttm_seconds"] = t_years * (252 * 23400)  # Convert back to trading seconds
         return agg

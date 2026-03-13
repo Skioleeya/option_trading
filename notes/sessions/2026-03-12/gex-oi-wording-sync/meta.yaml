@@ -1,0 +1,41 @@
+﻿session_id: "2026-03-12/gex-oi-wording-sync"
+title: "gex-oi-wording-sync"
+scope: "Cross-repo wording sync for OI-based GEX semantics"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-12 11:58:31 -04:00"
+updated_at_et: "2026-03-12 12:03:49 -04:00"
+parent_session: "2026-03-12/gex-institutional-convention-impl"
+
+branch: "master"
+base_commit: "bc51cc7"
+head_commit: "bc51cc7"
+
+files_changed:
+  - "docs/SOP/L1_LOCAL_COMPUTATION.md"
+  - "docs/SOP/L2_DECISION_ANALYSIS.md"
+  - "l1_compute/analysis/greeks_engine.py"
+  - "l1_compute/analysis/bsm_fast.py"
+  - "l1_compute/analysis/bsm.py"
+  - "l1_compute/output/enriched_snapshot.py"
+  - "example.py"
+  - "notes/sessions/2026-03-12/gex-oi-wording-sync/project_state.md"
+  - "notes/sessions/2026-03-12/gex-oi-wording-sync/open_tasks.md"
+  - "notes/sessions/2026-03-12/gex-oi-wording-sync/handoff.md"
+  - "notes/sessions/2026-03-12/gex-oi-wording-sync/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId gex-oi-wording-sync -Title \"gex-oi-wording-sync\" -Scope \"Cross-repo wording sync for OI-based GEX semantics\" -Owner \"Codex\" -ParentSession \"2026-03-12/gex-institutional-convention-impl\" -Timezone \"America/New_York\""
+  - "rg -n -i \"institutional|dealer|customer|open_close|open-close|position effect|true inventory|inventory reconstruction|OI-based|zero-gamma|gamma flip|gex\" docs notes l1_compute l2_decision l3_assembly app example.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict (first run failed: missing meta evidence)"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict (rerun passed)"
+tests_passed:
+  - "Targeted wording scan passed for current SOP, code comments, and context files"
+  - "Targeted grep verification passed for OI-based proxy wording in live GEX files"
+  - "scripts/validate_session.ps1 -Strict passed"
+tests_failed: []
+blockers: []
+notes:
+  - "Current Longbridge-backed GEX/Wall/Flip semantics are documented as OI-based proxy metrics, not dealer inventory truth."
+  - "Archived sessions and archive docs were left unchanged to preserve historical records."
+
+

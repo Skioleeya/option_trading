@@ -11,6 +11,11 @@ from typing import Any, Iterable, Protocol
 from longport.openapi import CalcIndex, Config, SubType
 
 from l0_ingest.feeds.market_data_gateway import MarketDataGateway
+from l0_ingest.feeds.longport_option_contracts import (
+    build_calc_index_contract,
+    build_option_chain_strike_contract,
+    build_option_quote_contract,
+)
 from l0_ingest import l0_rust
 
 logger = logging.getLogger(__name__)
@@ -275,7 +280,7 @@ class RustQuoteRuntime:
             "rest_option_quote",
             lambda: self._gateway.rest_option_quote(symbols),
         )
-        return self._decode_rows(payload)
+        return [build_option_quote_contract(row) for row in self._decode_rows(payload)]
 
     async def option_chain_info_by_date(self, symbol: str, expiry: date) -> list[Any]:
         payload = await self._execute_with_failover(
@@ -285,7 +290,7 @@ class RustQuoteRuntime:
                 expiry.isoformat(),
             ),
         )
-        return self._decode_rows(payload)
+        return [build_option_chain_strike_contract(row) for row in self._decode_rows(payload)]
 
     async def calc_indexes(self, symbols: list[str], indexes: list[Any]) -> list[Any]:
         index_names = [self._index_name(v) for v in indexes]
@@ -293,7 +298,7 @@ class RustQuoteRuntime:
             "rest_calc_indexes",
             lambda: self._gateway.rest_calc_indexes(symbols, index_names),
         )
-        return self._decode_rows(payload)
+        return [build_calc_index_contract(row) for row in self._decode_rows(payload)]
 
     def diagnostics(self) -> dict[str, Any]:
         active_profile = self._active_endpoint_profile()
@@ -349,15 +354,18 @@ class PythonQuoteRuntime:
 
     async def option_quote(self, symbols: list[str]) -> list[Any]:
         ctx = self._ctx_or_raise()
-        return await asyncio.to_thread(ctx.option_quote, symbols)
+        rows = await asyncio.to_thread(ctx.option_quote, symbols)
+        return [build_option_quote_contract(row) for row in rows]
 
     async def option_chain_info_by_date(self, symbol: str, expiry: date) -> list[Any]:
         ctx = self._ctx_or_raise()
-        return await asyncio.to_thread(ctx.option_chain_info_by_date, symbol, expiry)
+        rows = await asyncio.to_thread(ctx.option_chain_info_by_date, symbol, expiry)
+        return [build_option_chain_strike_contract(row) for row in rows]
 
     async def calc_indexes(self, symbols: list[str], indexes: list[Any]) -> list[Any]:
         ctx = self._ctx_or_raise()
-        return await asyncio.to_thread(ctx.calc_indexes, symbols, indexes)
+        rows = await asyncio.to_thread(ctx.calc_indexes, symbols, indexes)
+        return [build_calc_index_contract(row) for row in rows]
 
     def diagnostics(self) -> dict[str, Any]:
         return self._gateway.diagnostics()

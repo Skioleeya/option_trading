@@ -225,6 +225,7 @@ class SanitizationPipeline:
         iv_ts: float | None = None
 
         # opt_ext = getattr(q, "option_extend", None) # This line is now redundant due to the earlier assignment
+        iv_normalized = _safe_float(getattr(q, "implied_volatility_decimal", None))
         iv_raw  = (
             getattr(opt_ext, "implied_volatility", None)
             if opt_ext
@@ -233,12 +234,18 @@ class SanitizationPipeline:
         if opt_ext and oi is None:
             oi = _safe_int(getattr(opt_ext, "open_interest", None))
 
-        f_iv = _safe_float(iv_raw)
-        if f_iv is not None and f_iv > 0:
-            # Longport opt_ext.implied_volatility is a percentage string (e.g. "20.51" = 20.51%)
-            # Divide by 100 to get the decimal fraction needed by BSM (0.2051)
-            iv    = f_iv / 100.0
+        if iv_normalized is not None and iv_normalized > 0:
+            iv = iv_normalized
             iv_ts = time.monotonic()
+        else:
+            f_iv = _safe_float(iv_raw)
+            if f_iv is not None and f_iv > 0:
+                # Fallback for legacy runtime rows that do not expose normalized aliases yet.
+                if f_iv > 1.0:
+                    iv = f_iv / 100.0
+                else:
+                    iv = f_iv
+                iv_ts = time.monotonic()
 
         # ── BUG-6 FIX: 无套利条件检查（穿透报价，arxiv 2025） ────────────────────────
         # bid > ask 违反无套利条件，会导致 mid-price 偏高，从而括大 ATM Decay 计算误差。

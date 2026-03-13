@@ -23,6 +23,8 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from l2_decision.feature_store.store import FeatureSpec
+from shared.services.realized_volatility import RollingRealizedVolatility
+from shared.system.tactical_triad_logic import compute_vrp
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +45,14 @@ def _get_agg(obj, key, default=None):
     # Legacy dict: aggregates are often flat at top-level
     if isinstance(obj, dict):
         return obj.get(key, default)
+    return default
+
+def _get_agg_first(obj, keys: tuple[str, ...], default=None):
+    """Get the first populated aggregate field across canonical/legacy aliases."""
+    for key in keys:
+        value = _get_agg(obj, key, None)
+        if value is not None:
+            return value
     return default
 
 def _get_ms(obj, key, default=None):
@@ -307,41 +317,48 @@ class _Skew25dMetricsExtractor:
         self._last_key: tuple[int, int | None, int] | None = None
         self._last_value: float = 0.0
         self._last_valid: float = 0.0
+        self._last_rr25: float = 0.0
 
     def extract_value(self, snapshot: Any) -> float:
-        value, _ = self._compute(snapshot)
+        value, _, _ = self._compute(snapshot)
         return value
 
+    def extract_rr25(self, snapshot: Any) -> float:
+        _, _, rr25 = self._compute(snapshot)
+        return rr25
+
     def extract_valid(self, snapshot: Any) -> float:
-        _, valid = self._compute(snapshot)
+        _, valid, _ = self._compute(snapshot)
         return valid
 
     def reset(self) -> None:
         self._last_key = None
         self._last_value = 0.0
         self._last_valid = 0.0
+        self._last_rr25 = 0.0
 
-    def _compute(self, snapshot: Any) -> tuple[float, float]:
+    def _compute(self, snapshot: Any) -> tuple[float, float, float]:
         key = self._build_cache_key(snapshot)
         if key is not None and key == self._last_key:
-            return self._last_value, self._last_valid
+            return self._last_value, self._last_valid, self._last_rr25
 
-        value, valid = self._compute_uncached(snapshot)
+        value, valid, rr25 = self._compute_uncached(snapshot)
         if key is not None:
             self._last_key = key
             self._last_value = value
             self._last_valid = valid
-        return value, valid
+            self._last_rr25 = rr25
+        return value, valid, rr25
 
-    def _compute_uncached(self, snapshot: Any) -> tuple[float, float]:
+    def _compute_uncached(self, snapshot: Any) -> tuple[float, float, float]:
         chain = _get_val(snapshot, "chain")
         atm_iv = self._normalize_iv(_get_agg(snapshot, "atm_iv"))
         if chain is None or atm_iv is None or atm_iv <= 0.0:
-            return 0.0, 0.0
+            return 0.0, 0.0, 0.0
 
         rows = self._coerce_chain_rows(chain)
         if not rows:
-            return 0.0, 0.0
+            return 0.0, 0.0, 0.0
 
         call_match: tuple[float, float] | None = None  # (distance, iv)
         put_match: tuple[float, float] | None = None
@@ -375,15 +392,18 @@ class _Skew25dMetricsExtractor:
                     put_match = (distance, iv)
 
         if call_match is None or put_match is None:
-            return 0.0, 0.0
+            return 0.0, 0.0, 0.0
         if call_match[0] > self._delta_tolerance or put_match[0] > self._delta_tolerance:
-            return 0.0, 0.0
+            return 0.0, 0.0, 0.0
 
         skew = (put_match[1] - call_match[1]) / atm_iv
+        rr25 = call_match[1] - put_match[1]
         if not math.isfinite(skew):
-            return 0.0, 0.0
+            return 0.0, 0.0, 0.0
+        if not math.isfinite(rr25):
+            rr25 = 0.0
 
-        return max(-1.0, min(1.0, skew)), 1.0
+        return max(-1.0, min(1.0, skew)), 1.0, rr25
 
     @staticmethod
     def _build_cache_key(snapshot: Any) -> tuple[int, int | None, int] | None:
@@ -518,6 +538,113 @@ class _Skew25dValidExtractor:
         self._metrics.reset()
 
 
+class _RR25CallMinusPutExtractor:
+    """Return canonical 25-delta risk reversal: call IV minus put IV."""
+
+    def __init__(self, metrics: _Skew25dMetricsExtractor) -> None:
+        self._metrics = metrics
+
+    def __call__(self, snapshot: Any) -> float:
+        return self._metrics.extract_rr25(snapshot)
+
+    def reset(self) -> None:
+        self._metrics.reset()
+
+
+class _RealizedVolatilityMetricsExtractor:
+    """Rolling annualized realized volatility with per-snapshot memoization."""
+
+    def __init__(self, window_seconds: float = 900.0, min_samples: int = 5) -> None:
+        self._rv = RollingRealizedVolatility(
+            window_seconds=window_seconds,
+            min_samples=min_samples,
+        )
+        self._last_key: tuple[int, int | None, float] | None = None
+        self._last_realized_vol: float = 0.0
+        self._last_vrp: float = 0.0
+
+    def extract_realized_vol(self, snapshot: Any) -> float:
+        realized_vol, _ = self._compute(snapshot)
+        return realized_vol
+
+    def extract_vrp(self, snapshot: Any) -> float:
+        _, vrp = self._compute(snapshot)
+        return vrp
+
+    def reset(self) -> None:
+        self._rv.reset()
+        self._last_key = None
+        self._last_realized_vol = 0.0
+        self._last_vrp = 0.0
+
+    def _compute(self, snapshot: Any) -> tuple[float, float]:
+        spot = _get_val(snapshot, "spot")
+        if spot is None:
+            return 0.0, 0.0
+        try:
+            spot_f = float(spot)
+        except (TypeError, ValueError):
+            return 0.0, 0.0
+        if not math.isfinite(spot_f) or spot_f <= 0.0:
+            return 0.0, 0.0
+
+        now_mono = time.monotonic()
+        key = self._build_cache_key(snapshot, spot_f)
+        if key is not None and key == self._last_key:
+            return self._last_realized_vol, self._last_vrp
+
+        rv = self._rv.update(spot=spot_f, timestamp_mono=now_mono)
+        realized_vol = rv.realized_vol
+        vrp = 0.0
+        if realized_vol > 0.0:
+            vrp = _safe(lambda: compute_vrp(_get_agg(snapshot, "atm_iv", 0.0), realized_vol * 100.0))
+
+        if key is not None:
+            self._last_key = key
+            self._last_realized_vol = realized_vol
+            self._last_vrp = vrp
+        return realized_vol, vrp
+
+    @staticmethod
+    def _build_cache_key(snapshot: Any, spot: float) -> tuple[int, int | None, float] | None:
+        version = getattr(snapshot, "version", None)
+        if version is None and isinstance(snapshot, dict):
+            version = snapshot.get("version")
+        if isinstance(version, float):
+            version = int(version) if math.isfinite(version) else None
+        elif isinstance(version, str):
+            version = int(version) if version.strip().isdigit() else None
+        elif not isinstance(version, int):
+            version = None
+        return (id(snapshot), version, spot)
+
+
+class _RealizedVolatilityExtractor:
+    """Feature wrapper over realized-vol metrics."""
+
+    def __init__(self, metrics: _RealizedVolatilityMetricsExtractor) -> None:
+        self._metrics = metrics
+
+    def __call__(self, snapshot: Any) -> float:
+        return self._metrics.extract_realized_vol(snapshot)
+
+    def reset(self) -> None:
+        self._metrics.reset()
+
+
+class _RealizedVrpExtractor:
+    """Research-path VRP feature wrapper over realized-vol metrics."""
+
+    def __init__(self, metrics: _RealizedVolatilityMetricsExtractor) -> None:
+        self._metrics = metrics
+
+    def __call__(self, snapshot: Any) -> float:
+        return self._metrics.extract_vrp(snapshot)
+
+    def reset(self) -> None:
+        self._metrics.reset()
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Factory: build_default_extractors
 # ─────────────────────────────────────────────────────────────────────────────
@@ -532,6 +659,10 @@ def build_default_extractors() -> list[FeatureSpec]:
     skew_25d_metrics = _Skew25dMetricsExtractor(delta_tolerance=0.10)
     skew_25d = _Skew25dExtractor(skew_25d_metrics)
     skew_25d_valid = _Skew25dValidExtractor(skew_25d_metrics)
+    rr25_call_minus_put = _RR25CallMinusPutExtractor(skew_25d_metrics)
+    realized_vol_metrics = _RealizedVolatilityMetricsExtractor(window_seconds=900.0, min_samples=5)
+    realized_vol = _RealizedVolatilityExtractor(realized_vol_metrics)
+    vrp_realized_based = _RealizedVrpExtractor(realized_vol_metrics)
     turnover_vel = _TurnoverVelocityExtractor()
     max_impact = _MaxImpactExtractor()
 
@@ -561,9 +692,10 @@ def build_default_extractors() -> list[FeatureSpec]:
         ),
         FeatureSpec(
             name="net_gex_normalized",
-            extractor=lambda s: _safe(lambda: max(-1.0, min(1.0, _get_agg(s, "net_gex", 0.0) / 1e9))),
+            # net_gex is MMUSD; normalize by $1B => divide by 1000 MMUSD.
+            extractor=lambda s: _safe(lambda: max(-1.0, min(1.0, _get_agg(s, "net_gex", 0.0) / 1000.0))),
             ttl_seconds=1.0,
-            description="Net GEX normalized by $1B reference",
+            description="OI-based net GEX proxy (MMUSD) normalized by $1B reference (/1000)",
             tags=["gex", "regime"],
         ),
         FeatureSpec(
@@ -587,7 +719,7 @@ def build_default_extractors() -> list[FeatureSpec]:
                 if _get_val(s, "spot", 0.0) > 0 else 0.0
             ),
             ttl_seconds=1.0,
-            description="(call_wall - spot) / spot — distance to resistance",
+            description="(call_wall proxy - spot) / spot — distance to trading-practice resistance proxy",
             tags=["gex", "structure"],
         ),
         FeatureSpec(
@@ -625,10 +757,20 @@ def build_default_extractors() -> list[FeatureSpec]:
             extractor=skew_25d,
             ttl_seconds=5.0,
             description=(
-                "True 25-delta skew: nearest-delta put(-0.25)/call(+0.25) "
-                "using IV priority computed_iv>iv>implied_volatility"
+                "Legacy normalized skew contract: (put_iv - call_iv) / atm_iv "
+                "using nearest ±25d legs and IV priority computed_iv>iv>implied_volatility"
             ),
             tags=["skew", "regime"],
+        ),
+        FeatureSpec(
+            name="rr25_call_minus_put",
+            extractor=rr25_call_minus_put,
+            ttl_seconds=5.0,
+            description=(
+                "Canonical RR25 contract: call_iv(+0.25 delta) - put_iv(-0.25 delta) "
+                "using IV priority computed_iv>iv>implied_volatility"
+            ),
+            tags=["skew", "regime", "canonical"],
         ),
         FeatureSpec(
             name="skew_25d_valid",
@@ -638,6 +780,13 @@ def build_default_extractors() -> list[FeatureSpec]:
             tags=["skew", "quality"],
         ),
         FeatureSpec(
+            name="realized_volatility_15m",
+            extractor=realized_vol,
+            ttl_seconds=1.0,
+            description="Rolling 15-minute annualized realized volatility (decimal) from spot log returns",
+            tags=["iv", "research", "realized-vol"],
+        ),
+        FeatureSpec(
             name="mtf_consensus_score",
             extractor=mtf_consensus,
             ttl_seconds=5.0,
@@ -645,27 +794,48 @@ def build_default_extractors() -> list[FeatureSpec]:
             tags=["iv", "mtf", "regime"],
         ),
         FeatureSpec(
-            name="net_charm",
-            extractor=lambda s: _get_agg(s, "net_charm", 0.0),
+            name="net_charm_raw_sum",
+            extractor=lambda s: _get_agg_first(s, ("net_charm_raw_sum", "net_charm"), 0.0),
             ttl_seconds=1.0,
-            description="Aggregated net charm exposure across the chain",
+            description="Canonical raw chain sum of charm sensitivities; not position-weighted exposure",
+            tags=["gex", "charm", "sensitivity", "canonical"],
+        ),
+        FeatureSpec(
+            name="net_charm",
+            extractor=lambda s: _get_agg_first(s, ("net_charm_raw_sum", "net_charm"), 0.0),
+            ttl_seconds=1.0,
+            description="Legacy alias of net_charm_raw_sum",
             tags=["gex", "charm", "sensitivity"],
         ),
         FeatureSpec(
-            name="net_vanna",
-            extractor=lambda s: _get_agg(s, "net_vanna", 0.0),
+            name="net_vanna_raw_sum",
+            extractor=lambda s: _get_agg_first(s, ("net_vanna_raw_sum", "net_vanna"), 0.0),
             ttl_seconds=1.0,
-            description="Aggregated net vanna exposure across the chain",
+            description="Canonical raw chain sum of vanna sensitivities; not position-weighted exposure",
+            tags=["gex", "vanna", "sensitivity", "canonical"],
+        ),
+        FeatureSpec(
+            name="net_vanna",
+            extractor=lambda s: _get_agg_first(s, ("net_vanna_raw_sum", "net_vanna"), 0.0),
+            ttl_seconds=1.0,
+            description="Legacy alias of net_vanna_raw_sum",
             tags=["gex", "vanna", "sensitivity"],
         ),
         FeatureSpec(
             name="vol_risk_premium",
             extractor=lambda s: _safe(
-                lambda: (_get_agg(s, "atm_iv", 0.0) * 100.0) - settings.vrp_baseline_hv
+                lambda: compute_vrp(_get_agg(s, "atm_iv", 0.0), settings.vrp_baseline_hv)
             ),
             ttl_seconds=1.0,
-            description="ATM IV (%) minus baseline HV (%)",
+            description="ATM IV minus baseline HV in percent points (decimal/percent baseline auto-normalized)",
             tags=["iv", "regime", "vrp"],
+        ),
+        FeatureSpec(
+            name="vrp_realized_based",
+            extractor=vrp_realized_based,
+            ttl_seconds=1.0,
+            description="Research-path VRP in percent points using rolling realized volatility baseline",
+            tags=["iv", "research", "vrp", "canonical"],
         ),
         FeatureSpec(
             name="peak_impact",

@@ -131,7 +131,7 @@ class PayloadAssemblerV2:
             atm_iv=snap_data.atm_iv,
             net_gex=snap_data.net_gex,
             gamma_walls={"call_wall": snap_data.call_wall, "put_wall": snap_data.put_wall},
-            gamma_flip_level=snap_data.flip_level,
+            gamma_flip_level=snap_data.zero_gamma_level if snap_data.zero_gamma_level else snap_data.flip_level_cumulative,
             fused_signal=fused_signal_dict,
             micro_structure=micro_structure_dict,
             rust_active=snap_data.rust_active,
@@ -156,6 +156,10 @@ class PayloadAssemblerV2:
             data.spot = float(snapshot.spot or 0.0)
             data.atm_iv = float(getattr(aggregates, "atm_iv", 0.0) or 0.0)
             data.flip_level = float(getattr(aggregates, "flip_level", 0.0) or 0.0)
+            data.flip_level_cumulative = float(
+                getattr(aggregates, "flip_level_cumulative", data.flip_level) or 0.0
+            )
+            data.zero_gamma_level = float(getattr(aggregates, "zero_gamma_level", 0.0) or 0.0)
             data.snapshot_time = getattr(snapshot, "computed_at", None)
             # Aggregated GEX per strike (legacy presenters expect list[dict])
             data.per_strike_gex = getattr(aggregates, "per_strike_gex", [])
@@ -184,6 +188,8 @@ class PayloadAssemblerV2:
             data.call_wall = float(snapshot.get("call_wall", 0.0) or 0.0)
             data.put_wall = float(snapshot.get("put_wall", 0.0) or 0.0)
             data.flip_level = float(snapshot.get("flip_level", 0.0) or 0.0)
+            data.flip_level_cumulative = float(snapshot.get("flip_level_cumulative", data.flip_level) or 0.0)
+            data.zero_gamma_level = float(snapshot.get("zero_gamma_level", 0.0) or 0.0)
             data.rust_active = bool(snapshot.get("rust_active", False))
             data.shm_stats = snapshot.get("shm_stats")
 
@@ -276,7 +282,7 @@ class PayloadAssemblerV2:
             depth_profile = DepthProfilePresenterV2.build(
                 per_strike_gex=snap.per_strike_gex,
                 spot=snap.spot if snap.spot else None,
-                flip_level=snap.flip_level if snap.flip_level else None,
+                flip_level=snap.flip_level_cumulative if snap.flip_level_cumulative else None,
             )
         except Exception as exc:
             logger.warning(f"[L3 Assembler] DepthProfile failed: {exc}")
@@ -433,7 +439,7 @@ class _SnapshotData:
     Not exposed as a public API.
     """
     __slots__ = (
-        "spot", "atm_iv", "flip_level", "snapshot_time", "gex_regime", "vanna_state",
+        "spot", "atm_iv", "flip_level", "flip_level_cumulative", "zero_gamma_level", "snapshot_time", "gex_regime", "vanna_state",
         "momentum", "vrp", "vrp_state", "net_charm", "svol_corr", "svol_state",
         "fused_signal_direction", "wall_dyn", "wall_migration_data",
         "per_strike_gex", "mtf_consensus", "skew_dynamics", "volume_map",
@@ -445,6 +451,8 @@ class _SnapshotData:
         self.spot: float = 0.0
         self.atm_iv: float = 0.0
         self.flip_level: float = 0.0
+        self.flip_level_cumulative: float = 0.0
+        self.zero_gamma_level: float = 0.0
         self.snapshot_time: Any = None
         self.gex_regime: str = "NEUTRAL"
         self.vanna_state: str = "NORMAL"

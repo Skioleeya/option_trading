@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import pytest
+
 from app.loops.compute_loop import (
     _SnapshotVersionIvDriftProbe,
+    _build_l1_extra_metadata,
+    _build_longport_option_diagnostics,
     _extract_runtime_spy_atm_iv,
     _extract_snapshot_version,
 )
@@ -136,3 +140,77 @@ def test_extract_runtime_spy_atm_iv_returns_none_when_missing() -> None:
 
     value = _extract_runtime_spy_atm_iv(_L1Snapshot(), _Decision())
     assert value is None
+
+
+def test_build_longport_option_diagnostics_summarizes_tier2_tier3_fields() -> None:
+    snapshot = {
+        "as_of_utc": "2026-03-12T15:10:00+00:00",
+        "tier2_chain": [
+            {"standard": True, "premium": 0.10},
+            {"standard": False, "premium": 0.20},
+        ],
+        "tier3_chain": [
+            {"standard": True, "premium": 0.30},
+        ],
+        "official_hv_diagnostics": {
+            "official_hv_decimal": 0.18,
+            "official_hv_sample_count": 12,
+            "official_hv_synced_at_utc": "2026-03-12T15:05:00+00:00",
+        },
+    }
+
+    diag = _build_longport_option_diagnostics(snapshot)
+
+    assert diag["tier2_contracts"] == 2
+    assert diag["tier3_contracts"] == 1
+    assert diag["tier2_standard_ratio"] == 0.5
+    assert diag["tier3_standard_ratio"] == 1.0
+    assert diag["tier2_avg_premium"] == pytest.approx(0.15)
+    assert diag["tier3_avg_premium"] == pytest.approx(0.30)
+    assert diag["official_hv_decimal"] == pytest.approx(0.18)
+    assert diag["official_hv_sample_count"] == 12
+    assert diag["official_hv_synced_at_utc"] == "2026-03-12T15:05:00+00:00"
+    assert diag["official_hv_age_sec"] == pytest.approx(300.0)
+
+
+def test_build_l1_extra_metadata_includes_longport_option_diagnostics() -> None:
+    snapshot = {
+        "rust_active": True,
+        "shm_stats": {"status": "OK"},
+        "volume_map": {"560": 10},
+        "as_of_utc": "2026-03-12T15:00:00+00:00",
+        "tier2_chain": [{"standard": True, "premium": 0.10}],
+        "tier3_chain": [{"standard": False, "premium": 0.20}],
+        "official_hv_diagnostics": {
+            "official_hv_decimal": 0.17,
+            "official_hv_sample_count": 8,
+            "official_hv_synced_at_utc": "2026-03-12T14:58:00+00:00",
+        },
+    }
+
+    metadata = _build_l1_extra_metadata(snapshot, {"tick_id": 1})
+
+    assert metadata["longport_option_diagnostics"]["tier2_contracts"] == 1
+    assert metadata["longport_option_diagnostics"]["tier3_contracts"] == 1
+    assert metadata["longport_option_diagnostics"]["tier2_standard_ratio"] == 1.0
+    assert metadata["longport_option_diagnostics"]["tier3_standard_ratio"] == 0.0
+    assert metadata["longport_option_diagnostics"]["official_hv_decimal"] == pytest.approx(0.17)
+    assert metadata["longport_option_diagnostics"]["official_hv_sample_count"] == 8
+    assert metadata["longport_option_diagnostics"]["official_hv_age_sec"] == pytest.approx(120.0)
+
+
+def test_build_longport_option_diagnostics_handles_missing_official_hv() -> None:
+    snapshot = {
+        "as_of_utc": "2026-03-12T15:00:00+00:00",
+        "tier2_chain": [],
+        "tier3_chain": [],
+        "official_hv_diagnostics": {},
+    }
+
+    diag = _build_longport_option_diagnostics(snapshot)
+
+    assert diag["official_hv_decimal"] is None
+    assert diag["official_hv_sample_count"] == 0
+    assert diag["official_hv_synced_at_utc"] is None
+    assert diag["official_hv_age_sec"] is None
+

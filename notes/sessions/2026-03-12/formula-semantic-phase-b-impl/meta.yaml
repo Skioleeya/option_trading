@@ -1,0 +1,52 @@
+﻿session_id: "2026-03-12/formula-semantic-phase-b-impl"
+title: "formula-semantic-phase-b-impl"
+scope: "feature"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-12 14:43:30 -04:00"
+updated_at_et: "2026-03-12 14:50:37 -04:00"
+parent_session: "2026-03-12/formula-semantic-phase-a-impl"
+
+branch: "master"
+base_commit: "bc51cc7"
+head_commit: "bc51cc7"
+
+files_changed:
+  - "l1_compute/aggregation/streaming_aggregator.py"
+  - "l1_compute/output/enriched_snapshot.py"
+  - "l1_compute/reactor.py"
+  - "l1_compute/tests/test_reactor.py"
+  - "l2_decision/feature_store/extractors.py"
+  - "l2_decision/agents/services/gamma_qual_analyzer.py"
+  - "l2_decision/agents/services/greeks_extractor.py"
+  - "l2_decision/tests/test_feature_store.py"
+  - "l2_decision/tests/test_gamma_qual_analyzer.py"
+  - "shared/services/research_feature_store.py"
+  - "l3_assembly/tests/test_research_feature_store.py"
+  - "docs/SOP/L1_LOCAL_COMPUTATION.md"
+  - "docs/SOP/L2_DECISION_ANALYSIS.md"
+  - "docs/IV_METRICS_MAP.md"
+  - "openspec/changes/formula-semantic-phase-b-skew-and-raw-exposure-contracts/tasks.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-12/formula-semantic-phase-b-impl/project_state.md"
+  - "notes/sessions/2026-03-12/formula-semantic-phase-b-impl/open_tasks.md"
+  - "notes/sessions/2026-03-12/formula-semantic-phase-b-impl/handoff.md"
+commands:
+  - "git status --short --branch"
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId formula-semantic-phase-b-impl -Title \"formula-semantic-phase-b-impl\" -Scope \"feature\" -Owner \"Codex\" -ParentSession \"2026-03-12/formula-semantic-phase-a-impl\" -Timezone \"America/New_York\" -UpdatePointer"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_reactor.py l2_decision/tests/test_feature_store.py l2_decision/tests/test_gamma_qual_analyzer.py l3_assembly/tests/test_research_feature_store.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "l1_compute/tests/test_reactor.py"
+  - "l2_decision/tests/test_feature_store.py"
+  - "l2_decision/tests/test_gamma_qual_analyzer.py"
+  - "l3_assembly/tests/test_research_feature_store.py"
+tests_failed: []
+blockers: []
+notes:
+  - "Phase B keeps legacy alias continuity for net_vanna/net_charm so L3/UI typed consumers remain stable."
+  - "Canonical rr25_call_minus_put and raw-sum fields are now documented in SOP and IV metrics inventory."
+
+
