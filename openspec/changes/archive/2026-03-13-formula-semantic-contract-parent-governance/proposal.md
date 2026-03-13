@@ -38,3 +38,10 @@
 - `scripts/validate_session.ps1 -Strict` 失败
 - `gamma/dealer/VRP/RR25` 语义出现新旧混写
 - 新字段进入主链但缺少测试与 SOP 同步
+
+## Reconciliation Status (2026-03-13)
+
+- This parent is archived as historical governance record.
+- A/B/D are completed historical implementations.
+- Old `Phase C` unfinished residual scope is handed off to follow-up `Phase E`.
+- The only active residual closure entry is `formula-semantic-followup-parent-governance`.

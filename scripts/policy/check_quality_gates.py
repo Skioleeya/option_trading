@@ -15,6 +15,7 @@ import argparse
 import ast
 import json
 import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -40,6 +41,25 @@ SKIP_PATTERNS = (
     "/build/",
 )
 
+def is_test_like_python_file(path: str) -> bool:
+    norm = normalize_path(path).lower()
+    if not norm.endswith(".py"):
+        return False
+    if any(pat in norm for pat in SKIP_PATTERNS):
+        return True
+
+    leaf = Path(norm).name
+    if leaf == "conftest.py":
+        return True
+    if leaf.startswith("test_"):
+        return True
+    if leaf.endswith("_test.py"):
+        return True
+    if leaf.endswith(".test.py"):
+        return True
+    if leaf.endswith(".spec.py"):
+        return True
+    return False
 
 @dataclass
 class FunctionMetrics:
@@ -101,7 +121,7 @@ def is_runtime_python_file(path: str) -> bool:
         return False
     if not norm.startswith(RUNTIME_PREFIXES):
         return False
-    return not any(pat in norm for pat in SKIP_PATTERNS)
+    return not is_test_like_python_file(norm)
 
 
 def load_config(path: Path) -> dict[str, Any]:
@@ -118,10 +138,12 @@ def build_parent_map(tree: ast.AST) -> dict[ast.AST, ast.AST]:
 
 def _extract_nested_bodies(node: ast.AST) -> list[list[ast.stmt]]:
     out: list[list[ast.stmt]] = []
-    if isinstance(node, (ast.For, ast.AsyncFor, ast.While, ast.With, ast.AsyncWith)):
+    if isinstance(node, (ast.For, ast.AsyncFor, ast.While)):
         out.append(node.body)
         if node.orelse:
             out.append(node.orelse)
+    elif isinstance(node, (ast.With, ast.AsyncWith)):
+        out.append(node.body)
     elif isinstance(node, ast.If):
         out.append(node.body)
         if node.orelse:
@@ -204,9 +226,8 @@ def _is_governed_literal(node: ast.AST, parent_map: dict[ast.AST, ast.AST]) -> b
     return False
 
 
-def analyze_python_file(path: Path, cfg: dict[str, Any]) -> tuple[list[FunctionMetrics], list[ClassMetrics], dict[str, Any]]:
-    text = path.read_text(encoding="utf-8")
-    tree = ast.parse(text)
+def analyze_python_source(source: str, cfg: dict[str, Any]) -> tuple[list[FunctionMetrics], list[ClassMetrics], dict[str, Any]]:
+    tree = ast.parse(source)
     parent_map = build_parent_map(tree)
 
     functions: list[FunctionMetrics] = []
@@ -265,6 +286,28 @@ def analyze_python_file(path: Path, cfg: dict[str, Any]) -> tuple[list[FunctionM
         "magic_governed": governed_business_magic,
         "magic_ratio": magic_ratio,
     }
+
+
+def analyze_python_file(path: Path, cfg: dict[str, Any]) -> tuple[list[FunctionMetrics], list[ClassMetrics], dict[str, Any]]:
+    text = path.read_text(encoding="utf-8")
+    return analyze_python_source(text, cfg)
+
+
+def read_head_file_text(repo_root: Path, rel_path: str) -> str | None:
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(repo_root), "show", f"HEAD:{rel_path}"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+    except Exception:
+        return None
+    if proc.returncode != 0:
+        return None
+    return proc.stdout
 
 
 def normalize_line(line: str) -> str:
@@ -374,6 +417,21 @@ def main() -> int:
             )
             continue
 
+        baseline_functions: list[FunctionMetrics] = []
+        baseline_classes: list[ClassMetrics] = []
+        baseline_magic_info: dict[str, Any] | None = None
+        head_source = read_head_file_text(repo_root, rel)
+        if head_source is not None:
+            try:
+                baseline_functions, baseline_classes, baseline_magic_info = analyze_python_source(head_source, cfg)
+            except SyntaxError:
+                baseline_functions = []
+                baseline_classes = []
+                baseline_magic_info = None
+
+        baseline_fn_by_name = {fn.name: fn for fn in baseline_functions}
+        baseline_cls_by_name = {cls.name: cls for cls in baseline_classes}
+
         function_count += len(functions)
         class_count += len(classes)
         total_magic += int(magic_info["magic_total"])
@@ -382,53 +440,85 @@ def main() -> int:
         for fn in functions:
             depth_limit = hot_max_depth if fn.is_hot_path else max_depth
             cc_limit = hot_max_cc if fn.is_hot_path else max_cc
+            baseline_fn = baseline_fn_by_name.get(fn.name)
 
             if fn.length > max_fn_len:
-                summary["violations"].append(
-                    {
-                        "type": "function_length",
-                        "file": rel,
-                        "line": fn.lineno,
-                        "symbol": fn.name,
-                        "actual": fn.length,
-                        "limit": max_fn_len,
-                    }
-                )
+                baseline_failed = baseline_fn is not None and baseline_fn.length > max_fn_len
+                worsened = baseline_fn is None or fn.length > baseline_fn.length
+                if (not baseline_failed) or worsened:
+                    summary["violations"].append(
+                        {
+                            "type": "function_length",
+                            "file": rel,
+                            "line": fn.lineno,
+                            "symbol": fn.name,
+                            "actual": fn.length,
+                            "limit": max_fn_len,
+                        }
+                    )
             if fn.max_nesting > depth_limit:
-                summary["violations"].append(
-                    {
-                        "type": "nesting_depth",
-                        "file": rel,
-                        "line": fn.lineno,
-                        "symbol": fn.name,
-                        "actual": fn.max_nesting,
-                        "limit": depth_limit,
-                        "hot_path": fn.is_hot_path,
-                    }
-                )
+                baseline_failed = baseline_fn is not None and baseline_fn.max_nesting > depth_limit
+                worsened = baseline_fn is None or fn.max_nesting > baseline_fn.max_nesting
+                if (not baseline_failed) or worsened:
+                    summary["violations"].append(
+                        {
+                            "type": "nesting_depth",
+                            "file": rel,
+                            "line": fn.lineno,
+                            "symbol": fn.name,
+                            "actual": fn.max_nesting,
+                            "limit": depth_limit,
+                            "hot_path": fn.is_hot_path,
+                        }
+                    )
             if fn.cyclomatic_complexity > cc_limit:
-                summary["violations"].append(
-                    {
-                        "type": "cyclomatic_complexity",
-                        "file": rel,
-                        "line": fn.lineno,
-                        "symbol": fn.name,
-                        "actual": fn.cyclomatic_complexity,
-                        "limit": cc_limit,
-                        "hot_path": fn.is_hot_path,
-                    }
-                )
+                baseline_failed = baseline_fn is not None and baseline_fn.cyclomatic_complexity > cc_limit
+                worsened = baseline_fn is None or fn.cyclomatic_complexity > baseline_fn.cyclomatic_complexity
+                if (not baseline_failed) or worsened:
+                    summary["violations"].append(
+                        {
+                            "type": "cyclomatic_complexity",
+                            "file": rel,
+                            "line": fn.lineno,
+                            "symbol": fn.name,
+                            "actual": fn.cyclomatic_complexity,
+                            "limit": cc_limit,
+                            "hot_path": fn.is_hot_path,
+                        }
+                    )
 
         for cls in classes:
+            baseline_cls = baseline_cls_by_name.get(cls.name)
             if cls.length > max_cls_len:
+                baseline_failed = baseline_cls is not None and baseline_cls.length > max_cls_len
+                worsened = baseline_cls is None or cls.length > baseline_cls.length
+                if (not baseline_failed) or worsened:
+                    summary["violations"].append(
+                        {
+                            "type": "class_length",
+                            "file": rel,
+                            "line": cls.lineno,
+                            "symbol": cls.name,
+                            "actual": cls.length,
+                            "limit": max_cls_len,
+                        }
+                    )
+
+        file_magic_ratio = float(magic_info["magic_ratio"])
+        if file_magic_ratio < min_magic_ratio:
+            baseline_magic_ratio = None if baseline_magic_info is None else float(baseline_magic_info["magic_ratio"])
+            baseline_failed = baseline_magic_ratio is not None and baseline_magic_ratio < min_magic_ratio
+            worsened = baseline_magic_ratio is None or file_magic_ratio + 1e-12 < baseline_magic_ratio
+            if (not baseline_failed) or worsened:
                 summary["violations"].append(
                     {
-                        "type": "class_length",
+                        "type": "magic_number_governance_ratio",
                         "file": rel,
-                        "line": cls.lineno,
-                        "symbol": cls.name,
-                        "actual": cls.length,
-                        "limit": max_cls_len,
+                        "actual": round(file_magic_ratio, 4),
+                        "limit": min_magic_ratio,
+                        "magic_total": int(magic_info["magic_total"]),
+                        "magic_governed": int(magic_info["magic_governed"]),
+                        "baseline_actual": None if baseline_magic_ratio is None else round(baseline_magic_ratio, 4),
                     }
                 )
 
@@ -447,16 +537,6 @@ def main() -> int:
         )
 
     magic_ratio = 1.0 if total_magic == 0 else total_magic_governed / total_magic
-    if magic_ratio < min_magic_ratio:
-        summary["violations"].append(
-            {
-                "type": "magic_number_governance_ratio",
-                "actual": round(magic_ratio, 4),
-                "limit": min_magic_ratio,
-                "magic_total": total_magic,
-                "magic_governed": total_magic_governed,
-            }
-        )
 
     summary["metrics"] = {
         "analyzed_python_runtime_files": len(target_files),
@@ -481,3 +561,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

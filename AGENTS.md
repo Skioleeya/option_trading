@@ -267,6 +267,7 @@ SLA:
 - OpenSpec chain gate: `scripts/policy/check_openspec_chain.py`
 - Pytest entry: `scripts/test/run_pytest.ps1`
 - CI required check: `.github/workflows/session-validation.yml` (`validate-session` job)
+- Remote repo rule (ACTIVE): `refs/heads/master` MUST go through Pull Request; direct push is blocked; required status check `validate-session` MUST pass before merge.
 
 If any scripted gate fails, delivery is not complete.
 

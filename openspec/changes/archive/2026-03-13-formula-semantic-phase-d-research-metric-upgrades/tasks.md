@@ -14,3 +14,9 @@
 - [x] 3.1 新增 [shared/tests/test_realized_volatility.py](e:/US.market/Option_v3/shared/tests/test_realized_volatility.py)。
 - [x] 3.2 更新 [test_feature_store.py](e:/US.market/Option_v3/l2_decision/tests/test_feature_store.py)。
 - [x] 3.3 通过 `powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l2_decision/tests/test_feature_store.py shared/tests/test_realized_volatility.py l3_assembly/tests/test_research_feature_store.py`。
+
+## Reconciliation Evidence
+
+- Evidence Session: `notes/sessions/2026-03-12/formula-semantic-phase-d-impl/`
+- Verification Evidence: `notes/sessions/2026-03-12/formula-semantic-phase-d-impl/handoff.md`
+- Strict Gate Evidence: `notes/sessions/2026-03-12/formula-semantic-phase-d-impl/meta.yaml`

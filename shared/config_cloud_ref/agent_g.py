@@ -64,12 +64,12 @@ class AgentGConfig(BaseConfig):
         ),
     )
     guard_vrp_entry_threshold: float = Field(
-        default=0.15,
-        description="GuardRail VRP veto entry threshold (hysteresis entry).",
+        default=15.0,
+        description="GuardRail VRP veto entry threshold in percent points (legacy 0.15 => 15.0).",
     )
     guard_vrp_exit_threshold: float = Field(
-        default=0.13,
-        description="GuardRail VRP veto exit threshold (hysteresis exit).",
+        default=13.0,
+        description="GuardRail VRP veto exit threshold in percent points (legacy 0.13 => 13.0).",
     )
     guard_vrp_min_hold_ticks: int = Field(
         default=3,
@@ -108,33 +108,33 @@ class AgentGConfig(BaseConfig):
 
     # ── GEX Regime Thresholds ─────────────────────────────────────────────────
     gex_neutral_threshold: float = Field(
-        default=200, description="|GEX| < 200M = NEUTRAL regime"
+        default=20000.0, description="|GEX| < 20000M (20B) = NEUTRAL regime"
     )
     gex_damping_threshold: float = Field(
-        default=200, description="200M <= |GEX| = DAMPING regime entry (positive GEX)"
+        default=20000.0, description="20000M <= |GEX| = DAMPING regime entry (positive GEX)"
     )
     gex_extreme_threshold: float = Field(
-        default=500, description="|GEX| upper bound for DAMPING regime (< 500M)"
+        default=50000.0, description="|GEX| upper bound for DAMPING regime (< 50000M / 50B)"
     )
     gex_super_pin_threshold: float = Field(
-        default=1000, description="|GEX| >= 1000M = SUPER_PIN regime"
+        default=100000.0, description="|GEX| >= 100000M (100B) = SUPER_PIN regime"
     )
     gex_strong_negative: float = Field(
-        default=-500, description="GEX <= -500M = strong NEGATIVE_ACCELERATION"
+        default=-50000.0, description="GEX <= -50000M (-50B) = strong NEGATIVE_ACCELERATION"
     )
     gex_strong_positive: float = Field(
-        default=500, description="GEX >= 500M = strong POSITIVE_DAMPING"
+        default=50000.0, description="GEX >= 50000M (50B) = strong POSITIVE_DAMPING"
     )
     gex_acceleration_threshold: float = Field(
         default=0, description="net_gex < 0 = ACCELERATION regime (any negative)"
     )
     gex_moderate_threshold: float = Field(
-        default=200, description="|GEX| >= 200M = MODERATE intensity (legacy)"
+        default=30000.0, description="|GEX| >= 30000M (30B) = MODERATE intensity (legacy)"
     )
     gex_accel_threshold: float = Field(
-        default=-500.0,
+        default=10000.0,
         description=(
-            "PP-4 FIX: net_gex < 此值时激活加速置信度增益 (原硬编码 -500M). "
+            "PP-4 FIX: net_gex > 此值时激活加速置信度增益 (当前口径 10000M / 10B). "
             "可通过环境变量 GEX_ACCEL_THRESHOLD 覆盖。"
         ),
     )

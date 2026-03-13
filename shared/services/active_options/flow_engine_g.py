@@ -1,19 +1,16 @@
-"""FlowEngine_G — OI Momentum Flow.
+"""FlowEngine_G - OI Momentum Flow.
 
-Method G distinguishes opening from closing positions using the change in
-Open Interest (ΔOI = OI_now − OI_prev), weighted by the Moneyness-normalised
-IV premium and scaled by Turnover.
+This engine is a public-data proxy heuristic. It uses public OI deltas, IV
+normalization, and turnover to approximate opening/closing pressure. It must
+not be described as a unified academic exact formula.
 
-    Opening + IV rising  → informed directional flow (strong signal)
-    Closing + IV falling → position unwind (exit signal)
+Composite formula:
+    FLOW_G_i = DeltaOI_i x (IV_i / ATM_IV) x Turnover_i x sign(Type)
 
-Mathematical basis:
-    FLOW_G_i = ΔOI_i × (IV_i / ATM_IV) × Turnover_i × sign(Type)
+Degradation: if Redis OI cache is unavailable, returns 0 (no signal).
 
-    Degradation: if Redis OI cache is unavailable, returns 0 (no signal).
-
-Reference:
-    Augustin, Brenner & Hu (2023) "Informed Trading in Options", Mgmt. Science.
+See `shared.contracts.metric_semantics:get_metric_semantics("FLOW_G")` for the
+canonical provenance record.
 """
 
 from __future__ import annotations
@@ -31,7 +28,7 @@ _TYPE_SIGN = {"CALL": 1.0, "PUT": -1.0}
 
 
 class FlowEngineG:
-    """OI Momentum Flow engine (Method G)."""
+    """OI momentum flow engine using a public-data proxy heuristic."""
 
     async def compute(
         self,
@@ -52,7 +49,7 @@ class FlowEngineG:
         results = []
 
         if not redis:
-            logger.warning("[FlowEngineG] Redis unavailable — returning zero flows (graceful degradation)")
+            logger.warning("[FlowEngineG] Redis unavailable - returning zero flows (graceful degradation)")
             return [
                 FlowComponentResult(
                     symbol=inp.symbol,
@@ -86,7 +83,7 @@ class FlowEngineG:
                     prev_oi = baseline.get(inp.symbol)
                     if prev_oi is not None:
                         delta_oi = inp.open_interest - prev_oi
-                        logger.debug(f"[FlowEngineG] Persistent fallback for {inp.symbol}: Δ{delta_oi}")
+                        logger.debug(f"[FlowEngineG] Persistent fallback for {inp.symbol}: Delta{delta_oi}")
 
                 # If we still have no history, treat as neutral
                 if delta_oi == 0:
@@ -100,7 +97,7 @@ class FlowEngineG:
                     ))
                     continue
 
-                # Moneyness-normalised IV premium
+                # Moneyness-normalized IV premium
                 iv_norm = (inp.implied_volatility / inp.atm_iv) if inp.atm_iv > 0 else 1.0
                 type_sign = _TYPE_SIGN.get(inp.option_type, 1.0)
 

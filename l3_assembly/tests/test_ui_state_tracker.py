@@ -10,7 +10,8 @@ from shared.config import settings
 
 def _make_snapshot(
     atm_iv: float = 0.15,
-    net_charm: float = 10.0,
+    net_charm_raw_sum: float = 10.0,
+    net_charm_legacy: float = 10.0,
     microstructure: dict[str, object] | None = None,
 ) -> SimpleNamespace:
     aggregates = SimpleNamespace(
@@ -18,7 +19,8 @@ def _make_snapshot(
         net_gex=1000.0,
         call_wall=600.0,
         put_wall=590.0,
-        net_charm=net_charm,
+        net_charm_raw_sum=net_charm_raw_sum,
+        net_charm=net_charm_legacy,
     )
     return SimpleNamespace(
         spot=595.0,
@@ -81,7 +83,7 @@ def test_tick_marks_skew_speculative_when_below_threshold(monkeypatch: pytest.Mo
 
     tracker = UIStateTracker()
     decision = SimpleNamespace(
-        feature_vector={"skew_25d_normalized": -0.30, "skew_25d_valid": 1.0},
+        feature_vector={"rr25_call_minus_put": -0.30, "skew_25d_valid": 1.0},
         signal_summary={},
     )
     out = tracker.tick(_make_snapshot(), decision=decision)
@@ -96,7 +98,7 @@ def test_tick_marks_skew_defensive_when_above_threshold(monkeypatch: pytest.Monk
 
     tracker = UIStateTracker()
     decision = SimpleNamespace(
-        feature_vector={"skew_25d_normalized": 0.22, "skew_25d_valid": 1.0},
+        feature_vector={"rr25_call_minus_put": 0.22, "skew_25d_valid": 1.0},
         signal_summary={},
     )
     out = tracker.tick(_make_snapshot(), decision=decision)
@@ -107,13 +109,22 @@ def test_tick_marks_skew_defensive_when_above_threshold(monkeypatch: pytest.Monk
 def test_tick_marks_skew_unavailable_when_valid_flag_is_zero() -> None:
     tracker = UIStateTracker()
     decision = SimpleNamespace(
-        feature_vector={"skew_25d_normalized": -0.33, "skew_25d_valid": 0.0},
+        feature_vector={"rr25_call_minus_put": -0.33, "skew_25d_valid": 0.0},
         signal_summary={},
     )
     out = tracker.tick(_make_snapshot(), decision=decision)
 
     assert out["skew_dynamics"]["skew_state"] == "UNAVAILABLE"
     assert out["skew_dynamics"]["skew_value"] is None
+
+
+def test_tick_uses_net_charm_raw_sum_as_live_source() -> None:
+    tracker = UIStateTracker()
+    out = tracker.tick(
+        _make_snapshot(net_charm_raw_sum=-3.5, net_charm_legacy=9.9),
+        decision=None,
+    )
+    assert out["net_charm"] == pytest.approx(-3.5)
 
 
 def test_tick_prefers_snapshot_mtf_consensus_when_available() -> None:

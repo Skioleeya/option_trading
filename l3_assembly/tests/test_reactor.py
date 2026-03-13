@@ -32,6 +32,7 @@ class _MockSnapshot:
             net_gex = 1.5e9
             atm_iv = 0.125
             net_charm = 5.2
+            net_charm_raw_sum = -7.7
         self.aggregates = _Aggs()
 
 
@@ -173,7 +174,7 @@ class TestL3AssemblyReactor:
     def test_cross_layer_contract_regression_ui_state_fields(self):
         reactor = L3AssemblyReactor()
         decision = _MockDecision(
-            feature_vector={"skew_25d_normalized": -0.33, "skew_25d_valid": 1.0},
+            feature_vector={"rr25_call_minus_put": -0.33, "skew_25d_valid": 1.0},
             signal_summary={
                 "gex_regime": "ACCELERATION",
                 "atm_iv": "0.12",
@@ -272,6 +273,7 @@ class TestL3AssemblyReactor:
                 assert field in tactical_triad[leg]
             for field in ("sub_intensity", "sub_label"):
                 assert field in tactical_triad[leg]
+        assert tactical_triad["charm"]["value"] == "-7.7"
 
         row0, row1 = ui_state["active_options"][:2]
         assert row0["option_type"] == "CALL"

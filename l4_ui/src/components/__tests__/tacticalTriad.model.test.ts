@@ -19,4 +19,19 @@ describe('tacticalTriadModel', () => {
         expect(triad.charm.value).toBe('—')
         expect(triad.svol.value).toBe('—')
     })
+
+    it('keeps charm contract stable for canonical raw-sum source values', () => {
+        const triad = normalizeTacticalTriadState({
+            charm: {
+                value: '-7.7',
+                state_label: 'DECAYING',
+                sub_label: 'ACCELERATING',
+                sub_intensity: 'HIGH',
+            },
+        })
+
+        expect(triad.charm.value).toBe('-7.7')
+        expect(triad.charm.state_label).toBe('DECAYING')
+        expect(triad.charm.sub_label).toBe('ACCELERATING')
+    })
 })

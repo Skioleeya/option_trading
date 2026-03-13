@@ -196,6 +196,7 @@ describe('Right panel typed contract integration', () => {
 
         expect(screen.getByText('FAIR')).toBeInTheDocument()
         expect(screen.getByText('SPECULATIVE')).toBeInTheDocument()
+        expect(screen.getByText('2.4')).toBeInTheDocument()
         expect(screen.getByText('SPLIT')).toBeInTheDocument()
         expect(screen.getByText('88.12')).toBeInTheDocument()
         expect(screen.getByText('$1.25M')).toBeInTheDocument()
@@ -323,3 +324,4 @@ describe('Right panel typed contract integration', () => {
         expect(screen.getAllByText('—').length).toBeGreaterThan(0)
     })
 })
+

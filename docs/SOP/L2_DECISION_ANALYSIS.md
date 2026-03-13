@@ -71,6 +71,7 @@ flowchart LR
 - `gamma_flip` 必须优先基于 `spot` 与 L1 `zero_gamma_level` 判定（`spot < zero_gamma_level` 视为负 gamma），仅在缺失 `zero_gamma_level` 时回退 `net_gex < 0`
 - `call_wall_distance` 仅描述 spot 到 `call_wall` 代理位的几何距离，不得被解释为真实 dealer ceiling
 - `vol_risk_premium` 必须输出 `% points`，并复用统一标准化逻辑处理 `0.15`/`15.0` 两类 baseline HV 输入
+- `guard_vrp_proxy_pct`（`VRPVetoGuard` 专用）必须与 `vol_risk_premium` 保持语义隔离：前者是 guard heuristic proxy，后者是 live feature proxy；两者都按 `% points` 输出/解释，且 guard 阈值必须兼容 `0.15/0.13` 到 `15.0/13.0` 的归一化
 - `skew_25d_normalized` 与 `rr25_call_minus_put` 必须共享同一组真 25Δ 选腿：
   - CALL 使用 `+0.25`，PUT 使用 `-0.25`
   - 仅当两侧 delta 距离均在容差 `±0.10` 内时才判定有效

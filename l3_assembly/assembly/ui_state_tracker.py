@@ -36,7 +36,9 @@ class UIStateTracker:
 
         spot = self._to_float(self._get(agg, "spot", self._get(snapshot, "spot", 0.0)), default=0.0)
         atm_iv = self._to_float(self._get(agg, "atm_iv", 0.0), default=0.0)
-        net_charm = self._to_float(self._get(agg, "net_charm", 0.0), default=0.0)
+        # Phase G live canonical cutover: tactical charm source must use
+        # canonical raw sum (`net_charm_raw_sum`), not legacy alias (`net_charm`).
+        net_charm = self._to_float(self._get(agg, "net_charm_raw_sum", 0.0), default=0.0)
 
         micro_state = self._extract_micro_state(snapshot)
 
@@ -253,7 +255,20 @@ class UIStateTracker:
                 "skew_state": "UNAVAILABLE",
             }
 
-        skew_val = cls._to_float(features.get("skew_25d_normalized", 0.0), default=0.0)
+        # Phase G live canonical cutover: use RR25 canonical source only.
+        raw_rr25 = features.get("rr25_call_minus_put")
+        try:
+            skew_val = float(raw_rr25)
+        except (TypeError, ValueError):
+            return {
+                "skew_value": None,
+                "skew_state": "UNAVAILABLE",
+            }
+        if not math.isfinite(skew_val):
+            return {
+                "skew_value": None,
+                "skew_state": "UNAVAILABLE",
+            }
 
         skew_state = "NEUTRAL"
         if skew_val < getattr(settings, "skew_speculative_max", -0.10):

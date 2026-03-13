@@ -1,12 +1,12 @@
 # Handoff (Index)
 
 ## Active Handoff
-- Path: notes/sessions/2026-03-13/anti-garbage-code-gate-hardening/handoff.md
-- Meta: notes/sessions/2026-03-13/anti-garbage-code-gate-hardening/meta.yaml
+- Path: notes/sessions/2026-03-13/formula-semantic-governance-archive-close-impl/handoff.md
+- Meta: notes/sessions/2026-03-13/formula-semantic-governance-archive-close-impl/meta.yaml
 
 ## Latest Outcome
-- Session: 2026-03-13/anti-garbage-code-gate-hardening
-- Summary: AGENTS + strict + CI governance hardening implemented; quality and openspec chain machine gates added and passing locally; GitHub required-check setup remains pending admin action.
+- Session: 2026-03-13/formula-semantic-governance-archive-close-impl
+- Summary: Final governance archive/close completed for formula-semantic family. Archived follow-up `E/F/G/H`, follow-up parent, old parent, and historical completed `A/B/D`; strict validation passed.
 
 ## Next Session Bootstrap
 1. Read this file.

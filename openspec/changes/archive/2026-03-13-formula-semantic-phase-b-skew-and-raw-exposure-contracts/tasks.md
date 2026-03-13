@@ -15,4 +15,10 @@
 - [x] 3.1 更新 [test_feature_store.py](e:/US.market/Option_v3/l2_decision/tests/test_feature_store.py)。
 - [x] 3.2 更新 [test_reactor.py](e:/US.market/Option_v3/l1_compute/tests/test_reactor.py)。
 - [x] 3.3 更新 [test_gamma_qual_analyzer.py](e:/US.market/Option_v3/l2_decision/tests/test_gamma_qual_analyzer.py)。
-- [ ] 3.4 通过 `powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_reactor.py l2_decision/tests/test_feature_store.py l2_decision/tests/test_gamma_qual_analyzer.py`。
+- [x] 3.4 通过 `powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_reactor.py l2_decision/tests/test_feature_store.py l2_decision/tests/test_gamma_qual_analyzer.py`（历史执行为包含 `l3_assembly/tests/test_research_feature_store.py` 的超集命令，结果通过）。
+
+## Reconciliation Evidence
+
+- Evidence Session: `notes/sessions/2026-03-12/formula-semantic-phase-b-impl/`
+- Verification Evidence: `notes/sessions/2026-03-12/formula-semantic-phase-b-impl/handoff.md`
+- Strict Gate Evidence: `notes/sessions/2026-03-12/formula-semantic-phase-b-impl/meta.yaml`

@@ -62,6 +62,39 @@ function Test-PathGlobMatch {
     return $normPath -like $normGlob
 }
 
+function Test-IsTestLikePath {
+    param([string]$Path)
+
+    $norm = Normalize-RepoPath -Path $Path
+    if ([string]::IsNullOrWhiteSpace($norm)) {
+        return $false
+    }
+
+    if ($norm -match '/tests?/' -or $norm -match '/__tests__/') {
+        return $true
+    }
+
+    $leaf = [System.IO.Path]::GetFileName($norm).ToLowerInvariant()
+    if ([string]::IsNullOrWhiteSpace($leaf)) {
+        return $false
+    }
+
+    if ($leaf -eq "conftest.py") {
+        return $true
+    }
+    if ($leaf -match '^test_.*\.(py|ts|tsx|js|jsx)$') {
+        return $true
+    }
+    if ($leaf -match '^.*_test\.(py|ts|tsx|js|jsx)$') {
+        return $true
+    }
+    if ($leaf -match '^.*\.(spec|test)\.(ts|tsx|js|jsx)$') {
+        return $true
+    }
+
+    return $false
+}
+
 function Get-ArchitectureBoundaryHits {
     param(
         [string]$RepoRoot,
@@ -483,8 +516,7 @@ $runtimeChanged = @(
     $changedFiles | Where-Object {
         $norm = Normalize-RepoPath -Path $_
         $norm -match $runtimeRegex -and
-        $norm -notmatch '/tests?/' -and
-        $norm -notmatch '/__tests__/' -and
+        -not (Test-IsTestLikePath -Path $norm) -and
         $norm -notmatch '^docs/' -and
         $norm -notmatch '^notes/'
     }
@@ -566,7 +598,23 @@ if ($Strict) {
         Fail "Strict gate: quality gate script missing ($qualityGateScript)"
     } else {
         $qualityOut = Join-Path $gateDiagDir "quality_gate.json"
-        & python $qualityGateScript --repo-root $repoRoot --config (Join-Path $repoRoot "scripts/policy/quality_thresholds.json") --meta-file $metaPath --output $qualityOut
+        $qualityMetaPath = Join-Path $gateDiagDir "quality_gate_meta.yaml"
+        $qualityTargets = @(
+            $changedFiles | Where-Object {
+                $norm = Normalize-RepoPath -Path $_
+                $norm -match $runtimeRegex -and
+                $norm -match '\.py$' -and
+                -not (Test-IsTestLikePath -Path $norm)
+            }
+        )
+        $qualityMetaLines = @("files_changed:")
+        foreach ($entry in ($qualityTargets | Select-Object -Unique)) {
+            $escaped = $entry.Replace('"', '\"')
+            $qualityMetaLines += ('  - "' + $escaped + '"')
+        }
+        Set-Content -Path $qualityMetaPath -Value ($qualityMetaLines -join "`n") -Encoding UTF8
+
+        & python $qualityGateScript --repo-root $repoRoot --config (Join-Path $repoRoot "scripts/policy/quality_thresholds.json") --meta-file $qualityMetaPath --output $qualityOut
         if ($LASTEXITCODE -eq 0) {
             Pass "Strict gate: quality thresholds passed (changed Python runtime files)"
         } else {

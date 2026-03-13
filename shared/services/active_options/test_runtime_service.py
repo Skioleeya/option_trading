@@ -1,5 +1,6 @@
 import pytest
 
+from shared.contracts.metric_semantics import get_metric_semantics
 from shared.models.flow_engine import FlowEngineOutput
 from shared.services.active_options.runtime_service import ActiveOptionsRuntimeService
 
@@ -133,3 +134,12 @@ async def test_update_background_pads_when_real_rows_below_limit():
     assert len(rows) == 5
     assert [r["slot_index"] for r in rows] == [1, 2, 3, 4, 5]
     assert sum(1 for r in rows if r["is_placeholder"]) == 2
+
+
+def test_flow_engines_have_registry_semantics_entries():
+    for metric_name in ("FLOW_D", "FLOW_E", "FLOW_G"):
+        semantics = get_metric_semantics(metric_name)
+        assert semantics.classification == "heuristic"
+        assert semantics.live_usage == "live"
+        assert "proxy" in semantics.canonical_description.lower() or "heuristic" in semantics.canonical_description.lower()
+

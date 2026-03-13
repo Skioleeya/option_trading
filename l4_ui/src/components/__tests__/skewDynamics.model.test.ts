@@ -35,4 +35,14 @@ describe('skewDynamicsModel', () => {
         expect(skew.state_label).toBe('UNAVAILABLE')
         expect(skew.badge).toBe('badge-neutral')
     })
+
+    it('keeps contract stable for canonical rr25-driven values', () => {
+        const skew = normalizeSkewDynamicsState({
+            value: '-0.07',
+            state_label: 'SPECULATIVE',
+        })
+        expect(skew.value).toBe('-0.07')
+        expect(skew.state_label).toBe('SPECULATIVE')
+        expect(skew.badge).toBe('badge-red')
+    })
 })
