@@ -1,0 +1,52 @@
+session_id: "2026-03-13/formula-semantic-followup-phase-h-openspec-reconciliation-impl"
+title: "formula-semantic-followup-phase-h-openspec-reconciliation-impl"
+scope: "feature"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-13 10:09:46 -04:00"
+updated_at_et: "2026-03-13 10:22:58 -04:00"
+parent_session: "2026-03-13/formula-semantic-followup-phase-g-live-canonical-contract-cutover-impl"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "f8a9b52"
+head_commit: "f8a9b52"
+
+files_changed:
+  - "openspec/changes/formula-semantic-phase-a-vrp-gex-stopgap/tasks.md"
+  - "openspec/changes/formula-semantic-phase-b-skew-and-raw-exposure-contracts/tasks.md"
+  - "openspec/changes/formula-semantic-phase-d-research-metric-upgrades/tasks.md"
+  - "openspec/changes/formula-semantic-phase-c-provenance-and-heuristic-labels/proposal.md"
+  - "openspec/changes/formula-semantic-phase-c-provenance-and-heuristic-labels/tasks.md"
+  - "openspec/changes/formula-semantic-contract-parent-governance/proposal.md"
+  - "openspec/changes/formula-semantic-contract-parent-governance/tasks.md"
+  - "openspec/changes/formula-semantic-followup-parent-governance/proposal.md"
+  - "openspec/changes/formula-semantic-followup-parent-governance/tasks.md"
+  - "openspec/changes/formula-semantic-followup-phase-h-openspec-reconciliation/tasks.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-13/formula-semantic-followup-phase-h-openspec-reconciliation-impl/project_state.md"
+  - "notes/sessions/2026-03-13/formula-semantic-followup-phase-h-openspec-reconciliation-impl/open_tasks.md"
+  - "notes/sessions/2026-03-13/formula-semantic-followup-phase-h-openspec-reconciliation-impl/handoff.md"
+  - "notes/sessions/2026-03-13/formula-semantic-followup-phase-h-openspec-reconciliation-impl/meta.yaml"
+
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId \"formula-semantic-followup-phase-h-openspec-reconciliation-impl\" -Title \"formula-semantic-followup-phase-h-openspec-reconciliation-impl\" -Scope \"feature\" -Owner \"Codex\" -ParentSession \"2026-03-13/formula-semantic-followup-phase-g-live-canonical-contract-cutover-impl\" -Timezone \"America/New_York\" -UpdatePointer"
+  - "openspec list"
+  - "openspec list"
+  - "openspec list"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+
+tests_passed:
+  - "openspec list final: phase-h/followup-parent/old-parent all complete as expected"
+  - "scripts/validate_session.ps1 -Strict run #2 passed"
+  - "scripts/validate_session.ps1 -Strict run #3 passed"
+  - "scripts/validate_session.ps1 -Strict run #4 passed"
+tests_failed:
+  - "scripts/validate_session.ps1 -Strict run #1 failed: commands evidence missing in meta"
+blockers: []
+notes:
+  - "Phase H reconciliation is governance/doc-only; no runtime code changed."
+  - "Old Phase C remains intentionally incomplete with explicit handoff markers to follow-up Phase E."

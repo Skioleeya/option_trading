@@ -1,4 +1,3 @@
-import { describe, expect, it } from 'vitest'
 import type { FusedSignal } from '../../types/dashboard'
 import {
     confidenceToPercent,
@@ -73,3 +72,4 @@ describe('decisionEngineModel', () => {
         expect(formatRegimeLabel('HighVol')).toBe('HIGH VOL')
     })
 })
+

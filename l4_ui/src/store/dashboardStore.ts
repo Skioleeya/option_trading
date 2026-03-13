@@ -84,7 +84,6 @@ export interface DashboardState {
 const STICKY_KEYS = [
     'wall_migration',
     'depth_profile',
-    'active_options',
     'tactical_triad',
     'skew_dynamics',
     'macro_volume_map',

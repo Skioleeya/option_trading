@@ -1,20 +1,18 @@
-"""FlowEngine_E — Vanna × ΔIV Flow.
+"""FlowEngine_E - Vanna x Delta-IV Flow.
 
-Method E identifies strikes where traders are paying an IV premium above
-historical volatility (IV > HV).  When combined with high Vanna exposure,
-this indicates aggressive directional positioning — the trader is paying up
-for premium, suggesting informed or urgent buying intent.
+This engine is a research heuristic / public-data proxy. It combines public
+IV premium and vanna sensitivity into a directional composite, but it must not
+be described as a unified academic exact formula.
 
-Mathematical basis:
-    FLOW_E_i = Volume_i × |Vanna_i| × (IV_i − HV_i) × sign(ΔIV × Type)
+Composite formula:
+    FLOW_E_i = Volume_i x |Vanna_i| x (IV_i - HV_i) x sign(DeltaIV x Type)
 
     sign:
-        If IV > HV (premium):  sign = +1 for CALL (bullish aggression)
-                                       −1 for PUT  (bearish aggression)
-        If IV ≤ HV (discount): sign is inverted (selling flow)
+        If IV > HV (premium):  sign = +1 for CALL, -1 for PUT
+        If IV <= HV (discount): sign is inverted
 
-Reference:
-    Huh, Kim & Neuberger (2024) "0DTE Microstructure", J. Financial Economics.
+See `shared.contracts.metric_semantics:get_metric_semantics("FLOW_E")` for the
+canonical provenance record.
 """
 
 from __future__ import annotations
@@ -29,7 +27,7 @@ _TYPE_SIGN = {"CALL": 1.0, "PUT": -1.0}
 
 
 class FlowEngineE:
-    """Vanna × ΔIV Flow engine (Method E)."""
+    """Vanna x Delta-IV flow engine using a research heuristic."""
 
     def compute(
         self,
@@ -37,7 +35,7 @@ class FlowEngineE:
     ) -> list[FlowComponentResult]:
         """Compute Vanna-weighted IV premium flow for each strike.
 
-        Returns zero-valued (but valid) results when IV ≈ HV to avoid
+        Returns zero-valued (but valid) results when IV ~= HV to avoid
         injecting noise into the composite FLOW_DEG score.
         """
         results = []

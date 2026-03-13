@@ -32,3 +32,9 @@
 ## Parent
 
 - `formula-semantic-contract-parent-governance`
+
+## Reconciliation Status (2026-03-13)
+
+- This proposal is retained as historical record.
+- Unfinished residual scope is handed off to: `formula-semantic-followup-phase-e-provenance-and-proxy-registry`.
+- Active residual closure path is the follow-up family under `formula-semantic-followup-parent-governance`.

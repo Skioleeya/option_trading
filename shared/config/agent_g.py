@@ -26,15 +26,16 @@ class AgentGConfig(BaseConfig):
     # - `vrp_baseline_hv` accepts either decimal fraction (0.15) or percent (15.0)
     #   and is normalized to percent points by `compute_vrp`.
     # - `vrp_*_threshold` values below are already percent-point thresholds.
-    # - `guard_vrp_*_threshold` remain decimal-fraction guard inputs in Phase A.
+    # - `guard_vrp_*_threshold` are stored in percent points; legacy decimal
+    #   inputs like `0.15` are still normalized to `15.0` for compatibility.
     vrp_baseline_hv: float = Field(default=0.15)
     vrp_trap_threshold: float = Field(default=10.0)
     vrp_expensive_threshold: float = Field(default=5.0)
     vrp_cheap_threshold: float = Field(default=-5.0)
     vrp_veto_threshold: float = Field(default=-2.0)
     vrp_bargain_boost: float = Field(default=1.2)
-    guard_vrp_entry_threshold: float = Field(default=0.15)
-    guard_vrp_exit_threshold: float = Field(default=0.13)
+    guard_vrp_entry_threshold: float = Field(default=15.0)
+    guard_vrp_exit_threshold: float = Field(default=13.0)
     guard_vrp_min_hold_ticks: int = Field(default=3)
     guard_vrp_exit_confirm_ticks: int = Field(default=2)
     guard_drawdown_limit_usd: float = Field(default=-500.0)

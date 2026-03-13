@@ -46,6 +46,7 @@ flowchart LR
 - `microstructure.wall_migration.wall_context` 应与 `microstructure.wall_context` 同源
 - `AggregateGreeks` 中的 `net_gex/call_wall/put_wall/flip_level_cumulative/zero_gamma_level` 一律视为 `OI-based structural proxy`，不得在合同注释或展示文案中升级为 dealer inventory truth
 - `AggregateGreeks.net_vanna_raw_sum` / `net_charm_raw_sum` 是全链 raw Greek sum，明确不是 position-weighted / inventory exposure；`net_vanna` / `net_charm` 仅作为一阶段兼容 alias 保留
+- 公式语义 source-of-truth 必须指向 `shared/contracts/metric_semantics.py`；新增/变更文案不得绕开该 registry 自行定义 provenance
 - GEX 统一口径（主链路与 legacy 一致，当前为基于 `open_interest` 的代理语义而非 dealer inventory 真值）：
   - `gex_per_contract = gamma * open_interest * contract_multiplier * spot^2 * 0.01 / 1_000_000`
   - `total_call_gex` 与 `total_put_gex` 必须是非负幅度值（单位：`Million USD`）

@@ -1,22 +1,49 @@
 import { THEME } from '../../lib/theme'
 
+const BADGE = {
+    RED: 'badge-red',
+    GREEN: 'badge-green',
+    AMBER: 'badge-amber',
+    NEUTRAL: 'badge-neutral',
+    HOLLOW_GREEN: 'badge-hollow-green',
+    RED_DIM: 'badge-red-dim',
+} as const
+
+const DIRECTION_UP_KEYWORDS = ['CALL', 'BULL', 'UP', 'LONG', '↑'] as const
+const DIRECTION_DOWN_KEYWORDS = ['PUT', 'BEAR', 'DOWN', 'SHORT', '↓'] as const
+
+const STATE_DECAY = 'DECAY'
+const STATE_REINFORCE = 'REINFORCE'
+
 const LEGACY_BADGE_ALIASES: Record<string, string> = {
-    positive: 'badge-red',
-    negative: 'badge-green',
-    bullish: 'badge-red',
-    bearish: 'badge-green',
-    neutral: 'badge-neutral',
-    warning: 'badge-amber',
-    danger: 'badge-red',
-    'badge-positive': 'badge-red',
-    'badge-negative': 'badge-green',
-    'badge-bullish': 'badge-red',
-    'badge-bearish': 'badge-green',
-    'badge-warning': 'badge-amber',
-    'badge-danger': 'badge-red',
-    'badge-super-pin': 'badge-amber',
-    'badge-damping': 'badge-hollow-green',
-    'badge-acceleration': 'badge-red-dim',
+    positive: BADGE.RED,
+    negative: BADGE.GREEN,
+    bullish: BADGE.RED,
+    bearish: BADGE.GREEN,
+    neutral: BADGE.NEUTRAL,
+    warning: BADGE.AMBER,
+    danger: BADGE.RED,
+    'badge-positive': BADGE.RED,
+    'badge-negative': BADGE.GREEN,
+    'badge-bullish': BADGE.RED,
+    'badge-bearish': BADGE.GREEN,
+    'badge-warning': BADGE.AMBER,
+    'badge-danger': BADGE.RED,
+    'badge-super-pin': BADGE.AMBER,
+    'badge-damping': BADGE.HOLLOW_GREEN,
+    'badge-acceleration': BADGE.RED_DIM,
+}
+
+const WALL_DYN_NOISE_STATES = ['SIEGE', 'PINCH', 'STABLE', 'UNAVAILABLE']
+const WALL_DYN_RISK_STATES = ['COLLAPSE', 'RETREAT', 'BREACH']
+
+function normalizeStateToken(raw: unknown): string {
+    const text = String(raw ?? '').trim().toUpperCase()
+    return text ? text.replace(/\s+/g, ' ') : ''
+}
+
+function hasAnyKeyword(text: string, keywords: readonly string[]): boolean {
+    return keywords.some((keyword) => text.includes(keyword))
 }
 
 export function normalizeBadgeToken(raw: string | null | undefined, label?: string | null): string {
@@ -25,13 +52,43 @@ export function normalizeBadgeToken(raw: string | null | undefined, label?: stri
     if (mapped) return mapped
 
     const normalizedLabel = String(label ?? '').toUpperCase()
-    if (normalizedLabel.includes('BULL') || normalizedLabel.includes('UP') || normalizedLabel.includes('LONG')) {
-        return 'badge-red'
+    if (hasAnyKeyword(normalizedLabel, DIRECTION_UP_KEYWORDS)) {
+        return BADGE.RED
     }
-    if (normalizedLabel.includes('BEAR') || normalizedLabel.includes('DOWN') || normalizedLabel.includes('SHORT')) {
-        return 'badge-green'
+    if (hasAnyKeyword(normalizedLabel, DIRECTION_DOWN_KEYWORDS)) {
+        return BADGE.GREEN
     }
-    return 'badge-neutral'
+    return BADGE.NEUTRAL
+}
+
+export function normalizeWallDynBadgeToken(raw: string | null | undefined, label?: string | null): string {
+    const normalizedLabel = normalizeStateToken(label)
+
+    // Hard-cut governance: wall_dyn no longer inherits backend badge token.
+    // Only whitelist state semantics can drive the color.
+    if (hasAnyKeyword(normalizedLabel, WALL_DYN_RISK_STATES)) {
+        return BADGE.AMBER
+    }
+    if (normalizedLabel.includes(STATE_DECAY)) {
+        return BADGE.NEUTRAL
+    }
+    if (WALL_DYN_NOISE_STATES.some((state) => normalizedLabel.includes(state))) {
+        return BADGE.NEUTRAL
+    }
+    if (normalizedLabel.includes(STATE_REINFORCE)) {
+        if (hasAnyKeyword(normalizedLabel, DIRECTION_UP_KEYWORDS)) {
+            return BADGE.RED
+        }
+        if (hasAnyKeyword(normalizedLabel, DIRECTION_DOWN_KEYWORDS)) {
+            return BADGE.GREEN
+        }
+        return BADGE.NEUTRAL
+    }
+
+    // Unknown or future labels must stay neutral until explicitly mapped.
+    // `raw` is intentionally ignored to prevent reverse color semantics drift.
+    void raw
+    return BADGE.NEUTRAL
 }
 
 export const MICRO_STATS_THEME = {
@@ -44,7 +101,7 @@ export const MICRO_STATS_THEME = {
     edgeHover: THEME.defense.microStats.edgeHover,
     icons: {
         netGex: THEME.market.up,
-        wallDyn: THEME.market.down,
+        wallDyn: THEME.defense.microStats.iconWallDyn,
         momentum: THEME.defense.microStats.iconMomentum,
         vanna: THEME.defense.microStats.iconVanna,
     },

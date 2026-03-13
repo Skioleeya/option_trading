@@ -476,6 +476,36 @@ class TestGuardRailEngine:
         fused.feature_vector.features["atm_iv"] = 0.140
         assert guard.check(fused, {})[0] is False
 
+    def test_vrp_veto_legacy_decimal_thresholds_equal_percent_point_thresholds(self):
+        fused_legacy = _make_fused()
+        fused_legacy.feature_vector.features["atm_iv"] = 0.164
+        fused_legacy.feature_vector.features["vol_accel_ratio"] = 0.0
+
+        fused_pct = _make_fused()
+        fused_pct.feature_vector.features["atm_iv"] = 0.164
+        fused_pct.feature_vector.features["vol_accel_ratio"] = 0.0
+
+        legacy_guard = VRPVetoGuard(
+            entry_threshold=0.15,
+            exit_threshold=0.13,
+            min_hold_ticks=3,
+            exit_confirm_ticks=2,
+        )
+        pct_guard = VRPVetoGuard(
+            entry_threshold=15.0,
+            exit_threshold=13.0,
+            min_hold_ticks=3,
+            exit_confirm_ticks=2,
+        )
+
+        legacy_triggered, _, legacy_multiplier = legacy_guard.check(fused_legacy, {})
+        pct_triggered, _, pct_multiplier = pct_guard.check(fused_pct, {})
+
+        assert legacy_triggered is True
+        assert pct_triggered is True
+        assert legacy_multiplier == pytest.approx(0.6)
+        assert pct_multiplier == pytest.approx(0.6)
+
     def test_phase_a_vrp_feature_contract_is_percent_points(self):
         assert compute_vrp(0.18, 0.15) == pytest.approx(3.0)
         assert compute_vrp(18.0, 15.0) == pytest.approx(3.0)

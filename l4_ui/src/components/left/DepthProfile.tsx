@@ -16,6 +16,7 @@ import {
     resolveNearestStrike,
     type DepthProfileNavEvent,
 } from './depthProfileNav'
+import { DEPTH_PROFILE_THEME } from './depthProfileTheme'
 
 interface PropTableRow {
     strike: number; put_pct: number; call_pct: number
@@ -68,28 +69,28 @@ const DepthProfileRow: React.FC<{
                 {/* PUT WING */}
                 <div className="flex-1 h-full flex justify-end items-center relative">
                     {hasPut && (
-                        <div className={`h-[12px] relative transition-all duration-300 ease-out flex items-center justify-end ${row.is_dominant_put ? 'bg-gradient-to-l from-[#059669] to-[#10b981] border-l border-[#34d399] shadow-[-2px_0_6px_rgba(16,185,129,0.3)]' : 'bg-gradient-to-l from-[#064e3b] to-[#059669]/90 border-l border-[#10b981]/50'}`}
+                        <div className={`h-[12px] relative transition-all duration-300 ease-out flex items-center justify-end ${row.is_dominant_put ? DEPTH_PROFILE_THEME.putDominantBarClass : DEPTH_PROFILE_THEME.putNormalBarClass}`}
                             style={{ width: `${maxPutPct > 0 ? Math.max((row.put_pct / maxPutPct) * 95, 1) : 1}%`, borderTopLeftRadius: '2px', borderBottomLeftRadius: '2px' }}>
-                            {isMaxPut && <div className="absolute right-0 top-1/2 -translate-y-1/2 bg-[#022c22]/90 border-l border-[#10b981]/40 text-[#34d399] text-[9px] font-black px-[4px] py-[1px] rounded-[1px] leading-none z-10">P</div>}
+                            {isMaxPut && <div className={`absolute right-0 top-1/2 -translate-y-1/2 ${DEPTH_PROFILE_THEME.putMaxTagClass} text-[9px] font-black px-[4px] py-[1px] rounded-[1px] leading-none z-10`}>P</div>}
                         </div>
                     )}
                 </div>
 
                 {/* CENTER SPINE */}
                 <div className="w-[50px] h-full flex items-center justify-center relative shrink-0 z-20 bg-[#060606]">
-                    {hasPut && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[1px] h-[12px] bg-[#34d399] z-30 shadow-[0_0_4px_rgba(52,211,153,0.8)]"></div>}
+                    {hasPut && <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-[1px] h-[12px] z-30 ${DEPTH_PROFILE_THEME.putSpineLineClass}`}></div>}
                     <span className={`font-mono text-[11px] tracking-tight transition-colors z-10 ${row.is_spot ? 'text-[#ff3366] font-black bg-[#ff3366]/10 px-0.5 rounded' : row.is_flip ? 'text-[#fbbf24] font-bold' : (isMaxPut || isMaxCall) ? 'text-[#f4f4f5] font-bold drop-shadow-[0_0_4px_rgba(255,255,255,0.4)]' : 'text-[#71717a]'}`}>
                         {row.strike.toFixed(0)}
                     </span>
-                    {hasCall && <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[1px] h-[12px] bg-[#f87171] z-30 shadow-[0_0_4px_rgba(248,113,113,0.8)]"></div>}
+                    {hasCall && <div className={`absolute right-0 top-1/2 -translate-y-1/2 w-[1px] h-[12px] z-30 ${DEPTH_PROFILE_THEME.callSpineLineClass}`}></div>}
                 </div>
 
                 {/* CALL WING */}
                 <div className="flex-1 h-full flex justify-start items-center relative">
                     {hasCall && (
-                        <div className={`h-[12px] relative transition-all duration-300 ease-out flex items-center justify-start ${row.is_dominant_call ? 'bg-gradient-to-r from-[#dc2626] to-[#ef4444] border-r border-[#f87171] shadow-[2px_0_6px_rgba(239,68,68,0.3)]' : 'bg-gradient-to-r from-[#7f1d1d] to-[#dc2626]/90 border-r border-[#ef4444]/50'}`}
+                        <div className={`h-[12px] relative transition-all duration-300 ease-out flex items-center justify-start ${row.is_dominant_call ? DEPTH_PROFILE_THEME.callDominantBarClass : DEPTH_PROFILE_THEME.callNormalBarClass}`}
                             style={{ width: `${maxCallPct > 0 ? Math.max((row.call_pct / maxCallPct) * 95, 1) : 1}%`, borderTopRightRadius: '2px', borderBottomRightRadius: '2px' }}>
-                            {isMaxCall && <div className="absolute left-0 top-1/2 -translate-y-1/2 bg-[#450a0a]/90 border-r border-[#ef4444]/40 text-[#f87171] text-[9px] font-black px-[4px] py-[1px] rounded-[1px] leading-none z-10">c</div>}
+                            {isMaxCall && <div className={`absolute left-0 top-1/2 -translate-y-1/2 ${DEPTH_PROFILE_THEME.callMaxTagClass} text-[9px] font-black px-[4px] py-[1px] rounded-[1px] leading-none z-10`}>c</div>}
                         </div>
                     )}
                 </div>

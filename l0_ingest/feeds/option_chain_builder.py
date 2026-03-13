@@ -10,12 +10,22 @@ from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from longport.openapi import Config, Language, TradeDirection
+from longport.openapi import Config, Language
 
 from shared.config import settings
 
 from l0_ingest.feeds.chain_state_store import ChainStateStore
+from l0_ingest.feeds.chain_event_processor import ChainEventProcessor
 from l0_ingest.feeds.feed_orchestrator import FeedOrchestrator
+from l0_ingest.feeds.fetch_chain_components import (
+    LegacyGreeksAudit,
+    aggregate_store_snapshot,
+    build_error_snapshot,
+    build_governor_telemetry,
+    build_runtime_status,
+    build_uninitialized_snapshot,
+    compose_fetch_chain_payload,
+)
 from l0_ingest.feeds.iv_baseline_sync import IVBaselineSync
 from l0_ingest.feeds.quote_runtime import L0QuoteRuntime, PythonQuoteRuntime, RustQuoteRuntime
 from l0_ingest.feeds.rate_limiter import APIRateLimiter
@@ -344,15 +354,20 @@ class OptionChainBuilder:
         self._tier3 = Tier3Poller(self._rate_limiter)
 
         self._greeks_engine = GreeksEngine(self._store, self._iv_sync)
-        self._legacy_greeks_invocations: int = 0
-        self._legacy_greeks_by_version: dict[int, int] = {}
-        self._legacy_greeks_by_caller: dict[str, int] = {}
+        self._legacy_greeks_audit = LegacyGreeksAudit()
         self._orchestrator = FeedOrchestrator(
             self._quote_runtime,
             self._store,
             self._sub_mgr,
             self._iv_sync,
             self._rate_limiter,
+        )
+        self._event_processor = ChainEventProcessor(
+            store=self._store,
+            sanitizer=self._sanitizer,
+            entropy_filter=self._entropy_filter,
+            depth_engine=self._depth_engine,
+            sub_mgr=self._sub_mgr,
         )
 
         self._initialized = False
@@ -475,82 +490,66 @@ class OptionChainBuilder:
         caller_tag: str = "unspecified",
     ) -> dict[str, Any]:
         if not self._initialized:
-            return {
-                "spot": None,
-                "chain": [],
-                "as_of": None,
-                "as_of_utc": None,
-                "version": self._store.version,
-            }
+            return build_uninitialized_snapshot(self._store.version)
 
         now = datetime.now(ZoneInfo("US/Eastern"))
-        now_utc = now.astimezone(ZoneInfo("UTC"))
+        now_utc_iso = now.astimezone(ZoneInfo("UTC")).isoformat()
         try:
             target_set = self._sub_mgr.target_symbols
-            snapshot = self._store.get_flow_merged_snapshot(
-                self._depth_engine.get_flow_snapshot(),
+            chain_snapshot = aggregate_store_snapshot(
+                store=self._store,
+                depth_engine=self._depth_engine,
                 target_symbols=target_set,
             )
             ttm_seconds = get_trading_time_to_maturity(now) * (252 * 23400)
             agg: dict[str, Any] = {}
             if include_legacy_greeks:
                 version = int(self._store.version)
-                self._legacy_greeks_invocations += 1
-                self._legacy_greeks_by_version[version] = (
-                    self._legacy_greeks_by_version.get(version, 0) + 1
-                )
-                self._legacy_greeks_by_caller[caller_tag] = (
-                    self._legacy_greeks_by_caller.get(caller_tag, 0) + 1
-                )
+                invocation = self._legacy_greeks_audit.record_dispatch(version, caller_tag)
                 logger.info(
                     "[GPU-AUDIT] legacy_greeks_dispatch caller=%s snapshot_version=%s invocation=%s",
                     caller_tag,
                     version,
-                    self._legacy_greeks_invocations,
+                    invocation,
                 )
-                agg = await self._greeks_engine.enrich(snapshot, self._store.spot or 0.0)
+                agg = await self._greeks_engine.enrich(chain_snapshot, self._store.spot or 0.0)
                 ttm_seconds = float(agg.get("ttm_seconds", ttm_seconds) or ttm_seconds)
 
-            data = {
-                "spot": self._store.spot,
-                "chain": snapshot,
-                "version": self._store.version,
-                "tier2_chain": self._tier2.cache,
-                "tier3_chain": self._tier3.cache,
-                "volume_map": self._store.volume_map,
-                "aggregate_greeks": agg,
-                "ttm_seconds": ttm_seconds,
-                "as_of": now,
-                "as_of_utc": now_utc.isoformat(),
-                "rust_active": self._rust_bridge.mm is not None,
-                "rust_shm_path": self._rust_bridge.mm_path if self._rust_bridge.mm else None,
-                "shm_stats": {
-                    "head": self._get_shm_val(self._rust_bridge.head_ptr),
-                    "tail": self._get_shm_val(self._rust_bridge.tail_ptr),
-                    "status": "OK" if self._rust_bridge.mm else "DISCONNECTED",
-                },
-                "governor_telemetry": {
-                    "symbols_per_min": self._rate_limiter.symbol_tokens,
-                    "cooldown_active": self._rate_limiter.cooldown_active,
-                    "limiter_profile": self._rate_limiter.symbol_profile,
-                    "cooldown_hits_5m": self._rate_limiter.cooldown_hits_5m,
-                    "warmup_pending_symbols": self._orchestrator.pending_warmup_count,
-                    "metadata_cache_hit_rate": self._sub_mgr.metadata_cache_hit_rate,
-                },
-                "official_hv_diagnostics": self._orchestrator.official_hv_diagnostics,
-            }
-            if not data["rust_active"]:
+            runtime_status = build_runtime_status(
+                rust_bridge=self._rust_bridge,
+                shm_reader=self._get_shm_val,
+            )
+            governor_telemetry = build_governor_telemetry(
+                rate_limiter=self._rate_limiter,
+                orchestrator=self._orchestrator,
+                sub_mgr=self._sub_mgr,
+            )
+            data = compose_fetch_chain_payload(
+                spot=self._store.spot,
+                chain=chain_snapshot,
+                version=self._store.version,
+                tier2_chain=self._tier2.cache,
+                tier3_chain=self._tier3.cache,
+                volume_map=self._store.volume_map,
+                aggregate_greeks=agg,
+                ttm_seconds=ttm_seconds,
+                now=now,
+                now_utc_iso=now_utc_iso,
+                runtime_status=runtime_status,
+                governor_telemetry=governor_telemetry,
+                official_hv_diagnostics=self._orchestrator.official_hv_diagnostics,
+            )
+            if not runtime_status["rust_active"]:
                 logger.warning("[OptionChainBuilder] fetch_chain rust_active=FALSE")
             return data
         except Exception as exc:
             logger.error("[OptionChainBuilder] fetch_chain failure: %s", exc)
-            return {
-                "spot": self._store.spot,
-                "chain": [],
-                "as_of": now,
-                "as_of_utc": now_utc.isoformat(),
-                "version": self._store.version,
-            }
+            return build_error_snapshot(
+                spot=self._store.spot,
+                version=self._store.version,
+                now=now,
+                now_utc_iso=now_utc_iso,
+            )
 
     def _get_shm_val(self, ptr: int) -> int:
         if not self._rust_bridge.mm:
@@ -574,108 +573,32 @@ class OptionChainBuilder:
         logger.info("[OptionChainBuilder] Pipeline consumer loop active")
         queue = self._quote_runtime.event_queue
         while self._initialized:
+            raw_event: Any | None = None
             try:
                 raw_event = await queue.get()
-
-                if raw_event.symbol == "SPY.US" and raw_event.event_type == EventType.QUOTE:
-                    price = float(getattr(raw_event.payload, "last_done", 0) or 0)
-                    if price > 0:
-                        self._store.update_spot(price)
-                    queue.task_done()
-                    continue
-
-                if raw_event.event_type == EventType.QUOTE:
-                    strike = self._sub_mgr.symbol_to_strike.get(raw_event.symbol)
-                    if strike is None:
-                        queue.task_done()
-                        continue
-                    clean = self._sanitizer.parse_quote(raw_event, strike)
-                    if clean and self._entropy_filter.accept(clean.symbol, clean):
-                        self._store.apply_event(clean)
-                        if clean.open_interest is not None:
-                            self._store.apply_oi_smooth(clean.symbol, clean.open_interest)
-
-                elif raw_event.event_type == EventType.DEPTH:
-                    clean_depth = self._sanitizer.parse_depth(raw_event)
-                    if clean_depth:
-                        bids = getattr(raw_event.payload, "bids", [])
-                        asks = getattr(raw_event.payload, "asks", [])
-                        self._depth_engine.update_depth(clean_depth.symbol, bids, asks)
-                        self._store.apply_depth(clean_depth)
-                        if hasattr(self, "on_depth") and self.on_depth is not None:
-                            self.on_depth(clean_depth.symbol, bids, asks)
-
-                elif raw_event.event_type == EventType.TRADE:
-                    trades = getattr(raw_event.payload, "trades", [])
-                    if trades:
-                        trade_dicts: list[dict[str, Any]] = []
-                        for trade in trades:
-                            raw_dir = (
-                                getattr(trade, "direction", 0)
-                                if not isinstance(trade, dict)
-                                else trade.get("dir", trade.get("direction", 0))
-                            )
-                            if raw_dir == TradeDirection.Up or str(raw_dir) == "2" or raw_dir == 2:
-                                dir_sign = 1
-                            elif raw_dir == TradeDirection.Down or str(raw_dir) == "1" or raw_dir == 1:
-                                dir_sign = -1
-                            else:
-                                dir_sign = 0
-
-                            if isinstance(trade, dict):
-                                trade_dict = dict(trade)
-                                trade_dict["vol"] = float(
-                                    trade_dict.get("vol", 0.0) or trade_dict.get("volume", 0.0)
-                                )
-                                trade_dict["dir"] = dir_sign
-                                trade_dicts.append(trade_dict)
-                            else:
-                                def _local_safe_float(value: Any, default: float = 0.0) -> float:
-                                    try:
-                                        return float(value)
-                                    except (TypeError, ValueError):
-                                        return default
-
-                                def _local_safe_int(value: Any, default: int = 0) -> int:
-                                    try:
-                                        return int(float(value))
-                                    except (TypeError, ValueError):
-                                        return default
-
-                                volume = _local_safe_float(getattr(trade, "volume", 0))
-                                timestamp_val = getattr(trade, "timestamp", 0)
-
-                                def to_ts_int(value: Any) -> int:
-                                    if hasattr(value, "timestamp"):
-                                        return int(value.timestamp())
-                                    try:
-                                        return int(float(value))
-                                    except (TypeError, ValueError):
-                                        return int(time.time())
-
-                                trade_dicts.append(
-                                    {
-                                        "price": _local_safe_float(getattr(trade, "price", 0.0)),
-                                        "vol": volume,
-                                        "volume": volume,
-                                        "timestamp": to_ts_int(timestamp_val),
-                                        "dir": dir_sign,
-                                        "direction": dir_sign,
-                                        "trade_type": _local_safe_int(getattr(trade, "trade_type", 0)),
-                                    }
-                                )
-
-                        self._depth_engine.update_trades(raw_event.symbol, trade_dicts)
-                        if hasattr(self, "on_trade") and self.on_trade is not None:
-                            self.on_trade(raw_event.symbol, trade_dicts)
-
-                queue.task_done()
+                self._event_processor.process_event(
+                    raw_event,
+                    on_depth=getattr(self, "on_depth", None),
+                    on_trade=getattr(self, "on_trade", None),
+                )
             except Exception as exc:
                 logger.error("[OptionChainBuilder] Consumer loop exception: %s", exc)
                 await asyncio.sleep(0.1)
+            finally:
+                if raw_event is not None:
+                    queue.task_done()
 
     def set_mandatory_symbols(self, symbols: set[str]) -> None:
         self._orchestrator.set_mandatory_symbols(symbols)
+
+    def get_iv_sync_context(self) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Expose IV sync caches via public API for app loop orchestration.
+
+        App loops must not reach into private members like ``_iv_sync`` directly.
+        """
+        iv_cache = getattr(self._iv_sync, "iv_cache", {})
+        spot_at_sync = getattr(self._iv_sync, "spot_at_sync", {})
+        return dict(iv_cache or {}), dict(spot_at_sync or {})
 
     def get_diagnostics(self) -> dict[str, Any]:
         diagnostics = {
@@ -689,11 +612,7 @@ class OptionChainBuilder:
                 "pending_warmup_symbols": self._orchestrator.pending_warmup_count,
             },
             "subscription_metadata_cache": self._sub_mgr.metadata_cache_diagnostics(),
-            "legacy_greeks_audit": {
-                "invocations": self._legacy_greeks_invocations,
-                "by_version": dict(self._legacy_greeks_by_version),
-                "by_caller": dict(self._legacy_greeks_by_caller),
-            },
+            "legacy_greeks_audit": self._legacy_greeks_audit.diagnostics(),
         }
         diagnostics.update(self._store.diagnostics())
         return diagnostics

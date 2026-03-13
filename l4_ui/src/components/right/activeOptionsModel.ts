@@ -1,30 +1,22 @@
 import type { ActiveOption } from '../../types/dashboard'
+import {
+    ACTIVE_OPTIONS_FIXED_ROWS,
+    ACTIVE_OPTIONS_ALLOWED_FLOW_COLOR,
+    ACTIVE_OPTIONS_FLOW_COLOR_BY_DIRECTION,
+    ACTIVE_OPTIONS_FLOW_DIRECTION_BY_COLOR,
+    ACTIVE_OPTIONS_FLOW_GLOW_BY_DIRECTION_AND_INTENSITY,
+    ACTIVE_OPTIONS_FLOW_INTENSITY_SET,
+    ACTIVE_OPTIONS_SWEEP_GLOW,
+    type ActiveFlowDirection,
+    type ActiveFlowIntensity,
+} from './activeOptionsTheme'
 
 export function normalizeOptionType(raw: unknown): 'CALL' | 'PUT' {
     const text = typeof raw === 'string' ? raw.trim().toUpperCase() : ''
     return text === 'CALL' || text === 'C' ? 'CALL' : 'PUT'
 }
 
-export type ActiveFlowDirection = 'BULLISH' | 'BEARISH' | 'NEUTRAL'
-export type ActiveFlowIntensity = 'EXTREME' | 'HIGH' | 'MODERATE' | 'LOW'
-
-const ASIAN_FLOW_COLOR_BY_DIRECTION: Record<ActiveFlowDirection, string> = {
-    BULLISH: 'text-accent-red',
-    BEARISH: 'text-accent-green',
-    NEUTRAL: 'text-text-secondary',
-}
-
-const ALLOWED_FLOW_COLOR = new Set<string>([
-    'text-accent-red',
-    'text-accent-green',
-    'text-text-secondary',
-])
-
-const FLOW_DIRECTION_BY_COLOR: Record<string, ActiveFlowDirection> = {
-    'text-accent-red': 'BULLISH',
-    'text-accent-green': 'BEARISH',
-    'text-text-secondary': 'NEUTRAL',
-}
+export type { ActiveFlowDirection, ActiveFlowIntensity } from './activeOptionsTheme'
 
 function createPlaceholderOption(slotIndex: number): ActiveOption {
     return {
@@ -102,18 +94,18 @@ function normalizeFlowDirection(flow: number): ActiveFlowDirection {
 
 function normalizeFlowIntensity(raw: unknown): ActiveFlowIntensity {
     const text = typeof raw === 'string' ? raw.trim().toUpperCase() : ''
-    if (text === 'EXTREME' || text === 'HIGH' || text === 'MODERATE' || text === 'LOW') {
-        return text
+    if (ACTIVE_OPTIONS_FLOW_INTENSITY_SET.has(text)) {
+        return text as ActiveFlowIntensity
     }
     return 'LOW'
 }
 
 function normalizeFlowColor(raw: unknown, direction: ActiveFlowDirection): string {
     const text = typeof raw === 'string' ? raw.trim() : ''
-    if (text && ALLOWED_FLOW_COLOR.has(text) && FLOW_DIRECTION_BY_COLOR[text] === direction) {
+    if (text && ACTIVE_OPTIONS_ALLOWED_FLOW_COLOR.has(text) && ACTIVE_OPTIONS_FLOW_DIRECTION_BY_COLOR[text] === direction) {
         return text
     }
-    return ASIAN_FLOW_COLOR_BY_DIRECTION[direction]
+    return ACTIVE_OPTIONS_FLOW_COLOR_BY_DIRECTION[direction]
 }
 
 function normalizeFlowDisplayLabel(raw: unknown, flow: number): string | undefined {
@@ -148,9 +140,9 @@ export function normalizeActiveOption(input: unknown): ActiveOption {
     const flowIntensity = normalizeFlowIntensity(row.flow_intensity)
     const flowColor = normalizeFlowColor(row.flow_color, flowDirection)
     const flowScore = toFiniteNumber(row.flow_score, 0)
-    const normalizedGlow = typeof row.flow_glow === 'string' && row.flow_glow.trim()
-        ? row.flow_glow
-        : (isSweep ? 'shadow-[0_0_15px_rgba(255,255,255,0.7)] animate-pulse' : '')
+    const normalizedGlow = isSweep
+        ? ACTIVE_OPTIONS_SWEEP_GLOW
+        : ACTIVE_OPTIONS_FLOW_GLOW_BY_DIRECTION_AND_INTENSITY[flowDirection][flowIntensity]
 
     return {
         symbol: typeof row.symbol === 'string' && row.symbol.trim() ? row.symbol : 'SPY',
@@ -174,13 +166,36 @@ export function normalizeActiveOption(input: unknown): ActiveOption {
     }
 }
 
-export function normalizeActiveOptions(input: unknown, limit = 5): ActiveOption[] {
+export function normalizeActiveOptions(input: unknown, limit = ACTIVE_OPTIONS_FIXED_ROWS): ActiveOption[] {
     const target = Math.max(0, limit)
     const source = Array.isArray(input) ? input : []
-    const normalized: ActiveOption[] = source
-        .map((row) => normalizeActiveOption(row))
+    const ranked = source
+        .map((item, idx) => ({
+            row: normalizeActiveOption(item),
+            idx,
+        }))
+        .sort((a, b) => {
+            const aPlaceholder = Boolean(a.row.is_placeholder)
+            const bPlaceholder = Boolean(b.row.is_placeholder)
+            if (aPlaceholder !== bPlaceholder) return aPlaceholder ? 1 : -1
+
+            const volumeDiff = b.row.volume - a.row.volume
+            if (volumeDiff !== 0) return volumeDiff
+
+            const turnoverDiff = b.row.turnover - a.row.turnover
+            if (turnoverDiff !== 0) return turnoverDiff
+
+            const impactA = typeof a.row.impact_index === 'number' ? a.row.impact_index : 0
+            const impactB = typeof b.row.impact_index === 'number' ? b.row.impact_index : 0
+            const impactDiff = impactB - impactA
+            if (impactDiff !== 0) return impactDiff
+
+            return a.idx - b.idx
+        })
+
+    const normalized: ActiveOption[] = ranked
         .slice(0, target)
-        .map((row, idx) => ({
+        .map(({ row }, idx) => ({
             ...row,
             slot_index: idx + 1,
         }))

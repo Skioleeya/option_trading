@@ -1,4 +1,3 @@
-import { describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import type { ActiveOption } from '../../types/dashboard'
 import { ActiveOptions } from '../right/ActiveOptions'
@@ -48,6 +47,22 @@ describe('ActiveOptions render contracts', () => {
         expect(rows.map((el) => el.getAttribute('data-slot'))).toEqual(['1', '2', '3', '4', '5'])
     })
 
+    it('renders rows sorted by VOL desc', () => {
+        const { container } = render(
+            <ActiveOptions
+                options={[
+                    row(1, { symbol: 'LOW', volume: 100 }),
+                    row(2, { symbol: 'HIGH', volume: 900 }),
+                    row(3, { symbol: 'MID', volume: 500 }),
+                ]}
+            />
+        )
+
+        const symbolCells = Array.from(container.querySelectorAll('tbody tr td:nth-child(2)'))
+            .map((el) => el.textContent?.trim())
+
+        expect(symbolCells.slice(0, 3)).toEqual(['HIGH', 'MID', 'LOW'])
+    })
     it('renders negative FLOW with bearish green class even when backend color/direction conflict', () => {
         const { container } = render(
             <ActiveOptions
@@ -87,4 +102,26 @@ describe('ActiveOptions render contracts', () => {
         expect(screen.getByText('$0')).toBeInTheDocument()
         expect(screen.queryByText('-$0')).not.toBeInTheDocument()
     })
+    it('shows DEGRADED header when all rows are placeholders', () => {
+        render(<ActiveOptions options={[]} preferProp />)
+
+        expect(screen.getByText('DEGRADED')).toBeInTheDocument()
+        expect(screen.queryByText('TOP BY VOL')).not.toBeInTheDocument()
+    })
+
+    it('shows TOP BY VOL header when at least one real row exists', () => {
+        render(
+            <ActiveOptions
+                preferProp
+                options={[
+                    row(1, { symbol: 'REAL', is_placeholder: false, volume: 1234 }),
+                ]}
+            />
+        )
+
+        expect(screen.getByText('TOP BY VOL')).toBeInTheDocument()
+        expect(screen.queryByText('DEGRADED')).not.toBeInTheDocument()
+    })
 })
+
+

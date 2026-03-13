@@ -8,6 +8,7 @@ import { fmtPct, fmtPrice } from '../../lib/utils'
 import { LineChart } from 'lucide-react'
 import { useDashboardStore, selectAtm, selectAtmHistory } from '../../store/dashboardStore'
 import { resolveDisplayAtm } from './atmDecayDisplay'
+import { THEME } from '../../lib/theme'
 
 interface Props {
     atm?: AtmDecay | null
@@ -58,21 +59,21 @@ export const AtmDecayOverlay: React.FC<Props> = memo(({ atm: propAtm, history: p
 
             <div className="flex items-center gap-2.5">
                 <div className="flex items-center gap-2 px-2.5 py-1 rounded-md border border-[#3f3f46]">
-                    <span className="w-2 h-2 rounded-full bg-[#f59e0b]" />
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: THEME.accent.amber }} />
                     <span className="text-[9px] font-black text-[#a1a1aa] tracking-widest">STRADDLE</span>
-                    <span className="font-mono text-[11px] font-bold text-[#f59e0b]">{fmtPct(atm?.straddle_pct)}</span>
+                    <span className="font-mono text-[11px] font-bold" style={{ color: THEME.accent.amber }}>{fmtPct(atm?.straddle_pct)}</span>
                 </div>
 
                 <div className="flex items-center gap-2 px-2.5 py-1 rounded-md border border-[#3f3f46]">
-                    <span className="w-2 h-2 rounded-full bg-[#ef4444]" />
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: THEME.market.up }} />
                     <span className="text-[9px] font-black text-[#a1a1aa] tracking-widest">CALL</span>
-                    <span className="font-mono text-[11px] font-bold text-[#ef4444]">{fmtPct(atm?.call_pct)}</span>
+                    <span className="font-mono text-[11px] font-bold" style={{ color: THEME.market.up }}>{fmtPct(atm?.call_pct)}</span>
                 </div>
 
                 <div className="flex items-center gap-2 px-2.5 py-1 rounded-md border border-[#3f3f46]">
-                    <span className="w-2 h-2 rounded-full bg-[#10b981]" />
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: THEME.market.down }} />
                     <span className="text-[9px] font-black text-[#a1a1aa] tracking-widest">PUT</span>
-                    <span className="font-mono text-[11px] font-bold text-[#10b981]">{fmtPct(atm?.put_pct)}</span>
+                    <span className="font-mono text-[11px] font-bold" style={{ color: THEME.market.down }}>{fmtPct(atm?.put_pct)}</span>
                 </div>
             </div>
         </div>

@@ -19,7 +19,11 @@ logger = logging.getLogger(__name__)
 
 
 class GreeksExtractor:
-    """Maps L1 aggregate greeks to L2-compatible payload fields."""
+    """Maps L1 aggregate greeks to L2-compatible payload fields.
+
+    Wall and flip fields are treated as trading-practice proxies, not
+    dealer inventory truth.
+    """
 
     def __init__(self) -> None:
         self._gamma_qual_analyzer = GammaQualAnalyzer()
@@ -61,10 +65,12 @@ class GreeksExtractor:
         result = {
             "net_gex": summary.get("net_gex", 0.0),
             "gamma_walls": {
+                # Trading-practice wall proxies from L1 aggregate contract.
                 "call_wall": summary.get("call_wall"),
                 "put_wall": summary.get("put_wall"),
             },
             "gamma_flip_level": summary.get("gamma_flip_level"),
+            # Cumulative net-GEX zero-crossing proxy.
             "flip_level_cumulative": summary.get("flip_level_cumulative"),
             "gamma_flip": summary.get("gamma_flip", False),
             "atm_iv": atm_iv,
@@ -182,3 +188,4 @@ class GreeksExtractor:
                 "atm_iv": self._last_result.get("atm_iv"),
             }
         return {"has_result": False}
+

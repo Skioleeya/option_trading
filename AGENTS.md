@@ -49,6 +49,7 @@ This file is not advisory prose. It is a hard execution directive for all AI age
   <pattern>import l4_ui ... inside l2_decision/* or l3_assembly/*</pattern>
   <pattern>from l1_compute.analysis|trackers import ... inside l3_assembly/presenters/ui/*</pattern>
   <pattern>cross-layer private-member access in app loops: container.x._y</pattern>
+  <pattern>wildcard import in runtime source: `from x import *`</pattern>
   <pattern>Rust runtime `unwrap()` introduced in ingest/compute runtime path</pattern>
   <pattern>Python silent catch that hides runtime failure without log/escalation</pattern>
   <required_reaction>
@@ -199,6 +200,19 @@ This section is a machine gate. Agent completion claim without these hooks is in
   <pattern>Ignoring debt metric mismatch or missing context files</pattern>
 </ANTI_PATTERN>
 
+<MANDATORY_HOOK id="quality-gate-before-merge">
+  <rule>Before merge/handoff, strict validation MUST include a machine quality gate on changed Python runtime files.</rule>
+  <rule>Quality gate thresholds MUST include all: max nesting depth, max cyclomatic complexity, max function length, max class length, magic number governance ratio, duplicate window count.</rule>
+  <rule>Quality gate implementation source of truth: `scripts/policy/check_quality_gates.py` + `scripts/policy/quality_thresholds.json`.</rule>
+  <rule>If quality gate fails, agent MUST NOT claim completion.</rule>
+</MANDATORY_HOOK>
+
+<MANDATORY_HOOK id="openspec-chain-gate-before-runtime-change">
+  <rule>Runtime code change in `l0_ingest/`, `l1_compute/`, `l2_decision/`, `l3_assembly/`, `l4_ui/`, `app/`, or `shared/` MUST be linked to OpenSpec change records in `openspec/changes/*` unless `OPENSPEC-EXEMPT` is explicitly declared in handoff.</rule>
+  <rule>OpenSpec parent/child governance gate implementation source of truth: `scripts/policy/check_openspec_chain.py`.</rule>
+  <rule>Refactor governance proposals MUST satisfy naming, structure, and header template checks.</rule>
+</MANDATORY_HOOK>
+
 ---
 ## 8. SOP Sync Contract (Mandatory)
 
@@ -248,7 +262,12 @@ SLA:
 - Bootstrap: `scripts/new_session.ps1`
 - Validation: `scripts/validate_session.ps1 -Strict`
 - Architecture policy: `scripts/policy/layer_boundary_rules.json`
+- Quality thresholds: `scripts/policy/quality_thresholds.json`
+- Quality gate: `scripts/policy/check_quality_gates.py`
+- OpenSpec chain gate: `scripts/policy/check_openspec_chain.py`
 - Pytest entry: `scripts/test/run_pytest.ps1`
+- CI required check: `.github/workflows/session-validation.yml` (`validate-session` job)
+- Remote repo rule (ACTIVE): `refs/heads/master` MUST go through Pull Request; direct push is blocked; required status check `validate-session` MUST pass before merge.
 
 If any scripted gate fails, delivery is not complete.
 

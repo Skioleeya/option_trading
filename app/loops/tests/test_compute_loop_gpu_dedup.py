@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -90,7 +89,8 @@ class _FakeBuilder:
     def __init__(self, snapshots: list[dict[str, Any]]) -> None:
         self._snapshots = snapshots
         self._cursor = 0
-        self._iv_sync = SimpleNamespace(iv_cache={}, spot_at_sync={})
+        self._iv_cache: dict[str, float] = {}
+        self._spot_at_sync: dict[str, float] = {}
         self.fetch_args: list[tuple[bool, str]] = []
 
     async def fetch_chain(
@@ -105,6 +105,9 @@ class _FakeBuilder:
         self._cursor += 1
         await asyncio.sleep(0)
         return snapshot
+
+    def get_iv_sync_context(self) -> tuple[dict[str, float], dict[str, float]]:
+        return dict(self._iv_cache), dict(self._spot_at_sync)
 
 
 class _FakeContainer:
@@ -150,3 +153,4 @@ async def test_compute_loop_skips_duplicate_snapshot_versions(monkeypatch: pytes
     assert gpu_diag["l1_compute_runs"] == 2
     assert gpu_diag["duplicate_snapshot_skips"] >= 2
     assert str(gpu_diag["last_gpu_task_id"]).startswith("gpu-task-")
+

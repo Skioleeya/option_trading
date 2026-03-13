@@ -1,7 +1,21 @@
 {
-  "version": "2026-03-06",
+  "version": "2026-03-13",
   "description": "Layer anti-coupling guardrails for strict session validation.",
   "rules": [
+    {
+      "id": "L0_NO_IMPORT_L2_L3_L4",
+      "enabled": true,
+      "glob": "l0_ingest/*.py",
+      "regex": "^\\s*(from|import)\\s+l[234]_(decision|assembly|ui)\\b",
+      "message": "L0 must not import L2/L3/L4 modules."
+    },
+    {
+      "id": "L1_NO_IMPORT_L3_L4",
+      "enabled": true,
+      "glob": "l1_compute/*.py",
+      "regex": "^\\s*(from|import)\\s+l[34]_(assembly|ui)\\b",
+      "message": "L1 must not import L3/L4 modules."
+    },
     {
       "id": "L2_NO_IMPORT_L3",
       "enabled": true,
@@ -22,6 +36,13 @@
       "glob": "l3_assembly/*.py",
       "regex": "^\\s*(from|import)\\s+l4_ui\\b",
       "message": "L3 must not import L4 modules."
+    },
+    {
+      "id": "L3_NO_IMPORT_L2_SIGNALS_AGENTS",
+      "enabled": true,
+      "glob": "l3_assembly/*.py",
+      "regex": "^\\s*(from|import)\\s+l2_decision\\.(signals|agents)\\b",
+      "message": "L3 may import l2_decision.events only; L2 signals/agents imports are forbidden."
     },
     {
       "id": "L3_UI_NO_IMPORT_L2_SIGNALS_AGENTS",
@@ -57,6 +78,13 @@
       "glob": "app/loops/*.py",
       "regex": "\\b(?:ctr|container)\\.[A-Za-z]\\w*\\._[a-zA-Z]\\w*",
       "message": "app loops must not reach across layers via private members."
+    },
+    {
+      "id": "RUNTIME_NO_WILDCARD_IMPORT",
+      "enabled": true,
+      "glob": "*.py",
+      "regex": "^\\s*from\\s+[^\\s]+\\s+import\\s+\\*\\s*$",
+      "message": "Wildcard imports are forbidden in runtime code."
     }
   ],
   "allow": [

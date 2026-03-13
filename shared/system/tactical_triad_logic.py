@@ -47,6 +47,18 @@ def normalize_vrp_baseline_hv_pct(raw_baseline_hv: Any) -> float:
     return baseline * 100.0 if baseline <= 1.0 else baseline
 
 
+def normalize_guard_vrp_threshold_pct(raw_threshold: Any, default_pct: float) -> float:
+    """Normalize guard VRP thresholds to percentage points.
+
+    Compatibility rule: legacy decimal thresholds like `0.15` are interpreted as
+    `15.0` percent points.
+    """
+    threshold = _to_float(raw_threshold)
+    if threshold is None or threshold <= 0:
+        return default_pct
+    return threshold * 100.0 if threshold <= 1.0 else threshold
+
+
 def compute_vrp(atm_iv: Any, baseline_hv: Any) -> float | None:
     """Compute VRP = ATM_IV(%) - baseline_HV(%).
 
@@ -57,6 +69,21 @@ def compute_vrp(atm_iv: Any, baseline_hv: Any) -> float | None:
         return None
     baseline_pct = normalize_vrp_baseline_hv_pct(baseline_hv)
     return atm_iv_pct - baseline_pct
+
+
+def compute_guard_vrp_proxy_pct(atm_iv: Any, vol_accel_ratio: Any) -> float | None:
+    """Compute the guard-only VRP proxy in percentage points.
+
+    The guard preserves its historical idea of `ATM IV - realized vol proxy`,
+    where the realized-vol leg is still derived from `|vol_accel_ratio| * 0.10`
+    in decimal terms. This helper only normalizes the result to `% points`.
+    """
+    atm_iv_pct = normalize_iv_percent(atm_iv)
+    vol_accel = _to_float(vol_accel_ratio)
+    if atm_iv_pct is None or vol_accel is None:
+        return None
+    realized_vol_proxy_pct = abs(vol_accel) * 10.0
+    return atm_iv_pct - realized_vol_proxy_pct
 
 
 def classify_vrp_state(

@@ -1,0 +1,26 @@
+{
+  "version": "2026-03-13",
+  "description": "Institutional quality thresholds for changed Python runtime files.",
+  "max_nesting_depth": 3,
+  "hot_max_nesting_depth": 2,
+  "max_cyclomatic_complexity": 10,
+  "hot_max_cyclomatic_complexity": 8,
+  "max_function_length": 80,
+  "max_class_length": 400,
+  "magic_number_min_governance_ratio": 0.8,
+  "magic_number_exempt_values": [
+    0,
+    1,
+    -1
+  ],
+  "duplicate_window_size": 12,
+  "max_duplicate_windows": 0,
+  "hot_path_name_patterns": [
+    "fetch_chain",
+    "compute_loop",
+    "_event_consumer_loop",
+    "tick",
+    "poll",
+    "broadcast"
+  ]
+}

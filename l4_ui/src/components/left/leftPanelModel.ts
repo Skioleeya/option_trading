@@ -90,6 +90,29 @@ function normalizeWallMigrationRows(raw: unknown): LeftWallMigrationRow[] {
     })
 }
 
+function applyCanonicalWallStrikes(
+    rows: LeftWallMigrationRow[],
+    gammaWalls: { call_wall: number | null; put_wall: number | null } | null,
+): LeftWallMigrationRow[] {
+    if (!gammaWalls) return rows
+    const callWall = toOptionalFiniteNumber(gammaWalls.call_wall)
+    const putWall = toOptionalFiniteNumber(gammaWalls.put_wall)
+    if (callWall === null && putWall === null) return rows
+
+    return rows.map((row) => {
+        const label = String(row.label || '').toUpperCase()
+        const isCall = label.includes('CALL') || label === 'C'
+        const isPut = label.includes('PUT') || label === 'P'
+        if (isCall && callWall !== null) {
+            return { ...row, strike: callWall }
+        }
+        if (isPut && putWall !== null) {
+            return { ...row, strike: putWall }
+        }
+        return row
+    })
+}
+
 function normalizeDepthProfileRows(raw: unknown): LeftDepthProfileRow[] {
     if (!Array.isArray(raw)) return []
     return raw
@@ -144,17 +167,22 @@ export function deriveLeftPanelContracts(payload: DashboardPayload | null): Left
     const data = payload?.agent_g?.data
     const uiState = data?.ui_state
     const gammaWalls = data?.gamma_walls ?? null
+    const normalizedGammaWalls = gammaWalls
+        ? {
+            call_wall: toOptionalFiniteNumber(gammaWalls.call_wall),
+            put_wall: toOptionalFiniteNumber(gammaWalls.put_wall),
+        }
+        : null
+    const wallMigrationRows = applyCanonicalWallStrikes(
+        normalizeWallMigrationRows(uiState?.wall_migration),
+        normalizedGammaWalls,
+    )
 
     return {
         spot: payload?.spot ?? null,
-        gammaWalls: gammaWalls
-            ? {
-                call_wall: toOptionalFiniteNumber(gammaWalls.call_wall),
-                put_wall: toOptionalFiniteNumber(gammaWalls.put_wall),
-            }
-            : null,
+        gammaWalls: normalizedGammaWalls,
         flipLevel: toOptionalFiniteNumber(data?.gamma_flip_level),
-        wallMigrationRows: normalizeWallMigrationRows(uiState?.wall_migration),
+        wallMigrationRows,
         depthProfileRows: normalizeDepthProfileRows(uiState?.depth_profile),
         macroVolumeMap: normalizeMacroVolumeMap(uiState?.macro_volume_map),
         microStats: normalizeMicroStats(uiState?.micro_stats),

@@ -39,6 +39,8 @@ flowchart LR
 - `ui_state.skew_dynamics`
 - `ui_state.mtf_flow`
 - `ui_state.active_options`
+- `ui_state.skew_dynamics` live source-of-truth 必须使用 `rr25_call_minus_put` + `skew_25d_valid` gate；`skew_25d_normalized` 仅保留 compatibility/research 路径，不得驱动 live UI
+- `ui_state.tactical_triad.charm` live source-of-truth 必须使用 `net_charm_raw_sum`；legacy `net_charm` 仅保留 compatibility/research 路径
 
 规则:
 
@@ -100,3 +102,4 @@ flowchart LR
 powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l3_assembly/tests
 powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 scripts/test/test_l0_l4_pipeline.py
 ```
+

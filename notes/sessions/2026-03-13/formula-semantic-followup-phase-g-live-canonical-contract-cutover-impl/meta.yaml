@@ -1,0 +1,48 @@
+session_id: "2026-03-13/formula-semantic-followup-phase-g-live-canonical-contract-cutover-impl"
+title: "formula-semantic-followup-phase-g-live-canonical-contract-cutover-impl"
+scope: "feature"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-13 09:52:05 -04:00"
+updated_at_et: "2026-03-13 10:04:19 -04:00"
+parent_session: "2026-03-13/formula-semantic-followup-phase-f-guard-unit-and-reference-sync-impl"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "f8a9b52"
+head_commit: "f8a9b52"
+
+files_changed:
+  - "l3_assembly/assembly/ui_state_tracker.py"
+  - "l3_assembly/tests/test_ui_state_tracker.py"
+  - "l3_assembly/tests/test_reactor.py"
+  - "l4_ui/src/components/__tests__/skewDynamics.model.test.ts"
+  - "l4_ui/src/components/__tests__/tacticalTriad.model.test.ts"
+  - "l4_ui/src/components/__tests__/rightPanelContract.integration.test.tsx"
+  - "docs/SOP/L3_OUTPUT_ASSEMBLY.md"
+  - "openspec/changes/formula-semantic-followup-phase-g-live-canonical-contract-cutover/tasks.md"
+  - "notes/sessions/2026-03-13/formula-semantic-followup-phase-g-live-canonical-contract-cutover-impl/project_state.md"
+  - "notes/sessions/2026-03-13/formula-semantic-followup-phase-g-live-canonical-contract-cutover-impl/open_tasks.md"
+  - "notes/sessions/2026-03-13/formula-semantic-followup-phase-g-live-canonical-contract-cutover-impl/handoff.md"
+  - "notes/sessions/2026-03-13/formula-semantic-followup-phase-g-live-canonical-contract-cutover-impl/meta.yaml"
+
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId \"formula-semantic-followup-phase-g-live-canonical-contract-cutover-impl\" -Title \"formula-semantic-followup-phase-g-live-canonical-contract-cutover-impl\" -Scope \"feature\" -Owner \"Codex\" -ParentSession \"2026-03-13/formula-semantic-followup-phase-f-guard-unit-and-reference-sync-impl\" -Timezone \"America/New_York\" -UpdatePointer"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l3_assembly/tests/test_ui_state_tracker.py l3_assembly/tests/test_reactor.py"
+  - "npm --prefix l4_ui run test -- rightPanelContract.integration skewDynamics.model tacticalTriad.model"
+  - "npm --prefix l4_ui run test -- rightPanelContract.integration skewDynamics.model tacticalTriad.model"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+
+tests_passed:
+  - "scripts/test/run_pytest.ps1 l3_assembly/tests/test_ui_state_tracker.py l3_assembly/tests/test_reactor.py (25 passed)"
+  - "npm --prefix l4_ui run test -- rightPanelContract.integration skewDynamics.model tacticalTriad.model (10 passed)"
+  - "scripts/validate_session.ps1 -Strict run #2 passed"
+  - "scripts/validate_session.ps1 -Strict run #3 passed"
+tests_failed:
+  - "npm --prefix l4_ui run test -- rightPanelContract.integration skewDynamics.model tacticalTriad.model run #1 failed: spawn EPERM in sandbox"
+  - "scripts/validate_session.ps1 -Strict run #1 failed: commands evidence missing in meta"
+blockers: []
+notes:
+  - "Phase G task checklist marked complete after code/docs/tests sync."
+  - "Payload top-level schema remained unchanged during canonical source cutover."

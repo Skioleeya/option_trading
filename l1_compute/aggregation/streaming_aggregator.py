@@ -49,12 +49,12 @@ class AggregateGreeks:
     net_vanna: float        # Legacy alias for net_vanna_raw_sum
     net_charm_raw_sum: float  # Canonical raw chain sum of charm sensitivities
     net_charm: float        # Legacy alias for net_charm_raw_sum
-    call_wall: float        # Strike with highest call GEX
+    call_wall: float        # Trading-practice proxy: strike with highest call-side GEX proxy
     call_wall_gex: float
-    put_wall: float         # Strike with highest put GEX
+    put_wall: float         # Trading-practice proxy: strike with highest put-side GEX proxy
     put_wall_gex: float
     flip_level: float       # Legacy alias of flip_level_cumulative (for compatibility)
-    flip_level_cumulative: float
+    flip_level_cumulative: float  # Trading-practice cumulative flip proxy
     zero_gamma_level: float
     total_call_gex: float
     total_put_gex: float
@@ -480,3 +480,4 @@ class StreamingAggregator:
         if math.isfinite(spot_ref) and spot_ref > 0.0:
             return float(min(candidates, key=lambda x: abs(x - spot_ref)))
         return float(candidates[0])
+

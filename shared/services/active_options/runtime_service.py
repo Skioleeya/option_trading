@@ -1,7 +1,7 @@
 """ActiveOptions runtime service (shared neutral service layer).
 
 Orchestrates the three FlowEngine_D/E/G engines and the DEGComposer to
-produce the final Active Options UI payload ordered by flow intensity.
+produce the final Active Options UI payload with stable VOL-first ranking.
 """
 
 from __future__ import annotations
@@ -35,6 +35,9 @@ _INTENSITY_GLOW = {
     "MODERATE": "",
     "LOW": "",
 }
+
+_ACTIVE_OPTIONS_SWITCH_CONFIRM_TICKS = 3
+_PLACEHOLDER_SIGNATURE_PREFIX = "__placeholder__#"
 
 
 def _direction_from_flow_amount(flow_amount: float) -> str:
@@ -80,6 +83,11 @@ class ActiveOptionsRuntimeService:
         self._composer = DEGComposer()
         self._oi_store = PersistentOIStore()
         self._latest_payload: list[dict[str, Any]] = []
+        self._latest_signature: tuple[tuple[str, str, float], ...] | None = None
+        self._pending_signature: tuple[tuple[str, str, float], ...] | None = None
+        self._pending_rows: list[dict[str, Any]] = []
+        self._pending_hits = 0
+        self._switch_confirm_ticks = _ACTIVE_OPTIONS_SWITCH_CONFIRM_TICKS
 
     def get_latest(self) -> list[dict[str, Any]]:
         """Return the latest cached generated rows without blocking."""
@@ -99,6 +107,10 @@ class ActiveOptionsRuntimeService:
         target_limit = max(0, int(limit))
         if target_limit == 0:
             self._latest_payload = []
+            self._latest_signature = None
+            self._pending_signature = None
+            self._pending_rows = []
+            self._pending_hits = 0
             return
 
         min_vol = settings.flow_active_min_volume
@@ -109,7 +121,8 @@ class ActiveOptionsRuntimeService:
                 "[ActiveOptionsRuntimeService] No options above min_volume threshold — "
                 "emitting neutral placeholders to keep fixed row contract."
             )
-            self._latest_payload = self._pad_rows([], target_limit)
+            rows, signature = self._build_ranked_candidate([], target_limit)
+            self._commit_or_hold_candidate(rows=rows, signature=signature)
             return
 
         if redis:
@@ -142,9 +155,97 @@ class ActiveOptionsRuntimeService:
             ttm_seconds=ttm_seconds,
         )
 
-        top = sorted(outputs, key=lambda o: o.impact_index, reverse=True)[:target_limit]
-        rows = [self._format_row(o, slot_index=idx + 1) for idx, o in enumerate(top)]
-        self._latest_payload = self._pad_rows(rows, target_limit)
+        rows, signature = self._build_ranked_candidate(outputs, target_limit)
+        self._commit_or_hold_candidate(rows=rows, signature=signature)
+
+    @staticmethod
+    def _rank_outputs(outputs: list[FlowEngineOutput]) -> list[FlowEngineOutput]:
+        return sorted(
+            outputs,
+            key=lambda o: (
+                -int(o.volume),
+                -float(o.turnover),
+                -float(o.impact_index),
+                str(o.symbol),
+                float(o.strike),
+                str(o.option_type),
+            ),
+        )
+
+    @classmethod
+    def _build_ranked_candidate(
+        cls,
+        outputs: list[FlowEngineOutput],
+        limit: int,
+    ) -> tuple[list[dict[str, Any]], tuple[tuple[str, str, float], ...]]:
+        target = max(0, int(limit))
+        ranked = cls._rank_outputs(outputs)[:target]
+        rows = [cls._format_row(o, slot_index=idx + 1) for idx, o in enumerate(ranked)]
+        padded_rows = cls._pad_rows(rows, target)
+
+        signature_entries: list[tuple[str, str, float]] = [
+            (str(o.symbol), str(o.option_type), round(float(o.strike), 4))
+            for o in ranked
+        ]
+        while len(signature_entries) < target:
+            signature_entries.append((f"{_PLACEHOLDER_SIGNATURE_PREFIX}{len(signature_entries) + 1}", "CALL", 0.0))
+        return padded_rows, tuple(signature_entries)
+
+    def _commit_or_hold_candidate(
+        self,
+        *,
+        rows: list[dict[str, Any]],
+        signature: tuple[tuple[str, str, float], ...],
+    ) -> None:
+        # Empty-data degradation must cut over immediately (no stale retention window).
+        if self._is_placeholder_signature(signature):
+            self._latest_payload = rows
+            self._latest_signature = signature
+            self._pending_signature = None
+            self._pending_rows = []
+            self._pending_hits = 0
+            return
+
+        # First publish has no prior state; commit immediately.
+        if self._latest_signature is None:
+            self._latest_payload = rows
+            self._latest_signature = signature
+            self._pending_signature = None
+            self._pending_rows = []
+            self._pending_hits = 0
+            return
+
+        # No ranking change — refresh numeric fields in-place and clear pending candidate.
+        # This keeps VOL-top composition stable while still allowing live value updates.
+        if signature == self._latest_signature:
+            self._latest_payload = rows
+            self._pending_signature = None
+            self._pending_rows = []
+            self._pending_hits = 0
+            return
+
+        # Candidate changed — require N consecutive identical signatures before switch.
+        if signature != self._pending_signature:
+            self._pending_signature = signature
+            self._pending_rows = rows
+            self._pending_hits = 1
+            return
+
+        self._pending_hits += 1
+        if self._pending_hits < self._switch_confirm_ticks:
+            return
+
+        self._latest_payload = self._pending_rows
+        self._latest_signature = self._pending_signature
+        self._pending_signature = None
+        self._pending_rows = []
+        self._pending_hits = 0
+
+    @staticmethod
+    def _is_placeholder_signature(signature: tuple[tuple[str, str, float], ...]) -> bool:
+        if not signature:
+            return False
+        return all(str(entry[0]).startswith(_PLACEHOLDER_SIGNATURE_PREFIX) for entry in signature)
 
     @staticmethod
     def _format_row(o: FlowEngineOutput, *, slot_index: int = 1) -> dict[str, Any]:
@@ -215,3 +316,5 @@ class ActiveOptionsRuntimeService:
         while len(trimmed) < target:
             trimmed.append(cls._placeholder_row(len(trimmed) + 1))
         return trimmed
+
+
