@@ -62,6 +62,12 @@ flowchart LR
 - 禁止 `l2_decision -> l4_ui`
 - `l2_decision/agents/services` 禁止导入 `l1_compute.analysis/*`
 
+### 5.1 AgentG 决策管线边界（P1 去混乱）
+
+- `agent_g.py` 负责决策编排与状态机（VRP/MTF hysteresis）持有。
+- `agents/services/agent_g_decision_support.py` 负责输入归一化、ATM 微结构聚合、micro-flow 计算等纯 helper。
+- 对外契约保持不变：`AgentG.decide(...) -> AgentResult`，`fused_signal/summary/jump-gate` 语义不变。
+
 ## 6. Data Semantics
 
 - L2 不重写 L0/L1 时间语义

@@ -34,6 +34,12 @@ flowchart LR
  - 超过上限时按离 spot 距离优先保留近端合约，输出 drop 诊断日志。
 3. `ChainStateStore` 聚合并提供 `fetch_chain()` 快照。
 
+### 3.3 IVBaselineSync 模块边界（P1 去混乱）
+
+- `iv_baseline_sync.py` 只负责生命周期与流程编排（warm_up / staggered loop）。
+- `iv_baseline_sync_support.py` 负责批次切片、IV/OI 解析、cooldown 判定等纯 helper 逻辑。
+- 行为契约保持不变：dedupe window、`301607` cooldown、ATM-first chunk 顺序、`spot_at_sync` 写入语义不变。
+
 ## 3.1 官方网关与环境变量对齐（Rust SDK）
 
 按 Longport Rust `Config::from_env` 契约，L0 默认应使用以下主网关：
