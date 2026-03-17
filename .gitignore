@@ -65,3 +65,20 @@ backend/nul
 # Local runtime temp data
 tmp/atm_decay_*/
 tmp/pytest_cache/
+
+# Runtime-generated market data snapshots (daily rolling)
+data/atm_decay/atm_*.json
+data/atm_decay/atm_series_*.jsonl
+data/mtf_iv/mtf_iv_series_*.jsonl
+data/wall_migration/wall_series_*.jsonl
+data/research/raw/raw_*.parquet
+data/research/feature/feature_*.parquet
+data/research/label/label_*.parquet
+
+# Decision audit runtime logs
+l2_decision/.audit_logs/l2_audit_*.jsonl
+l2_decision/.audit_logs/l2_audit_*.parquet
+
+# Session validation diagnostics (ephemeral)
+tmp/session_validation_diag/*.json
+tmp/session_validation_diag/*.yaml
