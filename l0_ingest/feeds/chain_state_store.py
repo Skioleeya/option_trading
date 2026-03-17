@@ -51,6 +51,11 @@ class ChainStateStore:
         # Monotonic snapshot version for downstream cache invalidation.
         self._version: int = 0
 
+        # WS authority flags for controlled REST fallback on flow fields.
+        self._ws_volume_seen: set[str] = set()
+        self._ws_current_volume_seen: set[str] = set()
+        self._ws_turnover_seen: set[str] = set()
+
     # ── Spot ──────────────────────────────────────────────────────────────────
 
     @property
@@ -93,30 +98,7 @@ class ChainStateStore:
         if is_rest and event.seq_no <= last:
             return False
 
-        # Build or update the entry
-        created = False
-        if symbol not in self._chain:
-            self._chain[symbol] = {
-                "symbol":         symbol,
-                "strike":         event.strike,
-                "type":           event.opt_type,
-                "bid":            0.0,
-                "ask":            0.0,
-                "last_price":     0.0,
-                "volume":         0,
-                "open_interest":  0,
-                "implied_volatility": 0.0,
-                "iv_timestamp":   0.0,
-                "delta":          0.0,
-                "gamma":          0.0,
-                "theta":          0.0,
-                "vega":           0.0,
-                "current_volume": 0.0,
-                "turnover":       0.0,
-            }
-            created = True
-
-        entry = self._chain[symbol]
+        entry, created = self._ensure_entry(symbol, event)
         changed = False
 
         def _set(key: str, val: Any) -> None:
@@ -125,23 +107,8 @@ class ChainStateStore:
                 entry[key] = val
                 changed = True
 
-        # BUG-1 FIX: 价格字段仅 WS 推送写入；REST 不得覆盖实盘成交价
-        if not is_rest:
-            _set("bid",            event.bid)
-            _set("ask",            event.ask)
-            _set("last_price",     event.last_price)
-            _set("volume",         event.volume)
-            _set("current_volume", event.current_volume)
-            _set("turnover",       event.turnover)
-
-        # IV 字段：REST 是唯一来源（长桥 WS 不提供 IV）
-        _set("implied_volatility", event.implied_volatility)
-        _set("iv_timestamp",       event.iv_timestamp)
-
-        _set("delta",              event.delta)
-        _set("gamma",              event.gamma)
-        _set("theta",              event.theta)
-        _set("vega",               event.vega)
+        self._apply_price_and_flow_fields(symbol, event, is_rest=is_rest, setter=_set)
+        self._apply_iv_and_greeks(event, setter=_set)
 
         # BUG-8 NOTE (P2): OI 统一通过 apply_oi_smooth() 写入以保持 EMA 连续性。
         # 调用方负责在 apply_event() 后显式调用 apply_oi_smooth(symbol, event.open_interest)。
@@ -156,6 +123,79 @@ class ChainStateStore:
             self._bump_version()
 
         return True
+
+    def _ensure_entry(
+        self,
+        symbol: str,
+        event: CleanQuoteEvent,
+    ) -> tuple[dict[str, Any], bool]:
+        if symbol not in self._chain:
+            self._chain[symbol] = {
+                "symbol": symbol,
+                "strike": event.strike,
+                "type": event.opt_type,
+                "bid": 0.0,
+                "ask": 0.0,
+                "last_price": 0.0,
+                "volume": 0,
+                "open_interest": 0,
+                "implied_volatility": 0.0,
+                "iv_timestamp": 0.0,
+                "delta": 0.0,
+                "gamma": 0.0,
+                "theta": 0.0,
+                "vega": 0.0,
+                "current_volume": 0.0,
+                "turnover": 0.0,
+            }
+            return self._chain[symbol], True
+        return self._chain[symbol], False
+
+    def _apply_price_and_flow_fields(
+        self,
+        symbol: str,
+        event: CleanQuoteEvent,
+        *,
+        is_rest: bool,
+        setter: Any,
+    ) -> None:
+        if not is_rest:
+            setter("bid", event.bid)
+            setter("ask", event.ask)
+            setter("last_price", event.last_price)
+            self._apply_ws_flow_fields(symbol, event, setter)
+            return
+
+        self._apply_rest_flow_fallback(symbol, event, setter)
+
+    def _apply_ws_flow_fields(self, symbol: str, event: CleanQuoteEvent, setter: Any) -> None:
+        setter("volume", event.volume)
+        setter("current_volume", event.current_volume)
+        setter("turnover", event.turnover)
+        if event.volume is not None:
+            self._ws_volume_seen.add(symbol)
+        if event.current_volume is not None:
+            self._ws_current_volume_seen.add(symbol)
+        if event.turnover is not None:
+            self._ws_turnover_seen.add(symbol)
+
+    def _apply_rest_flow_fallback(self, symbol: str, event: CleanQuoteEvent, setter: Any) -> None:
+        if symbol not in self._ws_volume_seen:
+            setter("volume", event.volume)
+        if symbol not in self._ws_current_volume_seen:
+            setter("current_volume", event.current_volume)
+        if symbol not in self._ws_turnover_seen:
+            setter("turnover", event.turnover)
+
+    @staticmethod
+    def _apply_iv_and_greeks(event: CleanQuoteEvent, *, setter: Any) -> None:
+        # IV 字段：REST 是唯一来源（长桥 WS 不提供 IV）
+        setter("implied_volatility", event.implied_volatility)
+        setter("iv_timestamp", event.iv_timestamp)
+        setter("delta", event.delta)
+        setter("gamma", event.gamma)
+        setter("theta", event.theta)
+        setter("vega", event.vega)
 
     def apply_depth(self, event: CleanDepthEvent) -> None:
         """Update top-of-book bid/ask from a depth event."""
@@ -249,6 +289,9 @@ class ChainStateStore:
             "last_spot_update":    self._last_spot_update.isoformat() if self._last_spot_update else None,
             "volume_map_size":     len(self._volume_map),
             "oi_smooth_entries":   len(self._oi_smooth),
+            "ws_volume_seen":      len(self._ws_volume_seen),
+            "ws_current_volume_seen": len(self._ws_current_volume_seen),
+            "ws_turnover_seen":    len(self._ws_turnover_seen),
         }
 
     def _bump_version(self) -> None:

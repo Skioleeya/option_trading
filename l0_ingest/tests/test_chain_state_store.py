@@ -10,13 +10,17 @@ def _quote_event(
     seq_no: int,
     *,
     symbol: str = "SPY260306C560000.US",
+    event_type: EventType = EventType.QUOTE,
     bid: float | None = 1.0,
     ask: float | None = 1.1,
     last_price: float | None = 1.05,
+    volume: int | None = 100,
+    current_volume: float | None = None,
+    turnover: float | None = None,
 ) -> CleanQuoteEvent:
     return CleanQuoteEvent(
         seq_no=seq_no,
-        event_type=EventType.QUOTE,
+        event_type=event_type,
         symbol=symbol,
         strike=560.0,
         opt_type="CALL",
@@ -24,8 +28,10 @@ def _quote_event(
         bid=bid,
         ask=ask,
         last_price=last_price,
-        volume=100,
+        volume=volume,
         open_interest=200,
+        current_volume=current_volume,
+        turnover=turnover,
     )
 
 
@@ -117,3 +123,54 @@ def test_apply_depth_bumps_version_on_actual_change() -> None:
 
     assert changed == before + 1
     assert unchanged == changed
+
+
+def test_rest_can_seed_turnover_before_ws_seen() -> None:
+    store = ChainStateStore()
+
+    rest_event = _quote_event(
+        1,
+        event_type=EventType.REST,
+        bid=None,
+        ask=None,
+        last_price=None,
+        volume=12,
+        current_volume=34.0,
+        turnover=56.0,
+    )
+    assert store.apply_event(rest_event) is True
+
+    snap = store.get_snapshot()[0]
+    assert snap["volume"] == 12
+    assert snap["current_volume"] == 34.0
+    assert snap["turnover"] == 56.0
+
+
+def test_rest_fallback_does_not_override_ws_owned_flow_fields() -> None:
+    store = ChainStateStore()
+
+    ws_event = _quote_event(
+        1,
+        event_type=EventType.QUOTE,
+        volume=120,
+        current_volume=220.0,
+        turnover=320.0,
+    )
+    assert store.apply_event(ws_event) is True
+
+    rest_event = _quote_event(
+        2,
+        event_type=EventType.REST,
+        bid=None,
+        ask=None,
+        last_price=None,
+        volume=999,
+        current_volume=999.0,
+        turnover=999.0,
+    )
+    assert store.apply_event(rest_event) is True
+
+    snap = store.get_snapshot()[0]
+    assert snap["volume"] == 120
+    assert snap["current_volume"] == 220.0
+    assert snap["turnover"] == 320.0

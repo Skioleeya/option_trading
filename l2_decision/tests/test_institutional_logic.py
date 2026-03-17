@@ -1,4 +1,5 @@
 import pytest
+import pyarrow as pa
 from l2_decision.signals.flow.deg_composer import InstitutionalSweepDetector, DEGComposer
 from shared.models.flow_engine import FlowEngineInput, FlowEngineOutput, FlowComponentResult
 from l2_decision.feature_store.extractors import _MaxImpactExtractor
@@ -82,3 +83,25 @@ def test_max_impact_extractor():
     snapshot = MockSnapshot(chain)
     max_imp = extractor(snapshot)
     assert max_imp == 40.0
+
+
+def test_max_impact_extractor_recordbatch_with_computed_gamma():
+    extractor = _MaxImpactExtractor()
+
+    class MockSnapshot:
+        def __init__(self, chain):
+            self.chain = chain
+
+    chain = pa.RecordBatch.from_arrays(
+        [
+            pa.array([1000.0, 500.0], type=pa.float64()),
+            pa.array([0.0, 0.0], type=pa.float64()),
+            pa.array([0.01, 0.09], type=pa.float64()),
+            pa.array([0.5, 0.1], type=pa.float64()),
+        ],
+        names=["turnover", "volume", "gamma", "computed_gamma"],
+    )
+
+    snapshot = MockSnapshot(chain)
+    max_imp = extractor(snapshot)
+    assert max_imp == 100.0

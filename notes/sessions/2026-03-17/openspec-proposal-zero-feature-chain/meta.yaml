@@ -1,0 +1,39 @@
+session_id: "2026-03-17/openspec-proposal-zero-feature-chain"
+title: "openspec proposal for l0-l2 microstructure feature chain repair"
+scope: "openspec proposal + design + tasks + spec"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-17 11:42:08 -04:00"
+updated_at_et: "2026-03-17 11:52:20 -04:00"
+parent_session: "2026-03-13/activeoptions-freeze-rootcause-verifier"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "cbccdaa"
+head_commit: "cbccdaa"
+
+files_changed:
+  - "openspec/changes/l0-l2-microstructure-feature-chain-repair/proposal.md"
+  - "openspec/changes/l0-l2-microstructure-feature-chain-repair/design.md"
+  - "openspec/changes/l0-l2-microstructure-feature-chain-repair/tasks.md"
+  - "openspec/changes/l0-l2-microstructure-feature-chain-repair/specs/l0-l2-microstructure-feature-chain/spec.md"
+  - "notes/sessions/2026-03-17/openspec-proposal-zero-feature-chain/project_state.md"
+  - "notes/sessions/2026-03-17/openspec-proposal-zero-feature-chain/open_tasks.md"
+  - "notes/sessions/2026-03-17/openspec-proposal-zero-feature-chain/handoff.md"
+  - "notes/sessions/2026-03-17/openspec-proposal-zero-feature-chain/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+
+commands:
+  - "./scripts/new_session.ps1 -TaskId \"openspec-proposal-zero-feature-chain\" -Title \"openspec proposal for l0-l2 microstructure feature chain repair\" -Scope \"openspec proposal + design + tasks + spec\" -Owner \"Codex\" -ParentSession \"2026-03-13/activeoptions-freeze-rootcause-verifier\" -Timezone \"America/New_York\" -UpdatePointer"
+  - "./scripts/validate_session.ps1 -Strict"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+
+tests_passed:
+  - "./scripts/validate_session.ps1 -Strict (PASS)"
+tests_failed:
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict (failed: Internal Windows PowerShell error 8009001d in current shell)"
+blockers: []
+notes:
+  - "Single OpenSpec change created for L0/L1/L2 microstructure feature-chain repair scope."
+  - "Strict validation passed via direct script invocation in current shell."

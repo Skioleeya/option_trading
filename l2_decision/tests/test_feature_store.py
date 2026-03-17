@@ -31,7 +31,11 @@ from l2_decision.events.decision_events import (
     GuardedDecision,
     RawSignal,
 )
-from l2_decision.feature_store.extractors import build_default_extractors, reset_all_default_extractors
+from l2_decision.feature_store.extractors import (
+    _TurnoverVelocityExtractor,
+    build_default_extractors,
+    reset_all_default_extractors,
+)
 from l2_decision.feature_store.store import FeatureSpec, FeatureStore
 
 _ET = ZoneInfo("US/Eastern")
@@ -444,6 +448,78 @@ class TestDefaultExtractors:
         assert fv.get("net_vanna") == pytest.approx(12.5)
         assert fv.get("net_charm_raw_sum") == pytest.approx(-4.0)
         assert fv.get("net_charm") == pytest.approx(-4.0)
+
+
+def test_turnover_velocity_recordbatch_falls_back_to_current_volume(monkeypatch):
+    extractor = _TurnoverVelocityExtractor(window_seconds=60.0)
+
+    class _Snap:
+        def __init__(self, chain):
+            self.chain = chain
+
+    clock = {"t": 100.0}
+    monkeypatch.setattr(
+        "l2_decision.feature_store.extractors.time.monotonic",
+        lambda: clock["t"],
+    )
+
+    snap = _Snap(
+        pa.RecordBatch.from_arrays(
+            [
+                pa.array([0.0, 0.0], type=pa.float64()),
+                pa.array([100.0, 0.0], type=pa.float64()),
+                pa.array([0.0, 0.0], type=pa.float64()),
+            ],
+            names=["turnover", "current_volume", "volume"],
+        )
+    )
+    assert extractor(snap) == 0.0
+
+    clock["t"] = 130.0
+    snap.chain = pa.RecordBatch.from_arrays(
+        [
+            pa.array([0.0, 0.0], type=pa.float64()),
+            pa.array([160.0, 0.0], type=pa.float64()),
+            pa.array([0.0, 0.0], type=pa.float64()),
+        ],
+        names=["turnover", "current_volume", "volume"],
+    )
+    assert extractor(snap) == pytest.approx(2.0)
+
+
+def test_turnover_velocity_prefers_turnover_over_fallback_fields(monkeypatch):
+    extractor = _TurnoverVelocityExtractor(window_seconds=60.0)
+
+    class _Snap:
+        def __init__(self, chain):
+            self.chain = chain
+
+    clock = {"t": 200.0}
+    monkeypatch.setattr(
+        "l2_decision.feature_store.extractors.time.monotonic",
+        lambda: clock["t"],
+    )
+
+    snap = _Snap(
+        pa.RecordBatch.from_arrays(
+            [
+                pa.array([10.0], type=pa.float64()),
+                pa.array([100.0], type=pa.float64()),
+            ],
+            names=["turnover", "current_volume"],
+        )
+    )
+    assert extractor(snap) == 0.0
+
+    clock["t"] = 230.0
+    snap.chain = pa.RecordBatch.from_arrays(
+        [
+            pa.array([40.0], type=pa.float64()),
+            pa.array([1000.0], type=pa.float64()),
+        ],
+        names=["turnover", "current_volume"],
+    )
+    assert extractor(snap) == pytest.approx(1.0)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

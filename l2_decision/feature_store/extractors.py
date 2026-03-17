@@ -185,18 +185,17 @@ class _TurnoverVelocityExtractor:
         self._history: deque[tuple[float, float]] = deque(maxlen=3600)
 
     def __call__(self, snapshot: Any) -> float:
-        # Aggregate turnover across the entire chain
         chain = _get_val(snapshot, "chain")
         if chain is None:
             return 0.0
 
         try:
             import pyarrow as pa
+            import pyarrow.compute as pc
             if isinstance(chain, pa.RecordBatch):
-                # Use pyarrow optimized sum if possible
-                turnover = float(pa.compute.sum(chain.column("turnover")).as_py())
+                turnover = self._recordbatch_flow_sum(chain, pc)
             else:
-                turnover = sum(float(row.get("turnover", 0.0)) for row in chain)
+                turnover = self._iterable_flow_sum(chain)
         except Exception as exc:
             logger.debug("turnover_velocity extraction fallback: %s", exc)
             return 0.0
@@ -223,22 +222,62 @@ class _TurnoverVelocityExtractor:
     def reset(self) -> None:
         self._history.clear()
 
+    @staticmethod
+    def _recordbatch_flow_sum(chain: Any, pc: Any) -> float:
+        field_names = set(chain.schema.names)
+        for field in ("turnover", "current_volume", "volume"):
+            if field not in field_names:
+                continue
+            scalar = pc.sum(chain.column(field))
+            if scalar is None:
+                continue
+            raw = scalar.as_py()
+            if raw is None:
+                continue
+            total = float(raw)
+            if total > 0.0:
+                return total
+        return 0.0
+
+    @staticmethod
+    def _iterable_flow_sum(chain: Any) -> float:
+        total = 0.0
+        for row in chain:
+            if not isinstance(row, dict):
+                continue
+            raw = row.get("turnover")
+            if raw in (None, 0, 0.0):
+                raw = row.get("current_volume")
+            if raw in (None, 0, 0.0):
+                raw = row.get("volume", 0.0)
+            try:
+                total += float(raw or 0.0)
+            except (TypeError, ValueError):
+                continue
+        return total
+
 
 class _MaxImpactExtractor:
     """Heuristic for peak institutional impact (OFII proxy) at aggregate level."""
 
     def __call__(self, snapshot: Any) -> float:
         chain = _get_val(snapshot, "chain")
-        if not chain:
+        if chain is None:
             return 0.0
 
-        # Heuristic OFII proxy: peak (|Flow| * |Gamma|) 
         max_imp = 0.0
         try:
+            import pyarrow as pa
+            if isinstance(chain, pa.RecordBatch):
+                if chain.num_rows == 0:
+                    return 0.0
+                return self._recordbatch_max_impact(chain)
+
             for row in chain:
-                # Use turnover/volume * gamma as impact proxy for the aggregate signal
-                flow_proxy = abs(float(row.get("turnover", 0.0) or row.get("volume", 0.0)))
-                gamma = abs(float(row.get("gamma", 0.0) or 0.0))
+                if not isinstance(row, dict):
+                    continue
+                flow_proxy = self._flow_proxy(row)
+                gamma = self._gamma_proxy(row)
                 imp = flow_proxy * gamma
                 if imp > max_imp:
                     max_imp = imp
@@ -251,6 +290,42 @@ class _MaxImpactExtractor:
     def reset(self) -> None:
         pass
 
+    @staticmethod
+    def _recordbatch_max_impact(chain: Any) -> float:
+        rows = chain.to_pylist()
+        max_imp = 0.0
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            flow_proxy = _MaxImpactExtractor._flow_proxy(row)
+            gamma = _MaxImpactExtractor._gamma_proxy(row)
+            imp = flow_proxy * gamma
+            if imp > max_imp:
+                max_imp = imp
+        return max_imp
+
+    @staticmethod
+    def _flow_proxy(row: dict[str, Any]) -> float:
+        raw = row.get("turnover")
+        if raw in (None, 0, 0.0):
+            raw = row.get("current_volume")
+        if raw in (None, 0, 0.0):
+            raw = row.get("volume", 0.0)
+        try:
+            return abs(float(raw or 0.0))
+        except (TypeError, ValueError):
+            return 0.0
+
+    @staticmethod
+    def _gamma_proxy(row: dict[str, Any]) -> float:
+        raw = row.get("computed_gamma")
+        if raw in (None, 0, 0.0):
+            raw = row.get("gamma", 0.0)
+        try:
+            return abs(float(raw or 0.0))
+        except (TypeError, ValueError):
+            return 0.0
+
 
 class _SVolCorrelationExtractor:
     """15-minute spot-vol correlation feature."""
@@ -262,30 +337,44 @@ class _SVolCorrelationExtractor:
     def __call__(self, snapshot: Any) -> float:
         spot = _get_val(snapshot, "spot")
         iv = _get_agg(snapshot, "atm_iv")
-
-        if not (math.isfinite(spot or 0.0) and (spot or 0) > 0 and math.isfinite(iv or 0.0) and (iv or 0) > 0):
+        if not self._is_valid_input(spot, iv):
             return 0.0
 
-        now_mono = time.monotonic()
-        self._history.append((now_mono, spot, iv))
-
-        cutoff = now_mono - self._window
-        while self._history and self._history[0][0] < cutoff: self._history.popleft()
-
-        if len(self._history) < 30: return 0.0
-
-        spots, ivs = [x[1] for x in self._history], [x[2] for x in self._history]
-        n = len(spots)
-        mean_s, mean_iv = sum(spots)/n, sum(ivs)/n
-        num = sum((s - mean_s) * (v - mean_iv) for s, v in zip(spots, ivs))
-        std_s = math.sqrt(sum((s - mean_s)**2 for s in spots)/n)
-        std_iv = math.sqrt(sum((v - mean_iv)**2 for v in ivs)/n)
-
-        if std_s < 1e-9 or std_iv < 1e-9: return 0.0
-        return max(-1.0, min(1.0, num / (n * std_s * std_iv)))
+        self._append_and_trim(float(spot), float(iv))
+        if len(self._history) < 30:
+            return 0.0
+        return self._compute_correlation()
 
     def reset(self) -> None:
         self._history.clear()
+
+    @staticmethod
+    def _is_valid_input(spot: Any, iv: Any) -> bool:
+        return (
+            math.isfinite(spot or 0.0)
+            and (spot or 0) > 0
+            and math.isfinite(iv or 0.0)
+            and (iv or 0) > 0
+        )
+
+    def _append_and_trim(self, spot: float, iv: float) -> None:
+        now_mono = time.monotonic()
+        self._history.append((now_mono, spot, iv))
+        cutoff = now_mono - self._window
+        while self._history and self._history[0][0] < cutoff:
+            self._history.popleft()
+
+    def _compute_correlation(self) -> float:
+        spots, ivs = [x[1] for x in self._history], [x[2] for x in self._history]
+        n = len(spots)
+        mean_s, mean_iv = sum(spots) / n, sum(ivs) / n
+        covariance = sum((s - mean_s) * (v - mean_iv) for s, v in zip(spots, ivs))
+        std_s = math.sqrt(sum((s - mean_s) ** 2 for s in spots) / n)
+        std_iv = math.sqrt(sum((v - mean_iv) ** 2 for v in ivs) / n)
+        if std_s < 1e-9 or std_iv < 1e-9:
+            return 0.0
+        corr = covariance / (n * std_s * std_iv)
+        return max(-1.0, min(1.0, corr))
 
 
 class _MTFConsensusExtractor:
@@ -410,19 +499,24 @@ class _Skew25dMetricsExtractor:
         chain = _get_val(snapshot, "chain")
         if chain is None:
             return None
-        version = getattr(snapshot, "version", None)
-        if version is None and isinstance(snapshot, dict):
-            version = snapshot.get("version")
-        if isinstance(version, bool):
-            version = None
-        elif isinstance(version, float):
-            version = int(version) if math.isfinite(version) else None
-        elif isinstance(version, str):
-            text = version.strip()
-            version = int(text) if text.isdigit() else None
-        elif not isinstance(version, int):
-            version = None
+        raw_version = getattr(snapshot, "version", None)
+        if raw_version is None and isinstance(snapshot, dict):
+            raw_version = snapshot.get("version")
+        version = _Skew25dMetricsExtractor._coerce_version_token(raw_version)
         return (id(snapshot), version, id(chain))
+
+    @staticmethod
+    def _coerce_version_token(raw_version: Any) -> int | None:
+        if isinstance(raw_version, bool):
+            return None
+        if isinstance(raw_version, int):
+            return raw_version
+        if isinstance(raw_version, float):
+            return int(raw_version) if math.isfinite(raw_version) else None
+        if isinstance(raw_version, str):
+            text = raw_version.strip()
+            return int(text) if text.isdigit() else None
+        return None
 
     @staticmethod
     def _coerce_chain_rows(chain: Any) -> list[dict[str, Any]]:
