@@ -164,6 +164,66 @@ class TestL1ComputeReactor:
         assert snap.quality.contracts_computed == 0
 
     @pytest.mark.asyncio
+    async def test_empty_chain_preserves_extra_metadata(self):
+        reactor = L1ComputeReactor(sabr_enabled=False)
+        metadata = {
+            "rust_active": False,
+            "shm_stats": {"status": "UNINITIALIZED", "head": 0, "tail": 0},
+            "source_data_timestamp_utc": None,
+        }
+        snap = await reactor.compute(
+            [],
+            spot=560.0,
+            l0_version=2,
+            extra_metadata=metadata,
+        )
+        assert snap.extra_metadata == metadata
+
+    @pytest.mark.asyncio
+    async def test_nonpositive_spot_preserves_extra_metadata(self):
+        reactor = L1ComputeReactor(sabr_enabled=False)
+        metadata = {
+            "rust_active": True,
+            "shm_stats": {"status": "ERROR", "head": 0, "tail": 0},
+            "source_data_timestamp_utc": "2026-03-17T18:00:00+00:00",
+        }
+        snap = await reactor.compute(
+            _make_chain_entries(3),
+            spot=0.0,
+            l0_version=3,
+            extra_metadata=metadata,
+        )
+        assert snap.extra_metadata == metadata
+
+    @pytest.mark.asyncio
+    async def test_all_iv_invalid_preserves_extra_metadata(self):
+        reactor = L1ComputeReactor(sabr_enabled=False)
+        metadata = {
+            "rust_active": True,
+            "shm_stats": {"status": "OK", "head": 5, "tail": 5},
+            "source_data_timestamp_utc": "2026-03-17T18:01:00+00:00",
+        }
+        chain = [
+            {
+                "symbol": "SPY_BAD",
+                "strike": 560.0,
+                "type": "CALL",
+                "implied_volatility": 0.0,
+                "open_interest": 1000,
+                "contract_multiplier": 100,
+                "volume": 10,
+            }
+        ]
+        snap = await reactor.compute(
+            chain,
+            spot=560.0,
+            l0_version=4,
+            extra_metadata=metadata,
+        )
+        assert snap.quality.contracts_computed == 0
+        assert snap.extra_metadata == metadata
+
+    @pytest.mark.asyncio
     async def test_snapshot_contracts_computed(self):
         reactor = L1ComputeReactor(sabr_enabled=False)
         chain = _make_chain_entries(100)
@@ -178,7 +238,7 @@ class TestL1ComputeReactor:
         reactor = L1ComputeReactor(sabr_enabled=False)
         chain = _make_chain_entries(50)
         snap = await reactor.compute(chain, spot=560.0)
-        assert snap.quality.compute_tier in ("gpu", "numba", "numpy")
+        assert snap.quality.compute_tier in ("gpu", "gpu_only_blocked", "numba", "numpy")
 
     @pytest.mark.asyncio
     async def test_legacy_dict_output_compatible(self):
@@ -262,6 +322,77 @@ class TestL1ComputeReactor:
         chain = _make_chain_entries(20)
         result = reactor._compute_sync(chain, spot=560.0, l0_version=1, iv_cache={}, spot_at_sync={})
         assert isinstance(result, EnrichedSnapshot)
+
+    def test_compute_sync_empty_chain_preserves_extra_metadata(self):
+        reactor = L1ComputeReactor(sabr_enabled=False)
+        metadata = {
+            "rust_active": False,
+            "shm_stats": {"status": "UNINITIALIZED", "head": 0, "tail": 0},
+            "source_data_timestamp_utc": None,
+        }
+        snap = reactor._compute_sync(
+            [],
+            spot=560.0,
+            l0_version=31,
+            iv_cache={},
+            spot_at_sync={},
+            extra_metadata=metadata,
+        )
+        assert snap.extra_metadata == metadata
+
+    def test_compute_sync_nonpositive_spot_preserves_extra_metadata(self):
+        reactor = L1ComputeReactor(sabr_enabled=False)
+        metadata = {
+            "rust_active": True,
+            "shm_stats": {"status": "ERROR", "head": 0, "tail": 0},
+            "source_data_timestamp_utc": "2026-03-17T18:00:00+00:00",
+        }
+        snap = reactor._compute_sync(
+            _make_chain_entries(3),
+            spot=0.0,
+            l0_version=32,
+            iv_cache={},
+            spot_at_sync={},
+            extra_metadata=metadata,
+        )
+        assert snap.extra_metadata == metadata
+
+    def test_compute_sync_all_iv_invalid_preserves_extra_metadata(self):
+        reactor = L1ComputeReactor(sabr_enabled=False)
+        metadata = {
+            "rust_active": True,
+            "shm_stats": {"status": "OK", "head": 5, "tail": 5},
+            "source_data_timestamp_utc": "2026-03-17T18:01:00+00:00",
+        }
+
+        class _InvalidIV:
+            is_valid = False
+            value = 0.0
+
+        class _IVStats:
+            ws_hits = 0
+            rest_hits = 0
+            chain_hits = 0
+            sabr_hits = 0
+            misses = 1
+
+        class _InvalidResolver:
+            stats = _IVStats()
+
+            def batch_resolve(self, chain_snapshot, spot, iv_cache, spot_at_sync, ttm_years=0.0):
+                return {entry["symbol"]: _InvalidIV() for entry in chain_snapshot}
+
+        reactor._iv_resolver = _InvalidResolver()  # type: ignore[assignment]
+        snap = reactor._compute_sync(
+            _make_chain_entries(1),
+            spot=560.0,
+            l0_version=33,
+            iv_cache={},
+            spot_at_sync={},
+            extra_metadata=metadata,
+        )
+        assert snap.quality.contracts_computed == 0
+        assert snap.extra_metadata == metadata
 
     def test_wall_context_uses_million_unit_without_double_scaling(self):
         reactor = L1ComputeReactor(sabr_enabled=False)

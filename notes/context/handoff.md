@@ -1,12 +1,12 @@
 # Handoff (Index)
 
 ## Active Handoff
-- Path: notes/sessions/2026-03-17/openspec-refactor-parent-child-modularization/handoff.md
-- Meta: notes/sessions/2026-03-17/openspec-refactor-parent-child-modularization/meta.yaml
+- Path: notes/sessions/2026-03-17/apply-fix-20260317-p2-gpu-temp-noise-and-archive/handoff.md
+- Meta: notes/sessions/2026-03-17/apply-fix-20260317-p2-gpu-temp-noise-and-archive/meta.yaml
 
 ## Latest Outcome
-- Session: 2026-03-17/openspec-refactor-parent-child-modularization
-- Summary: Parent + 3 child OpenSpec refactor proposals created for `option_chain_builder.py` and `extractors.py` modular split governance; strict validation passed.
+- Session: 2026-03-17/apply-fix-20260317-p2-gpu-temp-noise-and-archive
+- Summary: GPU-only 重计算策略已落地并完成单轮 OpenSpec archive；本会话进入 strict 收口阶段。
 
 ## Next Session Bootstrap
 1. Read this file.

@@ -19,7 +19,12 @@ import pytest
 sys.path.insert(0, "e:\\US.market\\Option_v3")
 sys.path.insert(0, "e:\\US.market\\Option_v3\\backend")
 
-from l1_compute.compute.gpu_greeks_kernel import GPUGreeksKernel, GreeksMatrix, _compute_numpy
+from l1_compute.compute.gpu_greeks_kernel import (
+    GPUGreeksKernel,
+    GPUComputationUnavailableError,
+    GreeksMatrix,
+    _compute_numpy,
+)
 from l1_compute.compute.compute_router import ComputeRouter, ComputeTier
 from l1_compute.analysis.bsm_fast import _aggregate_greeks_cpu
 
@@ -159,7 +164,7 @@ class TestComputeRouter:
         if router.gpu_available:
             assert decision.tier == ComputeTier.GPU
         else:
-            assert decision.tier in (ComputeTier.NUMBA, ComputeTier.NUMPY)
+            assert decision.tier == ComputeTier.GPU_ONLY_BLOCKED
 
     def test_large_chain_routes_gpu_if_available(self):
         """Chain size >= 100 should route to GPU if available."""
@@ -170,7 +175,36 @@ class TestComputeRouter:
         if router.gpu_available:
             assert decision.tier == ComputeTier.GPU
         else:
-            assert decision.tier in (ComputeTier.NUMBA, ComputeTier.NUMPY)
+            assert decision.tier == ComputeTier.GPU_ONLY_BLOCKED
+
+    def test_gpu_unavailable_blocks_cpu_recompute(self):
+        router = ComputeRouter()
+        router._kernel._gpu_ok = False
+
+        n = 40
+        spots, strikes, ivs, is_call, ois, mults = _make_chain(n)
+        m, decision = router.compute(spots, strikes, ivs, 0.002, is_call, ois=ois, mults=mults)
+
+        assert decision.tier == ComputeTier.GPU_ONLY_BLOCKED
+        assert np.all(m.gamma == 0.0)
+        assert np.all(m.gex_per_contract == 0.0)
+
+    def test_gpu_runtime_failure_blocks_cpu_recompute(self, monkeypatch: pytest.MonkeyPatch):
+        router = ComputeRouter()
+        router._kernel._gpu_ok = True
+
+        def _raise_gpu_error(*args, **kwargs):
+            raise GPUComputationUnavailableError("gpu-failure")
+
+        monkeypatch.setattr(router._kernel, "compute_batch", _raise_gpu_error)
+
+        n = 40
+        spots, strikes, ivs, is_call, ois, mults = _make_chain(n)
+        m, decision = router.compute(spots, strikes, ivs, 0.002, is_call, ois=ois, mults=mults)
+
+        assert decision.tier == ComputeTier.GPU_ONLY_BLOCKED
+        assert "gpu_runtime_failed" in decision.reason
+        assert np.all(m.delta == 0.0)
 
     def test_output_schema_consistent_across_tiers(self):
         """Both tiers must return same GreeksMatrix field structure."""

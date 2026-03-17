@@ -30,20 +30,22 @@ class _FakeL1Reactor:
     def __init__(self) -> None:
         self.calls = 0
         self.compute_audits: list[dict[str, Any]] = []
+        self.chain_inputs: list[Any] = []
 
     async def compute(
         self,
         *,
-        chain_snapshot: list[dict[str, Any]],
+        chain_snapshot: Any,
         spot: float,
         l0_version: int,
         iv_cache: dict[str, float],
         spot_at_sync: dict[str, float],
         extra_metadata: dict[str, Any],
     ) -> _FakeL1Snapshot:
-        del chain_snapshot, iv_cache, spot_at_sync
+        del iv_cache, spot_at_sync
         self.calls += 1
         self.compute_audits.append(dict(extra_metadata.get("compute_audit", {})))
+        self.chain_inputs.append(chain_snapshot)
         return _FakeL1Snapshot(version=l0_version, spot=spot, extra_metadata=extra_metadata)
 
 
@@ -97,7 +99,9 @@ class _FakeBuilder:
         self,
         include_legacy_greeks: bool = False,
         caller_tag: str = "unspecified",
+        include_chain_arrow: bool = False,
     ) -> dict[str, Any]:
+        del include_chain_arrow
         self.fetch_args.append((include_legacy_greeks, caller_tag))
         if self._cursor >= len(self._snapshots):
             raise asyncio.CancelledError()
@@ -131,6 +135,12 @@ def _snapshot(version: int) -> dict[str, Any]:
     }
 
 
+def _snapshot_with_arrow(version: int, chain_arrow: Any) -> dict[str, Any]:
+    snap = _snapshot(version)
+    snap["chain_arrow"] = chain_arrow
+    return snap
+
+
 @pytest.mark.asyncio
 async def test_compute_loop_skips_duplicate_snapshot_versions(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "websocket_update_interval", 0.001, raising=False)
@@ -154,3 +164,18 @@ async def test_compute_loop_skips_duplicate_snapshot_versions(monkeypatch: pytes
     assert gpu_diag["duplicate_snapshot_skips"] >= 2
     assert str(gpu_diag["last_gpu_task_id"]).startswith("gpu-task-")
 
+
+@pytest.mark.asyncio
+async def test_compute_loop_prefers_chain_arrow_when_available(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "websocket_update_interval", 0.001, raising=False)
+
+    arrow_sentinel = object()
+    ctr = _FakeContainer([_snapshot_with_arrow(201, arrow_sentinel)])
+    state = SharedLoopState()
+
+    task = asyncio.create_task(run_compute_loop(ctr, state))
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert ctr.l1_reactor.calls == 1
+    assert ctr.l1_reactor.chain_inputs[0] is arrow_sentinel

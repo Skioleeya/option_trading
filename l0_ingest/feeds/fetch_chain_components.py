@@ -8,6 +8,11 @@ from typing import Any, Callable
 
 ShmReader = Callable[[int], int]
 
+DEFAULT_SHM_HEAD = 0
+DEFAULT_SHM_TAIL = 0
+FALLBACK_STATUS_UNINITIALIZED = "UNINITIALIZED"
+FALLBACK_STATUS_ERROR = "ERROR"
+
 
 @dataclass
 class LegacyGreeksAudit:
@@ -31,6 +36,14 @@ class LegacyGreeksAudit:
         }
 
 
+def _build_fallback_shm_stats(status: str) -> dict[str, Any]:
+    return {
+        "head": DEFAULT_SHM_HEAD,
+        "tail": DEFAULT_SHM_TAIL,
+        "status": status,
+    }
+
+
 def build_uninitialized_snapshot(version: int) -> dict[str, Any]:
     return {
         "spot": None,
@@ -38,6 +51,9 @@ def build_uninitialized_snapshot(version: int) -> dict[str, Any]:
         "as_of": None,
         "as_of_utc": None,
         "version": version,
+        "rust_active": False,
+        "rust_shm_path": None,
+        "shm_stats": _build_fallback_shm_stats(FALLBACK_STATUS_UNINITIALIZED),
     }
 
 
@@ -54,6 +70,9 @@ def build_error_snapshot(
         "as_of": now,
         "as_of_utc": now_utc_iso,
         "version": version,
+        "rust_active": False,
+        "rust_shm_path": None,
+        "shm_stats": _build_fallback_shm_stats(FALLBACK_STATUS_ERROR),
     }
 
 
@@ -79,8 +98,8 @@ def build_runtime_status(
         "rust_active": rust_active,
         "rust_shm_path": rust_bridge.mm_path if rust_active else None,
         "shm_stats": {
-            "head": shm_reader(rust_bridge.head_ptr) if rust_active else 0,
-            "tail": shm_reader(rust_bridge.tail_ptr) if rust_active else 0,
+            "head": shm_reader(rust_bridge.head_ptr) if rust_active else DEFAULT_SHM_HEAD,
+            "tail": shm_reader(rust_bridge.tail_ptr) if rust_active else DEFAULT_SHM_TAIL,
             "status": "OK" if rust_active else "DISCONNECTED",
         },
     }
@@ -106,6 +125,7 @@ def compose_fetch_chain_payload(
     *,
     spot: float | None,
     chain: list[dict[str, Any]],
+    chain_arrow: Any = None,
     version: int,
     tier2_chain: list[dict[str, Any]],
     tier3_chain: list[dict[str, Any]],
@@ -118,7 +138,7 @@ def compose_fetch_chain_payload(
     governor_telemetry: dict[str, Any],
     official_hv_diagnostics: dict[str, Any],
 ) -> dict[str, Any]:
-    return {
+    payload = {
         "spot": spot,
         "chain": chain,
         "version": version,
@@ -135,3 +155,6 @@ def compose_fetch_chain_payload(
         "governor_telemetry": governor_telemetry,
         "official_hv_diagnostics": official_hv_diagnostics,
     }
+    if chain_arrow is not None:
+        payload["chain_arrow"] = chain_arrow
+    return payload

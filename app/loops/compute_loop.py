@@ -72,6 +72,13 @@ def _normalize_source_timestamp_utc(snapshot: dict[str, Any]) -> str | None:
     return dt.isoformat()
 
 
+def _select_l1_chain_input(snapshot: dict[str, Any]) -> Any:
+    chain_arrow = snapshot.get("chain_arrow")
+    if chain_arrow is not None:
+        return chain_arrow
+    return snapshot.get("chain", [])
+
+
 def _build_l1_extra_metadata(
     snapshot: dict[str, Any],
     compute_audit: dict[str, Any] | None = None,
@@ -348,7 +355,7 @@ async def _run_l1_l2_pipeline(
         "gpu_task_id": gpu_task_id,
     }
     l1_snap = await ctr.l1_reactor.compute(
-        chain_snapshot=snapshot.get("chain", []),
+        chain_snapshot=_select_l1_chain_input(snapshot),
         spot=snapshot.get("spot", 0.0),
         l0_version=snapshot_version,
         iv_cache=iv_cache,
@@ -425,6 +432,7 @@ async def _run_compute_tick_safe(
         snapshot = await ctr.option_chain_builder.fetch_chain(
             include_legacy_greeks=False,
             caller_tag="compute_loop",
+            include_chain_arrow=True,
         )
         snapshot_time = time.monotonic() - start
         logger.info(

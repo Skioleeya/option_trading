@@ -1,0 +1,37 @@
+session_id: "2026-03-17/apply-fix-20260317-winerror-10106-pytest-unblock"
+title: "repair host asyncio WinError 10106 and resume pytest regressions"
+scope: "host python environment unblock for scripts/test/run_pytest.ps1 and L0/L2 regressions"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-17 13:47:21 -04:00"
+updated_at_et: "2026-03-17 14:06:04 -04:00"
+parent_session: "2026-03-17/apply-refactor-bloat-20260317-feature-extractors-module-split"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "06be8f2"
+head_commit: "06be8f2"
+
+files_changed:
+  - "scripts/test/run_pytest.ps1"
+  - "l2_decision/tests/test_institutional_logic.py"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-17/apply-fix-20260317-winerror-10106-pytest-unblock/project_state.md"
+  - "notes/sessions/2026-03-17/apply-fix-20260317-winerror-10106-pytest-unblock/open_tasks.md"
+  - "notes/sessions/2026-03-17/apply-fix-20260317-winerror-10106-pytest-unblock/handoff.md"
+  - "notes/sessions/2026-03-17/apply-fix-20260317-winerror-10106-pytest-unblock/meta.yaml"
+commands:
+  - "& ./scripts/new_session.ps1 -TaskId \"apply-fix-20260317-winerror-10106-pytest-unblock\" -Title \"repair host asyncio WinError 10106 and resume pytest regressions\" -Scope \"host python environment unblock for scripts/test/run_pytest.ps1 and L0/L2 regressions\" -Owner \"Codex\" -ParentSession \"2026-03-17/apply-refactor-bloat-20260317-feature-extractors-module-split\" -Timezone \"America/New_York\" -UpdatePointer"
+  - "& ./scripts/test/run_pytest.ps1 l2_decision/tests/test_feature_store.py l2_decision/tests/test_institutional_logic.py"
+  - "& ./scripts/test/run_pytest.ps1 l0_ingest/tests/test_builder_orchestration_support.py l0_ingest/tests/test_rust_event_bridge.py"
+  - "& ./scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "scripts/test/run_pytest.ps1 l2_decision/tests/test_feature_store.py l2_decision/tests/test_institutional_logic.py (52 passed)"
+  - "scripts/test/run_pytest.ps1 l0_ingest/tests/test_builder_orchestration_support.py l0_ingest/tests/test_rust_event_bridge.py (7 passed)"
+  - "scripts/validate_session.ps1 -Strict (PASS)"
+tests_failed: []
+blockers: []
+notes:
+  - "Host Python312 asyncio fallback applied in C:\\Users\\Lenovo\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\asyncio\\__init__.py; backup saved as __init__.py.bak."
+  - "run_pytest wrapper now sets USERPROFILE/HOMEDRIVE/HOMEPATH fallbacks and disables entrypoint autoload plugins by default."

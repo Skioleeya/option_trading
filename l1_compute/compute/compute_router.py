@@ -1,9 +1,8 @@
 """Compute Router — Adaptive GPU/CPU tier selection.
 
 Routing decision rules (evaluated in order):
-    1. GPU available     → GPU (CuPy CUDA)       — Institutional mandate for all recomputations
-    2. GPU unavailable   → Numba JIT (if present)  — CPU-parallel fallback
-    3. Numba unavailable → NumPy vectorized         — guaranteed last resort
+    1. GPU available     → GPU (CuPy CUDA)       — institutional mandate
+    2. GPU unavailable   → GPU_ONLY_BLOCKED      — CPU recomputation forbidden
 
 Tier override: set `force_tier` to bypass auto-routing (useful for testing).
 
@@ -19,7 +18,12 @@ from typing import Optional
 
 import numpy as np
 
-from l1_compute.compute.gpu_greeks_kernel import GPUGreeksKernel, GreeksMatrix, _compute_numpy
+from l1_compute.compute.gpu_greeks_kernel import (
+    GPUGreeksKernel,
+    GPUComputationUnavailableError,
+    GreeksMatrix,
+    _compute_numpy,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +42,7 @@ _GPU_CHAIN_THRESHOLD: int = 100
 
 class ComputeTier(str, Enum):
     GPU    = "gpu"
+    GPU_ONLY_BLOCKED = "gpu_only_blocked"
     NUMBA  = "numba"
     NUMPY  = "numpy"
 
@@ -68,6 +73,7 @@ class ComputeRouter:
     def __init__(self, force_tier: Optional[ComputeTier] = None) -> None:
         self._kernel = GPUGreeksKernel()
         self._force = force_tier
+        self._gpu_only_blocked_logged = False
 
     @property
     def gpu_available(self) -> bool:
@@ -95,7 +101,20 @@ class ComputeRouter:
 
         decision = ComputeDecision(tier=tier, reason=reason, chain_size=n)
 
-        matrix = self._execute(tier, spots, strikes, ivs, t_years, is_call, r, q, ois, mults)
+        if tier == ComputeTier.GPU_ONLY_BLOCKED:
+            matrix = self._blocked_matrix(n, ivs)
+            self._log_gpu_only_blocked_once("gpu_unavailable_cpu_recompute_forbidden")
+        else:
+            try:
+                matrix = self._execute(tier, spots, strikes, ivs, t_years, is_call, r, q, ois, mults)
+            except GPUComputationUnavailableError as exc:
+                decision = ComputeDecision(
+                    tier=ComputeTier.GPU_ONLY_BLOCKED,
+                    reason=f"gpu_runtime_failed:{exc}",
+                    chain_size=n,
+                )
+                matrix = self._blocked_matrix(n, ivs)
+                self._log_gpu_only_blocked_once(str(exc))
 
         logger.debug(
             "[ComputeRouter] tier=%s chain=%d reason=%s",
@@ -111,12 +130,8 @@ class ComputeRouter:
             return self._force, f"forced:{self._force.value}"
 
         if self._kernel.gpu_available:
-            return ComputeTier.GPU, "GPU mandate: all recomputations must offload to CUDA"
-        
-        # GPU physically unavailable — use Cascading Fallback (AGENTS.md 1.2)
-        if _NUMBA_AVAILABLE:
-            return ComputeTier.NUMBA, "gpu_unavailable, falling back to Numba"
-        return ComputeTier.NUMPY, "gpu_unavailable+numba_unavailable"
+            return ComputeTier.GPU, "gpu_mandate_active"
+        return ComputeTier.GPU_ONLY_BLOCKED, "gpu_unavailable_cpu_recompute_forbidden"
 
     def _execute(
         self,
@@ -137,7 +152,17 @@ class ComputeRouter:
 
         if tier == ComputeTier.GPU:
             return self._kernel.compute_batch(
-                spots, strikes, ivs, t_years, is_call, r, q, _ois, _mults, prefer_gpu=True
+                spots,
+                strikes,
+                ivs,
+                t_years,
+                is_call,
+                r,
+                q,
+                _ois,
+                _mults,
+                prefer_gpu=True,
+                allow_cpu_fallback=False,
             )
 
         if tier == ComputeTier.NUMBA:
@@ -168,3 +193,24 @@ class ComputeRouter:
 
         # NumPy fallback (always available)
         return _compute_numpy(spots, strikes, ivs, t_years, is_call, r, q, _ois, _mults)
+
+    @staticmethod
+    def _blocked_matrix(n: int, ivs: np.ndarray) -> GreeksMatrix:
+        zeros = np.zeros(n, dtype=np.float64)
+        return GreeksMatrix(
+            delta=zeros,
+            gamma=zeros,
+            vega=zeros,
+            vanna=zeros,
+            charm=zeros,
+            theta=zeros,
+            gex_per_contract=zeros,
+            call_gex=zeros,
+            put_gex=zeros,
+            iv_used=ivs.astype(np.float64, copy=True),
+        )
+
+    def _log_gpu_only_blocked_once(self, reason: str) -> None:
+        if not self._gpu_only_blocked_logged:
+            logger.error("[ComputeRouter] GPU-only mode blocked CPU recomputation: %s", reason)
+            self._gpu_only_blocked_logged = True

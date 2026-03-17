@@ -161,9 +161,9 @@ class L1ComputeReactor:
             Immutable EnrichedSnapshot ready for L2 Decision Layer.
         """
         if not chain_snapshot or spot <= 0:
-            return self._empty_snapshot(l0_version)
+            return self._empty_snapshot(l0_version, extra_metadata=extra_metadata or {})
 
-        iv_cache     = iv_cache or {}
+        iv_cache = iv_cache or {}
         spot_at_sync = spot_at_sync or {}
 
         with self._inst.span_compute():
@@ -225,7 +225,7 @@ class L1ComputeReactor:
 
         if n == 0 or spot <= 0.0:
             logger.debug("[L1ComputeReactor] Skipping: snapshot empty or spot <= 0")
-            return self._empty_snapshot(l0_version)
+            return self._empty_snapshot(l0_version, extra_metadata=extra_metadata)
 
         # ── Step 1: IV Resolution ──────────────────────────────────────────────
         ttm_years = get_trading_ttm_v2_scalar(now)
@@ -275,7 +275,7 @@ class L1ComputeReactor:
 
         if n_valid == 0:
             logger.info("[L1ComputeReactor] compute bypassed: n_valid = 0 (Total n=%d)", n)
-            return self._empty_snapshot(l0_version)
+            return self._empty_snapshot(l0_version, extra_metadata=extra_metadata)
 
         # ── Step 4: Greeks batch compute ──────────────────────────────────────
         t_greeks = time.monotonic()
@@ -685,7 +685,7 @@ class L1ComputeReactor:
         idx_atm = int(np.argmin(diffs))
         return float(ivs[idx_atm]) if ivs[idx_atm] > 0 else 0.0
 
-    def _empty_snapshot(self, l0_version: int) -> EnrichedSnapshot:
+    def _empty_snapshot(self, l0_version: int, extra_metadata: Optional[dict[str, Any]] = None) -> EnrichedSnapshot:
         now = datetime.now(_ET)
         return EnrichedSnapshot(
             spot=0.0,
@@ -696,5 +696,5 @@ class L1ComputeReactor:
             ttm_seconds=0.0,
             version=l0_version,
             computed_at=now,
-            extra_metadata={},
+            extra_metadata=dict(extra_metadata or {}),
         )

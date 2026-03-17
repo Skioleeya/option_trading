@@ -45,6 +45,10 @@ _CONTRACT_MULTIPLIER: float = 100.0
 _GEX_SCALE: float = 1_000_000.0   # normalise GEX to USD millions
 
 
+class GPUComputationUnavailableError(RuntimeError):
+    """Raised when GPU computation is required but not available."""
+
+
 @dataclass
 class GreeksMatrix:
     """Per-contract Greeks arrays (length N, one entry per chain contract).
@@ -321,6 +325,7 @@ class GPUGreeksKernel:
         ois: Optional[np.ndarray] = None,
         mults: Optional[np.ndarray] = None,
         prefer_gpu: bool = True,
+        allow_cpu_fallback: bool = True,
     ) -> GreeksMatrix:
         """Compute all BSM Greeks for the entire chain in a single call.
 
@@ -352,10 +357,23 @@ class GPUGreeksKernel:
         _ois  = ois  if ois  is not None else np.zeros(n, dtype=np.float64)
         _mults = mults if mults is not None else np.full(n, _CONTRACT_MULTIPLIER, dtype=np.float64)
 
-        if prefer_gpu and self._gpu_ok:
+        if prefer_gpu:
+            if not self._gpu_ok:
+                if allow_cpu_fallback:
+                    return _compute_numpy(spots, strikes, ivs, t_years, is_call, r, q, _ois, _mults)
+                raise GPUComputationUnavailableError(
+                    "GPU unavailable and CPU fallback disabled."
+                )
+
             try:
                 return _compute_cupy(spots, strikes, ivs, t_years, is_call, r, q, _ois, _mults)
             except Exception as exc:
-                logger.warning("[GPUGreeksKernel] GPU compute failed (%s). Falling back to NumPy.", exc)
+                self._gpu_ok = False
+                if allow_cpu_fallback:
+                    logger.warning("[GPUGreeksKernel] GPU compute failed (%s). Falling back to NumPy.", exc)
+                    return _compute_numpy(spots, strikes, ivs, t_years, is_call, r, q, _ois, _mults)
+                raise GPUComputationUnavailableError(
+                    f"GPU compute failed ({exc}) and CPU fallback disabled."
+                ) from exc
 
         return _compute_numpy(spots, strikes, ivs, t_years, is_call, r, q, _ois, _mults)

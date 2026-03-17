@@ -1,6 +1,6 @@
 # L1 SOP — LOCAL COMPUTATION
 
-> Version: 2026-03-12
+> Version: 2026-03-17
 > Layer: L1 Local Computation
 
 ## 1. Responsibility
@@ -13,7 +13,7 @@ L1 将 L0 快照转化为 `EnrichedSnapshot`，负责 Greeks、本地风险指�
 flowchart LR
   A[L0 fetch_chain] --> B[RustBridge / SHM]
   B --> C[L1ComputeReactor]
-  C --> D[ComputeRouter GPU/Numba/NumPy]
+  C --> D[ComputeRouter GPU-only]
   C --> E[Trackers]
   C --> F[Microstructure engines]
   D --> G[EnrichedSnapshot]
@@ -38,6 +38,7 @@ flowchart LR
 
 - `version` 必须透传 L0 真实版本
 - `extra_metadata.source_data_timestamp_utc` 必须绑定 L0 `as_of_utc`
+- 当 L1 进入空快照/降级返回路径时，`extra_metadata` 必须保持透传，尤其是 `rust_active`、`shm_stats`、`source_data_timestamp_utc` 不得丢失
 - `microstructure.wall_context` 为可选合同字段，必须包含：
   - `gamma_regime`（`LONG_GAMMA|SHORT_GAMMA|NEUTRAL`）
   - `hedge_flow_intensity`
@@ -61,7 +62,7 @@ flowchart LR
 
 - 重计算路径必须可异步卸载（`asyncio.to_thread`）
 - 避免 GIL 阻塞主循环
-- 大规模链路优先 GPU / 向量化
+- 重计算路径必须 GPU-only；禁止 CPU（Numba/NumPy）参与重计算
 - 同一 `snapshot_version` 在计算环不得重复提交 GPU 任务；重复 tick 必须跳过并输出审计字段（`tick_id/snapshot_version/compute_id/gpu_task_id`）
 - 禁止在微结构分支对 `RecordBatch` 做无效 `to_pylist()` 拷贝（仅在确有行级字段消费时允许）
 
@@ -83,6 +84,7 @@ flowchart LR
 - 多周期输入必须独立封帧（1m/5m/15m 各自始末向量），禁止将同一瞬时 `atm_iv` 同步喂入所有周期
 - MTFIVEngine 几何帧状态必须支持后端冷存储恢复（按交易日 JSONL 快照）；重启后恢复最近状态，减少 1m/5m/15m 暖机失真
 - MTFIVEngine 持久化失败必须显式日志降级，不得阻断 `compute()` 与 L1->L4 广播链路
+- GPU 不可用或 GPU 运行失败时，必须显式降级为 `compute_tier=gpu_only_blocked`，并禁止触发 CPU 重计算
 
 ## 7. Observability
 

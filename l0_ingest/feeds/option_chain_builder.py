@@ -4,16 +4,19 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
-import time
 from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from longport.openapi import Config, Language
+from longport.openapi import Config
 
 from shared.config import settings
 
+from l0_ingest.feeds.builder_orchestration_support import (
+    apply_preloaded_oi_events,
+    apply_rest_update,
+    read_shm_u64,
+)
 from l0_ingest.feeds.chain_state_store import ChainStateStore
 from l0_ingest.feeds.chain_event_processor import ChainEventProcessor
 from l0_ingest.feeds.feed_orchestrator import FeedOrchestrator
@@ -27,13 +30,22 @@ from l0_ingest.feeds.fetch_chain_components import (
     compose_fetch_chain_payload,
 )
 from l0_ingest.feeds.iv_baseline_sync import IVBaselineSync
+from l0_ingest.feeds.openapi_bootstrap import (
+    _build_openapi_endpoint_profiles,
+    _longport_config_kwargs,
+    _startup_connectivity_probe,
+    _sync_openapi_env_aliases,
+)
 from l0_ingest.feeds.quote_runtime import L0QuoteRuntime, PythonQuoteRuntime, RustQuoteRuntime
 from l0_ingest.feeds.rate_limiter import APIRateLimiter
+from l0_ingest.feeds.rust_event_bridge import (
+    dispatch_depth_event,
+    dispatch_trade_event,
+    parse_rust_event,
+)
 from l0_ingest.feeds.sanitization import (
-    CleanQuoteEvent,
     EventType,
     SanitizationPipeline,
-    _infer_opt_type,
 )
 from l0_ingest.feeds.tier2_poller import Tier2Poller
 from l0_ingest.feeds.tier3_poller import Tier3Poller
@@ -43,391 +55,10 @@ from l1_compute.analysis.depth_engine import DepthEngine
 from l1_compute.analysis.entropy_filter import EntropyFilter
 from l1_compute.analysis.bsm import get_trading_time_to_maturity
 from l1_compute.analysis.greeks_engine import GreeksEngine
+from l1_compute.arrow.schema import dicts_to_record_batch
 from l1_compute.rust_bridge import RustBridge
 
 logger = logging.getLogger(__name__)
-
-_DEFAULT_HTTP_URL = "https://openapi.longportapp.com"
-_DEFAULT_QUOTE_WS_URL = "wss://openapi-quote.longportapp.com/v2"
-_DEFAULT_TRADE_WS_URL = "wss://openapi-trade.longportapp.com/v2"
-
-_LEGACY_HTTP_URL = "https://openapi.longbridge.com"
-_LEGACY_QUOTE_WS_URL = "wss://openapi-quote.longbridge.com/v2"
-_LEGACY_TRADE_WS_URL = "wss://openapi-trade.longbridge.com/v2"
-
-
-def _optional_text(value: Any) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None
-
-
-def _resolve_language(value: Any) -> Language | None:
-    if value is None:
-        return None
-    if isinstance(value, Language):
-        return value
-
-    text = _optional_text(value)
-    if text is None:
-        return None
-
-    normalized = text.lower().replace("_", "-")
-    mapping = {
-        "en": Language.EN,
-        "zh-cn": Language.ZH_CN,
-        "zh-hk": Language.ZH_HK,
-    }
-    resolved = mapping.get(normalized)
-    if resolved is None:
-        logger.warning(
-            "[OptionChainBuilder] Unsupported language '%s'; fallback to Language.EN",
-            text,
-        )
-        return Language.EN
-    return resolved
-
-
-def _convert_gateway(value: str, src_host: str, dst_host: str) -> str:
-    return value.replace(src_host, dst_host)
-
-
-def _dedupe_endpoint_profiles(
-    profiles: list[dict[str, str]],
-) -> list[dict[str, str]]:
-    out: list[dict[str, str]] = []
-    seen: set[tuple[str, str, str]] = set()
-    for profile in profiles:
-        key = (
-            profile.get("http_url", ""),
-            profile.get("quote_ws_url", ""),
-            profile.get("trade_ws_url", ""),
-        )
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(profile)
-    return out
-
-
-def _build_openapi_endpoint_profiles(cfg: Any) -> list[dict[str, str]]:
-    """Build ordered endpoint profiles for runtime connectivity fallback."""
-    primary_http = _optional_text(getattr(cfg, "longport_http_url", None)) or _DEFAULT_HTTP_URL
-    primary_quote_ws = (
-        _optional_text(getattr(cfg, "longport_quote_ws_url", None)) or _DEFAULT_QUOTE_WS_URL
-    )
-    primary_trade_ws = (
-        _optional_text(getattr(cfg, "longport_trade_ws_url", None)) or _DEFAULT_TRADE_WS_URL
-    )
-
-    profiles: list[dict[str, str]] = [
-        {
-            "name": "primary",
-            "http_url": primary_http,
-            "quote_ws_url": primary_quote_ws,
-            "trade_ws_url": primary_trade_ws,
-        }
-    ]
-
-    if "longbridge.com" in primary_http:
-        profiles.append(
-            {
-                "name": "official_longportapp",
-                "http_url": _convert_gateway(
-                    primary_http,
-                    "openapi.longbridge.com",
-                    "openapi.longportapp.com",
-                ),
-                "quote_ws_url": _convert_gateway(
-                    primary_quote_ws,
-                    "openapi-quote.longbridge.com",
-                    "openapi-quote.longportapp.com",
-                ),
-                "trade_ws_url": _convert_gateway(
-                    primary_trade_ws,
-                    "openapi-trade.longbridge.com",
-                    "openapi-trade.longportapp.com",
-                ),
-            }
-        )
-    elif "longportapp.com" in primary_http:
-        profiles.append(
-            {
-                "name": "official_longbridge",
-                "http_url": _convert_gateway(
-                    primary_http,
-                    "openapi.longportapp.com",
-                    "openapi.longbridge.com",
-                ),
-                "quote_ws_url": _convert_gateway(
-                    primary_quote_ws,
-                    "openapi-quote.longportapp.com",
-                    "openapi-quote.longbridge.com",
-                ),
-                "trade_ws_url": _convert_gateway(
-                    primary_trade_ws,
-                    "openapi-trade.longportapp.com",
-                    "openapi-trade.longbridge.com",
-                ),
-            }
-        )
-    else:
-        profiles.append(
-            {
-                "name": "official_longportapp",
-                "http_url": _DEFAULT_HTTP_URL,
-                "quote_ws_url": _DEFAULT_QUOTE_WS_URL,
-                "trade_ws_url": _DEFAULT_TRADE_WS_URL,
-            }
-        )
-        profiles.append(
-            {
-                "name": "official_longbridge",
-                "http_url": _LEGACY_HTTP_URL,
-                "quote_ws_url": _LEGACY_QUOTE_WS_URL,
-                "trade_ws_url": _LEGACY_TRADE_WS_URL,
-            }
-        )
-
-    return _dedupe_endpoint_profiles(profiles)
-
-
-def _longport_config_kwargs(cfg: Any) -> dict[str, Any]:
-    """Build Config kwargs aligned with official Longport Rust SDK env contract."""
-    return {
-        "app_key": str(getattr(cfg, "longport_app_key")),
-        "app_secret": str(getattr(cfg, "longport_app_secret")),
-        "access_token": str(getattr(cfg, "longport_access_token")),
-        "http_url": _optional_text(getattr(cfg, "longport_http_url", None)),
-        "quote_ws_url": _optional_text(getattr(cfg, "longport_quote_ws_url", None)),
-        "trade_ws_url": _optional_text(getattr(cfg, "longport_trade_ws_url", None)),
-        "language": _resolve_language(getattr(cfg, "longport_language", None)),
-        "enable_overnight": bool(getattr(cfg, "longport_enable_overnight", False)),
-    }
-
-
-def _sync_openapi_env_aliases(cfg: Any) -> dict[str, str]:
-    """Expose config as BOTH LONGPORT_* and LONGBRIDGE_* env aliases.
-
-    This keeps compatibility with older Python/Rust bridges while using
-    LONGPORT_* as the primary contract and LONGBRIDGE_* as compatibility alias.
-    """
-
-    def _set_pair(
-        longport_key: str,
-        longbridge_key: str,
-        value: Any,
-        out: dict[str, str],
-    ) -> None:
-        text = _optional_text(value)
-        if text is None:
-            return
-        os.environ[longport_key] = text
-        os.environ[longbridge_key] = text
-        out[longport_key] = text
-        out[longbridge_key] = text
-
-    applied: dict[str, str] = {}
-    _set_pair("LONGPORT_APP_KEY", "LONGBRIDGE_APP_KEY", getattr(cfg, "longport_app_key", None), applied)
-    _set_pair("LONGPORT_APP_SECRET", "LONGBRIDGE_APP_SECRET", getattr(cfg, "longport_app_secret", None), applied)
-    _set_pair("LONGPORT_ACCESS_TOKEN", "LONGBRIDGE_ACCESS_TOKEN", getattr(cfg, "longport_access_token", None), applied)
-    _set_pair("LONGPORT_HTTP_URL", "LONGBRIDGE_HTTP_URL", getattr(cfg, "longport_http_url", None), applied)
-    _set_pair("LONGPORT_QUOTE_WS_URL", "LONGBRIDGE_QUOTE_WS_URL", getattr(cfg, "longport_quote_ws_url", None), applied)
-    _set_pair("LONGPORT_TRADE_WS_URL", "LONGBRIDGE_TRADE_WS_URL", getattr(cfg, "longport_trade_ws_url", None), applied)
-    _set_pair("LONGPORT_LANGUAGE", "LONGBRIDGE_LANGUAGE", getattr(cfg, "longport_language", None), applied)
-
-    overnight = bool(getattr(cfg, "longport_enable_overnight", False))
-    os.environ["LONGPORT_ENABLE_OVERNIGHT"] = "true" if overnight else "false"
-    os.environ["LONGBRIDGE_ENABLE_OVERNIGHT"] = "true" if overnight else "false"
-    applied["LONGPORT_ENABLE_OVERNIGHT"] = os.environ["LONGPORT_ENABLE_OVERNIGHT"]
-    applied["LONGBRIDGE_ENABLE_OVERNIGHT"] = os.environ["LONGBRIDGE_ENABLE_OVERNIGHT"]
-
-    strict_connectivity = bool(getattr(cfg, "longport_startup_strict_connectivity", True))
-    strict_text = "true" if strict_connectivity else "false"
-    os.environ["LONGPORT_STARTUP_STRICT_CONNECTIVITY"] = strict_text
-    os.environ["LONGBRIDGE_STARTUP_STRICT_CONNECTIVITY"] = strict_text
-    applied["LONGPORT_STARTUP_STRICT_CONNECTIVITY"] = strict_text
-    applied["LONGBRIDGE_STARTUP_STRICT_CONNECTIVITY"] = strict_text
-    return applied
-
-
-def _runtime_diagnostics(runtime: L0QuoteRuntime) -> dict[str, Any]:
-    try:
-        data = runtime.diagnostics()
-        if isinstance(data, dict):
-            return data
-    except Exception as exc:  # pragma: no cover - defensive diagnostics path.
-        return {"diagnostics_error": str(exc)}
-    return {}
-
-
-async def _startup_connectivity_probe(
-    runtime: L0QuoteRuntime,
-    *,
-    strict_connectivity: bool,
-    probe_symbol: str = "SPY.US",
-) -> None:
-    """Verify startup connectivity through quote REST before background loops start."""
-    try:
-        rows = await runtime.quote([probe_symbol])
-    except Exception as exc:
-        diagnostics = _runtime_diagnostics(runtime)
-        profile = diagnostics.get("endpoint_profile")
-        endpoint = diagnostics.get("endpoint_http_url")
-        if strict_connectivity:
-            raise RuntimeError(
-                "startup connectivity probe failed for quote runtime: "
-                f"profile={profile} endpoint={endpoint} error={exc}"
-            ) from exc
-        logger.warning(
-            "[OptionChainBuilder] Startup connectivity probe failed but strict gate disabled. "
-            "profile=%s endpoint=%s error=%s",
-            profile,
-            endpoint,
-            exc,
-        )
-        return
-
-    diagnostics = _runtime_diagnostics(runtime)
-    logger.info(
-        "[OptionChainBuilder] Startup connectivity probe passed: symbol=%s rows=%d profile=%s endpoint=%s",
-        probe_symbol,
-        len(rows),
-        diagnostics.get("endpoint_profile"),
-        diagnostics.get("endpoint_http_url"),
-    )
-
-
-def _positive_or_none(value: Any) -> float | None:
-    try:
-        parsed = float(value)
-    except (TypeError, ValueError):
-        return None
-    return parsed if parsed > 0.0 else None
-
-
-def _safe_int_or_none(value: Any) -> int | None:
-    try:
-        parsed = int(float(value))
-    except (TypeError, ValueError):
-        return None
-    return parsed if parsed >= 0 else None
-
-
-def _safe_float_or_none(value: Any) -> float | None:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _impact_sign(value: float | None) -> int:
-    impact = float(value or 0.0)
-    if impact > 0.0:
-        return 1
-    if impact < 0.0:
-        return -1
-    return 0
-
-
-def _infer_rust_trade_direction(
-    cache: dict[str, float],
-    *,
-    symbol: str,
-    last_price: float | None,
-    impact_index: float | None,
-) -> int:
-    if last_price is None or last_price <= 0.0:
-        return _impact_sign(impact_index)
-
-    prev = cache.get(symbol)
-    cache[symbol] = last_price
-    if prev is None:
-        return _impact_sign(impact_index)
-    if last_price > prev:
-        return 1
-    if last_price < prev:
-        return -1
-    return _impact_sign(impact_index)
-
-
-def _rust_depth_levels(event: CleanQuoteEvent) -> tuple[list[dict[str, float]], list[dict[str, float]]]:
-    base_volume = max(float(event.volume or 0.0), 1.0)
-    bid_volume, ask_volume = _depth_side_volumes(base_volume, float(event.impact_index or 0.0))
-    bids = _build_book_side(event.bid, bid_volume)
-    asks = _build_book_side(event.ask, ask_volume)
-    return bids, asks
-
-
-def _depth_side_volumes(volume: float, impact: float) -> tuple[float, float]:
-    if impact > 0.0:
-        return volume, max(1.0, volume * 0.3)
-    if impact < 0.0:
-        return max(1.0, volume * 0.3), volume
-    return volume, volume
-
-
-def _build_book_side(price: float | None, volume: float) -> list[dict[str, float]]:
-    if (price or 0.0) <= 0.0:
-        return []
-    return [{"price": float(price), "volume": volume}]
-
-
-def _dispatch_rust_depth_callback(builder: "OptionChainBuilder", event: CleanQuoteEvent) -> None:
-    callback = getattr(builder, "on_depth", None)
-    if callback is None:
-        logger.debug("[OptionChainBuilder] Rust depth bridge: on_depth callback not set")
-        return
-
-    bids, asks = _rust_depth_levels(event)
-    try:
-        callback(event.symbol, bids, asks)
-    except (RuntimeError, ValueError, TypeError, AttributeError) as exc:
-        logger.error(
-            "[OptionChainBuilder] Rust depth bridge callback failed: symbol=%s error=%s",
-            event.symbol,
-            exc,
-        )
-
-
-def _dispatch_rust_trade_callback(builder: "OptionChainBuilder", event: CleanQuoteEvent) -> None:
-    callback = getattr(builder, "on_trade", None)
-    if callback is None:
-        logger.debug("[OptionChainBuilder] Rust trade bridge: on_trade callback not set")
-        return
-
-    volume = float(event.volume or 0.0)
-    if volume <= 0.0:
-        logger.debug(
-            "[OptionChainBuilder] Rust trade bridge skipped (non-positive volume): symbol=%s",
-            event.symbol,
-        )
-        return
-
-    direction = _infer_rust_trade_direction(
-        builder._last_trade_price,
-        symbol=event.symbol,
-        last_price=event.last_price,
-        impact_index=event.impact_index,
-    )
-    trade = {
-        "price": float(event.last_price or 0.0),
-        "vol": volume,
-        "volume": volume,
-        "timestamp": int(time.time()),
-        "dir": direction,
-        "direction": direction,
-        "trade_type": 0,
-    }
-    try:
-        callback(event.symbol, [trade])
-    except (RuntimeError, ValueError, TypeError, AttributeError) as exc:
-        logger.error(
-            "[OptionChainBuilder] Rust trade bridge callback failed: symbol=%s error=%s",
-            event.symbol,
-            exc,
-        )
 
 
 class OptionChainBuilder:
@@ -530,38 +161,23 @@ class OptionChainBuilder:
             logger.info("[OptionChainBuilder] OI preloaded: %d symbols", preloaded_count)
 
             if preloaded_count > 0:
-                for symbol, oi in self._iv_sync.oi_cache.items():
-                    strike = self._sub_mgr.resolve_strike(symbol)
-                    if strike:
-                        self._store.apply_event(
-                            CleanQuoteEvent(
-                                seq_no=0,
-                                event_type=EventType.REST,
-                                symbol=symbol,
-                                strike=strike,
-                                opt_type=_infer_opt_type(symbol),
-                                bid=None,
-                                ask=None,
-                                last_price=None,
-                                volume=None,
-                                open_interest=oi,
-                                implied_volatility=None,
-                                iv_timestamp=None,
-                                delta=None,
-                                gamma=None,
-                                theta=None,
-                                vega=None,
-                                current_volume=None,
-                                turnover=None,
-                                arrival_mono=time.monotonic(),
-                            )
-                        )
+                apply_preloaded_oi_events(
+                    oi_cache=self._iv_sync.oi_cache,
+                    resolve_strike=self._sub_mgr.resolve_strike,
+                    store=self._store,
+                )
 
             self._iv_sync.start(
                 self._quote_runtime,
                 get_symbols_fn=lambda: self._sub_mgr.subscribed_symbols,
                 get_spot_fn=lambda: self._store.spot,
-                on_update=self._handle_rest_update,
+                on_update=lambda symbol, item: apply_rest_update(
+                    symbol=symbol,
+                    item=item,
+                    resolve_strike=self._sub_mgr.resolve_strike,
+                    sanitizer=self._sanitizer,
+                    store=self._store,
+                ),
             )
             if settings.enable_tier2_polling:
                 self._tier2.start(self._quote_runtime, get_spot_fn=lambda: self._store.spot)
@@ -598,55 +214,33 @@ class OptionChainBuilder:
                 await asyncio.sleep(0.1)
 
     def _handle_rust_event(self, event: dict[str, Any]) -> None:
-        symbol = str(event.get("symbol", "") or "")
-        strike = self._sub_mgr.symbol_to_strike.get(symbol)
-        if strike is None:
-            logger.debug("[OptionChainBuilder] Rust event dropped (unknown symbol): %s", symbol)
-            return
-
-        raw_event_type = event.get("event_type")
-        try:
-            event_type = EventType(raw_event_type)
-        except (TypeError, ValueError):
-            logger.warning(
-                "[OptionChainBuilder] Rust event dropped (invalid event_type): symbol=%s event_type=%s",
-                symbol,
-                raw_event_type,
-            )
-            return
-
-        bid = _positive_or_none(event.get("bid"))
-        ask = _positive_or_none(event.get("ask"))
-        last_price = _positive_or_none(event.get("last_price"))
-        clean = CleanQuoteEvent(
-            seq_no=int(event.get("seq_no", 0) or 0),
-            event_type=event_type,
-            symbol=symbol,
-            strike=strike,
-            opt_type=_infer_opt_type(symbol),
-            bid=bid,
-            ask=ask,
-            last_price=last_price,
-            volume=_safe_int_or_none(event.get("volume")),
-            open_interest=None,
-            implied_volatility=None,
-            arrival_mono=float(event.get("arrival_mono_ns", 0) or 0) / 1e9,
-            impact_index=_safe_float_or_none(event.get("impact_index")),
-            is_sweep=bool(event.get("is_sweep", False)),
+        clean = parse_rust_event(
+            event,
+            symbol_to_strike=self._sub_mgr.symbol_to_strike,
         )
+        if clean is None:
+            return
 
         self._store.apply_event(clean)
 
-        if event_type == EventType.DEPTH:
-            _dispatch_rust_depth_callback(self, clean)
+        if clean.event_type == EventType.DEPTH:
+            dispatch_depth_event(
+                clean,
+                on_depth=getattr(self, "on_depth", None),
+            )
             return
-        if event_type == EventType.TRADE:
-            _dispatch_rust_trade_callback(self, clean)
+        if clean.event_type == EventType.TRADE:
+            dispatch_trade_event(
+                clean,
+                on_trade=getattr(self, "on_trade", None),
+                last_trade_price=self._last_trade_price,
+            )
 
     async def fetch_chain(
         self,
         include_legacy_greeks: bool = False,
         caller_tag: str = "unspecified",
+        include_chain_arrow: bool = False,
     ) -> dict[str, Any]:
         if not self._initialized:
             return build_uninitialized_snapshot(self._store.version)
@@ -660,6 +254,7 @@ class OptionChainBuilder:
                 depth_engine=self._depth_engine,
                 target_symbols=target_set,
             )
+            chain_arrow = dicts_to_record_batch(chain_snapshot) if include_chain_arrow else None
             ttm_seconds = get_trading_time_to_maturity(now) * (252 * 23400)
             agg: dict[str, Any] = {}
             if include_legacy_greeks:
@@ -676,7 +271,7 @@ class OptionChainBuilder:
 
             runtime_status = build_runtime_status(
                 rust_bridge=self._rust_bridge,
-                shm_reader=self._get_shm_val,
+                shm_reader=lambda ptr: read_shm_u64(self._rust_bridge.mm, ptr),
             )
             governor_telemetry = build_governor_telemetry(
                 rate_limiter=self._rate_limiter,
@@ -686,6 +281,7 @@ class OptionChainBuilder:
             data = compose_fetch_chain_payload(
                 spot=self._store.spot,
                 chain=chain_snapshot,
+                chain_arrow=chain_arrow,
                 version=self._store.version,
                 tier2_chain=self._tier2.cache,
                 tier3_chain=self._tier3.cache,
@@ -709,24 +305,6 @@ class OptionChainBuilder:
                 now=now,
                 now_utc_iso=now_utc_iso,
             )
-
-    def _get_shm_val(self, ptr: int) -> int:
-        if not self._rust_bridge.mm:
-            return 0
-        import struct
-
-        return struct.unpack("Q", self._rust_bridge.mm[ptr : ptr + 8])[0]
-
-    def _handle_rest_update(self, symbol: str, item: Any) -> None:
-        strike = self._sub_mgr.resolve_strike(symbol)
-        if strike is None:
-            logger.warning("[OptionChainBuilder] REST update dropped: strike unresolved for %s", symbol)
-            return
-        clean = self._sanitizer.parse_rest_item(symbol, strike, item)
-        if clean:
-            self._store.apply_event(clean)
-        else:
-            logger.warning("[OptionChainBuilder] REST update sanitize failed for %s", symbol)
 
     async def _event_consumer_loop(self) -> None:
         logger.info("[OptionChainBuilder] Pipeline consumer loop active")

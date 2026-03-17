@@ -1,0 +1,69 @@
+session_id: "2026-03-17/apply-fix-l0-l2-path-openspec-chain"
+title: "execute openspec parent-child remediation chain for L0-L2 data path"
+scope: "openspec governance plus P1 continuity fixes and P2 zero-copy prep for L0-L2"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-17 14:23:30 -04:00"
+updated_at_et: "2026-03-17 14:53:46 -04:00"
+parent_session: "2026-03-17/apply-static-check-20260317-l0-l2-data-path"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "06be8f2"
+head_commit: "06be8f2"
+
+files_changed:
+  - "l0_ingest/feeds/fetch_chain_components.py"
+  - "l0_ingest/tests/test_fetch_chain_components.py"
+  - "l1_compute/reactor.py"
+  - "l1_compute/tests/test_reactor.py"
+  - "scripts/test/run_pytest.ps1"
+  - "docs/SOP/L0_DATA_FEED.md"
+  - "docs/SOP/L1_LOCAL_COMPUTATION.md"
+  - "openspec/changes/refactor-governance-20260317-l0-l2-data-path-remediation-chain/proposal.md"
+  - "openspec/changes/refactor-governance-20260317-l0-l2-data-path-remediation-chain/design.md"
+  - "openspec/changes/refactor-governance-20260317-l0-l2-data-path-remediation-chain/tasks.md"
+  - "openspec/changes/refactor-governance-20260317-l0-l2-data-path-remediation-chain/specs/governance/spec.md"
+  - "openspec/changes/refactor-dependency-20260317-l1-empty-snapshot-metadata-continuity/proposal.md"
+  - "openspec/changes/refactor-dependency-20260317-l1-empty-snapshot-metadata-continuity/design.md"
+  - "openspec/changes/refactor-dependency-20260317-l1-empty-snapshot-metadata-continuity/tasks.md"
+  - "openspec/changes/refactor-dependency-20260317-l1-empty-snapshot-metadata-continuity/specs/dependency/spec.md"
+  - "openspec/changes/refactor-dependency-20260317-l0-fallback-snapshot-diagnostics-continuity/proposal.md"
+  - "openspec/changes/refactor-dependency-20260317-l0-fallback-snapshot-diagnostics-continuity/design.md"
+  - "openspec/changes/refactor-dependency-20260317-l0-fallback-snapshot-diagnostics-continuity/tasks.md"
+  - "openspec/changes/refactor-dependency-20260317-l0-fallback-snapshot-diagnostics-continuity/specs/dependency/spec.md"
+  - "openspec/changes/refactor-bloat-20260317-l0-l1-arrow-zero-copy-path/proposal.md"
+  - "openspec/changes/refactor-bloat-20260317-l0-l1-arrow-zero-copy-path/design.md"
+  - "openspec/changes/refactor-bloat-20260317-l0-l1-arrow-zero-copy-path/tasks.md"
+  - "openspec/changes/refactor-bloat-20260317-l0-l1-arrow-zero-copy-path/specs/bloat/spec.md"
+  - "notes/sessions/2026-03-17/apply-fix-l0-l2-path-openspec-chain/project_state.md"
+  - "notes/sessions/2026-03-17/apply-fix-l0-l2-path-openspec-chain/open_tasks.md"
+  - "notes/sessions/2026-03-17/apply-fix-l0-l2-path-openspec-chain/handoff.md"
+  - "notes/sessions/2026-03-17/apply-fix-l0-l2-path-openspec-chain/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/policy/check_layer_boundaries.ps1"
+  - "python scripts/policy/check_quality_gates.py --repo-root . --config scripts/policy/quality_thresholds.json --meta-file tmp/session_validation_diag/l0_l2_quality_meta.yaml --output tmp/session_validation_diag/l0_l2_quality_gate.json"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/test_fetch_chain_components.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_reactor.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_reactor.py::TestL1ComputeReactor::test_compute_sync_empty_chain_preserves_extra_metadata l1_compute/tests/test_reactor.py::TestL1ComputeReactor::test_compute_sync_nonpositive_spot_preserves_extra_metadata l1_compute/tests/test_reactor.py::TestL1ComputeReactor::test_compute_sync_all_iv_invalid_preserves_extra_metadata"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+
+tests_passed:
+  - "scripts/policy/check_layer_boundaries.ps1"
+  - "python scripts/policy/check_quality_gates.py --repo-root . --config scripts/policy/quality_thresholds.json --meta-file tmp/session_validation_diag/l0_l2_quality_meta.yaml --output tmp/session_validation_diag/l0_l2_quality_gate.json"
+  - "scripts/test/run_pytest.ps1 l0_ingest/tests/test_fetch_chain_components.py (6 passed)"
+  - "scripts/test/run_pytest.ps1 l1_compute/tests/test_reactor.py::<3 sync metadata tests> (3 passed)"
+  - "scripts/validate_session.ps1 -Strict (PASS)"
+
+tests_failed:
+  - "scripts/test/run_pytest.ps1 l1_compute/tests/test_reactor.py (13 errors, WinError 10106)"
+
+blockers:
+  - "Host-level WinError 10106 in asyncio selector socketpair initialization blocks async pytest coverage in l1_compute/tests/test_reactor.py"
+
+notes:
+  - "P1 child-1 and child-2 code changes landed; P2 currently at proposal/static-gate stage only."
+  - "pytest wrapper now enforces plugin load and propagates non-zero exit code (no silent failure)."

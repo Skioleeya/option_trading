@@ -72,7 +72,11 @@ flowchart LR
 
 - `version` 单调递增，用于下游缓存失效
 - `as_of_utc` 是链路主数据时间戳
+- fallback 快照（`uninitialized` / `error`）也必须稳定输出 `rust_active`、`rust_shm_path` 与 `shm_stats`：
+  - `uninitialized`: `rust_active=false`, `shm_stats.status=UNINITIALIZED`
+  - `error`: `rust_active=false`, `shm_stats.status=ERROR`
 - `fetch_chain()` 默认不得触发 legacy Greeks 重算；若确需兼容路径，必须显式传入 `include_legacy_greeks=true` 并记录调用来源（caller tag）
+- `fetch_chain(include_chain_arrow=true)` 允许为 L1 compute 快路径附带内部字段 `chain_arrow`（`RecordBatch`）；该字段仅供进程内 L0->L1 使用，不作为外部 API 稳定合同
 - `ttm_seconds` 必须持续输出（即使 legacy Greeks 关闭），不得影响下游 ActiveOptions/Presenter 契约
 
 ## 5.1 LongPort REST Runtime Contract

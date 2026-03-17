@@ -104,4 +104,6 @@ def test_max_impact_extractor_recordbatch_with_computed_gamma():
 
     snapshot = MockSnapshot(chain)
     max_imp = extractor(snapshot)
-    assert max_imp == 100.0
+    # computed_gamma has higher priority than gamma in recordbatch rows.
+    # Row1 impact = 1000 * 0.5 = 500, row2 impact = 500 * 0.1 = 50.
+    assert max_imp == 500.0

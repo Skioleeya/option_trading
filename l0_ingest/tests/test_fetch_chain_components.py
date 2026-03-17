@@ -108,10 +108,16 @@ def test_snapshot_builders_return_contract_fields() -> None:
         "as_of": None,
         "as_of_utc": None,
         "version": 123,
+        "rust_active": False,
+        "rust_shm_path": None,
+        "shm_stats": {"head": 0, "tail": 0, "status": "UNINITIALIZED"},
     }
     assert error_snapshot["spot"] == 560.1
     assert error_snapshot["version"] == 124
     assert error_snapshot["as_of_utc"] == now.isoformat()
+    assert error_snapshot["rust_active"] is False
+    assert error_snapshot["rust_shm_path"] is None
+    assert error_snapshot["shm_stats"] == {"head": 0, "tail": 0, "status": "ERROR"}
 
 
 def test_compose_fetch_chain_payload_preserves_runtime_contract() -> None:
