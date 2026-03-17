@@ -1,16 +1,16 @@
 # Project State (Index)
 
 ## Active Session
-- Path: notes/sessions/2026-03-17/apply-fix-20260317-p2-gpu-temp-noise-and-archive/project_state.md
-- Meta: notes/sessions/2026-03-17/apply-fix-20260317-p2-gpu-temp-noise-and-archive/meta.yaml
-- Status: ACTIVE (GPU-only 路由与归档流程收口中)
+- Path: notes/sessions/2026-03-17/apply-refactor-governance-20260317-active-options-arrow-volume-contract-chain-final-merge-gate/project_state.md
+- Meta: notes/sessions/2026-03-17/apply-refactor-governance-20260317-active-options-arrow-volume-contract-chain-final-merge-gate/meta.yaml
+- Status: ACTIVE (parent merge-gate closure completed; strict passed)
 
 ## Recent Sessions
-- notes/sessions/2026-03-17/apply-fix-20260317-p2-gpu-temp-noise-and-archive/
-- notes/sessions/2026-03-17/apply-fix-20260317-winerror-10106-async-recovery-p2/
-- notes/sessions/2026-03-17/apply-fix-l0-l2-path-openspec-chain/
-- notes/sessions/2026-03-17/apply-static-check-20260317-l0-l2-data-path/
-- notes/sessions/2026-03-17/apply-fix-20260317-winerror-10106-pytest-unblock/
+- notes/sessions/2026-03-17/apply-refactor-governance-20260317-active-options-arrow-volume-contract-chain-final-merge-gate/
+- notes/sessions/2026-03-17/apply-refactor-magic-number-20260317-active-options-threshold-constants-governance/
+- notes/sessions/2026-03-17/apply-refactor-bloat-20260317-active-options-runtime-service-module-split/
+- notes/sessions/2026-03-17/apply-refactor-nesting-20260317-active-options-filter-guard-flattening/
+- notes/sessions/2026-03-17/apply-refactor-governance-20260317-remaining-children-proposals/
 
 ## Global Rules
 - Session folders are immutable records; do not overwrite prior sessions.

@@ -1,0 +1,46 @@
+session_id: "2026-03-17/apply-refactor-governance-20260317-remaining-children-proposals"
+title: "Apply refactor governance 20260317 remaining children proposals"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-17 16:59:58 -04:00"
+updated_at_et: "2026-03-17 17:15:00 -04:00"
+parent_session: null
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "7438767"
+head_commit: "7438767"
+
+files_changed:
+  - "openspec/changes/refactor-nesting-20260317-active-options-filter-guard-flattening/proposal.md"
+  - "openspec/changes/refactor-nesting-20260317-active-options-filter-guard-flattening/design.md"
+  - "openspec/changes/refactor-nesting-20260317-active-options-filter-guard-flattening/tasks.md"
+  - "openspec/changes/refactor-nesting-20260317-active-options-filter-guard-flattening/specs/nesting/spec.md"
+  - "openspec/changes/refactor-bloat-20260317-active-options-runtime-service-module-split/proposal.md"
+  - "openspec/changes/refactor-bloat-20260317-active-options-runtime-service-module-split/design.md"
+  - "openspec/changes/refactor-bloat-20260317-active-options-runtime-service-module-split/tasks.md"
+  - "openspec/changes/refactor-bloat-20260317-active-options-runtime-service-module-split/specs/bloat/spec.md"
+  - "openspec/changes/refactor-magic-number-20260317-active-options-threshold-constants-governance/proposal.md"
+  - "openspec/changes/refactor-magic-number-20260317-active-options-threshold-constants-governance/design.md"
+  - "openspec/changes/refactor-magic-number-20260317-active-options-threshold-constants-governance/tasks.md"
+  - "openspec/changes/refactor-magic-number-20260317-active-options-threshold-constants-governance/specs/magic-number/spec.md"
+  - "openspec/changes/refactor-governance-20260317-active-options-arrow-volume-contract-chain/proposal.md"
+  - "openspec/changes/refactor-governance-20260317-active-options-arrow-volume-contract-chain/design.md"
+  - "openspec/changes/refactor-governance-20260317-active-options-arrow-volume-contract-chain/tasks.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-17/apply-refactor-governance-20260317-remaining-children-proposals/project_state.md"
+  - "notes/sessions/2026-03-17/apply-refactor-governance-20260317-remaining-children-proposals/open_tasks.md"
+  - "notes/sessions/2026-03-17/apply-refactor-governance-20260317-remaining-children-proposals/handoff.md"
+  - "notes/sessions/2026-03-17/apply-refactor-governance-20260317-remaining-children-proposals/meta.yaml"
+commands:
+  - "python ./scripts/policy/check_openspec_chain.py --repo-root . --meta-file notes/sessions/2026-03-17/apply-refactor-governance-20260317-remaining-children-proposals/meta.yaml --handoff-file notes/sessions/2026-03-17/apply-refactor-governance-20260317-remaining-children-proposals/handoff.md --output tmp/session_validation_diag/openspec_gate_remaining_children.json"
+  - "./scripts/validate_session.ps1 -Strict (passed)"
+tests_passed:
+  - "check_openspec_chain: pass"
+  - "validate_session -Strict: pass"
+tests_failed: []
+blockers: []
+notes:
+  - "This session only advances OpenSpec governance assets; runtime code is untouched."

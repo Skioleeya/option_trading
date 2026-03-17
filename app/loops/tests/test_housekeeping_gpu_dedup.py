@@ -131,3 +131,20 @@ async def test_housekeeping_reuses_latest_l1_snapshot_and_dedups(monkeypatch: py
     assert row["delta"] == pytest.approx(0.31)
     assert row["gamma"] == pytest.approx(0.018)
     assert row["vanna"] == pytest.approx(-0.01)
+
+def test_normalize_active_options_row_supports_arrow_is_call_rows() -> None:
+    row = _normalize_active_options_row(
+        {
+            "symbol": "SPY.TEST.C",
+            "is_call": True,
+            "volume": 0.0,
+            "current_volume": 256.2,
+            "turnover": 12345.0,
+            "iv": 0.19,
+            "computed_iv": 0.21,
+        }
+    )
+
+    assert row["option_type"] == "CALL"
+    assert row["volume"] == 256
+    assert row["turnover"] == pytest.approx(12345.0)

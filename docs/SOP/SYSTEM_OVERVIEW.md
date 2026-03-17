@@ -205,14 +205,13 @@ try { (Invoke-WebRequest http://127.0.0.1:5173 -UseBasicParsing -TimeoutSec 3).S
 Get-NetTCPConnection -LocalPort 6380 -State Listen -ErrorAction SilentlyContinue
 
 # backend strict (default)
-$env:PYTHONPATH='.'
-python -m uvicorn main:app --host 0.0.0.0 --port 8001
+.\scripts\ops\start_backend.ps1
 
 # backend degraded (only when startup connectivity fails)
-$env:PYTHONPATH='.'
-$env:LONGPORT_STARTUP_STRICT_CONNECTIVITY='false'
-$env:LONGBRIDGE_STARTUP_STRICT_CONNECTIVITY='false'
-python -m uvicorn main:app --host 0.0.0.0 --port 8001
+.\scripts\ops\start_backend.ps1 -Degraded
+
+# backend log tail (latest)
+Get-Content .\logs\backend_runtime.current.log -Tail 400
 
 # frontend
 npm --prefix l4_ui run dev -- --host 0.0.0.0 --port 5173

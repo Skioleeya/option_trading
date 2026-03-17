@@ -16,6 +16,8 @@ def _make_dict_chain(n: int) -> list[dict]:
             "ask": 1.2 + i * 0.1,
             "iv": 0.15,
             "volume": 100.0,
+            "current_volume": 90.0 + i,
+            "turnover": 10_000.0 + i,
             "open_interest": 500.0,
             "contract_multiplier": 100.0,
         }
@@ -32,13 +34,15 @@ class TestArrowSchema:
         assert isinstance(rb, pa.RecordBatch)
         assert rb.schema == OPTION_CHAIN_SCHEMA
         assert rb.num_rows == 10
-        assert rb.num_columns == 9
+        assert rb.num_columns == 11
 
         # Spot check data
         assert rb.column("symbol")[0].as_py() == "SPY0"
         assert rb.column("strike")[1].as_py() == 501.0
         assert rb.column("is_call")[0].as_py() is True
         assert rb.column("is_call")[1].as_py() is False
+        assert rb.column("current_volume")[0].as_py() == pytest.approx(90.0)
+        assert rb.column("turnover")[0].as_py() == pytest.approx(10_000.0)
 
 
 class TestReactorArrowIntegration:
@@ -58,7 +62,7 @@ class TestReactorArrowIntegration:
         # Ensure extra column 'computed_iv' was added by the reactor
         assert "computed_iv" in snap.chain.schema.names
         assert "computed_delta" in snap.chain.schema.names
-        assert snap.chain.num_columns == 14  # 9 base + computed_iv/computed_delta + gex/call_gex/put_gex
+        assert snap.chain.num_columns == len(OPTION_CHAIN_SCHEMA.names) + 7
         
     @pytest.mark.asyncio
     async def test_to_legacy_dict_from_record_batch(self):

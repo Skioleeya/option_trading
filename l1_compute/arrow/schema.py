@@ -16,6 +16,8 @@ OPTION_CHAIN_SCHEMA = pa.schema([
     pa.field("ask", pa.float64()),
     pa.field("iv", pa.float64()),
     pa.field("volume", pa.float64()),
+    pa.field("current_volume", pa.float64()),
+    pa.field("turnover", pa.float64()),
     pa.field("open_interest", pa.float64()),
     pa.field("contract_multiplier", pa.float64()),
 ])
@@ -34,6 +36,8 @@ def dicts_to_record_batch(chain_snapshot: List[dict[str, Any]]) -> pa.RecordBatc
     asks = []
     ivs = []
     volumes = []
+    current_volumes = []
+    turnovers = []
     ois = []
     mults = []
 
@@ -52,8 +56,10 @@ def dicts_to_record_batch(chain_snapshot: List[dict[str, Any]]) -> pa.RecordBatc
         if iv_val is None:
             iv_val = entry.get("implied_volatility", 0.0)
         ivs.append(float(iv_val or 0.0))
-        
+
         volumes.append(float(entry.get("volume", 0.0) or 0.0))
+        current_volumes.append(float(entry.get("current_volume", 0.0) or 0.0))
+        turnovers.append(float(entry.get("turnover", 0.0) or 0.0))
         ois.append(float(entry.get("open_interest", 0.0)))
         mults.append(float(entry.get("contract_multiplier", 100.0)))
 
@@ -65,6 +71,8 @@ def dicts_to_record_batch(chain_snapshot: List[dict[str, Any]]) -> pa.RecordBatc
         pa.array(asks, type=pa.float64()),
         pa.array(ivs, type=pa.float64()),
         pa.array(volumes, type=pa.float64()),
+        pa.array(current_volumes, type=pa.float64()),
+        pa.array(turnovers, type=pa.float64()),
         pa.array(ois, type=pa.float64()),
         pa.array(mults, type=pa.float64()),
     ]

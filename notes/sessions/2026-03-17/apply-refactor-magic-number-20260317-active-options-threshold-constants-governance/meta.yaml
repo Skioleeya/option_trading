@@ -1,0 +1,43 @@
+session_id: "2026-03-17/apply-refactor-magic-number-20260317-active-options-threshold-constants-governance"
+title: "Apply refactor magic number 20260317 active options threshold constants governance"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-17 18:03:06 -04:00"
+updated_at_et: "2026-03-17 18:28:00 -04:00"
+parent_session: null
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "7438767"
+head_commit: "7438767"
+
+files_changed:
+  - "shared/services/active_options/constants.py"
+  - "shared/services/active_options/runtime_service.py"
+  - "shared/services/active_options/runtime_service_support.py"
+  - "shared/services/active_options/__init__.py"
+  - "app/loops/housekeeping_loop.py"
+  - "openspec/changes/refactor-magic-number-20260317-active-options-threshold-constants-governance/tasks.md"
+  - "openspec/changes/refactor-magic-number-20260317-active-options-threshold-constants-governance/phase1-8-execution.md"
+  - "openspec/changes/refactor-governance-20260317-active-options-arrow-volume-contract-chain/tasks.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-17/apply-refactor-magic-number-20260317-active-options-threshold-constants-governance/project_state.md"
+  - "notes/sessions/2026-03-17/apply-refactor-magic-number-20260317-active-options-threshold-constants-governance/open_tasks.md"
+  - "notes/sessions/2026-03-17/apply-refactor-magic-number-20260317-active-options-threshold-constants-governance/handoff.md"
+  - "notes/sessions/2026-03-17/apply-refactor-magic-number-20260317-active-options-threshold-constants-governance/meta.yaml"
+commands:
+  - "./scripts/test/run_pytest.ps1 shared/services/active_options/test_runtime_service.py app/loops/tests/test_housekeeping_gpu_dedup.py app/loops/tests/test_compute_loop_gpu_dedup.py"
+  - "./scripts/policy/check_layer_boundaries.ps1"
+  - "python ./scripts/policy/check_quality_gates.py --repo-root . --config scripts/policy/quality_thresholds.json --meta-file tmp/session_validation_diag/magic_quality_meta.yaml --output tmp/session_validation_diag/magic_quality_gate.json"
+  - "./scripts/validate_session.ps1 -Strict (passed)"
+tests_passed:
+  - "pytest targeted: 19 passed"
+  - "layer boundary scan: pass"
+  - "quality gate: pass"
+  - "validate_session -Strict: pass"
+tests_failed: []
+blockers: []
+notes:
+  - "Magic-number governance migrated to shared/services/active_options/constants.py as single authority."

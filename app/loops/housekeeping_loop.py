@@ -6,6 +6,7 @@ import time
 from typing import Any
 
 from shared.config import settings
+from shared.services.active_options.constants import ACTIVE_OPTIONS_DEFAULT_LIMIT
 from app.loops.shared_state import SharedLoopState
 
 # Only for type hints
@@ -15,7 +16,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-ACTIVE_OPTIONS_LIMIT = 5
+ACTIVE_OPTIONS_LIMIT = ACTIVE_OPTIONS_DEFAULT_LIMIT
 HOUSEKEEPING_OVERRUN_SLEEP_SECONDS = 0.01
 
 
@@ -200,7 +201,7 @@ async def run_housekeeping_loop(ctr: 'AppContainer', state: SharedLoopState) -> 
     update_interval = settings.websocket_update_interval
     next_tick = time.monotonic()
     last_l1_version: int | None = None
-    
+
     while True:
         atm_iv, gex_regime = _extract_agent_g_context(state.payload_dict)
         last_l1_version = await _run_housekeeping_tick_safe(

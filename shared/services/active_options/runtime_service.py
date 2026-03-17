@@ -11,10 +11,17 @@ from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from shared.cache.oi_snapshot import save_oi_snapshot
 from shared.config import settings
 from shared.models.flow_engine import FlowEngineInput, FlowEngineOutput
-from shared.cache.oi_snapshot import save_oi_snapshot
 from shared.system.persistent_oi_store import PersistentOIStore
+from . import runtime_service_support as support
+from .constants import (
+    ACTIVE_OPTIONS_CHARM_SURGE_END_HOUR_ET,
+    ACTIVE_OPTIONS_CHARM_SURGE_START_HOUR_ET,
+    ACTIVE_OPTIONS_DEFAULT_LIMIT,
+    ACTIVE_OPTIONS_SWITCH_CONFIRM_TICKS,
+)
 from .deg_composer import DEGComposer
 from .flow_engine_d import FlowEngineD
 from .flow_engine_e import FlowEngineE
@@ -22,55 +29,11 @@ from .flow_engine_g import FlowEngineG
 
 logger = logging.getLogger(__name__)
 
-# Colour decisions (Asian style): positive flow = Red (bullish), negative = Green (bearish)
-_DIRECTION_COLOR = {
-    "BULLISH": "text-accent-red",
-    "BEARISH": "text-accent-green",
-    "NEUTRAL": "text-text-secondary",
-}
-
-_INTENSITY_GLOW = {
-    "EXTREME": "shadow-[0_0_12px_rgba(255,77,79,0.6)] animate-pulse",
-    "HIGH": "shadow-[0_0_8px_rgba(255,77,79,0.35)]",
-    "MODERATE": "",
-    "LOW": "",
-}
-
-_ACTIVE_OPTIONS_SWITCH_CONFIRM_TICKS = 3
-_PLACEHOLDER_SIGNATURE_PREFIX = "__placeholder__#"
-
-
-def _direction_from_flow_amount(flow_amount: float) -> str:
-    if flow_amount > 0:
-        return "BULLISH"
-    if flow_amount < 0:
-        return "BEARISH"
-    return "NEUTRAL"
-
 
 def _is_charm_surge() -> bool:
     """Return True if now is within the last 2 hours before market close (ET)."""
     now = datetime.now(ZoneInfo("US/Eastern"))
-    return now.hour >= 14 and now.hour < 16
-
-
-def _format_flow(val: float) -> str:
-    abs_v = abs(val)
-    sign = "" if val >= 0 else "-"
-    prefix = "$"
-    if abs_v >= 1_000_000:
-        return f"{sign}{prefix}{abs_v / 1_000_000:.1f}M"
-    if abs_v >= 1_000:
-        return f"{sign}{prefix}{abs_v / 1_000:.0f}K"
-    return f"{sign}{prefix}{int(abs_v)}"
-
-
-def _format_volume(v: int) -> str:
-    if v >= 1_000_000:
-        return f"{v / 1_000_000:.1f}M"
-    if v >= 1_000:
-        return f"{v / 1_000:.0f}K"
-    return str(v)
+    return ACTIVE_OPTIONS_CHARM_SURGE_START_HOUR_ET <= now.hour < ACTIVE_OPTIONS_CHARM_SURGE_END_HOUR_ET
 
 
 class ActiveOptionsRuntimeService:
@@ -87,7 +50,7 @@ class ActiveOptionsRuntimeService:
         self._pending_signature: tuple[tuple[str, str, float], ...] | None = None
         self._pending_rows: list[dict[str, Any]] = []
         self._pending_hits = 0
-        self._switch_confirm_ticks = _ACTIVE_OPTIONS_SWITCH_CONFIRM_TICKS
+        self._switch_confirm_ticks = ACTIVE_OPTIONS_SWITCH_CONFIRM_TICKS
 
     def get_latest(self) -> list[dict[str, Any]]:
         """Return the latest cached generated rows without blocking."""
@@ -101,33 +64,95 @@ class ActiveOptionsRuntimeService:
         gex_regime: str = "NEUTRAL",
         ttm_seconds: float | None = None,
         redis: Any | None = None,
-        limit: int = 5,
+        limit: int = ACTIVE_OPTIONS_DEFAULT_LIMIT,
     ) -> None:
         """Run the full D+E+G pipeline and update the background cache."""
         target_limit = max(0, int(limit))
-        if target_limit == 0:
-            self._latest_payload = []
-            self._latest_signature = None
-            self._pending_signature = None
-            self._pending_rows = []
-            self._pending_hits = 0
+        if self._apply_zero_limit_guard(target_limit):
             return
 
-        min_vol = settings.flow_active_min_volume
-        filtered = [o for o in chain if int(o.get("volume", 0) or 0) >= min_vol]
-
-        if not filtered:
-            logger.warning(
-                "[ActiveOptionsRuntimeService] No options above min_volume threshold — "
-                "emitting neutral placeholders to keep fixed row contract."
-            )
-            rows, signature = self._build_ranked_candidate([], target_limit)
-            self._commit_or_hold_candidate(rows=rows, signature=signature)
+        filtered = self._normalize_and_filter_chain(
+            chain=chain,
+            min_volume=settings.flow_active_min_volume,
+        )
+        if self._apply_empty_filtered_guard(filtered=filtered, target_limit=target_limit):
             return
 
-        if redis:
-            await save_oi_snapshot(redis, filtered)
+        await self._save_oi_snapshot_if_enabled(redis=redis, filtered=filtered)
+        outputs = await self._run_flow_pipeline(
+            filtered=filtered,
+            spot=spot,
+            atm_iv=atm_iv,
+            gex_regime=gex_regime,
+            ttm_seconds=ttm_seconds,
+            redis=redis,
+        )
 
+        rows, signature = self._build_ranked_candidate(outputs, target_limit)
+        self._commit_or_hold_candidate(rows=rows, signature=signature)
+
+    def _reset_cache_state(self) -> None:
+        self._latest_payload = []
+        self._latest_signature = None
+        self._pending_signature = None
+        self._pending_rows = []
+        self._pending_hits = 0
+
+    def _clear_pending_state(self) -> None:
+        self._pending_signature = None
+        self._pending_rows = []
+        self._pending_hits = 0
+
+    def _apply_zero_limit_guard(self, target_limit: int) -> bool:
+        if target_limit > 0:
+            return False
+        self._reset_cache_state()
+        return True
+
+    @staticmethod
+    def _normalize_and_filter_chain(
+        *,
+        chain: list[dict[str, Any]],
+        min_volume: int,
+    ) -> list[dict[str, Any]]:
+        return support.normalize_and_filter_chain(chain=chain, min_volume=min_volume)
+
+    def _apply_empty_filtered_guard(
+        self,
+        *,
+        filtered: list[dict[str, Any]],
+        target_limit: int,
+    ) -> bool:
+        if filtered:
+            return False
+        logger.warning(
+            "[ActiveOptionsRuntimeService] No options above min_volume threshold — "
+            "emitting neutral placeholders to keep fixed row contract."
+        )
+        rows, signature = self._build_ranked_candidate([], target_limit)
+        self._commit_or_hold_candidate(rows=rows, signature=signature)
+        return True
+
+    @staticmethod
+    async def _save_oi_snapshot_if_enabled(
+        *,
+        redis: Any | None,
+        filtered: list[dict[str, Any]],
+    ) -> None:
+        if redis is None:
+            return
+        await save_oi_snapshot(redis, filtered)
+
+    async def _run_flow_pipeline(
+        self,
+        *,
+        filtered: list[dict[str, Any]],
+        spot: float,
+        atm_iv: float,
+        gex_regime: str,
+        ttm_seconds: float | None,
+        redis: Any | None,
+    ) -> list[FlowEngineOutput]:
         inputs = [
             FlowEngineInput.from_chain_entry(opt, spot=spot, atm_iv=atm_iv)
             for opt in filtered
@@ -143,53 +168,15 @@ class ActiveOptionsRuntimeService:
             oi_store=self._oi_store,
             date_str=today_str,
         )
-
-        charm_surge = _is_charm_surge()
-        outputs: list[FlowEngineOutput] = self._composer.compose(
+        return self._composer.compose(
             d_results,
             e_results,
             g_results,
             inputs_by_symbol=inputs_by_symbol,
-            is_charm_surge=charm_surge,
+            is_charm_surge=_is_charm_surge(),
             gex_regime=gex_regime,
             ttm_seconds=ttm_seconds,
         )
-
-        rows, signature = self._build_ranked_candidate(outputs, target_limit)
-        self._commit_or_hold_candidate(rows=rows, signature=signature)
-
-    @staticmethod
-    def _rank_outputs(outputs: list[FlowEngineOutput]) -> list[FlowEngineOutput]:
-        return sorted(
-            outputs,
-            key=lambda o: (
-                -int(o.volume),
-                -float(o.turnover),
-                -float(o.impact_index),
-                str(o.symbol),
-                float(o.strike),
-                str(o.option_type),
-            ),
-        )
-
-    @classmethod
-    def _build_ranked_candidate(
-        cls,
-        outputs: list[FlowEngineOutput],
-        limit: int,
-    ) -> tuple[list[dict[str, Any]], tuple[tuple[str, str, float], ...]]:
-        target = max(0, int(limit))
-        ranked = cls._rank_outputs(outputs)[:target]
-        rows = [cls._format_row(o, slot_index=idx + 1) for idx, o in enumerate(ranked)]
-        padded_rows = cls._pad_rows(rows, target)
-
-        signature_entries: list[tuple[str, str, float]] = [
-            (str(o.symbol), str(o.option_type), round(float(o.strike), 4))
-            for o in ranked
-        ]
-        while len(signature_entries) < target:
-            signature_entries.append((f"{_PLACEHOLDER_SIGNATURE_PREFIX}{len(signature_entries) + 1}", "CALL", 0.0))
-        return padded_rows, tuple(signature_entries)
 
     def _commit_or_hold_candidate(
         self,
@@ -201,27 +188,21 @@ class ActiveOptionsRuntimeService:
         if self._is_placeholder_signature(signature):
             self._latest_payload = rows
             self._latest_signature = signature
-            self._pending_signature = None
-            self._pending_rows = []
-            self._pending_hits = 0
+            self._clear_pending_state()
             return
 
         # First publish has no prior state; commit immediately.
         if self._latest_signature is None:
             self._latest_payload = rows
             self._latest_signature = signature
-            self._pending_signature = None
-            self._pending_rows = []
-            self._pending_hits = 0
+            self._clear_pending_state()
             return
 
         # No ranking change — refresh numeric fields in-place and clear pending candidate.
         # This keeps VOL-top composition stable while still allowing live value updates.
         if signature == self._latest_signature:
             self._latest_payload = rows
-            self._pending_signature = None
-            self._pending_rows = []
-            self._pending_hits = 0
+            self._clear_pending_state()
             return
 
         # Candidate changed — require N consecutive identical signatures before switch.
@@ -237,84 +218,33 @@ class ActiveOptionsRuntimeService:
 
         self._latest_payload = self._pending_rows
         self._latest_signature = self._pending_signature
-        self._pending_signature = None
-        self._pending_rows = []
-        self._pending_hits = 0
+        self._clear_pending_state()
+
+    # Compatibility wrappers kept to avoid broad test/caller churn during split.
+    @staticmethod
+    def _rank_outputs(outputs: list[FlowEngineOutput]) -> list[FlowEngineOutput]:
+        return support.rank_outputs(outputs)
+
+    @classmethod
+    def _build_ranked_candidate(
+        cls,
+        outputs: list[FlowEngineOutput],
+        limit: int,
+    ) -> tuple[list[dict[str, Any]], tuple[tuple[str, str, float], ...]]:
+        return support.build_ranked_candidate(outputs, limit)
 
     @staticmethod
     def _is_placeholder_signature(signature: tuple[tuple[str, str, float], ...]) -> bool:
-        if not signature:
-            return False
-        return all(str(entry[0]).startswith(_PLACEHOLDER_SIGNATURE_PREFIX) for entry in signature)
+        return support.is_placeholder_signature(signature)
 
     @staticmethod
     def _format_row(o: FlowEngineOutput, *, slot_index: int = 1) -> dict[str, Any]:
-        # UI semantics are amount-first: displayed FLOW sign must match direction/color.
-        flow_amount = o.flow_d + o.flow_e + o.flow_g
-        flow_direction = _direction_from_flow_amount(flow_amount)
-        flow_color = _DIRECTION_COLOR.get(flow_direction, "text-text-secondary")
-        glow = _INTENSITY_GLOW.get(o.flow_intensity, "")
-
-        return {
-            "symbol": "SPY",
-            "option_type": o.option_type,
-            "strike": o.strike,
-            "implied_volatility": o.implied_volatility,
-            "volume": o.volume,
-            "turnover": o.turnover,
-            "flow": flow_amount,
-            "flow_score": o.flow_deg,
-            "impact_index": o.impact_index,
-            "is_sweep": o.is_sweep,
-            "flow_deg_formatted": _format_flow(flow_amount),
-            "flow_volume_label": _format_volume(o.volume),
-            "flow_color": flow_color,
-            "flow_glow": glow if not o.is_sweep else "shadow-[0_0_15px_rgba(255,255,255,0.7)] animate-pulse",
-            "flow_intensity": o.flow_intensity,
-            "flow_direction": flow_direction,
-            "flow_d_z": round(o.flow_d_z, 3),
-            "flow_e_z": round(o.flow_e_z, 3),
-            "flow_g_z": round(o.flow_g_z, 3),
-            "is_placeholder": False,
-            "slot_index": max(1, int(slot_index)),
-        }
+        return support.format_row(o, slot_index=slot_index)
 
     @staticmethod
     def _placeholder_row(slot_index: int) -> dict[str, Any]:
-        idx = max(1, int(slot_index))
-        return {
-            "symbol": "—",
-            "option_type": "CALL",
-            "strike": 0.0,
-            "implied_volatility": 0.0,
-            "volume": 0,
-            "turnover": 0.0,
-            "flow": 0.0,
-            "flow_score": 0.0,
-            "impact_index": 0.0,
-            "is_sweep": False,
-            "flow_deg_formatted": "—",
-            "flow_volume_label": "—",
-            "flow_color": "text-text-secondary",
-            "flow_glow": "",
-            "flow_intensity": "LOW",
-            "flow_direction": "NEUTRAL",
-            "flow_d_z": 0.0,
-            "flow_e_z": 0.0,
-            "flow_g_z": 0.0,
-            "is_placeholder": True,
-            "slot_index": idx,
-        }
+        return support.placeholder_row(slot_index)
 
     @classmethod
     def _pad_rows(cls, rows: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
-        target = max(0, int(limit))
-        trimmed = rows[:target]
-        for idx, row in enumerate(trimmed):
-            row["slot_index"] = idx + 1
-            row["is_placeholder"] = bool(row.get("is_placeholder", False))
-        while len(trimmed) < target:
-            trimmed.append(cls._placeholder_row(len(trimmed) + 1))
-        return trimmed
-
-
+        return support.pad_rows(rows, limit)

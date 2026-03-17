@@ -229,3 +229,61 @@ def test_flow_engines_have_registry_semantics_entries():
         assert semantics.live_usage == "live"
         assert "proxy" in semantics.canonical_description.lower() or "heuristic" in semantics.canonical_description.lower()
 
+
+@pytest.mark.asyncio
+async def test_update_background_uses_current_volume_fallback_for_min_volume_filter():
+    svc = ActiveOptionsRuntimeService()
+    chain = [
+        {
+            "symbol": "SPY_FALLBACK",
+            "option_type": "C",
+            "strike": 562.0,
+            "volume": 0,
+            "current_volume": 220,
+            "turnover": 130000.0,
+            "implied_volatility": 0.19,
+            "historical_volatility": 0.17,
+            "open_interest": 900,
+            "gamma": 0.01,
+            "vanna": 0.02,
+        }
+    ]
+
+    await svc.update_background(chain=chain, spot=560.0, atm_iv=0.2, redis=None, limit=3)
+    rows = svc.get_latest()
+    assert len(rows) == 3
+    assert rows[0]["is_placeholder"] is False
+    assert rows[0]["volume"] == 220
+
+def test_apply_zero_limit_guard_resets_runtime_cache_state():
+    svc = ActiveOptionsRuntimeService()
+    svc._latest_payload = [{"slot_index": 1, "is_placeholder": False}]
+    svc._latest_signature = (("A", "CALL", 560.0),)
+    svc._pending_signature = (("B", "CALL", 561.0),)
+    svc._pending_rows = [{"slot_index": 1, "is_placeholder": False, "id": "B"}]
+    svc._pending_hits = 2
+
+    handled = svc._apply_zero_limit_guard(0)
+
+    assert handled is True
+    assert svc.get_latest() == []
+    assert svc._latest_signature is None
+    assert svc._pending_signature is None
+    assert svc._pending_rows == []
+    assert svc._pending_hits == 0
+
+
+def test_normalize_and_filter_chain_uses_volume_fallback_before_threshold():
+    chain = [
+        {"symbol": "A", "volume": 0, "current_volume": 220},
+        {"symbol": "B", "volume": 150, "current_volume": 0},
+    ]
+
+    filtered = ActiveOptionsRuntimeService._normalize_and_filter_chain(
+        chain=chain,
+        min_volume=200,
+    )
+
+    assert len(filtered) == 1
+    assert filtered[0]["symbol"] == "A"
+    assert int(filtered[0]["volume"]) == 220

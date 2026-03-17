@@ -1,0 +1,31 @@
+session_id: "2026-03-17/apply-refactor-governance-20260317-active-options-arrow-volume-contract-chain-final-merge-gate"
+title: "Apply refactor governance 20260317 active options arrow volume contract chain final merge gate"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-17 17:41:56 -04:00"
+updated_at_et: "2026-03-17 18:44:00 -04:00"
+parent_session: null
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "7438767"
+head_commit: "7438767"
+
+files_changed:
+  - "openspec/changes/refactor-governance-20260317-active-options-arrow-volume-contract-chain/final-merge-gate-closure.md"
+  - "openspec/changes/refactor-governance-20260317-active-options-arrow-volume-contract-chain/tasks.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-17/apply-refactor-governance-20260317-active-options-arrow-volume-contract-chain-final-merge-gate/project_state.md"
+  - "notes/sessions/2026-03-17/apply-refactor-governance-20260317-active-options-arrow-volume-contract-chain-final-merge-gate/open_tasks.md"
+  - "notes/sessions/2026-03-17/apply-refactor-governance-20260317-active-options-arrow-volume-contract-chain-final-merge-gate/handoff.md"
+  - "notes/sessions/2026-03-17/apply-refactor-governance-20260317-active-options-arrow-volume-contract-chain-final-merge-gate/meta.yaml"
+commands:
+  - "./scripts/validate_session.ps1 -Strict (passed)"
+tests_passed:
+  - "parent merge-gate strict: pass"
+tests_failed: []
+blockers: []
+notes:
+  - "Parent proposal merge gate closure report consolidated child evidence and metrics."
