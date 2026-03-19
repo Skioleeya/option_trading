@@ -33,6 +33,10 @@ flowchart LR
  - 订阅池执行硬上限：`subscription_max` 会被运行时钳制到官方上限 `500`。
  - 超过上限时按离 spot 距离优先保留近端合约，输出 drop 诊断日志。
 3. `ChainStateStore` 聚合并提供 `fetch_chain()` 快照。
+4. L0 flow 字段所有权约束（ActiveOptions 关键）:
+ - `DEPTH` 事件只允许更新价位簿价格（bid/ask），不得写入 `volume/current_volume/turnover`。
+ - `QUOTE/TRADE` 事件可写入 flow 字段；`ws_*_seen` 仅在字段为正值时置位，避免 `0` 锁死 REST fallback。
+ - WS `volume/current_volume` 必须通过可信上限校验（当前 hard cap: `1_000_000_000`）；超限值视为脏数据并丢弃，且不得置位 `ws_volume_seen/ws_current_volume_seen`（保留 REST fallback 接管能力）。
 
 ### 3.3 IVBaselineSync 模块边界（P1 去混乱）
 
@@ -53,7 +57,9 @@ flowchart LR
 - 同时兼容 `LONGPORT_*` 与 `LONGBRIDGE_*` 两套环境变量名。
 - 启动阶段必须将配置同步到两套别名，避免 Python/Rust bridge 读取键名不一致导致初始化失败。
 - Rust runtime 必须维护端点候选序列（primary -> fallback），默认顺序：`longportapp -> longbridge`。
-- 当 `socket/token` 建连出现 `client error (Connect)` 等网络类错误时，允许在未建立 WS 会话前切换后备端点并重试一次。
+- 当 `socket/token` 建连出现 `client error (Connect)` 等网络类错误时，允许切换后备端点并重试一次。
+- 若故障发生在运行中（WS 会话已建立），允许执行 `stop -> 切端点 -> 重建 gateway -> 用 tracked_symbols 重订阅` 的自愈流程；单次操作最多一次切端点与一次重试，禁止无限切换循环。
+- `RustQuoteRuntime.diagnostics()` 必须持续提供 `failover_count`、`last_failover_error`、`last_failover_at_utc` 供 `/debug/persistence_status` 透出。
 
 ## 4. Degraded Startup Contract
 
@@ -84,6 +90,8 @@ flowchart LR
 - `fetch_chain()` 默认不得触发 legacy Greeks 重算；若确需兼容路径，必须显式传入 `include_legacy_greeks=true` 并记录调用来源（caller tag）
 - `fetch_chain(include_chain_arrow=true)` 允许为 L1 compute 快路径附带内部字段 `chain_arrow`（`RecordBatch`）；该字段仅供进程内 L0->L1 使用，不作为外部 API 稳定合同
 - `ttm_seconds` 必须持续输出（即使 legacy Greeks 关闭），不得影响下游 ActiveOptions/Presenter 契约
+- 当 ActiveOptions 在 `min_volume` 过滤后为空且链路仍有有效候选（如 `turnover/open_interest`）时，允许运行时使用 fallback candidates 继续输出真实行，避免长期全占位降级；该路径必须保留结构化日志与诊断计数。
+- ActiveOptions 行合同允许附加质量标记字段（向后兼容）：`row_quality`、`fallback_reason`、`is_synthetic_fallback`，用于区分真实可交易行与合成降级行。
 
 ## 5.1 LongPort REST Runtime Contract
 
@@ -123,7 +131,11 @@ Raw + Normalized 规则：
 
 - L0 消费者应优先读取 `implied_volatility_decimal` 与 `expiry_date_iso`
 - 旧字段继续保留用于兼容现有调用方，不允许在本轮替换式改名
-- 本轮不修改 `fetch_chain()`、SHM schema、`CleanQuoteEvent` / `EnrichedSnapshot` 契约
+- Active Options turnover 修复轮（2026-03-19）已升级 SHM Push schema 到 v2：
+  - 头部元数据新增 `magic/schema_version/event_size`（保留 `head@0`、`tail@64`、`buffer@128`）
+  - 事件尾部新增 `current_volume/turnover/current_turnover`
+  - Python `RustBridge` 必须同时兼容读取 v1/v2 布局
+  - `fetch_chain()` 与 `CleanQuoteEvent` / `EnrichedSnapshot` 外部契约保持兼容
 
 ## 6. Boundary Rules
 
@@ -139,12 +151,14 @@ Raw + Normalized 规则：
 - `[IVSync]`
 - `Switching endpoint profile to '<name>' (http=<url>)`
 - `Startup connectivity probe passed|failed ... profile=<name> endpoint=<url>`
+- `Spot REST fallback failed ... endpoint_profile=<...> failover_count=<...> last_failover_at_utc=<...>`
 
 关键指标:
 
 - `rust_active`
 - `shm_stats`
 - queue backlog / dropped count
+- `ws_volume_dropped`, `ws_current_volume_dropped`
 
 ## 8. Failure Handling
 

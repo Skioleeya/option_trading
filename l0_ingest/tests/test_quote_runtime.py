@@ -219,6 +219,31 @@ class _FailoverGateway:
         )
 
 
+class _StartedFailoverGateway:
+    def __init__(self, fail_quote: bool) -> None:
+        self.fail_quote = fail_quote
+        self.started = False
+        self.stopped = False
+        self.start_symbols: list[str] = []
+
+    def start(self, symbols: list[str], _shm_path: str, _cpu_id: int) -> None:
+        self.started = True
+        self.start_symbols = list(symbols)
+
+    def stop(self) -> None:
+        self.stopped = True
+
+    def rest_quote(self, symbols: list[str]) -> str:
+        if self.fail_quote:
+            raise RuntimeError(
+                "QuoteContext init failed: error sending request for url "
+                "(https://openapi.longportapp.com/v2/socket/token): client error (Connect)"
+            )
+        return json.dumps(
+            [{"symbol": symbols[0], "last_done": 101.5, "volume": 21, "turnover": 3.2, "timestamp": 2}]
+        )
+
+
 @pytest.mark.asyncio
 async def test_rust_quote_runtime_decodes_rows_and_indexes(monkeypatch):
     fake = _FakeRustGateway()
@@ -327,6 +352,99 @@ async def test_rust_quote_runtime_switches_endpoint_profile_on_connectivity_fail
         "wss://openapi-trade.longbridge.com/v2",
     )
     assert runtime.diagnostics()["endpoint_profile"] == "official_longbridge"
+
+
+@pytest.mark.asyncio
+async def test_rust_quote_runtime_started_session_failover_restarts_and_resubscribes(monkeypatch):
+    instances: list[_StartedFailoverGateway] = []
+
+    def _factory() -> _StartedFailoverGateway:
+        gateway = _StartedFailoverGateway(fail_quote=(len(instances) == 0))
+        instances.append(gateway)
+        return gateway
+
+    monkeypatch.setattr(
+        "l0_ingest.feeds.quote_runtime.l0_rust",
+        SimpleNamespace(RustIngestGateway=_factory),
+    )
+
+    runtime = RustQuoteRuntime(
+        _DummyConfig(),
+        endpoint_profiles=[
+            {
+                "name": "primary",
+                "http_url": "https://openapi.longportapp.com",
+                "quote_ws_url": "wss://openapi-quote.longportapp.com/v2",
+                "trade_ws_url": "wss://openapi-trade.longportapp.com/v2",
+            },
+            {
+                "name": "official_longbridge",
+                "http_url": "https://openapi.longbridge.com",
+                "quote_ws_url": "wss://openapi-quote.longbridge.com/v2",
+                "trade_ws_url": "wss://openapi-trade.longbridge.com/v2",
+            },
+        ],
+    )
+
+    await runtime.connect()
+    await runtime.subscribe(["SPY.US"])
+    quotes = await runtime.quote(["SPY.US"])
+
+    assert quotes[0].symbol == "SPY.US"
+    assert len(instances) == 2
+    assert instances[0].started is True
+    assert instances[0].stopped is True
+    assert instances[1].started is True
+    assert instances[1].start_symbols == ["SPY.US"]
+    diag = runtime.diagnostics()
+    assert diag["endpoint_profile"] == "official_longbridge"
+    assert diag["failover_count"] == 1
+    assert isinstance(diag["last_failover_error"], str)
+    assert isinstance(diag["last_failover_at_utc"], str)
+
+
+@pytest.mark.asyncio
+async def test_rust_quote_runtime_started_session_failover_stops_after_single_retry(monkeypatch):
+    instances: list[_StartedFailoverGateway] = []
+
+    def _factory() -> _StartedFailoverGateway:
+        gateway = _StartedFailoverGateway(fail_quote=True)
+        instances.append(gateway)
+        return gateway
+
+    monkeypatch.setattr(
+        "l0_ingest.feeds.quote_runtime.l0_rust",
+        SimpleNamespace(RustIngestGateway=_factory),
+    )
+
+    runtime = RustQuoteRuntime(
+        _DummyConfig(),
+        endpoint_profiles=[
+            {
+                "name": "primary",
+                "http_url": "https://openapi.longportapp.com",
+                "quote_ws_url": "wss://openapi-quote.longportapp.com/v2",
+                "trade_ws_url": "wss://openapi-trade.longportapp.com/v2",
+            },
+            {
+                "name": "official_longbridge",
+                "http_url": "https://openapi.longbridge.com",
+                "quote_ws_url": "wss://openapi-quote.longbridge.com/v2",
+                "trade_ws_url": "wss://openapi-trade.longbridge.com/v2",
+            },
+        ],
+    )
+
+    await runtime.connect()
+    await runtime.subscribe(["SPY.US"])
+    with pytest.raises(RuntimeError, match="socket/token"):
+        await runtime.quote(["SPY.US"])
+
+    # One initial gateway + one failover gateway; no infinite switch loop.
+    assert len(instances) == 2
+    diag = runtime.diagnostics()
+    assert diag["failover_count"] == 1
+    assert diag["endpoint_profile"] == "official_longbridge"
 
 
 @pytest.mark.asyncio

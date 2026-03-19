@@ -2,6 +2,11 @@ use serde::{Deserialize, Serialize};
 use arrow::datatypes::{DataType, Field, Schema};
 use std::sync::Arc;
 
+pub const SHM_META_MAGIC: u32 = 0x4C305348; // "L0SH"
+pub const SHM_SCHEMA_VERSION_V1: u32 = 1;
+pub const SHM_SCHEMA_VERSION_V2: u32 = 2;
+pub const SHM_SCHEMA_VERSION: u32 = SHM_SCHEMA_VERSION_V2;
+
 #[derive(Debug, Clone, Serialize, Deserialize, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
 #[repr(C)]
 pub struct InstitutionalMarketEvent {
@@ -20,6 +25,9 @@ pub struct InstitutionalMarketEvent {
     pub ttm_seconds: f64,    // High-precision time decay
     pub arrival_mono_ns: u64,
     pub sequence_id: i64,    // For ordering
+    pub current_volume: u64,
+    pub turnover: f64,
+    pub current_turnover: f64,
 }
 
 lazy_static::lazy_static! {
@@ -39,5 +47,8 @@ lazy_static::lazy_static! {
         Field::new("ttm_seconds", DataType::Float64, true),
         Field::new("arrival_mono_ns", DataType::UInt64, false),
         Field::new("sequence_id", DataType::Int64, false),
+        Field::new("current_volume", DataType::UInt64, true),
+        Field::new("turnover", DataType::Float64, true),
+        Field::new("current_turnover", DataType::Float64, true),
     ]));
 }

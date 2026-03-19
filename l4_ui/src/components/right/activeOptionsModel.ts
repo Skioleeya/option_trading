@@ -18,6 +18,11 @@ export function normalizeOptionType(raw: unknown): 'CALL' | 'PUT' {
 
 export type { ActiveFlowDirection, ActiveFlowIntensity } from './activeOptionsTheme'
 
+const ACTIVE_OPTIONS_FLOW_SIGNAL_STATE_LIVE = 'LIVE'
+const ACTIVE_OPTIONS_FLOW_SIGNAL_STATE_DEGRADED = 'DEGRADED'
+const ACTIVE_OPTIONS_FLOW_SIGNAL_REASON_ALL_ENGINES_INACTIVE = 'all_engines_inactive'
+const ACTIVE_OPTIONS_ROW_QUALITY_FALLBACK_SYNTHETIC = 'FALLBACK_SYNTHETIC'
+
 function createPlaceholderOption(slotIndex: number): ActiveOption {
     return {
         symbol: '—',
@@ -38,6 +43,11 @@ function createPlaceholderOption(slotIndex: number): ActiveOption {
         flow_direction: 'NEUTRAL',
         is_placeholder: true,
         slot_index: Math.max(1, slotIndex),
+        row_quality: 'PLACEHOLDER',
+        fallback_reason: null,
+        is_synthetic_fallback: false,
+        flow_signal_state: ACTIVE_OPTIONS_FLOW_SIGNAL_STATE_DEGRADED,
+        flow_signal_reason: ACTIVE_OPTIONS_FLOW_SIGNAL_REASON_ALL_ENGINES_INACTIVE,
     }
 }
 
@@ -123,6 +133,29 @@ function normalizeFlowDisplayLabel(raw: unknown, flow: number): string | undefin
     return text
 }
 
+function normalizeOptionalString(raw: unknown): string | null {
+    if (typeof raw !== 'string') return null
+    const text = raw.trim()
+    return text ? text : null
+}
+
+function normalizeFlowSignalState(
+    raw: unknown,
+    isSyntheticFallback: boolean
+): 'LIVE' | 'DEGRADED' {
+    const text = typeof raw === 'string' ? raw.trim().toUpperCase() : ''
+    if (text === ACTIVE_OPTIONS_FLOW_SIGNAL_STATE_DEGRADED) {
+        return ACTIVE_OPTIONS_FLOW_SIGNAL_STATE_DEGRADED
+    }
+    if (text === ACTIVE_OPTIONS_FLOW_SIGNAL_STATE_LIVE) {
+        return ACTIVE_OPTIONS_FLOW_SIGNAL_STATE_LIVE
+    }
+    if (isSyntheticFallback) {
+        return ACTIVE_OPTIONS_FLOW_SIGNAL_STATE_DEGRADED
+    }
+    return ACTIVE_OPTIONS_FLOW_SIGNAL_STATE_LIVE
+}
+
 export function normalizeActiveOption(input: unknown): ActiveOption {
     const row = (input && typeof input === 'object') ? (input as Partial<ActiveOption>) : {}
     const isPlaceholder = Boolean(row.is_placeholder)
@@ -140,6 +173,11 @@ export function normalizeActiveOption(input: unknown): ActiveOption {
     const flowIntensity = normalizeFlowIntensity(row.flow_intensity)
     const flowColor = normalizeFlowColor(row.flow_color, flowDirection)
     const flowScore = toFiniteNumber(row.flow_score, 0)
+    const rowQuality = normalizeOptionalString(row.row_quality)?.toUpperCase() ?? null
+    const fallbackReason = normalizeOptionalString(row.fallback_reason)
+    const isSyntheticFallback = Boolean(row.is_synthetic_fallback) || rowQuality === ACTIVE_OPTIONS_ROW_QUALITY_FALLBACK_SYNTHETIC
+    const flowSignalState = normalizeFlowSignalState(row.flow_signal_state, isSyntheticFallback)
+    const flowSignalReason = normalizeOptionalString(row.flow_signal_reason)
     const normalizedGlow = isSweep
         ? ACTIVE_OPTIONS_SWEEP_GLOW
         : ACTIVE_OPTIONS_FLOW_GLOW_BY_DIRECTION_AND_INTENSITY[flowDirection][flowIntensity]
@@ -163,6 +201,11 @@ export function normalizeActiveOption(input: unknown): ActiveOption {
         flow_direction: flowDirection,
         is_placeholder: false,
         slot_index: slotIndex,
+        row_quality: rowQuality,
+        fallback_reason: fallbackReason,
+        is_synthetic_fallback: isSyntheticFallback,
+        flow_signal_state: flowSignalState,
+        flow_signal_reason: flowSignalReason,
     }
 }
 

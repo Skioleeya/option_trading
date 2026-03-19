@@ -37,6 +37,9 @@ def test_rust_depth_event_bridges_to_on_depth() -> None:
             "ask": 1.3,
             "last_price": 1.25,
             "volume": 50,
+            "current_volume": 12,
+            "turnover": 5200.0,
+            "current_turnover": 450.0,
             "impact_index": 0.8,
             "is_sweep": False,
             "arrival_mono_ns": 1_000_000_000,
@@ -45,6 +48,8 @@ def test_rust_depth_event_bridges_to_on_depth() -> None:
 
     assert len(builder._store.events) == 1
     assert builder._store.events[0].event_type == EventType.DEPTH
+    assert builder._store.events[0].turnover == 5200.0
+    assert builder._store.events[0].current_volume == 12.0
     assert len(depth_calls) == 1
     assert depth_calls[0][0] == "SPY.OPT.C"
     assert depth_calls[0][1]
@@ -65,6 +70,9 @@ def test_rust_trade_event_bridges_to_on_trade_with_direction() -> None:
             "ask": 1.3,
             "last_price": 1.26,
             "volume": 20,
+            "current_volume": 6,
+            "turnover": 2400.0,
+            "current_turnover": 180.0,
             "impact_index": -0.5,
             "is_sweep": True,
             "arrival_mono_ns": 2_000_000_000,
@@ -77,4 +85,5 @@ def test_rust_trade_event_bridges_to_on_trade_with_direction() -> None:
     assert len(trades) == 1
     assert trades[0]["dir"] == -1
     assert trades[0]["vol"] == 20.0
-
+    assert builder._store.events[0].turnover == 2400.0
+    assert builder._store.events[0].current_volume == 6.0

@@ -20,7 +20,12 @@ export const ActiveOptions: React.FC<Props> = memo(({ options: propOptions, pref
         ? (propOptions ?? storeOptions ?? [])
         : (storeOptions ?? propOptions ?? [])
     const options: ActiveOption[] = normalizeActiveOptions(source, ACTIVE_OPTIONS_FIXED_ROWS)
-    const isDegraded = options.length > 0 && options.every((opt) => Boolean(opt.is_placeholder))
+    const allPlaceholder = options.length > 0 && options.every((opt) => Boolean(opt.is_placeholder))
+    const hasDegradedSignal = options.some((opt) => {
+        if (opt.is_placeholder) return false
+        return String(opt.flow_signal_state ?? '').toUpperCase() === 'DEGRADED'
+    })
+    const isDegraded = allPlaceholder || hasDegradedSignal
 
     return (
         <div className="p-2">

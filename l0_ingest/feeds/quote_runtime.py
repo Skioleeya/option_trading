@@ -4,7 +4,7 @@ import asyncio
 import json
 import logging
 import os
-from datetime import date
+from datetime import date, datetime, timezone
 from types import SimpleNamespace
 from typing import Any, Iterable, Protocol
 
@@ -76,6 +76,9 @@ class RustQuoteRuntime:
         self._event_queue: asyncio.Queue[Any] = asyncio.Queue(maxsize=1)
         self._endpoint_profiles = self._normalize_endpoint_profiles(endpoint_profiles)
         self._active_endpoint_profile_idx = 0
+        self._failover_count = 0
+        self._last_failover_error: str | None = None
+        self._last_failover_at_utc: str | None = None
 
     @staticmethod
     def _normalize_endpoint_profiles(
@@ -128,7 +131,11 @@ class RustQuoteRuntime:
         os.environ["LONGPORT_TRADE_WS_URL"] = trade_ws_url
         os.environ["LONGBRIDGE_TRADE_WS_URL"] = trade_ws_url
 
-    async def _reset_gateway(self) -> None:
+    @staticmethod
+    def _utc_now_iso() -> str:
+        return datetime.now(timezone.utc).isoformat()
+
+    async def _reset_gateway(self, *, clear_symbols: bool = True) -> None:
         if self._gateway and self._started:
             try:
                 await asyncio.to_thread(self._gateway.stop)
@@ -137,7 +144,8 @@ class RustQuoteRuntime:
         self._gateway = None
         self._connected = False
         self._started = False
-        self._symbols.clear()
+        if clear_symbols:
+            self._symbols.clear()
 
     @staticmethod
     def _is_connectivity_error(exc: Exception) -> bool:
@@ -153,17 +161,32 @@ class RustQuoteRuntime:
         )
 
     async def _switch_to_next_endpoint_profile(self) -> bool:
-        if self._started:
-            return False
         if not self._endpoint_profiles:
             return False
         next_idx = self._active_endpoint_profile_idx + 1
         if next_idx >= len(self._endpoint_profiles):
             return False
+        tracked_symbols = set(self._symbols)
+        was_started = self._started
         self._active_endpoint_profile_idx = next_idx
-        await self._reset_gateway()
+        await self._reset_gateway(clear_symbols=False)
         self._apply_active_endpoint_profile()
         active = self._active_endpoint_profile()
+        if was_started and tracked_symbols:
+            await self._ensure_gateway()
+            await asyncio.to_thread(
+                self._gateway.start,
+                sorted(tracked_symbols),
+                self._shm_path,
+                self._cpu_id,
+            )
+            self._started = True
+            self._symbols = tracked_symbols
+            self._connected = True
+            logger.warning(
+                "[RustQuoteRuntime] Runtime failover restored Rust session: %d tracked symbol(s)",
+                len(self._symbols),
+            )
         logger.warning(
             "[RustQuoteRuntime] Switching endpoint profile to '%s' (http=%s)",
             (active or {}).get("name"),
@@ -198,13 +221,18 @@ class RustQuoteRuntime:
         except Exception as exc:
             if not self._is_connectivity_error(exc):
                 raise
+            failed_profile = (self._active_endpoint_profile() or {}).get("name")
             switched = await self._switch_to_next_endpoint_profile()
             if not switched:
                 raise
+            self._failover_count += 1
+            self._last_failover_error = str(exc)
+            self._last_failover_at_utc = self._utc_now_iso()
             logger.warning(
-                "[RustQuoteRuntime] %s failed on endpoint profile '%s': %s",
+                "[RustQuoteRuntime] %s connectivity failure on endpoint profile '%s' -> failover_count=%d error=%s",
                 op_name,
-                self._endpoint_profiles[self._active_endpoint_profile_idx - 1]["name"],
+                failed_profile,
+                self._failover_count,
                 exc,
             )
             await self._ensure_gateway()
@@ -308,6 +336,9 @@ class RustQuoteRuntime:
             "tracked_symbols": len(self._symbols),
             "endpoint_profile": (active_profile or {}).get("name"),
             "endpoint_http_url": (active_profile or {}).get("http_url"),
+            "failover_count": self._failover_count,
+            "last_failover_error": self._last_failover_error,
+            "last_failover_at_utc": self._last_failover_at_utc,
         }
 
 

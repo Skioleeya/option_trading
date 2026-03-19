@@ -22,6 +22,7 @@ from zoneinfo import ZoneInfo
 from l0_ingest.feeds.sanitization import CleanQuoteEvent, CleanDepthEvent, EventType
 
 logger = logging.getLogger(__name__)
+MAX_WS_FLOW_VOLUME = 1_000_000_000.0
 
 
 class ChainStateStore:
@@ -55,6 +56,8 @@ class ChainStateStore:
         self._ws_volume_seen: set[str] = set()
         self._ws_current_volume_seen: set[str] = set()
         self._ws_turnover_seen: set[str] = set()
+        self._ws_volume_dropped: int = 0
+        self._ws_current_volume_dropped: int = 0
 
     # ── Spot ──────────────────────────────────────────────────────────────────
 
@@ -163,21 +166,123 @@ class ChainStateStore:
             setter("bid", event.bid)
             setter("ask", event.ask)
             setter("last_price", event.last_price)
-            self._apply_ws_flow_fields(symbol, event, setter)
+            if self._event_allows_flow_fields(event):
+                self._apply_ws_flow_fields(symbol, event, setter)
             return
 
         self._apply_rest_flow_fallback(symbol, event, setter)
 
+    @staticmethod
+    def _event_allows_flow_fields(event: CleanQuoteEvent) -> bool:
+        return event.event_type in (EventType.QUOTE, EventType.TRADE)
+
+    @staticmethod
+    def _is_positive_numeric(value: Any) -> bool:
+        if value is None:
+            return False
+        try:
+            return float(value) > 0.0
+        except (TypeError, ValueError):
+            return False
+
+    @classmethod
+    def _sanitize_ws_volume_candidate(cls, value: Any) -> float | None:
+        if not cls._is_positive_numeric(value):
+            return None
+        parsed = float(value)
+        if parsed > MAX_WS_FLOW_VOLUME:
+            return None
+        return parsed
+
     def _apply_ws_flow_fields(self, symbol: str, event: CleanQuoteEvent, setter: Any) -> None:
-        setter("volume", event.volume)
-        setter("current_volume", event.current_volume)
+        raw_volume_positive = self._is_positive_numeric(event.volume)
+        raw_current_positive = self._is_positive_numeric(event.current_volume)
+        sanitized_volume = self._sanitize_ws_volume_candidate(event.volume)
+        sanitized_current_volume = self._sanitize_ws_volume_candidate(event.current_volume)
+        self._track_implausible_ws_volume(
+            symbol=symbol,
+            field_name="volume",
+            raw_positive=raw_volume_positive,
+            sanitized_value=sanitized_volume,
+            raw_value=event.volume,
+        )
+        self._track_implausible_ws_volume(
+            symbol=symbol,
+            field_name="current_volume",
+            raw_positive=raw_current_positive,
+            sanitized_value=sanitized_current_volume,
+            raw_value=event.current_volume,
+        )
+
+        ws_volume = self._resolve_ws_volume(sanitized_volume, sanitized_current_volume)
+        volume_owned_by_ws = (
+            event.event_type == EventType.TRADE
+            or self._is_positive_numeric(event.turnover)
+        )
+        if volume_owned_by_ws and self._is_positive_numeric(ws_volume):
+            setter("volume", ws_volume)
+        if sanitized_current_volume is not None:
+            setter("current_volume", sanitized_current_volume)
         setter("turnover", event.turnover)
-        if event.volume is not None:
+        self._mark_ws_flow_owner_seen(
+            symbol=symbol,
+            volume_owned_by_ws=volume_owned_by_ws,
+            ws_volume=ws_volume,
+            current_volume=sanitized_current_volume,
+            turnover=event.turnover,
+        )
+
+    def _track_implausible_ws_volume(
+        self,
+        *,
+        symbol: str,
+        field_name: str,
+        raw_positive: bool,
+        sanitized_value: float | None,
+        raw_value: Any,
+    ) -> None:
+        if not raw_positive or sanitized_value is not None:
+            return
+        if field_name == "current_volume":
+            self._ws_current_volume_dropped += 1
+        else:
+            self._ws_volume_dropped += 1
+        logger.warning(
+            "[ChainStateStore] dropped implausible WS %s: symbol=%s value=%s cap=%s",
+            field_name,
+            symbol,
+            raw_value,
+            int(MAX_WS_FLOW_VOLUME),
+        )
+
+    def _mark_ws_flow_owner_seen(
+        self,
+        *,
+        symbol: str,
+        volume_owned_by_ws: bool,
+        ws_volume: float,
+        current_volume: float | None,
+        turnover: float | None,
+    ) -> None:
+        if volume_owned_by_ws and self._is_positive_numeric(ws_volume):
             self._ws_volume_seen.add(symbol)
-        if event.current_volume is not None:
+        if self._is_positive_numeric(current_volume):
             self._ws_current_volume_seen.add(symbol)
-        if event.turnover is not None:
+        if self._is_positive_numeric(turnover):
             self._ws_turnover_seen.add(symbol)
+
+    @classmethod
+    def _resolve_ws_volume(cls, volume: Any, current_volume: Any) -> float:
+        """Resolve WS volume from dual fields while guarding against single-field corruption."""
+        vol_ok = cls._is_positive_numeric(volume)
+        cur_ok = cls._is_positive_numeric(current_volume)
+        if vol_ok and cur_ok:
+            return min(float(volume), float(current_volume))
+        if vol_ok:
+            return float(volume)
+        if cur_ok:
+            return float(current_volume)
+        return 0.0
 
     def _apply_rest_flow_fallback(self, symbol: str, event: CleanQuoteEvent, setter: Any) -> None:
         if symbol not in self._ws_volume_seen:
@@ -292,6 +397,8 @@ class ChainStateStore:
             "ws_volume_seen":      len(self._ws_volume_seen),
             "ws_current_volume_seen": len(self._ws_current_volume_seen),
             "ws_turnover_seen":    len(self._ws_turnover_seen),
+            "ws_volume_dropped":   self._ws_volume_dropped,
+            "ws_current_volume_dropped": self._ws_current_volume_dropped,
         }
 
     def _bump_version(self) -> None:

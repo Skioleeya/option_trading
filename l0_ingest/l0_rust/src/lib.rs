@@ -32,6 +32,14 @@ fn now_unix_nanos() -> u64 {
     }
 }
 
+fn non_negative_volume_to_u64(value: i64) -> u64 {
+    if value > 0 {
+        value as u64
+    } else {
+        0
+    }
+}
+
 fn parse_calc_index(name: &str) -> Option<CalcIndex> {
     match name.trim() {
         "LastDone" => Some(CalcIndex::LastDone),
@@ -307,6 +315,8 @@ impl RustIngestGateway {
                         let symbol = event.symbol.clone();
                         match event.detail {
                             PushEventDetail::Quote(q) => {
+                                let current_volume = non_negative_volume_to_u64(q.current_volume);
+                                let reported_volume = non_negative_volume_to_u64(q.volume);
                                 let ev = InstitutionalMarketEvent {
                                     symbol: str_to_32(&symbol),
                                     seq_no: 0,
@@ -315,7 +325,7 @@ impl RustIngestGateway {
                                     ask: 0.0,
                                     last_price: q.last_done.to_f64().unwrap_or_default(),
                                     spot: 0.0,
-                                    volume: q.volume as u64,
+                                    volume: reported_volume,
                                     open_interest: 0,
                                     implied_volatility: 0.0,
                                     impact_index: 0.0,
@@ -323,6 +333,9 @@ impl RustIngestGateway {
                                     ttm_seconds: 0.0,
                                     arrival_mono_ns: mono_ns,
                                     sequence_id: 0,
+                                    current_volume,
+                                    turnover: q.turnover.to_f64().unwrap_or_default(),
+                                    current_turnover: q.current_turnover.to_f64().unwrap_or_default(),
                                 };
                                 let _ = producer.push(&ev);
                             }
@@ -336,7 +349,7 @@ impl RustIngestGateway {
                                         ask: 0.0,
                                         last_price: trade.price.to_f64().unwrap_or_default(),
                                         spot: 0.0,
-                                        volume: trade.volume as u64,
+                                        volume: non_negative_volume_to_u64(trade.volume),
                                         open_interest: 0,
                                         implied_volatility: 0.0,
                                         impact_index: 0.0,
@@ -344,6 +357,9 @@ impl RustIngestGateway {
                                         ttm_seconds: 0.0,
                                         arrival_mono_ns: mono_ns,
                                         sequence_id: 0,
+                                        current_volume: 0,
+                                        turnover: 0.0,
+                                        current_turnover: 0.0,
                                     };
                                     let _ = producer.push(&ev);
                                 }
@@ -361,8 +377,16 @@ impl RustIngestGateway {
                                     .and_then(|a| a.price)
                                     .and_then(|p| p.to_f64())
                                     .unwrap_or(0.0);
-                                let bid_vol = d.bids.first().map(|b| b.volume as u64).unwrap_or(0);
-                                let ask_vol = d.asks.first().map(|a| a.volume as u64).unwrap_or(0);
+                                let bid_vol = d
+                                    .bids
+                                    .first()
+                                    .map(|b| non_negative_volume_to_u64(b.volume))
+                                    .unwrap_or(0);
+                                let ask_vol = d
+                                    .asks
+                                    .first()
+                                    .map(|a| non_negative_volume_to_u64(a.volume))
+                                    .unwrap_or(0);
                                 let impact = threat_engine.calculate_ofii(&symbol, bid, bid_vol, ask, ask_vol);
                                 let ev = InstitutionalMarketEvent {
                                     symbol: str_to_32(&symbol),
@@ -380,6 +404,9 @@ impl RustIngestGateway {
                                     ttm_seconds: 0.0,
                                     arrival_mono_ns: mono_ns,
                                     sequence_id: 0,
+                                    current_volume: 0,
+                                    turnover: 0.0,
+                                    current_turnover: 0.0,
                                 };
                                 let _ = producer.push(&ev);
                             }
@@ -557,6 +584,9 @@ impl RustIngestGateway {
                 ttm_seconds: 0.0,
                 arrival_mono_ns: now_unix_nanos(),
                 sequence_id: i as i64,
+                current_volume: 0,
+                turnover: 0.0,
+                current_turnover: 0.0,
             };
             while !producer.push(&ev) {
                 std::hint::spin_loop();
@@ -585,4 +615,21 @@ impl RustIngestGateway {
 fn l0_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<RustIngestGateway>()?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::non_negative_volume_to_u64;
+
+    #[test]
+    fn non_negative_volume_clamps_negative_and_zero() {
+        assert_eq!(non_negative_volume_to_u64(-1), 0);
+        assert_eq!(non_negative_volume_to_u64(0), 0);
+    }
+
+    #[test]
+    fn non_negative_volume_keeps_positive() {
+        assert_eq!(non_negative_volume_to_u64(1), 1);
+        assert_eq!(non_negative_volume_to_u64(123_456), 123_456);
+    }
 }

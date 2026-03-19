@@ -56,6 +56,14 @@ class FlowEngineConfig(BaseConfig):
     flow_active_min_volume: int = Field(
         default=100, description="Minimum volume threshold for Active Options inclusion"
     )
+    flow_active_empty_filter_fallback_enabled: bool = Field(
+        default=True,
+        description="Enable turnover/open-interest fallback candidates when min-volume filter is empty.",
+    )
+    flow_active_empty_filter_fallback_max_candidates: int = Field(
+        default=120,
+        description="Max fallback candidate rows before DEG pipeline when min-volume path is empty.",
+    )
 
     # ── VPIN (Practice 2) ─────────────────────────────────────────────────────
     vpin_bucket_size: float = Field(

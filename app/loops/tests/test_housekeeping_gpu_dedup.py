@@ -1,56 +1,24 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
-from app.loops.housekeeping_loop import _normalize_active_options_row, run_housekeeping_loop
-from app.loops.shared_state import SharedLoopState
+from app.loops.housekeeping_loop import run_housekeeping_loop
+from app.loops.shared_state import ActiveOptionsInputSnapshot, SharedLoopState
 from shared.config import settings
-
-
-@dataclass
-class _FakeAggregates:
-    atm_iv: float = 0.21
-
-
-class _FakeL1Snapshot:
-    def __init__(self) -> None:
-        self.version = 777
-        self.spot = 561.0
-        self.ttm_seconds = 900.0
-        self.aggregates = _FakeAggregates()
-        self.chain = [
-            {
-                "symbol": "SPY.TEST.C",
-                "strike": 560.0,
-                "type": "CALL",
-                "volume": 500,
-                "turnover": 100000.0,
-                "implied_volatility": 0.0,
-                "computed_iv": 0.22,
-                "delta": 0.0,
-                "computed_delta": 0.31,
-                "gamma": 0.0,
-                "computed_gamma": 0.018,
-                "vanna": 0.0,
-                "computed_vanna": -0.01,
-                "open_interest": 1000,
-            }
-        ]
 
 
 class _FakeActiveOptionsService:
     def __init__(self) -> None:
         self.calls = 0
-        self.last_chain: list[dict[str, Any]] = []
+        self.last_kwargs: dict[str, Any] = {}
 
     async def update_background(self, **kwargs: Any) -> None:
         self.calls += 1
-        self.last_chain = kwargs.get("chain", [])
+        self.last_kwargs = dict(kwargs)
 
 
 class _FakeAtmDecayTracker:
@@ -83,38 +51,25 @@ class _FakeContainer:
         self.redis_service = SimpleNamespace(client=None)
 
 
-
-def test_normalize_active_options_row_falls_back_to_current_volume() -> None:
-    row = _normalize_active_options_row(
-        {
-            "symbol": "SPY.TEST.C",
-            "type": "C",
-            "volume": 0,
-            "current_volume": 812.9,
-            "implied_volatility": 0.0,
-            "computed_iv": 0.23,
-            "delta": 0.0,
-            "computed_delta": 0.11,
-            "gamma": 0.0,
-            "computed_gamma": 0.01,
-            "vanna": 0.0,
-            "computed_vanna": -0.02,
-        }
-    )
-
-    assert row["option_type"] == "CALL"
-    assert row["volume"] == 812
-    assert row["implied_volatility"] == pytest.approx(0.23)
-    assert row["delta"] == pytest.approx(0.11)
-    assert row["gamma"] == pytest.approx(0.01)
-    assert row["vanna"] == pytest.approx(-0.02)
 @pytest.mark.asyncio
-async def test_housekeeping_reuses_latest_l1_snapshot_and_dedups(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_housekeeping_consumes_shared_active_options_input_and_dedups(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "websocket_update_interval", 0.001, raising=False)
 
     ctr = _FakeContainer()
     state = SharedLoopState()
-    state.latest_l1_snapshot = _FakeL1Snapshot()
+    state.update_active_options_input(
+        ActiveOptionsInputSnapshot(
+            chain=[{"symbol": "SPY.TEST.C", "strike": 560.0, "type": "CALL", "volume": 500}],
+            spot=561.0,
+            atm_iv=0.22,
+            gex_regime="NEUTRAL",
+            ttm_seconds=900.0,
+            source_version=777,
+            source_timestamp_utc="2026-03-19T15:40:00+00:00",
+            valid=True,
+            invalid_reason=None,
+        )
+    )
 
     task = asyncio.create_task(run_housekeeping_loop(ctr, state))
     await asyncio.sleep(0.02)
@@ -124,27 +79,39 @@ async def test_housekeeping_reuses_latest_l1_snapshot_and_dedups(monkeypatch: py
 
     assert ctr.option_chain_builder.fetch_calls == 0
     assert ctr.active_options_service.calls == 1
-    assert ctr.active_options_service.last_chain
-    row = ctr.active_options_service.last_chain[0]
-    assert row["option_type"] == "CALL"
-    assert row["implied_volatility"] == pytest.approx(0.22)
-    assert row["delta"] == pytest.approx(0.31)
-    assert row["gamma"] == pytest.approx(0.018)
-    assert row["vanna"] == pytest.approx(-0.01)
+    assert ctr.active_options_service.last_kwargs.get("spot") == pytest.approx(561.0)
+    assert ctr.active_options_service.last_kwargs.get("atm_iv") == pytest.approx(0.22)
+    assert ctr.active_options_service.last_kwargs.get("gex_regime") == "NEUTRAL"
+    assert ctr.active_options_service.last_kwargs.get("chain")
 
-def test_normalize_active_options_row_supports_arrow_is_call_rows() -> None:
-    row = _normalize_active_options_row(
-        {
-            "symbol": "SPY.TEST.C",
-            "is_call": True,
-            "volume": 0.0,
-            "current_volume": 256.2,
-            "turnover": 12345.0,
-            "iv": 0.19,
-            "computed_iv": 0.21,
-        }
+
+@pytest.mark.asyncio
+async def test_housekeeping_degrades_when_shared_input_is_invalid(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "websocket_update_interval", 0.001, raising=False)
+
+    ctr = _FakeContainer()
+    state = SharedLoopState()
+    state.update_active_options_input(
+        ActiveOptionsInputSnapshot(
+            chain=[],
+            spot=0.0,
+            atm_iv=0.0,
+            gex_regime="NEUTRAL",
+            ttm_seconds=None,
+            source_version=1001,
+            source_timestamp_utc="2026-03-19T15:40:00+00:00",
+            valid=False,
+            invalid_reason="empty_chain",
+        )
     )
 
-    assert row["option_type"] == "CALL"
-    assert row["volume"] == 256
-    assert row["turnover"] == pytest.approx(12345.0)
+    task = asyncio.create_task(run_housekeeping_loop(ctr, state))
+    await asyncio.sleep(0.01)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert ctr.option_chain_builder.fetch_calls == 0
+    assert ctr.active_options_service.calls >= 1
+    assert ctr.active_options_service.last_kwargs.get("chain") == []
+    assert ctr.active_options_service.last_kwargs.get("spot") == pytest.approx(0.0)

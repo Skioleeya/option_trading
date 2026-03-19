@@ -171,6 +171,148 @@ def test_rest_fallback_does_not_override_ws_owned_flow_fields() -> None:
     assert store.apply_event(rest_event) is True
 
     snap = store.get_snapshot()[0]
-    assert snap["volume"] == 120
+    assert snap["volume"] == 120.0
     assert snap["current_volume"] == 220.0
     assert snap["turnover"] == 320.0
+
+
+def test_depth_event_does_not_override_flow_fields() -> None:
+    store = ChainStateStore()
+
+    ws_event = _quote_event(
+        1,
+        event_type=EventType.QUOTE,
+        volume=120,
+        current_volume=220.0,
+        turnover=320.0,
+    )
+    assert store.apply_event(ws_event) is True
+
+    depth_like_event = _quote_event(
+        2,
+        event_type=EventType.DEPTH,
+        bid=1.2,
+        ask=1.3,
+        last_price=None,
+        volume=0,
+        current_volume=0.0,
+        turnover=0.0,
+    )
+    assert store.apply_event(depth_like_event) is True
+
+    snap = store.get_snapshot()[0]
+    assert snap["volume"] == 120.0
+    assert snap["current_volume"] == 220.0
+    assert snap["turnover"] == 320.0
+    diag = store.diagnostics()
+    assert diag["ws_volume_seen"] == 1
+    assert diag["ws_current_volume_seen"] == 1
+    assert diag["ws_turnover_seen"] == 1
+
+
+def test_zero_ws_flow_values_do_not_lock_rest_fallback() -> None:
+    store = ChainStateStore()
+
+    zero_ws_event = _quote_event(
+        1,
+        event_type=EventType.QUOTE,
+        volume=0,
+        current_volume=0.0,
+        turnover=0.0,
+    )
+    assert store.apply_event(zero_ws_event) is True
+    diag = store.diagnostics()
+    assert diag["ws_volume_seen"] == 0
+    assert diag["ws_current_volume_seen"] == 0
+    assert diag["ws_turnover_seen"] == 0
+
+    rest_event = _quote_event(
+        2,
+        event_type=EventType.REST,
+        bid=None,
+        ask=None,
+        last_price=None,
+        volume=12,
+        current_volume=34.0,
+        turnover=56.0,
+    )
+    assert store.apply_event(rest_event) is True
+
+    snap = store.get_snapshot()[0]
+    assert snap["volume"] == 12
+    assert snap["current_volume"] == 34.0
+    assert snap["turnover"] == 56.0
+
+
+def test_ws_prefers_current_volume_over_reported_volume() -> None:
+    store = ChainStateStore()
+
+    ws_event = _quote_event(
+        1,
+        event_type=EventType.QUOTE,
+        volume=3617287935039721472,
+        current_volume=638246.0,
+        turnover=1.0,
+    )
+    assert store.apply_event(ws_event) is True
+
+    snap = store.get_snapshot()[0]
+    assert snap["volume"] == 638246.0
+    assert snap["current_volume"] == 638246.0
+
+
+def test_ws_volume_uses_reported_when_current_volume_is_corrupted_high() -> None:
+    store = ChainStateStore()
+
+    ws_event = _quote_event(
+        1,
+        event_type=EventType.QUOTE,
+        volume=638246,
+        current_volume=3617287935039721472.0,
+        turnover=0.0,
+    )
+    assert store.apply_event(ws_event) is True
+
+    rest_event = _quote_event(
+        2,
+        event_type=EventType.REST,
+        bid=None,
+        ask=None,
+        last_price=None,
+        volume=920,
+        current_volume=0.0,
+        turnover=0.0,
+    )
+    assert store.apply_event(rest_event) is True
+
+    snap = store.get_snapshot()[0]
+    assert snap["volume"] == 920
+
+
+def test_ws_volume_corruption_with_turnover_does_not_lock_rest_fallback() -> None:
+    store = ChainStateStore()
+
+    ws_event = _quote_event(
+        1,
+        event_type=EventType.QUOTE,
+        volume=3617287935039721472,
+        current_volume=0.0,
+        turnover=1250.0,
+    )
+    assert store.apply_event(ws_event) is True
+
+    rest_event = _quote_event(
+        2,
+        event_type=EventType.REST,
+        bid=None,
+        ask=None,
+        last_price=None,
+        volume=920,
+        current_volume=120.0,
+        turnover=560.0,
+    )
+    assert store.apply_event(rest_event) is True
+
+    snap = store.get_snapshot()[0]
+    assert snap["volume"] == 920
+    assert snap["current_volume"] == 120.0

@@ -10,6 +10,22 @@ from dataclasses import dataclass, field
 
 from l3_assembly.events.payload_events import FrozenPayload
 
+
+@dataclass(frozen=True)
+class ActiveOptionsInputSnapshot:
+    """Single-source ActiveOptions input published by compute loop."""
+
+    chain: list[dict[str, Any]] = field(default_factory=list)
+    spot: float = 0.0
+    atm_iv: float = 0.0
+    gex_regime: str = "NEUTRAL"
+    ttm_seconds: float | None = None
+    source_version: int = 0
+    source_timestamp_utc: str | None = None
+    valid: bool = False
+    invalid_reason: str | None = None
+
+
 @dataclass
 class SharedLoopState:
     """State blackboard for asynchronous tasks."""
@@ -17,11 +33,14 @@ class SharedLoopState:
     frozen: FrozenPayload | None = None
     payload_dict: dict[str, Any] | None = None
     latest_l1_snapshot: Any | None = None
+    latest_active_options_input: ActiveOptionsInputSnapshot | None = None
     last_payload_time: float = 0.0
+    last_active_options_input_time: float = 0.0
     
     # Trackers for diagnostics
     total_computations: int = 0
     failed_computations: int = 0
+    active_options_input_updates: int = 0
     current_compute_interval: float = 1.0
     snapshot_version_iv_probe: dict[str, Any] = field(default_factory=dict)
     compute_ticks_seen: int = 0
@@ -49,6 +68,12 @@ class SharedLoopState:
     def update_latest_l1_snapshot(self, snapshot: Any) -> None:
         """Publish latest L1 snapshot for auxiliary loops (housekeeping)."""
         self.latest_l1_snapshot = snapshot
+
+    def update_active_options_input(self, snapshot: ActiveOptionsInputSnapshot) -> None:
+        """Publish compute-loop normalized input for ActiveOptions runtime path."""
+        self.latest_active_options_input = snapshot
+        self.last_active_options_input_time = time.monotonic()
+        self.active_options_input_updates += 1
 
     def record_compute_tick(self, snapshot_version: int) -> None:
         """Record one compute-loop tick before dedup decision."""
@@ -81,6 +106,17 @@ class SharedLoopState:
     def get_diagnostics(self) -> dict[str, Any]:
         """Return agent runner diagnostics."""
         age = time.monotonic() - self.last_payload_time if self.last_payload_time else None
+        input_age = (
+            time.monotonic() - self.last_active_options_input_time
+            if self.last_active_options_input_time
+            else None
+        )
+        active_options_input = self.latest_active_options_input
+        input_chain_size = (
+            len(active_options_input.chain)
+            if active_options_input is not None
+            else 0
+        )
         total = self.total_computations + self.failed_computations
         return {
             "total_computations": self.total_computations,
@@ -89,6 +125,15 @@ class SharedLoopState:
             "last_update_age_seconds": age,
             "is_running": self.is_running,
             "snapshot_version_iv_probe": self.snapshot_version_iv_probe,
+            "active_options_input": {
+                "updates": self.active_options_input_updates,
+                "age_seconds": input_age,
+                "valid": bool(active_options_input.valid) if active_options_input else False,
+                "chain_size": input_chain_size,
+                "source_version": int(active_options_input.source_version) if active_options_input else 0,
+                "source_timestamp_utc": active_options_input.source_timestamp_utc if active_options_input else None,
+                "invalid_reason": active_options_input.invalid_reason if active_options_input else "missing_input",
+            },
             "gpu_compute_audit": {
                 "compute_ticks_seen": self.compute_ticks_seen,
                 "duplicate_snapshot_skips": self.duplicate_snapshot_skips,

@@ -52,6 +52,8 @@ def parse_rust_event(
         volume=_safe_int_or_none(event.get("volume")),
         open_interest=None,
         implied_volatility=None,
+        current_volume=_safe_float_or_none(event.get("current_volume")),
+        turnover=_safe_float_or_none(event.get("turnover")),
         arrival_mono=float(event.get("arrival_mono_ns", 0) or 0) / ARRIVAL_MONO_NS_PER_SECOND,
         impact_index=_safe_float_or_none(event.get("impact_index")),
         is_sweep=bool(event.get("is_sweep", False)),

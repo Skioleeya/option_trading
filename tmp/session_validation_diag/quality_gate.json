@@ -1,19 +1,16 @@
 {
   "status": "PASS",
   "targets": [
-    "l2_decision/agents/agent_g.py",
-    "l2_decision/agents/services/agent_g_decision_support.py",
-    "l0_ingest/feeds/iv_baseline_sync.py",
-    "l0_ingest/feeds/iv_baseline_sync_support.py"
+    "l0_ingest/feeds/chain_state_store.py"
   ],
   "violations": [],
   "metrics": {
-    "analyzed_python_runtime_files": 4,
-    "function_count": 57,
-    "class_count": 2,
-    "magic_total": 25,
-    "magic_governed": 11,
-    "magic_ratio": 0.44,
+    "analyzed_python_runtime_files": 1,
+    "function_count": 26,
+    "class_count": 1,
+    "magic_total": 2,
+    "magic_governed": 1,
+    "magic_ratio": 0.5,
     "duplicate_windows": 0
   }
 }

@@ -233,6 +233,8 @@ class TestActiveOptionRow:
         payload = row.to_dict()
         assert payload["is_placeholder"] is True
         assert payload["slot_index"] == 4
+        assert "flow_signal_state" in payload
+        assert "flow_signal_reason" in payload
 
 
 # ─────────────────────────────────────────────────────────────────────────────

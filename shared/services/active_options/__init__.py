@@ -18,6 +18,12 @@ from .flow_engine_d import FlowEngineD
 from .flow_engine_e import FlowEngineE
 from .flow_engine_g import FlowEngineG
 from .deg_composer import DEGComposer, InstitutionalSweepDetector
+from .input_adapter import (
+    ACTIVE_OPTIONS_INPUT_REASON_EMPTY_CHAIN,
+    ACTIVE_OPTIONS_INPUT_REASON_INVALID_SPOT,
+    ActiveOptionsInputSnapshotData,
+    build_active_options_input_snapshot,
+)
 from .runtime_service import ActiveOptionsRuntimeService
 
 __all__ = [
@@ -35,5 +41,9 @@ __all__ = [
     "FlowEngineG",
     "DEGComposer",
     "InstitutionalSweepDetector",
+    "ACTIVE_OPTIONS_INPUT_REASON_EMPTY_CHAIN",
+    "ACTIVE_OPTIONS_INPUT_REASON_INVALID_SPOT",
+    "ActiveOptionsInputSnapshotData",
+    "build_active_options_input_snapshot",
     "ActiveOptionsRuntimeService",
 ]

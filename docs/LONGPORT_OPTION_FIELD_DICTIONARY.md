@@ -46,6 +46,30 @@
   - `calc-index` 仍然是“按请求枚举返回字段”的接口，不是天然固定全返回
   - `implied_volatility` 与 `expiry_date` 的格式解释仍需明确区分 raw 和 normalized
 
+## 2.1 SHM Push v2 契约（2026-03-19）
+
+为修复 Active Options `missing_turnover` 常驻问题，Rust 推送链路新增 SHM v2 事件字段与版本握手。
+
+- SHM 头部保留区（不改 `head@0`、`tail@64`、`buffer@128`）新增元数据：
+  - `magic` @ `16` (`0x4C305348`, `"L0SH"`)
+  - `schema_version` @ `20`（当前 `2`）
+  - `event_size` @ `24`（当前 `168` bytes）
+- `InstitutionalMarketEvent` v2 在尾部追加：
+  - `current_volume: u64`
+  - `turnover: f64`
+  - `current_turnover: f64`
+- Python `RustBridge` 读取策略：
+  - 优先按头部元数据选布局（v2）
+  - 元数据缺失时按映射长度回退布局（v1），并将 `current_volume/turnover/current_turnover` 置 `None`
+
+### Turnover 字段 owner/fallback 口径
+
+| 字段 | owner 链路 | fallback 链路 | 诊断口径 |
+| --- | --- | --- | --- |
+| `volume` | Push Quote/Trade -> SHM -> `RustBridge.poll()` | REST `option_quote/calc_indexes`（仅在 `ws_volume_seen` 未置位时） | `ws_volume_seen` |
+| `current_volume` | Push Quote -> SHM v2 -> `RustBridge.poll()` | REST（仅在 `ws_current_volume_seen` 未置位时） | `ws_current_volume_seen` |
+| `turnover` | Push Quote -> SHM v2 -> `RustBridge.poll()` | REST（仅在 `ws_turnover_seen` 未置位时） | `ws_turnover_seen`, `missing_turnover_rows` |
+
 ## 3. 当前代码中的对齐入口
 
 ### 3.1 Rust 序列化层

@@ -9,7 +9,11 @@ from datetime import datetime, timezone
 from typing import Any
 
 from shared.config import settings
-from app.loops.shared_state import SharedLoopState
+from shared.services.active_options.input_adapter import (
+    ActiveOptionsInputSnapshotData,
+    build_active_options_input_snapshot,
+)
+from app.loops.shared_state import ActiveOptionsInputSnapshot, SharedLoopState
 
 # Only for type hints
 from typing import TYPE_CHECKING
@@ -20,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 L2_AUDIT_FLUSH_EVERY_TICKS = 60
 LOOP_OVERRUN_SLEEP_SECONDS = 0.01
+ACTIVE_OPTIONS_DEFAULT_GEX_REGIME = "NEUTRAL"
 
 
 def _coerce_utc_datetime(raw: Any) -> datetime | None:
@@ -70,6 +75,45 @@ def _normalize_source_timestamp_utc(snapshot: dict[str, Any]) -> str | None:
     if dt is None:
         return None
     return dt.isoformat()
+
+
+def _to_non_negative_float(raw: Any) -> float:
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return 0.0
+    if not math.isfinite(value) or value < 0.0:
+        return 0.0
+    return value
+
+
+def _to_shared_active_options_input(
+    snapshot: ActiveOptionsInputSnapshotData,
+) -> ActiveOptionsInputSnapshot:
+    return ActiveOptionsInputSnapshot(
+        chain=snapshot.chain,
+        spot=snapshot.spot,
+        atm_iv=snapshot.atm_iv,
+        gex_regime=ACTIVE_OPTIONS_DEFAULT_GEX_REGIME,
+        ttm_seconds=snapshot.ttm_seconds,
+        source_version=snapshot.source_version,
+        source_timestamp_utc=snapshot.source_timestamp_utc,
+        valid=snapshot.valid,
+        invalid_reason=snapshot.invalid_reason,
+    )
+
+
+def _publish_active_options_input(
+    state: SharedLoopState,
+    *,
+    l0_snapshot: dict[str, Any],
+    l1_snapshot: Any,
+) -> None:
+    adapted = build_active_options_input_snapshot(
+        l0_snapshot=l0_snapshot,
+        l1_snapshot=l1_snapshot,
+    )
+    state.update_active_options_input(_to_shared_active_options_input(adapted))
 
 
 def _select_l1_chain_input(snapshot: dict[str, Any]) -> Any:
@@ -271,7 +315,7 @@ async def _process_snapshot_tick(
     version_iv_probe: "_SnapshotVersionIvDriftProbe",
     compute_interval: float,
 ) -> tuple[int, int | None]:
-    chain_size = len(snapshot.get("chain", []))
+    chain_size = _count_rows(snapshot.get("chain"))
     snapshot_version = _extract_snapshot_version(snapshot)
     state.record_compute_tick(snapshot_version)
 
@@ -306,6 +350,11 @@ async def _process_snapshot_tick(
         now_monotonic=time.monotonic(),
     )
     state.update_snapshot_version_iv_probe(probe_diag)
+    _publish_active_options_input(
+        state,
+        l0_snapshot=snapshot,
+        l1_snapshot=l1_snap,
+    )
 
     atm_decay_payload = await ctr.atm_decay_tracker.update(
         snapshot.get("chain", []),

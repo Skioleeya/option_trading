@@ -1,16 +1,16 @@
 # Project State (Index)
 
 ## Active Session
-- Path: notes/sessions/2026-03-17/apply-refactor-governance-20260317-l0-l2-dechaos-chain-p1-implementation/project_state.md
-- Meta: notes/sessions/2026-03-17/apply-refactor-governance-20260317-l0-l2-dechaos-chain-p1-implementation/meta.yaml
-- Status: ACTIVE (P1 implementation complete; archive complete; strict passed)
+- Path: notes/sessions/2026-03-19/active-options-volume-sanitize-20260319/project_state.md
+- Meta: notes/sessions/2026-03-19/active-options-volume-sanitize-20260319/meta.yaml
+- Status: ACTIVE (WS volume hard-cap sanitation + Active Options normalization guard + verify gate tuning)
 
 ## Recent Sessions
-- notes/sessions/2026-03-17/apply-refactor-governance-20260317-l0-l2-dechaos-chain-p1-implementation/
-- notes/sessions/2026-03-17/apply-refactor-governance-20260317-active-options-arrow-volume-contract-chain-final-merge-gate/
-- notes/sessions/2026-03-17/apply-refactor-magic-number-20260317-active-options-threshold-constants-governance/
-- notes/sessions/2026-03-17/apply-refactor-bloat-20260317-active-options-runtime-service-module-split/
-- notes/sessions/2026-03-17/apply-refactor-nesting-20260317-active-options-filter-guard-flattening/
+- notes/sessions/2026-03-19/active-options-volume-sanitize-20260319/
+- notes/sessions/2026-03-19/turnover-shm-v2-handshake-20260319/
+- notes/sessions/2026-03-19/active-options-flow-l1-priority-fix-20260319/
+- notes/sessions/2026-03-19/p0-active-options-row-quality-l0-flow-20260319/
+- notes/sessions/2026-03-19/fix-start-backend-active-options-fallback-20260319/
 
 ## Global Rules
 - Session folders are immutable records; do not overwrite prior sessions.

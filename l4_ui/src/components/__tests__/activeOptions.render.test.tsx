@@ -122,6 +122,26 @@ describe('ActiveOptions render contracts', () => {
         expect(screen.getByText('TOP BY VOL')).toBeInTheDocument()
         expect(screen.queryByText('DEGRADED')).not.toBeInTheDocument()
     })
+
+    it('shows DEGRADED header when any non-placeholder row is marked degraded', () => {
+        render(
+            <ActiveOptions
+                preferProp
+                options={[
+                    row(1, {
+                        symbol: 'REAL',
+                        is_placeholder: false,
+                        volume: 1234,
+                        flow_signal_state: 'DEGRADED',
+                        flow_signal_reason: 'missing_turnover',
+                    }),
+                ]}
+            />
+        )
+
+        expect(screen.getByText('DEGRADED')).toBeInTheDocument()
+        expect(screen.queryByText('TOP BY VOL')).not.toBeInTheDocument()
+    })
 })
 
 

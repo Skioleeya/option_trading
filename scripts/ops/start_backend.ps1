@@ -2,6 +2,8 @@ param(
     [string]$BindHost = "0.0.0.0",
     [int]$Port = 8001,
     [switch]$Degraded,
+    [switch]$HotfixActiveOptions,
+    [int]$HotfixMinVolume = 10,
     [string]$LogFile = "logs/backend_runtime.current.log",
     [switch]$Foreground,
     [switch]$DryRun
@@ -21,11 +23,17 @@ if ([System.IO.Path]::IsPathRooted($LogFile)) {
 $logDir = Split-Path -Parent $logPath
 New-Item -ItemType Directory -Path $logDir -Force | Out-Null
 
+$useDegraded = [bool]$Degraded -or [bool]$HotfixActiveOptions
 $bootMode = "strict"
 $envCmd = "set PYTHONPATH=."
-if ($Degraded) {
+if ($useDegraded) {
     $bootMode = "degraded"
     $envCmd = "$envCmd&& set LONGPORT_STARTUP_STRICT_CONNECTIVITY=false&& set LONGBRIDGE_STARTUP_STRICT_CONNECTIVITY=false"
+}
+if ($HotfixActiveOptions) {
+    $hotfixVolume = [Math]::Max(1, [int]$HotfixMinVolume)
+    $bootMode = "degraded+active-options-hotfix"
+    $envCmd = "$envCmd&& set FLOW_ACTIVE_MIN_VOLUME=$hotfixVolume"
 }
 
 $uvicornCmd = "python -m uvicorn main:app --host $BindHost --port $Port"
@@ -35,6 +43,10 @@ $cmd = "$envCmd&& $uvicornCmd $redirectCmd"
 if ($DryRun) {
     Write-Output "[backend-start] DryRun=true"
     Write-Output "[backend-start] mode=$bootMode"
+    Write-Output "[backend-start] hotfix_active_options=$HotfixActiveOptions"
+    if ($HotfixActiveOptions) {
+        Write-Output "[backend-start] flow_active_min_volume=$hotfixVolume"
+    }
     Write-Output "[backend-start] foreground=$Foreground"
     Write-Output "[backend-start] log=$logPath"
     Write-Output "[backend-start] cmd=cmd.exe /c $cmd"
@@ -46,15 +58,24 @@ Add-Content -Path $logPath -Encoding utf8 -Value "[$stamp] [BOOT] mode=$bootMode
 
 if ($Foreground) {
     $env:PYTHONPATH = "."
-    if ($Degraded) {
+    if ($useDegraded) {
         $env:LONGPORT_STARTUP_STRICT_CONNECTIVITY = "false"
         $env:LONGBRIDGE_STARTUP_STRICT_CONNECTIVITY = "false"
     }
+    if ($HotfixActiveOptions) {
+        $env:FLOW_ACTIVE_MIN_VOLUME = [string]$hotfixVolume
+    }
     Write-Output "[backend-start] foreground=true mode=$bootMode log=$logPath"
+    Write-Output "[backend-start] hotfix_active_options=$HotfixActiveOptions"
+    if ($HotfixActiveOptions) {
+        Write-Output "[backend-start] flow_active_min_volume=$hotfixVolume"
+    }
     Write-Output "[backend-start] running=python -m uvicorn main:app --host $BindHost --port $Port"
-    & python -m uvicorn main:app --host $BindHost --port $Port 2>&1 | Tee-Object -FilePath $logPath -Append
-    if ($LASTEXITCODE -ne 0) {
-        exit $LASTEXITCODE
+    # Foreground path must run under cmd to avoid PowerShell NativeCommandError on uvicorn stderr logs.
+    cmd.exe /c "$envCmd&& $uvicornCmd 2>&1" | Tee-Object -FilePath $logPath -Append
+    $exitCode = $LASTEXITCODE
+    if ($exitCode -ne 0) {
+        exit $exitCode
     }
 } else {
     $proc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", $cmd -WorkingDirectory $repoRoot -PassThru

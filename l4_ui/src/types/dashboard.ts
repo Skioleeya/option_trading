@@ -88,6 +88,11 @@ export interface ActiveOption {
     flow_direction?: 'BULLISH' | 'BEARISH' | 'NEUTRAL'
     is_placeholder?: boolean
     slot_index?: number
+    row_quality?: 'REAL' | 'FALLBACK_SYNTHETIC' | 'PLACEHOLDER' | string | null
+    fallback_reason?: 'turnover_open_interest' | 'hard_chain' | 'engine_empty_output' | string | null
+    is_synthetic_fallback?: boolean
+    flow_signal_state?: 'LIVE' | 'DEGRADED' | string
+    flow_signal_reason?: string | null
 }
 
 export interface TacticalTriadCard {

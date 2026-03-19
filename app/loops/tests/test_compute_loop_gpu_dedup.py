@@ -163,6 +163,11 @@ async def test_compute_loop_skips_duplicate_snapshot_versions(monkeypatch: pytes
     assert gpu_diag["l1_compute_runs"] == 2
     assert gpu_diag["duplicate_snapshot_skips"] >= 2
     assert str(gpu_diag["last_gpu_task_id"]).startswith("gpu-task-")
+    active_input_diag = state.get_diagnostics()["active_options_input"]
+    assert active_input_diag["updates"] == 2
+    assert active_input_diag["valid"] is True
+    assert active_input_diag["chain_size"] == 1
+    assert active_input_diag["source_version"] == 102
 
 
 @pytest.mark.asyncio
@@ -179,3 +184,6 @@ async def test_compute_loop_prefers_chain_arrow_when_available(monkeypatch: pyte
 
     assert ctr.l1_reactor.calls == 1
     assert ctr.l1_reactor.chain_inputs[0] is arrow_sentinel
+    active_input_diag = state.get_diagnostics()["active_options_input"]
+    assert active_input_diag["updates"] == 1
+    assert active_input_diag["valid"] is True

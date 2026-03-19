@@ -53,6 +53,8 @@ describe('activeOptionsModel', () => {
         expect(rows[4].is_placeholder).toBe(true)
         expect(rows[4].slot_index).toBe(5)
         expect(rows[4].flow_deg_formatted).toBe('—')
+        expect(rows[4].flow_signal_state).toBe('DEGRADED')
+        expect(rows[4].flow_signal_reason).toBe('all_engines_inactive')
     })
 
     it('normalizes non-array input to 5 placeholders', () => {
@@ -60,6 +62,21 @@ describe('activeOptionsModel', () => {
         expect(rows).toHaveLength(5)
         expect(rows.every((r) => r.is_placeholder)).toBe(true)
         expect(rows.map((r) => r.slot_index)).toEqual([1, 2, 3, 4, 5])
+        expect(rows.every((r) => r.flow_signal_state === 'DEGRADED')).toBe(true)
+    })
+
+    it('defaults synthetic fallback row to DEGRADED flow signal state', () => {
+        const row = normalizeActiveOption({
+            option_type: 'CALL',
+            strike: 560,
+            volume: 1000,
+            flow: 0,
+            row_quality: 'FALLBACK_SYNTHETIC',
+            fallback_reason: 'engine_empty_output',
+        })
+
+        expect(row.flow_signal_state).toBe('DEGRADED')
+        expect(row.fallback_reason).toBe('engine_empty_output')
     })
 
     it('normalizes flow direction/color to asian semantics when backend value is invalid', () => {

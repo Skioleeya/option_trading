@@ -17,6 +17,9 @@ def _raw_event(**overrides):
         "ask": 1.3,
         "last_price": 1.25,
         "volume": 20,
+        "current_volume": 7,
+        "turnover": 1250.5,
+        "current_turnover": 300.2,
         "impact_index": 0.6,
         "is_sweep": False,
         "arrival_mono_ns": 1_000_000_000,
@@ -52,6 +55,16 @@ def test_dispatch_depth_event_bridges_book_levels() -> None:
     symbol, bids, asks = calls[0]
     assert symbol == "SPY.OPT.C"
     assert bids and asks
+
+
+def test_parse_rust_event_maps_flow_fields() -> None:
+    clean = parse_rust_event(
+        _raw_event(event_type=EventType.QUOTE.value),
+        symbol_to_strike={"SPY.OPT.C": 560.0},
+    )
+    assert clean is not None
+    assert clean.current_volume == 7.0
+    assert clean.turnover == 1250.5
 
 
 def test_dispatch_trade_event_uses_price_delta_direction() -> None:

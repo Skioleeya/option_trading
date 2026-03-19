@@ -181,8 +181,25 @@ class FeedOrchestrator:
                         self._store.update_spot(price)
                         return price
             except Exception as exc:
-                logger.warning("[FeedOrchestrator] Spot REST fallback failed: %s", exc)
+                self._log_spot_fallback_failure(exc)
         return spot
+
+    def _log_spot_fallback_failure(self, exc: Exception) -> None:
+        diagnostics = {}
+        try:
+            diagnostics = self._quote_runtime.diagnostics() or {}
+        except Exception as diag_exc:
+            logger.debug("[FeedOrchestrator] diagnostics() read failed: %s", diag_exc)
+            diagnostics = {}
+        logger.warning(
+            "[FeedOrchestrator] Spot REST fallback failed: %s | "
+            "endpoint_profile=%s endpoint=%s failover_count=%s last_failover_at_utc=%s",
+            exc,
+            diagnostics.get("endpoint_profile"),
+            diagnostics.get("endpoint_http_url"),
+            diagnostics.get("failover_count"),
+            diagnostics.get("last_failover_at_utc"),
+        )
 
     async def _run_volume_research(
         self,

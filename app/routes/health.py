@@ -19,6 +19,11 @@ async def persistence_status(request: Request):
     service_diag = container.option_chain_builder.get_diagnostics()
     quote_hub_active = container.quote_hub_ready.is_set()
     runner_stats = state.get_diagnostics()
+    active_options_input_diag = runner_stats.get("active_options_input", {})
+    active_options_diag = {}
+    active_options_service = getattr(container, "active_options_service", None)
+    if active_options_service is not None and hasattr(active_options_service, "get_diagnostics"):
+        active_options_diag = active_options_service.get_diagnostics()
 
     return {
         "timestamp": datetime.now().isoformat(),
@@ -31,7 +36,9 @@ async def persistence_status(request: Request):
             "stats": runner_stats,
             "last_update_age_seconds": runner_stats.get("last_update_age_seconds"),
         },
+        "active_options_input": active_options_input_diag,
         "l3_layer": container.l3_reactor.get_diagnostics() if container.l3_reactor else {},
+        "active_options": active_options_diag,
         "redis": container.redis_service.get_diagnostics(),
         "stores": service_diag,
     }

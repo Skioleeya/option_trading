@@ -53,6 +53,7 @@ flowchart LR
 - `dashboardStore` 不得将 `ui_state.active_options` 作为 sticky key；当后端发送 `null/[]` 时必须按显式更新清空，禁止保留旧榜单。
 - `ActiveOptions` 的占位行由 `is_placeholder=true` 标识，显示文案统一 `—`，且不得渲染方向色条/发光样式
 - `ActiveOptions` 当 5 行全部为占位行时，右上角状态必须显示 `DEGRADED`；只要存在至少 1 行真实合约则必须显示 `TOP BY VOL`，禁止在空数据降级阶段误报活跃榜单。
+- `ActiveOptions` 当任一真实行 `flow_signal_state=DEGRADED` 时，右上角状态必须显示 `DEGRADED`（显式信号降级），禁止静默显示 `$0` 且继续标记 `TOP BY VOL`。
 - `ActiveOptions` 行稳定键优先使用 `slot_index`（1..5），避免跨帧重排抖动
 - `DecisionEngine` 禁止渲染 `fused_signal.explanation` 文案（包括 tooltip/title）；guard 说明仅保留在后端审计与诊断链路，不在前端主视图展示
 - `DecisionEngine` 的 GEX badge 必须与 `ui_state.micro_stats.net_gex` 同源（label+badge）；仅当该字段缺失时允许回退 `fused_signal.gex_intensity`
