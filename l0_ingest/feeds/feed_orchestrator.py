@@ -164,7 +164,7 @@ class FeedOrchestrator:
         spot: float | None,
         now: datetime,
     ) -> float | None:
-        last_spot_update = getattr(self._store, "_last_spot_update", None)
+        last_spot_update = self._store.last_spot_update
         needs_refresh = (
             spot is None
             or (last_spot_update and (now - last_spot_update).total_seconds() > 10.0)

@@ -1,0 +1,27 @@
+e:\US.market\Option_v3\l2_decision\agents\services\agent_g_decision_support.py:27: error: Skipping analyzing "pyarrow": module is installed, but missing library stubs or py.typed marker  [import-untyped]
+e:\US.market\Option_v3\l2_decision\agents\services\agent_g_decision_support.py:27: note: See https://mypy.readthedocs.io/en/stable/running_mypy.html#missing-imports
+e:\US.market\Option_v3\l1_compute\output\enriched_snapshot.py:16: error: Skipping analyzing "pyarrow": module is installed, but missing library stubs or py.typed marker  [import-untyped]
+e:\US.market\Option_v3\l2_decision\feature_store\registry.py:32: error: Library stubs not installed for "yaml"  [import-untyped]
+e:\US.market\Option_v3\l2_decision\feature_store\registry.py:32: note: Hint: "python3 -m pip install types-PyYAML"
+e:\US.market\Option_v3\l2_decision\feature_store\extractors_volatility.py:68: error: Argument 1 to "_safe" has incompatible type "Callable[[], float | None]"; expected "Callable[[], float]"  [arg-type]
+e:\US.market\Option_v3\l2_decision\feature_store\extractors_volatility.py:68: error: Incompatible return value type (got "float | None", expected "float")  [return-value]
+e:\US.market\Option_v3\l2_decision\feature_store\extractors_skew.py:176: error: Skipping analyzing "pyarrow": module is installed, but missing library stubs or py.typed marker  [import-untyped]
+e:\US.market\Option_v3\l2_decision\feature_store\extractors_flow.py:156: error: Skipping analyzing "pyarrow": module is installed, but missing library stubs or py.typed marker  [import-untyped]
+e:\US.market\Option_v3\l2_decision\feature_store\extractors_flow.py:157: error: Skipping analyzing "pyarrow.compute": module is installed, but missing library stubs or py.typed marker  [import-untyped]
+e:\US.market\Option_v3\l2_decision\observability\l2_instrumentation.py:33: error: Cannot find implementation or library stub for module named "opentelemetry"  [import-not-found]
+e:\US.market\Option_v3\shared\config\__init__.py:25: error: Library stubs not installed for "pytz"  [import-untyped]
+e:\US.market\Option_v3\shared\config\__init__.py:25: note: Hint: "python3 -m pip install types-pytz"
+e:\US.market\Option_v3\shared\config\__init__.py:25: note: (or run "mypy --install-types" to install all missing stub packages)
+e:\US.market\Option_v3\shared\config\__init__.py:35: error: Missing named argument "longport_app_key" for "Settings"  [call-arg]
+e:\US.market\Option_v3\shared\config\__init__.py:35: error: Missing named argument "longport_app_secret" for "Settings"  [call-arg]
+e:\US.market\Option_v3\shared\config\__init__.py:35: error: Missing named argument "longport_access_token" for "Settings"  [call-arg]
+e:\US.market\Option_v3\l2_decision\agents\agent_b.py:299: error: Item "None" of "Any | None" has no attribute "data"  [union-attr]
+e:\US.market\Option_v3\l2_decision\signals\fusion\dynamic_weight_engine.py:52: error: "Settings" has no attribute "iv_low_max"  [attr-defined]
+e:\US.market\Option_v3\l2_decision\signals\fusion\dynamic_weight_engine.py:54: error: "Settings" has no attribute "iv_normal_max"  [attr-defined]
+e:\US.market\Option_v3\l2_decision\signals\fusion\dynamic_weight_engine.py:56: error: "Settings" has no attribute "iv_elevated_max"  [attr-defined]
+e:\US.market\Option_v3\l2_decision\signals\fusion\dynamic_weight_engine.py:58: error: "Settings" has no attribute "iv_high_max"  [attr-defined]
+e:\US.market\Option_v3\l2_decision\agents\agent_g.py:492: error: "Settings" has no attribute "gex_accel_boost_bearish"  [attr-defined]
+e:\US.market\Option_v3\l2_decision\agents\agent_g.py:495: error: "Settings" has no attribute "gex_accel_boost_bullish"  [attr-defined]
+e:\US.market\Option_v3\l2_decision\feature_store\extractors_registry.py:275: error: Argument 1 to "_safe" has incompatible type "Callable[[], float | None]"; expected "Callable[[], float]"  [arg-type]
+e:\US.market\Option_v3\l2_decision\feature_store\extractors_registry.py:275: error: Incompatible return value type (got "float | None", expected "float")  [return-value]
+Found 22 errors in 1 file (checked 2 source files)

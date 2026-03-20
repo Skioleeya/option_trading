@@ -281,6 +281,8 @@ class AgentG:
         vrp_vetoed = False
         if vrp is not None:
             vrp_vetoed, signal = self._apply_vrp_veto(signal=signal, summary=summary, vrp=vrp, spy_atm_iv=spy_atm_iv)
+        else:
+            logger.debug("[AgentG] VRP veto skipped: vrp=None (vrp_baseline_hv not configured or HV unavailable)")
 
         dealer_squeeze_alert = extract_dealer_squeeze_alert(ms_state, agent_b.data)
         adjusted_confidence = self._compute_adjusted_confidence(
@@ -293,7 +295,7 @@ class AgentG:
             dealer_squeeze_alert=dealer_squeeze_alert,
             avg_atm_vpin=avg_atm_vpin,
         )
-        object.__setattr__(fused_signal, "confidence", adjusted_confidence)
+        fused_signal.confidence = adjusted_confidence
 
         if not vrp_vetoed:
             signal = self._resolve_signal(

@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Institutional quality gate for changed Python runtime files.
+"""Institutional quality gate for changed runtime source files.
 
 Checks changed runtime files recorded in session meta.yaml against static thresholds:
+- file length (.py/.rs)
 - nesting depth
 - cyclomatic complexity (approximation)
 - function/class length
 - magic number governance ratio
-- duplicate code windows
+- duplicate code windows (.py)
 """
 
 from __future__ import annotations
@@ -16,7 +17,6 @@ import ast
 import json
 import re
 import subprocess
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -122,6 +122,19 @@ def is_runtime_python_file(path: str) -> bool:
     if not norm.startswith(RUNTIME_PREFIXES):
         return False
     return not is_test_like_python_file(norm)
+
+
+def is_runtime_rust_file(path: str) -> bool:
+    norm = normalize_path(path)
+    if not norm.endswith(".rs"):
+        return False
+    if not norm.startswith(RUNTIME_PREFIXES):
+        return False
+    return not any(pat in norm.lower() for pat in SKIP_PATTERNS)
+
+
+def is_quality_target_file(path: str) -> bool:
+    return is_runtime_python_file(path) or is_runtime_rust_file(path)
 
 
 def load_config(path: Path) -> dict[str, Any]:
@@ -288,11 +301,6 @@ def analyze_python_source(source: str, cfg: dict[str, Any]) -> tuple[list[Functi
     }
 
 
-def analyze_python_file(path: Path, cfg: dict[str, Any]) -> tuple[list[FunctionMetrics], list[ClassMetrics], dict[str, Any]]:
-    text = path.read_text(encoding="utf-8")
-    return analyze_python_source(text, cfg)
-
-
 def read_head_file_text(repo_root: Path, rel_path: str) -> str | None:
     try:
         proc = subprocess.run(
@@ -313,6 +321,12 @@ def read_head_file_text(repo_root: Path, rel_path: str) -> str | None:
 def normalize_line(line: str) -> str:
     no_comment = line.split("#", 1)[0].strip()
     return re.sub(r"\s+", " ", no_comment)
+
+
+def count_file_lines(text: str) -> int:
+    if not text:
+        return 0
+    return len(text.splitlines())
 
 
 def count_duplicate_windows(files: list[Path], window_size: int) -> tuple[int, list[dict[str, Any]]]:
@@ -345,7 +359,7 @@ def count_duplicate_windows(files: list[Path], window_size: int) -> tuple[int, l
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Quality gate for changed Python runtime files")
+    parser = argparse.ArgumentParser(description="Quality gate for changed runtime source files")
     parser.add_argument("--repo-root", default=".")
     parser.add_argument("--config", default="scripts/policy/quality_thresholds.json")
     parser.add_argument("--meta-file", required=True)
@@ -369,26 +383,36 @@ def main() -> int:
 
     target_files: list[Path] = []
     for rel in changed_files:
-        if is_runtime_python_file(rel):
+        if is_quality_target_file(rel):
             full = (repo_root / rel).resolve()
             if full.exists():
                 target_files.append(full)
 
+    python_target_files = [p for p in target_files if p.suffix.lower() == ".py"]
+    rust_target_files = [p for p in target_files if p.suffix.lower() == ".rs"]
+
     summary: dict[str, Any] = {
         "status": "PASS",
         "targets": [normalize_path(str(p.relative_to(repo_root))) for p in target_files],
+        "targets_python": [normalize_path(str(p.relative_to(repo_root))) for p in python_target_files],
+        "targets_rust": [normalize_path(str(p.relative_to(repo_root))) for p in rust_target_files],
         "violations": [],
         "metrics": {},
     }
 
     if not target_files:
-        summary["metrics"] = {"analyzed_python_runtime_files": 0}
+        summary["metrics"] = {
+            "analyzed_runtime_source_files": 0,
+            "analyzed_python_runtime_files": 0,
+            "analyzed_rust_runtime_files": 0,
+        }
         payload = json.dumps(summary, indent=2, ensure_ascii=False)
         if args.output:
             Path(args.output).write_text(payload, encoding="utf-8")
         print(payload)
         return 0
 
+    max_file_length = int(cfg.get("max_file_length", 400))
     max_fn_len = int(cfg.get("max_function_length", 80))
     max_cls_len = int(cfg.get("max_class_length", 400))
     max_depth = int(cfg.get("max_nesting_depth", 3))
@@ -404,8 +428,32 @@ def main() -> int:
 
     for path in target_files:
         rel = normalize_path(str(path.relative_to(repo_root)))
+        ext = path.suffix.lower()
+        source = path.read_text(encoding="utf-8")
+        file_line_count = count_file_lines(source)
+
+        head_source = read_head_file_text(repo_root, rel)
+        baseline_line_count = None if head_source is None else count_file_lines(head_source)
+
+        if file_line_count > max_file_length:
+            baseline_failed = baseline_line_count is not None and baseline_line_count > max_file_length
+            worsened = baseline_line_count is None or file_line_count > baseline_line_count
+            if (not baseline_failed) or worsened:
+                summary["violations"].append(
+                    {
+                        "type": "file_length",
+                        "file": rel,
+                        "actual": file_line_count,
+                        "limit": max_file_length,
+                        "baseline_actual": baseline_line_count,
+                    }
+                )
+
+        if ext != ".py":
+            continue
+
         try:
-            functions, classes, magic_info = analyze_python_file(path, cfg)
+            functions, classes, magic_info = analyze_python_source(source, cfg)
         except SyntaxError as exc:
             summary["violations"].append(
                 {
@@ -420,7 +468,6 @@ def main() -> int:
         baseline_functions: list[FunctionMetrics] = []
         baseline_classes: list[ClassMetrics] = []
         baseline_magic_info: dict[str, Any] | None = None
-        head_source = read_head_file_text(repo_root, rel)
         if head_source is not None:
             try:
                 baseline_functions, baseline_classes, baseline_magic_info = analyze_python_source(head_source, cfg)
@@ -524,7 +571,7 @@ def main() -> int:
 
     duplicate_window_size = int(cfg.get("duplicate_window_size", 12))
     max_duplicate_windows = int(cfg.get("max_duplicate_windows", 0))
-    duplicate_windows, duplicate_examples = count_duplicate_windows(target_files, duplicate_window_size)
+    duplicate_windows, duplicate_examples = count_duplicate_windows(python_target_files, duplicate_window_size)
     if duplicate_windows > max_duplicate_windows:
         summary["violations"].append(
             {
@@ -539,7 +586,10 @@ def main() -> int:
     magic_ratio = 1.0 if total_magic == 0 else total_magic_governed / total_magic
 
     summary["metrics"] = {
-        "analyzed_python_runtime_files": len(target_files),
+        "analyzed_runtime_source_files": len(target_files),
+        "analyzed_python_runtime_files": len(python_target_files),
+        "analyzed_rust_runtime_files": len(rust_target_files),
+        "max_file_length": max_file_length,
         "function_count": function_count,
         "class_count": class_count,
         "magic_total": total_magic,

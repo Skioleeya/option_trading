@@ -176,6 +176,11 @@ class L2DecisionReactor:
         # 3. IV regime from IVRegimeEngine signal (used to gate fusion weights)
         iv_regime_signal = raw_signals.get("iv_regime")
         regime_direction = iv_regime_signal.direction if iv_regime_signal else "NEUTRAL"
+        # P1-4 NOTE: IVRegimeEngine uses BULLISH/BEARISH to indicate IV trend direction,
+        # NOT spot price direction. BULLISH = IV declining / low-vol regime (vol compression);
+        # BEARISH = IV rising / high-vol regime (vol expansion). This is separate from AgentG's
+        # _map_iv_to_direction() which uses velocity states. Both coexist intentionally;
+        # this mapping gates L2 fusion weights while AgentG drives L2-legacy signal direction.
         iv_regime_str = {
             "BULLISH": "LOW_VOL",
             "BEARISH": "HIGH_VOL",
@@ -260,8 +265,13 @@ class L2DecisionReactor:
         return output
 
     def decide_sync(self, snapshot: Any) -> DecisionOutput:
-        """Synchronous wrapper — use in thread pool contexts."""
-        return asyncio.get_event_loop().run_until_complete(self.decide(snapshot))
+        """Synchronous wrapper — use ONLY in non-asyncio thread contexts (e.g. test harness).
+
+        P0-3 FIX: Replaced deprecated asyncio.get_event_loop().run_until_complete() with
+        asyncio.run() which is the correct modern API for Python 3.10+.
+        Must NOT be called from within a running event loop.
+        """
+        return asyncio.run(self.decide(snapshot))
 
     # ── Shadow mode ───────────────────────────────────────────────────────────
 
@@ -286,6 +296,7 @@ class L2DecisionReactor:
             "total_decisions": self._shadow_total,
             "mismatch_rate": self._shadow_mismatch / max(1, self._shadow_total),
         }
+
 
     # ── Session management ────────────────────────────────────────────────────
 

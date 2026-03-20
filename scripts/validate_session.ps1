@@ -603,7 +603,7 @@ if ($Strict) {
             $changedFiles | Where-Object {
                 $norm = Normalize-RepoPath -Path $_
                 $norm -match $runtimeRegex -and
-                $norm -match '\.py$' -and
+                $norm -match '\.(py|rs)$' -and
                 -not (Test-IsTestLikePath -Path $norm)
             }
         )
@@ -616,7 +616,7 @@ if ($Strict) {
 
         & python $qualityGateScript --repo-root $repoRoot --config (Join-Path $repoRoot "scripts/policy/quality_thresholds.json") --meta-file $qualityMetaPath --output $qualityOut
         if ($LASTEXITCODE -eq 0) {
-            Pass "Strict gate: quality thresholds passed (changed Python runtime files)"
+            Pass "Strict gate: quality thresholds passed (changed Python/Rust runtime files)"
         } else {
             Fail "Strict gate: quality thresholds failed (see $qualityOut)"
         }

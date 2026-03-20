@@ -31,6 +31,12 @@ This file is not advisory prose. It is a hard execution directive for all AI age
   <rule>Heavy Python compute MUST be offloaded (`asyncio.to_thread`) to protect event-loop latency.</rule>
 </MANDATORY_ARCH>
 
+<MANDATORY_ARCH id="modularity-core">
+  <rule>Every Python (`*.py`) and Rust (`*.rs`) source file MUST NOT exceed 400 lines.</rule>
+  <rule>Implementation MUST follow modular design: high cohesion, low coupling, and clear responsibility boundaries.</rule>
+  <rule>If a file approaches the 400-line ceiling, logic MUST be split into focused modules before further feature growth.</rule>
+</MANDATORY_ARCH>
+
 <MANDATORY_ARCH id="resilience-core">
   <rule>Shared resource handshake MUST follow create-or-open semantics.</rule>
   <rule>No silent failure: Rust runtime path MUST NOT use `unwrap()`; Python MUST NOT swallow errors with bare/silent `try-except`.</rule>
@@ -52,6 +58,8 @@ This file is not advisory prose. It is a hard execution directive for all AI age
   <pattern>wildcard import in runtime source: `from x import *`</pattern>
   <pattern>Rust runtime `unwrap()` introduced in ingest/compute runtime path</pattern>
   <pattern>Python silent catch that hides runtime failure without log/escalation</pattern>
+  <pattern>Any Python (`*.py`) or Rust (`*.rs`) source file exceeds 400 lines</pattern>
+  <pattern>God-module structure that violates modularity (low cohesion / high coupling)</pattern>
   <required_reaction>
     1) STOP current implementation immediately.
     2) REVERT current local plan (not unrelated user changes).
@@ -201,8 +209,9 @@ This section is a machine gate. Agent completion claim without these hooks is in
 </ANTI_PATTERN>
 
 <MANDATORY_HOOK id="quality-gate-before-merge">
-  <rule>Before merge/handoff, strict validation MUST include a machine quality gate on changed Python runtime files.</rule>
-  <rule>Quality gate thresholds MUST include all: max nesting depth, max cyclomatic complexity, max function length, max class length, magic number governance ratio, duplicate window count.</rule>
+  <rule>Before merge/handoff, strict validation MUST include a machine quality gate on changed Python/Rust runtime files.</rule>
+  <rule>Quality gate thresholds MUST include all: max nesting depth, max cyclomatic complexity, max function length, max class length, magic number governance ratio, duplicate window count, and max file length.</rule>
+  <rule>Max file length threshold is mandatory for both Python (`*.py`) and Rust (`*.rs`) source files: 400 lines.</rule>
   <rule>Quality gate implementation source of truth: `scripts/policy/check_quality_gates.py` + `scripts/policy/quality_thresholds.json`.</rule>
   <rule>If quality gate fails, agent MUST NOT claim completion.</rule>
 </MANDATORY_HOOK>

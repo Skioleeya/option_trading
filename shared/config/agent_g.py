@@ -21,6 +21,14 @@ class AgentGConfig(BaseConfig):
     gex_strong_negative: float = Field(default=-50000.0)       # -50B
     gex_moderate_threshold: float = Field(default=30000.0)     # 30B
     gex_accel_threshold: float = Field(default=10000.0)        # 10B
+    gex_accel_boost_bearish: float = Field(default=1.5)
+    gex_accel_boost_bullish: float = Field(default=1.3)
+
+    # IV Regime thresholds
+    iv_low_max: float = Field(default=0.12)
+    iv_normal_max: float = Field(default=0.20)
+    iv_elevated_max: float = Field(default=0.30)
+    iv_high_max: float = Field(default=0.35)
 
     # VRP thresholds:
     # - `vrp_baseline_hv` accepts either decimal fraction (0.15) or percent (15.0)

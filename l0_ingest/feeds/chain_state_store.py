@@ -66,6 +66,11 @@ class ChainStateStore:
         return self._spot
 
     @property
+    def last_spot_update(self) -> "datetime | None":
+        """Timestamp of the most recent spot price update (public access for FeedOrchestrator)."""
+        return self._last_spot_update
+
+    @property
     def version(self) -> int:
         """Monotonic state version used by downstream reactors."""
         return self._version
@@ -113,11 +118,9 @@ class ChainStateStore:
         self._apply_price_and_flow_fields(symbol, event, is_rest=is_rest, setter=_set)
         self._apply_iv_and_greeks(event, setter=_set)
 
-        # BUG-8 NOTE (P2): OI 统一通过 apply_oi_smooth() 写入以保持 EMA 连续性。
-        # 调用方负责在 apply_event() 后显式调用 apply_oi_smooth(symbol, event.open_interest)。
-        # 此处保留直写作为热启动路径（seq_no=0），后续 P2 轮修复。
-        if event.open_interest is not None:
-            _set("open_interest", event.open_interest)
+        # P0-1 FIX (BUG-8 resolved): OI 写入统一走 apply_oi_smooth() 保持 EMA 连续性。
+        # apply_event() 不再直写 open_interest，消除与 apply_oi_smooth() 的双写竞争。
+        # 调用方必须在 apply_event() 后显式调用 apply_oi_smooth(symbol, event.open_interest)。
 
         entry["last_update"] = datetime.now(ZoneInfo("US/Eastern"))
         self._last_seq[symbol] = event.seq_no

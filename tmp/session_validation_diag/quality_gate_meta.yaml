@@ -1,2 +1,10 @@
 files_changed:
-  - "l0_ingest/feeds/chain_state_store.py"
+  - "l1_compute/trackers/vanna/__init__.py"
+  - "l1_compute/trackers/vanna/pearson_engine.py"
+  - "l1_compute/trackers/vanna/acceleration_engine.py"
+  - "l1_compute/trackers/vanna/gex_classifier.py"
+  - "l1_compute/trackers/vanna/persistence.py"
+  - "l1_compute/trackers/vanna_flow_analyzer.py"
+  - "l1_compute/microstructure/wall_context_builder.py"
+  - "l1_compute/microstructure/micro_signal_builder.py"
+  - "l1_compute/reactor.py"

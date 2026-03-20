@@ -343,16 +343,31 @@ class IVBaselineSync:
         today_str = datetime.now(ZoneInfo("US/Eastern")).strftime("%Y%m%d")
         self._persist_oi_to_disk(today_str)
 
-    def _sort_by_proximity(self, symbols: list[str]) -> list[str]:
-        """Sort symbols by distance from current spot price."""
+    def _sort_by_proximity(
+        self,
+        symbols: list[str],
+        symbol_to_strike: dict[str, float] | None = None,
+    ) -> list[str]:
+        """Sort symbols by distance from current spot price.
+
+        P1-6 FIX: Uses symbol_to_strike dict lookup (from SubscriptionManager) when available,
+        falling back to hardcoded character-offset parsing only if the dict misses.
+        """
         spot = self._get_spot()
         if not spot:
             return symbols
 
         def get_dist(symbol: str) -> float:
+            # Prefer dict lookup (reliable, no format assumptions)
+            if symbol_to_strike and symbol in symbol_to_strike:
+                return abs(symbol_to_strike[symbol] - spot)
+            # Fallback: LongPort-specific format symbol[10:].split(".")[0] / 1000.0
+            # (fragile if symbol format changes — TODO: remove once dict is always available)
             try:
                 strike_part = symbol[10:].split(".")[0]
-                return abs(float(strike_part) / 1000.0 - spot)
+                strike_val = float(strike_part) / 1000.0
+                logger.debug("[IVSync] _sort_by_proximity: dict miss for %s, using string parse", symbol)
+                return abs(strike_val - spot)
             except (ValueError, IndexError):
                 return 999.0
 

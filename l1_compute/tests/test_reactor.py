@@ -30,6 +30,7 @@ from l1_compute.output.enriched_snapshot import (
 )
 from l1_compute.observability.l1_instrumentation import L1Instrumentation
 from l1_compute.reactor import L1ComputeReactor
+from l1_compute.microstructure.wall_context_builder import build_wall_context
 
 _ET = ZoneInfo("US/Eastern")
 
@@ -395,7 +396,6 @@ class TestL1ComputeReactor:
         assert snap.extra_metadata == metadata
 
     def test_wall_context_uses_million_unit_without_double_scaling(self):
-        reactor = L1ComputeReactor(sabr_enabled=False)
         chain = [
             {"strike": 554.0, "volume": 120},
             {"strike": 555.0, "volume": 360},
@@ -404,8 +404,8 @@ class TestL1ComputeReactor:
             {"strike": 566.0, "volume": 110},
         ]
 
-        ctx = reactor._build_wall_context(
-            chain_snapshot=chain,
+        ctx = build_wall_context(
+            chain,
             net_gex=-12.0,
             call_wall=565.0,
             put_wall=555.0,
