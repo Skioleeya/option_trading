@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import sys
 import uuid
@@ -45,6 +46,14 @@ class FakeRedis:
 
     async def execute(self):
         return []
+
+
+class DiagnosticStorageStub:
+    def __init__(self) -> None:
+        self.diagnostics: list[tuple[str, dict]] = []
+
+    async def append_anchor_diagnostic(self, date_str: str, data: dict) -> None:
+        self.diagnostics.append((date_str, data))
 
 
 def _mk_cold_dir() -> Path:
@@ -337,3 +346,148 @@ def test_load_stitch_state_from_legacy_offset_clamps_invalid_floor(monkeypatch):
     assert tracker.accumulated_factor["c"] == 0.0
     assert tracker.accumulated_factor["p"] == pytest.approx(1.25, rel=1e-9, abs=1e-9)
     assert tracker.accumulated_offset["c"] == -1.0
+
+
+@pytest.mark.asyncio
+async def test_calculate_decay_persists_anchor_diagnostic_when_leg_prices_starve(monkeypatch):
+    monkeypatch.setattr(tracker_mod.settings, "opening_atm_cold_storage_root", str(_mk_cold_dir()))
+
+    fixed_now = datetime(2026, 3, 6, 10, 0, tzinfo=ET)
+
+    class _FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return fixed_now
+            return fixed_now.astimezone(tz)
+
+    monkeypatch.setattr(tracker_mod, "datetime", _FixedDateTime)
+
+    tracker = AtmDecayTracker(redis_client=None, quote_ctx=None)
+    tracker.is_initialized = True
+    tracker.anchor = _mk_anchor(fixed_now, 672.0)
+    tracker._storage = DiagnosticStorageStub()  # noqa: SLF001 - test-only stub
+
+    chain = [
+        _mk_opt(fixed_now, 672.0, "C", 1.9, 2.1),
+        _mk_opt(fixed_now, 672.0, "P", 0.0, 0.0),
+    ]
+
+    out = tracker._calculate_decay(chain)
+    await asyncio.sleep(0)
+
+    assert out is None
+    assert tracker._storage.diagnostics  # noqa: SLF001 - test-only stub
+    date_str, diag = tracker._storage.diagnostics[0]
+    assert date_str == "20260306"
+    assert diag["reason"] == "raw_pct_unavailable"
+    assert diag["call_leg"]["bid"] == 1.9
+    assert diag["call_leg"]["ask"] == 2.1
+    assert diag["put_leg"]["bid"] == 0.0
+    assert diag["put_leg"]["ask"] == 0.0
+    assert diag["failure_reasons"] == ["put_leg_non_positive"]
+
+
+@pytest.mark.asyncio
+async def test_calculate_decay_suppresses_flat_opening_tick_until_post_lock_movement(monkeypatch):
+    monkeypatch.setattr(tracker_mod.settings, "opening_atm_cold_storage_root", str(_mk_cold_dir()))
+
+    fixed_now = datetime(2026, 3, 6, 10, 0, tzinfo=ET)
+
+    class _FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return fixed_now
+            return fixed_now.astimezone(tz)
+
+    monkeypatch.setattr(tracker_mod, "datetime", _FixedDateTime)
+
+    tracker = AtmDecayTracker(redis_client=None, quote_ctx=None)
+    tracker.is_initialized = True
+    tracker.anchor = _mk_anchor(fixed_now, 672.0)
+    tracker._opening_tick_pending = True
+
+    flat_chain = [
+        _mk_opt(fixed_now, 672.0, "C", 1.0, 1.0),
+        _mk_opt(fixed_now, 672.0, "P", 1.0, 1.0),
+    ]
+    assert tracker._calculate_decay(flat_chain) is None
+    assert tracker._prev_pcts is None
+    assert tracker._opening_tick_pending is True
+
+    moved_chain = [
+        _mk_opt(fixed_now, 672.0, "C", 1.1, 1.1),
+        _mk_opt(fixed_now, 672.0, "P", 0.9, 0.9),
+    ]
+    out = tracker._calculate_decay(moved_chain)
+    assert out is not None
+    assert tracker._opening_tick_pending is False
+    assert out["call_pct"] == pytest.approx(0.1, rel=1e-9, abs=1e-9)
+    assert out["put_pct"] == pytest.approx(-0.1, rel=1e-9, abs=1e-9)
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_intraday_anchor_locks_same_day_without_waiting(monkeypatch):
+    monkeypatch.setattr(tracker_mod.settings, "opening_atm_cold_storage_root", str(_mk_cold_dir()))
+
+    fixed_now = datetime(2026, 3, 24, 11, 0, tzinfo=ET)
+
+    class _FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return fixed_now
+            return fixed_now.astimezone(tz)
+
+    monkeypatch.setattr(tracker_mod, "datetime", _FixedDateTime)
+
+    tracker = AtmDecayTracker(redis_client=None, quote_ctx=None)
+    tracker.is_initialized = True
+    tracker._warmup_ticks_remaining = 5
+
+    chain = [
+        _mk_opt(fixed_now, 654.0, "C", 1.9, 2.1),
+        _mk_opt(fixed_now, 654.0, "P", 1.8, 2.0),
+        _mk_opt(fixed_now, 655.0, "C", 1.2, 1.4),
+        _mk_opt(fixed_now, 655.0, "P", 1.0, 1.2),
+    ]
+
+    out = await tracker.bootstrap_intraday_anchor(chain, spot=654.1)
+
+    assert tracker.anchor is not None
+    assert tracker.anchor["strike"] == 654.0
+    assert tracker._warmup_ticks_remaining == 5
+    assert out is None
+
+
+@pytest.mark.asyncio
+async def test_compute_current_decay_returns_first_valid_point_after_startup_repair(monkeypatch):
+    monkeypatch.setattr(tracker_mod.settings, "opening_atm_cold_storage_root", str(_mk_cold_dir()))
+
+    fixed_now = datetime(2026, 3, 24, 11, 32, 30, tzinfo=ET)
+
+    class _FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return fixed_now
+            return fixed_now.astimezone(tz)
+
+    monkeypatch.setattr(tracker_mod, "datetime", _FixedDateTime)
+
+    tracker = AtmDecayTracker(redis_client=None, quote_ctx=None)
+    tracker.is_initialized = True
+    tracker.anchor = _mk_anchor(datetime(2026, 3, 24, 11, 32, 26, tzinfo=ET), 659.0)
+    tracker._opening_tick_pending = True
+
+    chain = [
+        _mk_opt(fixed_now, 659.0, "C", 1.45, 1.55),
+        _mk_opt(fixed_now, 659.0, "P", 1.50, 1.60),
+    ]
+
+    out = tracker.compute_current_decay(chain)
+
+    assert out is not None
+    assert out["strike"] == 659.0
+    assert tracker._prev_pcts is not None

@@ -1,0 +1,141 @@
+# Handoff
+
+## Session Summary
+- DateTime (ET): 2026-03-24 11:57:00 -04:00
+- Goal: Close the live ATM anchor starvation loop by adding bounded price repair, preventing empty WS prices from erasing recovered legs, suppressing flat opening `0/0/0` ATM ticks, blocking persisted flat-zero bad anchors from restoring after restart, ensuring same-day intraday startup can bootstrap a new anchor immediately, and seeding the first post-lock sample during startup.
+- Outcome: IN PROGRESS. The bounded repair path, WS-price overwrite guard, opening-tick suppression, restore-time bad-anchor discard, intraday startup bootstrap lock, startup one-shot repair/recompute path, and immediate mandatory subscription refresh are implemented and regression-tested. The live `10:56:47 ET` bad anchor was removed from Redis/cold storage and no longer restores into current payload; same-day startup lock is live-verified, but fresh online restarts still leave `atm=null` and empty ATM history, so the remaining gap is first-sample materialization after lock.
+
+## What Changed
+- Code / Docs Files:
+  - `app/lifespan.py`
+  - `l4_ui/src/store/dashboardStore.ts`
+  - `l4_ui/src/store/__tests__/dashboardStore.test.ts`
+  - `l0_ingest/feeds/chain_state_store.py`
+  - `l0_ingest/feeds/feed_orchestrator.py`
+  - `l0_ingest/feeds/iv_baseline_sync.py`
+  - `l0_ingest/feeds/option_chain_builder.py`
+  - `l0_ingest/feeds/price_repair.py`
+  - `l0_ingest/tests/test_chain_state_store.py`
+  - `l0_ingest/tests/test_feed_orchestrator_startup_stagger.py`
+  - `l0_ingest/tests/test_iv_baseline_sync.py`
+  - `docs/SOP/L0_DATA_FEED.md`
+  - `l1_compute/analysis/atm_decay/anchor.py`
+  - `l1_compute/analysis/atm_decay/runtime.py`
+  - `l1_compute/analysis/atm_decay/storage.py`
+  - `l1_compute/analysis/atm_decay/tracker.py`
+  - `l1_compute/tests/test_atm_decay_modular.py`
+  - `l1_compute/tests/test_atm_decay_tracker.py`
+  - `docs/SOP/L1_LOCAL_COMPUTATION.md`
+  - `notes/context/project_state.md`
+  - `notes/context/open_tasks.md`
+  - `notes/context/handoff.md`
+  - `notes/sessions/2026-03-24/fix-oi-rest-path-depth-zero-20260324/project_state.md`
+  - `notes/sessions/2026-03-24/fix-oi-rest-path-depth-zero-20260324/open_tasks.md`
+  - `notes/sessions/2026-03-24/fix-oi-rest-path-depth-zero-20260324/handoff.md`
+  - `notes/sessions/2026-03-24/fix-oi-rest-path-depth-zero-20260324/meta.yaml`
+- Runtime / Infra Changes:
+  - `ChainStateStore` now tracks per-symbol WS price ownership and lets REST seed `bid/ask/last_price` only before any positive WS price has been observed.
+  - `ChainStateStore` now ignores non-positive WS price fields for `bid/ask/last_price`, so empty live quote ticks cannot erase a previously recovered positive anchor-leg price.
+  - Added shared L0 helper `price_repair.py` so bounded `option_quote()` repairs use one candidate-selection and limiter path.
+  - `IVBaselineSync` still repairs after `calc_indexes()` batches, but now delegates to the shared bounded `option_quote()` repair helper.
+  - `FeedOrchestrator` now runs bounded `option_quote()` repair for `mandatory_symbols` on its own tick cadence, so restored/captured ATM anchors do not need to wait for the 60-second IV sync loop.
+  - `lifespan` now synchronizes restored ATM anchor symbols into `mandatory_symbols` immediately after tracker initialization, before housekeeping starts.
+  - Frontend `dashboardStore` now appends ATM ticks by unique timestamp even when the percentages are numerically unchanged, so the chart preserves time progression during flat periods instead of replacing the last point.
+  - When `calculate_raw_pct()` cannot compute, the tracker now emits a diagnostic payload for the locked call/put symbols.
+  - The payload records exact raw `bid`, `ask`, and `last_price` values plus derived `mid_price` for each leg.
+  - Diagnostics persist to a separate cold JSONL file and Redis list key so they do not contaminate the main ATM decay series.
+  - ATM decay now suppresses a newly locked opening tick when `call_pct/put_pct/straddle_pct` are all still exactly `0`, preventing flat lock points from being appended to the main ATM series before post-lock movement appears.
+  - ATM decay restore and deferred-restore now discard a persisted anchor whenever the latest same-lock ATM history point is a flat `0/0/0` opening row, so stale bad anchors cannot reappear after restart.
+  - `AtmDecayStorage` now exposes `get_latest_history_point()` to support targeted restore-time screening without replaying the whole series.
+  - `lifespan` now attempts one intraday ATM bootstrap lock from the startup `fetch_chain()` result whenever the service starts during regular session and no valid anchor was restored.
+  - `AtmDecayTracker.bootstrap_intraday_anchor()` bypasses the normal post-start warm-up countdown for this startup-only path while preserving the regular-session and valid-spot guards.
+  - Startup bootstrap no longer relies on the filtered `fetch_chain()['chain']` payload; `OptionChainBuilder` now exposes an unfiltered startup bootstrap context from the raw L0 store.
+  - `lifespan` now retries that startup bootstrap context for a bounded 10-second window so the first usable live spot/chain snapshot can still lock the same-day anchor during startup.
+  - `FeedOrchestrator` now exposes a public bounded `repair_symbols_once()` hook so startup orchestration can repair freshly locked anchor legs immediately instead of waiting for the background tick cadence.
+  - `OptionChainBuilder` now wraps that one-shot repair through a public API safe for app orchestration.
+  - `AtmDecayTracker` now exposes `compute_current_decay()` so startup orchestration can re-run ATM decay immediately after a successful repair without touching private internals.
+  - `lifespan` now chains `bootstrap lock -> set mandatory symbols -> bounded repair -> immediate decay recompute` before background loops start, so same-day startup can produce the first valid ATM point as soon as repaired prices are available.
+  - `OptionChainBuilder` now exposes `refresh_subscriptions_once()` so startup wiring can force anchor legs into `target_symbols` immediately rather than waiting for the next orchestrator cadence.
+  - `lifespan` now forces that immediate subscription refresh and always attempts a startup recompute even when `repair_symbols_once()` returns `0`, closing two startup timing gaps that previously deferred first-sample materialization.
+  - Runtime orchestration was split into a thin coordinator plus a dedicated `runtime.py` helper module to keep file sizes bounded.
+  - Previous healthy online restart completed with proxy variables cleared for the launched process; `oi_smooth_entries` and `depth_profile` recovered, but ATM still starved on `SPY260324C652000.US` because the old path depended on `calc_indexes()` price fields.
+  - Isolated verification proved `option_quote('SPY260324C652000.US')` returns a positive last price and that `apply_rest_update()` now persists it correctly.
+  - Online verification proved `calc_indexes('SPY260324C652000.US')` returns only `IV/OI` with `last_done=None`, which is the precise gap the new bounded `option_quote()` repair path is designed to bypass.
+  - Live restart after the WS-price guard showed `source_version` advancing over consecutive windows (`113 -> 194 -> 354`) instead of immediately collapsing into a hard plateau.
+  - The latest fresh ATM lock still produced a flat `0/0/0` current payload at `10:56:47 ET`, which motivated the opening-tick suppression patch so that such flat lock points stop polluting the persisted history.
+  - Live cleanup removed `app:opening_atm:20260324`, `app:atm_decay_series:20260324`, `app:atm_anchor_diag:20260324` plus the cold `atm_20260324.json`, `atm_series_20260324.jsonl`, and `atm_anchor_diag_20260324.jsonl` files before restart; the restarted backend now serves `atm=null` and empty ATM history instead of restoring the old `10:56:47 ET` flat-zero platform.
+- Commands Run:
+  - `powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/test_chain_state_store.py`
+  - `powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/test_builder_orchestration_support.py l0_ingest/tests/test_chain_state_store.py l1_compute/tests/test_atm_decay_tracker.py`
+  - `powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/test_iv_baseline_sync.py l0_ingest/tests/test_feed_orchestrator_startup_stagger.py l0_ingest/tests/test_chain_state_store.py l0_ingest/tests/test_builder_orchestration_support.py l1_compute/tests/test_atm_decay_tracker.py`
+  - `powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_atm_decay_tracker.py`
+  - `powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/test_chain_state_store.py`
+  - `powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_atm_decay_tracker.py l1_compute/tests/test_atm_decay_modular.py`
+  - `powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_atm_decay_modular.py l1_compute/tests/test_atm_decay_tracker.py`
+  - `powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_atm_decay_tracker.py l1_compute/tests/test_atm_decay_modular.py`
+  - `powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/test_fetch_chain_components.py l1_compute/tests/test_atm_decay_tracker.py l1_compute/tests/test_atm_decay_modular.py`
+  - `powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/test_feed_orchestrator_startup_stagger.py l1_compute/tests/test_atm_decay_tracker.py`
+  - `powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/test_feed_orchestrator_startup_stagger.py l1_compute/tests/test_atm_decay_tracker.py`
+  - `npm --prefix l4_ui run test -- dashboardStore`
+  - `powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict`
+
+## Verification
+- Passed:
+  - `powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/test_chain_state_store.py` -> 14 passed in 0.19s
+  - `powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/test_builder_orchestration_support.py l0_ingest/tests/test_chain_state_store.py l1_compute/tests/test_atm_decay_tracker.py` -> 30 passed in 0.94s
+  - `powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/test_iv_baseline_sync.py l0_ingest/tests/test_feed_orchestrator_startup_stagger.py l0_ingest/tests/test_chain_state_store.py l0_ingest/tests/test_builder_orchestration_support.py l1_compute/tests/test_atm_decay_tracker.py` -> 36 passed in 1.02s
+  - `powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_atm_decay_tracker.py` -> 11 passed in 0.77s
+  - `powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/test_chain_state_store.py` -> 15 passed in 0.25s
+  - `powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_atm_decay_tracker.py l1_compute/tests/test_atm_decay_modular.py` -> 22 passed in 0.90s
+  - `powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_atm_decay_modular.py l1_compute/tests/test_atm_decay_tracker.py` -> 25 passed in 0.92s
+  - `powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_atm_decay_tracker.py l1_compute/tests/test_atm_decay_modular.py` -> 26 passed in 0.98s
+  - `powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/test_fetch_chain_components.py l1_compute/tests/test_atm_decay_tracker.py l1_compute/tests/test_atm_decay_modular.py` -> 33 passed in 1.01s
+  - `powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/test_feed_orchestrator_startup_stagger.py l1_compute/tests/test_atm_decay_tracker.py` -> 19 passed in 0.97s
+  - `powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/test_feed_orchestrator_startup_stagger.py l1_compute/tests/test_atm_decay_tracker.py` -> 20 passed in 0.89s
+  - `powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict` -> PASS
+  - Healthy degraded backend restarts on port `8001` succeeded; online sampling after the WS-price guard showed `/debug/persistence_status` source versions progressing (`113 -> 194 -> 354`) and `/history` moving again
+  - After explicit bad-anchor invalidation and restart, `GET /api/atm-decay/history` returned `count=0` and `GET /history?view=full&count=1&schema=v1` returned `atm=null`, confirming the stale `10:56:47 ET` flat-zero lock no longer restores into active payload
+  - Forced clean restart after the startup-bootstrap fixes now creates a fresh same-day Redis anchor (`2026-03-24T11:32:26.497428-04:00`, strike `659.0`) even with persisted ATM state cleared first
+  - The same live run still shows `app:atm_decay_series:20260324 = 0`, `/api/atm-decay/history count=0`, and `/history atm=null`, which is why startup now forces a one-shot repair/recompute path before loops begin
+  - A second fresh restart after the immediate-subscription-refresh patch still created same-day anchors (`2026-03-24T11:50:55 ET`, strike `660.0`; `2026-03-24T11:55:46 ET`, strike `653.0`), but `/api/atm-decay/history` remained empty, `/history` remained `atm=null`, and no fresh `app:atm_decay_series:*` or `app:atm_anchor_diag:*` entries were created
+- Failed / Not Run:
+  - A fresh-lock verification has not yet confirmed that the opening-tick suppression patch prevents the next `0/0/0` lock point from entering `/api/atm-decay/history`.
+  - `npm --prefix l4_ui run test -- dashboardStore` failed in this environment with `esbuild spawn EPERM`, so frontend automated verification is still pending despite the targeted store patch.
+
+## Pending
+- Must Do Next:
+  - Trace why fresh startup anchors still do not materialize the first ATM sample even after immediate subscription refresh and unconditional recompute.
+  - Re-check the next fresh ATM lock and confirm `/api/atm-decay/history` does not append a flat `0/0/0` opening row.
+  - Continue verifying whether bounded repair logs appear when `SPY260324C652000.US` starves while the paired put remains healthy.
+  - Re-run frontend ATM chart verification in an environment where Vite/Vitest can spawn `esbuild`.
+- Nice to Have:
+  - Promote anchor diagnostics into a small debug endpoint if cold JSONL inspection becomes too slow operationally.
+
+## Debt Record (Mandatory)
+- DEBT-EXEMPT: Partial handoff only; live verification is improved but still incomplete because the next fresh-lock event has not yet been observed after the opening-tick suppression patch.
+- DEBT-EXEMPT: Partial handoff only; the frontend ATM history fix is implemented, but local Vitest verification is blocked by `spawn EPERM`.
+- DEBT-OWNER: Codex
+- DEBT-DUE: 2026-03-25
+- DEBT-RISK: Same-day startup lock is now live-verified, but frontend still sees `atm=null` until the first post-lock sample persists; remaining risk is concentrated in first-sample persistence rather than anchor capture.
+- DEBT-NEW: 0
+- DEBT-CLOSED: 4
+- DEBT-DELTA: -4
+- DEBT-JUSTIFICATION: N/A
+- RUNTIME-ARTIFACT-EXEMPT: N/A
+- OPENSPEC-EXEMPT: Targeted bounded runtime hotfix within existing L0/L1 contracts; no new external contract surface.
+- SOP-EXEMPT: N/A
+
+## How To Continue
+- Start Command:
+  - `.\scripts\ops\start_backend.ps1`
+- Key Logs:
+  - `logs\\backend_runtime.current.log`
+  - `data\\atm_decay\\atm_anchor_diag_YYYYMMDD.jsonl`
+- First File To Read:
+  - `l4_ui/src/store/dashboardStore.ts`
+  - `l0_ingest/feeds/price_repair.py`
+  - `l0_ingest/feeds/iv_baseline_sync.py`
+  - `l0_ingest/feeds/feed_orchestrator.py`
+  - `l0_ingest/feeds/chain_state_store.py`
+  - `l1_compute/analysis/atm_decay/tracker.py`
+  - `l1_compute/analysis/atm_decay/anchor.py`

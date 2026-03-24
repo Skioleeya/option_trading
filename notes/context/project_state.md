@@ -1,16 +1,16 @@
-# Project State (Index)
+﻿# Project State (Index)
 
 ## Active Session
-- Path: notes/sessions/2026-03-19/modularize-reactor-vanna-20260319/project_state.md
-- Meta: notes/sessions/2026-03-19/modularize-reactor-vanna-20260319/meta.yaml
-- Status: COMPLETE (P0 coupling violation — reactor.py + VannaFlowAnalyzer modularized)
+- Path: notes/sessions/2026-03-24/l0-ingest-structure-governance/project_state.md
+- Meta: notes/sessions/2026-03-24/l0-ingest-structure-governance/meta.yaml
+- Status: COMPLETE (flat `l0_ingest/feeds/*` has been removed, L0 runtime code is reorganized under hierarchical `v2/*` subpackages, V2 tests are green, and `validate_session -Strict` passed)
 
 ## Recent Sessions
+- notes/sessions/2026-03-24/l0-ingest-structure-governance/
+- notes/sessions/2026-03-24/l0-v2-single-direction-tree/
+- notes/sessions/2026-03-24/fix-oi-rest-path-depth-zero-20260324/
 - notes/sessions/2026-03-19/modularize-reactor-vanna-20260319/
 - notes/sessions/2026-03-19/active-options-volume-sanitize-20260319/
-- notes/sessions/2026-03-19/turnover-shm-v2-handshake-20260319/
-- notes/sessions/2026-03-19/active-options-flow-l1-priority-fix-20260319/
-- notes/sessions/2026-03-19/p0-active-options-row-quality-l0-flow-20260319/
 
 ## Global Rules
 - Session folders are immutable records; do not overwrite prior sessions.

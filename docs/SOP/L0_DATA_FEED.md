@@ -11,19 +11,24 @@ L0 负责接入行情源、维持订阅、执行基础清洗和快照输出，�
 
 ```mermaid
 flowchart LR
-  A[LongPort OpenAPI] --> B[RustQuoteRuntime]
-  B --> C[OptionSubscriptionManager]
-  C --> D[RustIngestGateway]
-  D --> E[Shared Memory]
-  B --> F[REST Pull APIs]
-  F --> G[IVBaselineSync]
-  F --> H[Tier2Poller]
-  F --> I[Tier3Poller]
-  B --> J[async event_queue fallback]
-  J --> K[SanitizationPipeline]
-  K --> L[ChainStateStore]
-  L --> M[fetch_chain payload]
+  A[LongPort OpenAPI] --> B[v2/source/runtime]
+  B --> C[v2/normalize]
+  C --> D[v2/state/runtime]
+  D --> E[v2/projection/snapshot]
+  B --> F[v2/services/subscription]
+  F --> G[v2/services/sync]
+  F --> H[v2/services/pollers]
+  F --> I[v2/services/orchestration]
+  B --> J[RustIngestGateway]
+  J --> K[Shared Memory]
+  E --> L[fetch_snapshot payload]
 ```
+
+目录治理要求：
+
+- `l0_ingest/v2` 是唯一正式运行树；禁止恢复 `l0_ingest/feeds/*` 平铺目录。
+- `v2` 内部依赖固定为 `source -> normalize -> state -> services -> projection -> facade`。
+- 顶层 `l0_ingest/` 仅允许保留稳定入口、基础中立目录与测试目录，禁止继续堆放新的业务编排文件。
 
 ## 3. Runtime Flow
 
@@ -32,11 +37,17 @@ flowchart LR
 2. `OptionSubscriptionManager` 通过 runtime 抽象触发 Rust 订阅与 REST 拉取。
  - 订阅池执行硬上限：`subscription_max` 会被运行时钳制到官方上限 `500`。
  - 超过上限时按离 spot 距离优先保留近端合约，输出 drop 诊断日志。
-3. `ChainStateStore` 聚合并提供 `fetch_chain()` 快照。
+3. `ChainStateStore` 聚合并提供 `fetch_snapshot()` 快照。
 4. L0 flow 字段所有权约束（ActiveOptions 关键）:
  - `DEPTH` 事件只允许更新价位簿价格（bid/ask），不得写入 `volume/current_volume/turnover`。
  - `QUOTE/TRADE` 事件可写入 flow 字段；`ws_*_seen` 仅在字段为正值时置位，避免 `0` 锁死 REST fallback。
+ - 当某个 symbol 尚未收到任何有效 WS 价格（`bid/ask/last_price`）时，REST `option_quote` 允许临时回填价格字段；一旦该 symbol 出现有效 WS 价格，REST 不得再覆盖该 symbol 的价格所有权。
+ - Anchor / mandatory symbols 若在 `calc_indexes()` 同步后仍无正价格字段，允许通过受限 `option_quote()` 追加一次价格修复；该修复必须复用共享 rate limiter，且仅面向小规模候选集，禁止退化为全链价格轮询。
+ - 若启动时从持久化状态恢复出 ATM anchor，`lifespan` 必须在后台 loops 启动前先把该 anchor 两腿同步进 `mandatory_symbols`，避免首轮 warm-up / repair 因时序而看不到 anchor legs。
+ - 若盘中冷启动刚完成 same-day bootstrap lock，`lifespan` 也必须在后台 loops 启动前把新锁定的 anchor 两腿同步进 `mandatory_symbols`，并执行一次有界 `option_quote()` repair；若修复命中正价格，应立即触发一次 ATM decay 重算，避免首个有效样本必须等待后续管理 tick。
+ - 上述 startup anchor legs 同步进 `mandatory_symbols` 后，还必须立刻执行一次订阅刷新；禁止仅登记 mandatory 集合却等待后续 `FeedOrchestrator` cadence 才把 anchor 两腿纳入 `target_symbols`，否则盘中首个 ATM 样本可能长期看不到锁定腿。
  - WS `volume/current_volume` 必须通过可信上限校验（当前 hard cap: `1_000_000_000`）；超限值视为脏数据并丢弃，且不得置位 `ws_volume_seen/ws_current_volume_seen`（保留 REST fallback 接管能力）。
+ - HOT-START OI 预加载优先使用 `SubscriptionManager.symbol_to_strike`，但若启动早期映射尚未建立，允许按 option symbol 直接解析 strike 作为兜底，确保 disk OI 可在首批 live tick 前写入 `ChainStateStore`。
 
 ### 3.3 IVBaselineSync 模块边界（P1 去混乱）
 
@@ -71,7 +82,7 @@ flowchart LR
 
 ## 5. Output Contract (to L1)
 
-`fetch_chain()` 最小字段要求:
+`fetch_snapshot()` 最小字段要求:
 
 - `spot`
 - `chain`
@@ -87,9 +98,9 @@ flowchart LR
 - fallback 快照（`uninitialized` / `error`）也必须稳定输出 `rust_active`、`rust_shm_path` 与 `shm_stats`：
   - `uninitialized`: `rust_active=false`, `shm_stats.status=UNINITIALIZED`
   - `error`: `rust_active=false`, `shm_stats.status=ERROR`
-- `fetch_chain()` 默认不得触发 legacy Greeks 重算；若确需兼容路径，必须显式传入 `include_legacy_greeks=true` 并记录调用来源（caller tag）
-- `fetch_chain(include_chain_arrow=true)` 允许为 L1 compute 快路径附带内部字段 `chain_arrow`（`RecordBatch`）；该字段仅供进程内 L0->L1 使用，不作为外部 API 稳定合同
-- `ttm_seconds` 必须持续输出（即使 legacy Greeks 关闭），不得影响下游 ActiveOptions/Presenter 契约
+- `fetch_snapshot()` 只负责 L0 原始快照与诊断投影，禁止在 L0 内补算 legacy Greeks / TTM 兼容字段
+- `fetch_snapshot(include_chain_arrow=true)` 允许为 L1 compute 快路径附带内部字段 `chain_arrow`（`RecordBatch`）；该字段仅供进程内 L0->L1 使用，不作为外部 API 稳定合同
+- `aggregate_greeks` 与 `ttm_seconds` 不再属于 L0 输出合同；若下游需要，必须由 L1 或 shared 中立服务产出
 - 当 ActiveOptions 在 `min_volume` 过滤后为空且链路仍有有效候选（如 `turnover/open_interest`）时，允许运行时使用 fallback candidates 继续输出真实行，避免长期全占位降级；该路径必须保留结构化日志与诊断计数。
 - ActiveOptions 行合同允许附加质量标记字段（向后兼容）：`row_quality`、`fallback_reason`、`is_synthetic_fallback`，用于区分真实可交易行与合成降级行。
 
@@ -140,6 +151,7 @@ Raw + Normalized 规则：
 ## 6. Boundary Rules
 
 - L0 不得依赖 L2/L3/L4。
+- L0 主路径不得依赖 `l1_compute` 运行时模块；跨层复用逻辑必须迁入 `shared/*` 中立模块。
 - L0 对外仅暴露稳定数据契约，不泄漏内部实现细节。
 
 ## 7. Observability

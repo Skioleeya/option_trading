@@ -10,7 +10,8 @@ import pytest
 
 from l1_compute.analysis.atm_decay import AtmDecayTracker as NewPathTracker
 from l1_compute.analysis.atm_decay import tracker as tracker_mod
-from l1_compute.analysis.atm_decay.anchor import select_opening_anchor
+from l1_compute.analysis.atm_decay import runtime as runtime_mod
+from l1_compute.analysis.atm_decay.anchor import build_anchor_leg_diagnostics, select_opening_anchor
 from l1_compute.analysis.atm_decay.storage import AtmDecayStorage
 from l1_compute.analysis.atm_decay_tracker import AtmDecayTracker as LegacyPathTracker
 
@@ -85,14 +86,26 @@ def _symbol(now: datetime, cp: str, strike: float) -> str:
     return f"SPY{now.strftime('%y%m%d')}{cp}{int(round(strike * 1000)):08d}.US"
 
 
-def _mk_opt(now: datetime, strike: float, cp: str, bid: float, ask: float) -> dict:
+def _mk_opt(now: datetime, strike: float, cp: str, bid: float, ask: float, last_price: float = 0.0) -> dict:
     return {
         "symbol": _symbol(now, cp, strike),
         "strike": strike,
         "option_type": "CALL" if cp == "C" else "PUT",
         "bid": bid,
         "ask": ask,
-        "last_price": 0.0,
+        "last_price": last_price,
+    }
+
+
+def _mk_anchor(now: datetime, strike: float) -> dict:
+    return {
+        "strike": strike,
+        "base_strike": strike,
+        "call_symbol": _symbol(now, "C", strike),
+        "put_symbol": _symbol(now, "P", strike),
+        "call_price": 1.0,
+        "put_price": 1.0,
+        "timestamp": now.isoformat(),
     }
 
 
@@ -130,6 +143,25 @@ async def test_storage_roundtrip_without_tracker():
     hist = await storage.get_history(date_str)
     assert len(hist) == 1
     assert hist[0]["strike"] == 672.0
+
+
+@pytest.mark.asyncio
+async def test_storage_get_latest_history_point_prefers_latest_row():
+    date_str = "20260306"
+    redis = FakeRedis()
+    storage = AtmDecayStorage(
+        redis_client=redis,
+        cold_dir=_mk_cold_dir(),
+        redis_key_tpl="app:opening_atm:{date}",
+        series_key_tpl="app:atm_decay_series:{date}",
+    )
+
+    await storage.append_series(date_str, {"timestamp": "2026-03-06T09:30:01-05:00", "strike": 672.0})
+    await storage.append_series(date_str, {"timestamp": "2026-03-06T09:30:02-05:00", "strike": 673.0})
+
+    latest = await storage.get_latest_history_point(date_str)
+    assert latest is not None
+    assert latest["strike"] == 673.0
 
 
 @pytest.mark.asyncio
@@ -226,6 +258,33 @@ def test_anchor_selection_without_io_dependencies():
     assert payload["base_strike"] == 672.0
 
 
+def test_anchor_leg_diagnostics_capture_exact_inputs():
+    now = datetime(2026, 3, 6, 10, 0, tzinfo=ET)
+    anchor = _mk_anchor(now, 672.0)
+    chain = [
+        _mk_opt(now, 672.0, "C", 1.9, 2.1, last_price=2.0),
+        {
+            "symbol": _symbol(now, "P", 672.0),
+            "strike": 672.0,
+            "option_type": "PUT",
+            "bid": 0.0,
+            "ask": 0.0,
+            "last_price": 0.0,
+        },
+    ]
+
+    diag = build_anchor_leg_diagnostics(anchor, chain)
+
+    assert diag is not None
+    assert diag["call_leg"]["bid"] == 1.9
+    assert diag["call_leg"]["ask"] == 2.1
+    assert diag["call_leg"]["last_price"] == 2.0
+    assert diag["put_leg"]["bid"] == 0.0
+    assert diag["put_leg"]["ask"] == 0.0
+    assert diag["put_leg"]["last_price"] == 0.0
+    assert "put_leg_non_positive" in diag["failure_reasons"]
+
+
 class NoneLogger:
     def info(self, *args, **kwargs):  # noqa: D401
         return None
@@ -249,6 +308,7 @@ async def test_deferred_restore_when_startup_spot_unavailable(monkeypatch):
             return fixed_now.astimezone(tz)
 
     monkeypatch.setattr(tracker_mod, "datetime", FixedDateTime)
+    monkeypatch.setattr(runtime_mod, "datetime", FixedDateTime)
 
     redis = FakeRedis()
     tracker = NewPathTracker(redis_client=redis, quote_ctx=None)
@@ -300,6 +360,7 @@ async def test_deferred_restore_ignores_none_spot_until_valid(monkeypatch):
             return fixed_now.astimezone(tz)
 
     monkeypatch.setattr(tracker_mod, "datetime", FixedDateTime)
+    monkeypatch.setattr(runtime_mod, "datetime", FixedDateTime)
 
     redis = FakeRedis()
     tracker = NewPathTracker(redis_client=redis, quote_ctx=None)
@@ -337,3 +398,131 @@ async def test_deferred_restore_ignores_none_spot_until_valid(monkeypatch):
     assert out_valid is not None
     assert tracker.anchor is not None
     assert tracker._pending_restore_anchor is None  # noqa: SLF001
+
+
+@pytest.mark.asyncio
+async def test_initialize_discards_flat_zero_restore_anchor(monkeypatch):
+    fixed_now = datetime(2026, 3, 9, 10, 15, tzinfo=ET)
+
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return fixed_now.replace(tzinfo=None)
+            return fixed_now.astimezone(tz)
+
+    monkeypatch.setattr(tracker_mod, "datetime", FixedDateTime)
+    monkeypatch.setattr(runtime_mod, "datetime", FixedDateTime)
+
+    redis = FakeRedis()
+    cold_dir = _mk_cold_dir()
+    tracker = NewPathTracker(redis_client=redis, quote_ctx=None)
+    tracker._storage = AtmDecayStorage(  # noqa: SLF001 - test-only deterministic storage root
+        redis_client=redis,
+        cold_dir=cold_dir,
+        redis_key_tpl="app:opening_atm:{date}",
+        series_key_tpl="app:atm_decay_series:{date}",
+    )
+
+    date_str = fixed_now.strftime("%Y%m%d")
+    anchor = _mk_anchor(fixed_now, 670.0)
+    await tracker._storage.save_anchor(date_str, anchor, ttl_seconds=600)  # noqa: SLF001
+    await tracker._storage.append_series(  # noqa: SLF001
+        date_str,
+        {
+            "timestamp": fixed_now.isoformat(),
+            "locked_at": "10:15:00",
+            "call_pct": 0.0,
+            "put_pct": 0.0,
+            "straddle_pct": 0.0,
+            "strike": 670.0,
+        },
+    )
+
+    await tracker.initialize(spot=670.1)
+
+    assert tracker.anchor is None
+    assert tracker._pending_restore_anchor is None  # noqa: SLF001
+
+
+@pytest.mark.asyncio
+async def test_deferred_restore_discards_flat_zero_anchor_when_spot_becomes_valid(monkeypatch):
+    fixed_now = datetime(2026, 3, 9, 10, 20, tzinfo=ET)
+
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return fixed_now.replace(tzinfo=None)
+            return fixed_now.astimezone(tz)
+
+    monkeypatch.setattr(tracker_mod, "datetime", FixedDateTime)
+    monkeypatch.setattr(runtime_mod, "datetime", FixedDateTime)
+
+    redis = FakeRedis()
+    cold_dir = _mk_cold_dir()
+    tracker = NewPathTracker(redis_client=redis, quote_ctx=None)
+    tracker._storage = AtmDecayStorage(  # noqa: SLF001 - test-only deterministic storage root
+        redis_client=redis,
+        cold_dir=cold_dir,
+        redis_key_tpl="app:opening_atm:{date}",
+        series_key_tpl="app:atm_decay_series:{date}",
+    )
+
+    date_str = fixed_now.strftime("%Y%m%d")
+    anchor = _mk_anchor(fixed_now, 670.0)
+    await tracker._storage.save_anchor(date_str, anchor, ttl_seconds=600)  # noqa: SLF001
+    await tracker._storage.append_series(  # noqa: SLF001
+        date_str,
+        {
+            "timestamp": fixed_now.isoformat(),
+            "locked_at": "10:20:00",
+            "call_pct": 0.0,
+            "put_pct": 0.0,
+            "straddle_pct": 0.0,
+            "strike": 670.0,
+        },
+    )
+
+    await tracker.initialize(spot=0.0)
+    assert tracker._pending_restore_anchor is None  # noqa: SLF001
+
+    chain = [
+        _mk_opt(fixed_now, 670.0, "C", 1.8, 2.0),
+        _mk_opt(fixed_now, 670.0, "P", 1.9, 2.1),
+    ]
+    out = await tracker.update(chain=chain, spot=670.1)
+
+    assert out is None
+    assert tracker.anchor is None
+    assert tracker._pending_restore_anchor is None  # noqa: SLF001
+
+
+@pytest.mark.asyncio
+async def test_storage_persists_anchor_diagnostics():
+    date_str = "20260306"
+    cold_dir = _mk_cold_dir()
+    redis = FakeRedis()
+    storage = AtmDecayStorage(
+        redis_client=redis,
+        cold_dir=cold_dir,
+        redis_key_tpl="app:opening_atm:{date}",
+        series_key_tpl="app:atm_decay_series:{date}",
+    )
+
+    diag = {
+        "strike": 672.0,
+        "call_symbol": "CALL",
+        "put_symbol": "PUT",
+        "call_leg": {"symbol": "CALL", "found": True, "bid": 1.9, "ask": 2.1, "last_price": 2.0, "mid_price": 2.0},
+        "put_leg": {"symbol": "PUT", "found": True, "bid": 0.0, "ask": 0.0, "last_price": 0.0, "mid_price": 0.0},
+        "failure_reasons": ["put_leg_non_positive"],
+    }
+
+    await storage.append_anchor_diagnostic(date_str, diag)
+
+    key = f"app:atm_anchor_diag:{date_str}"
+    assert key in redis.lists
+    assert len(redis.lists[key]) == 1
+    assert json.loads(redis.lists[key][0]) == diag
+    assert (cold_dir / f"atm_anchor_diag_{date_str}.jsonl").exists()

@@ -3,7 +3,7 @@
 import asyncio
 from dataclasses import dataclass
 
-from l0_ingest.feeds.option_chain_builder import OptionChainBuilder
+from l0_ingest.v2 import OptionChainBuilder
 from l2_decision.agents.agent_g import AgentG
 from shared.system.redis_service import RedisService
 from shared.system.historical_store import HistoricalStore

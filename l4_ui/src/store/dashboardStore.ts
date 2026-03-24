@@ -256,17 +256,7 @@ export const useDashboardStore = create<DashboardState>()(
                 const tradeDateKey = getPayloadTradeDateKey(merged)
                 let nextHistory = keepHistoryWithinTradeDate(state.atmHistory, tradeDateKey)
                 if (atm && !nextHistory.some((t) => t.timestamp === atm.timestamp)) {
-                    const last = nextHistory[nextHistory.length - 1]
-                    const isStatic = last &&
-                        Math.abs((last.call_pct || 0) - (atm.call_pct || 0)) < 1e-6 &&
-                        Math.abs((last.put_pct || 0) - (atm.put_pct || 0)) < 1e-6 &&
-                        Math.abs((last.straddle_pct || 0) - (atm.straddle_pct || 0)) < 1e-6
-
-                    if (isStatic) {
-                        nextHistory = [...nextHistory.slice(0, -1), atm]
-                    } else {
-                        nextHistory = [...nextHistory.slice(-MAX_ATM_HISTORY + 1), atm]
-                    }
+                    nextHistory = [...nextHistory.slice(-MAX_ATM_HISTORY + 1), atm]
                 }
 
                 return {
@@ -295,17 +285,7 @@ export const useDashboardStore = create<DashboardState>()(
                 const tradeDateKey = getPayloadTradeDateKey(merged)
                 let nextHistory = keepHistoryWithinTradeDate(state.atmHistory, tradeDateKey)
                 if (atm && !nextHistory.some((t) => t.timestamp === atm.timestamp)) {
-                    const last = nextHistory[nextHistory.length - 1]
-                    const isStatic = last &&
-                        Math.abs((last.call_pct || 0) - (atm.call_pct || 0)) < 1e-6 &&
-                        Math.abs((last.put_pct || 0) - (atm.put_pct || 0)) < 1e-6 &&
-                        Math.abs((last.straddle_pct || 0) - (atm.straddle_pct || 0)) < 1e-6
-
-                    if (isStatic) {
-                        nextHistory = [...nextHistory.slice(0, -1), atm]
-                    } else {
-                        nextHistory = [...nextHistory.slice(-MAX_ATM_HISTORY + 1), atm]
-                    }
+                    nextHistory = [...nextHistory.slice(-MAX_ATM_HISTORY + 1), atm]
                 }
 
                 return {

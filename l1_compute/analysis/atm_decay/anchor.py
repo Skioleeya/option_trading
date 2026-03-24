@@ -222,3 +222,66 @@ def calculate_raw_pct(anchor: dict[str, Any] | None, chain: list[dict[str, Any]]
     p_pct = (curr_p - anchor_p) / anchor_p if anchor_p > 0 else 0.0
     s_pct = (curr_s - anchor_s) / anchor_s if anchor_s > 0 else 0.0
     return c_pct, p_pct, s_pct
+
+
+def build_anchor_leg_diagnostics(
+    anchor: dict[str, Any] | None,
+    chain: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Capture the exact anchor-leg price inputs used for ATM decay computation."""
+    if not anchor:
+        return None
+
+    call_symbol = anchor.get("call_symbol")
+    put_symbol = anchor.get("put_symbol")
+    if not call_symbol or not put_symbol:
+        return None
+
+    call_leg = _build_leg_snapshot(chain, call_symbol)
+    put_leg = _build_leg_snapshot(chain, put_symbol)
+    failure_reasons = []
+    if call_leg["mid_price"] <= 0:
+        failure_reasons.append("call_leg_non_positive")
+    if put_leg["mid_price"] <= 0:
+        failure_reasons.append("put_leg_non_positive")
+
+    return {
+        "strike": anchor.get("strike"),
+        "base_strike": anchor.get("base_strike", anchor.get("strike")),
+        "locked_at": anchor.get("timestamp"),
+        "call_symbol": call_symbol,
+        "put_symbol": put_symbol,
+        "call_leg": call_leg,
+        "put_leg": put_leg,
+        "failure_reasons": failure_reasons,
+    }
+
+
+def _build_leg_snapshot(chain: list[dict[str, Any]], symbol: str) -> dict[str, Any]:
+    entry = next((opt for opt in chain if opt.get("symbol") == symbol), None)
+    if entry is None:
+        return {
+            "symbol": symbol,
+            "found": False,
+            "bid": None,
+            "ask": None,
+            "last_price": None,
+            "mid_price": 0.0,
+        }
+
+    raw_bid = entry.get("bid", 0.0)
+    raw_ask = entry.get("ask", 0.0)
+    raw_last = entry.get("last_price", 0.0)
+    bid = 0.0 if raw_bid is None else raw_bid
+    ask = 0.0 if raw_ask is None else raw_ask
+    last = 0.0 if raw_last is None else raw_last
+    return {
+        "symbol": symbol,
+        "found": True,
+        "strike": entry.get("strike"),
+        "option_type": entry.get("option_type", entry.get("type")),
+        "bid": raw_bid,
+        "ask": raw_ask,
+        "last_price": raw_last,
+        "mid_price": mid_price(bid, ask, last),
+    }

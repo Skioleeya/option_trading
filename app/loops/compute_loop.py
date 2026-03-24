@@ -478,11 +478,7 @@ async def _run_compute_tick_safe(
 ) -> tuple[int, int | None]:
     start = time.monotonic()
     try:
-        snapshot = await ctr.option_chain_builder.fetch_chain(
-            include_legacy_greeks=False,
-            caller_tag="compute_loop",
-            include_chain_arrow=True,
-        )
+        snapshot = await ctr.option_chain_builder.fetch_snapshot(include_chain_arrow=True)
         snapshot_time = time.monotonic() - start
         logger.info(
             f"[Debug] L0 Fetch: rust_active={snapshot.get('rust_active')} "

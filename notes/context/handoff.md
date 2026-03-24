@@ -1,16 +1,12 @@
-# Handoff (Index)
+﻿# Handoff (Index)
 
 ## Active Handoff
-- Path: notes/sessions/2026-03-19/modularize-reactor-vanna-20260319/handoff.md
-- Meta: notes/sessions/2026-03-19/modularize-reactor-vanna-20260319/meta.yaml
+- Path: notes/sessions/2026-03-24/l0-ingest-structure-governance/handoff.md
+- Meta: notes/sessions/2026-03-24/l0-ingest-structure-governance/meta.yaml
 
 ## Latest Outcome
-- Session: 2026-03-19/modularize-reactor-vanna-20260319
-- Summary: P0 coupling violation remediation complete. reactor.py 752→290 lines, vanna_flow_analyzer.py 613→155 lines. Created 6 new focused modules. 44/44 tests pass.
-
-## Prior Session (Unresolved Online Validation)
-- Session: 2026-03-19/active-options-volume-sanitize-20260319
-- Pending: Online active-options verification blocked by backend process launch restriction (requires separate environment)
+- Session: 2026-03-24/l0-ingest-structure-governance
+- Summary: Complete. Legacy flat `l0_ingest/feeds/*` has been removed, runtime code is reorganized under hierarchical `l0_ingest/v2/*` subpackages, V2 tests are green, and `powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict` passed.
 
 ## Next Session Bootstrap
 1. Read this file.

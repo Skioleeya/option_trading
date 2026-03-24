@@ -17,11 +17,11 @@
 ```mermaid
 flowchart LR
   subgraph L0["L0 Data Ingest"]
-    L0A[LongPort WS/REST]
-    L0B[Rust Ingest Gateway]
-    L0C[RustQuoteRuntime]
-    L0D[ChainStateStore]
-    L0E[IV/Tier2/Tier3 Pollers]
+    L0A[v2/source/runtime]
+    L0B[v2/normalize]
+    L0C[v2/state/runtime]
+    L0D[v2/services/*]
+    L0E[v2/projection/snapshot]
   end
 
   subgraph L1["L1 Local Computation"]
@@ -66,6 +66,11 @@ flowchart LR
   SHARED -. reusable contracts/services .-> L3
 ```
 
+L0 目录治理补充：
+
+- `l0_ingest/v2` 是 L0 唯一正式业务树；旧 `feeds` 平铺结构已退场。
+- L0 包内新增业务代码必须落入分层子包，禁止在 `l0_ingest/` 顶层或单一 `feeds/` 目录平铺堆放。
+
 ## 3. Hard Dependency Law
 
 只允许单向依赖: `L0 -> L1 -> L2 -> L3 -> L4`。
@@ -92,6 +97,7 @@ flowchart LR
 
 - `spot`
 - `chain`
+- `chain_arrow` (optional, in-process fast path only)
 - `version` (单调递增)
 - `as_of_utc` (L0 数据源时间)
 - `rust_active`

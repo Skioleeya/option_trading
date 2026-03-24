@@ -30,14 +30,10 @@ class _FakeBuilder:
     def __init__(self) -> None:
         self.fetch_calls = 0
 
-    async def fetch_chain(
-        self,
-        include_legacy_greeks: bool = False,
-        caller_tag: str = "unspecified",
-    ) -> dict[str, Any]:
-        del include_legacy_greeks, caller_tag
+    async def fetch_snapshot(self, *, include_chain_arrow: bool = False) -> dict[str, Any]:
+        del include_chain_arrow
         self.fetch_calls += 1
-        return {"chain": [], "spot": 0.0, "ttm_seconds": 0.0}
+        return {"chain": [], "spot": 0.0}
 
     def set_mandatory_symbols(self, symbols: set[str]) -> None:
         del symbols

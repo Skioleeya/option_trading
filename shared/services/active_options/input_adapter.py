@@ -192,10 +192,6 @@ def _resolve_atm_iv(*, l0_snapshot: Mapping[str, Any], l1_snapshot: Any) -> floa
     l1_atm_iv = _to_non_negative_float(getattr(l1_aggregates, "atm_iv", None))
     if l1_atm_iv > 0.0:
         return l1_atm_iv
-
-    l0_aggregate_greeks = l0_snapshot.get("aggregate_greeks")
-    if isinstance(l0_aggregate_greeks, Mapping):
-        return _to_non_negative_float(l0_aggregate_greeks.get("atm_iv"))
     return 0.0
 
 
@@ -203,9 +199,6 @@ def _resolve_ttm_seconds(*, l0_snapshot: Mapping[str, Any], l1_snapshot: Any) ->
     l1_ttm_seconds = _to_non_negative_float(getattr(l1_snapshot, "ttm_seconds", None))
     if l1_ttm_seconds > 0.0:
         return l1_ttm_seconds
-    l0_ttm_seconds = _to_non_negative_float(l0_snapshot.get("ttm_seconds"))
-    if l0_ttm_seconds > 0.0:
-        return l0_ttm_seconds
     return None
 
 

@@ -156,6 +156,39 @@ describe('DashboardStore', () => {
         expect(useDashboardStore.getState().atmHistory).toHaveLength(1)
     })
 
+    it('applyFullUpdate preserves a new ATM timepoint even when values are unchanged', () => {
+        const first = makePayload({
+            atm: {
+                strike: 560,
+                locked_at: '2026-01-01T09:30:00Z',
+                straddle_pct: 0.022,
+                call_pct: 0.011,
+                put_pct: 0.011,
+                timestamp: '2026-01-01T09:30:00Z',
+            },
+        })
+        const second = makePayload({
+            timestamp: '2026-01-01T09:30:05Z',
+            data_timestamp: '2026-01-01T09:30:05Z',
+            atm: {
+                strike: 560,
+                locked_at: '2026-01-01T09:30:00Z',
+                straddle_pct: 0.022,
+                call_pct: 0.011,
+                put_pct: 0.011,
+                timestamp: '2026-01-01T09:30:05Z',
+            },
+        })
+
+        useDashboardStore.getState().applyFullUpdate(first)
+        useDashboardStore.getState().applyFullUpdate(second)
+
+        const history = useDashboardStore.getState().atmHistory
+        expect(history).toHaveLength(2)
+        expect(history[0].timestamp).toBe('2026-01-01T09:30:00Z')
+        expect(history[1].timestamp).toBe('2026-01-01T09:30:05Z')
+    })
+
     it('appendAtmHistory accumulates unique ticks and deduplicates', () => {
         const tick1 = { strike: 560, locked_at: null, straddle_pct: 0.02, call_pct: 0.01, put_pct: 0.01, timestamp: 'T1' }
         const tick2 = { ...tick1, timestamp: 'T2' }

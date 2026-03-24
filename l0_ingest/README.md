@@ -6,42 +6,39 @@
 
 ```
 l0_ingest/
-├── feeds/                    # 核心生产管线
-│   ├── option_chain_builder.py  # 顶层编排（主入口，fetch_chain()）
-│   ├── market_data_gateway.py   # LongPort WS 连接管理（quote_ctx 单例）
-│   ├── feed_orchestrator.py     # 主动合约发现 + 订阅级联
-│   ├── subscription_manager.py  # WS subscriptions 生命周期
-│   ├── chain_state_store.py     # REST/WS 双写快照存储（价格字段优先级保护）
-│   ├── iv_baseline_sync.py      # IV 基线同步（REST → WS 降级，spot_at_sync TTL）
-│   ├── sanitization.py          # L0 清洗管线（无套利条件 + 报价时效 TTL）
-│   ├── rate_limiter.py          # Token Bucket + Semaphore + 冷却期一体限流器
-│   ├── tier2_poller.py          # Tier2 品种轮询（次 ATM 档位）
-│   ├── tier3_poller.py          # Tier3 品种轮询（深度 OTM / OI 精排）
-│   ├── longport_adapter.py      # WS 心跳检测 + 指数退避重连
-│   └── base_feed.py             # FeedBase 协议接口
+├── v2/                       # 唯一正式运行树
+│   ├── facade.py                # app 唯一入口，initialize/fetch_snapshot/shutdown
+│   ├── source/runtime/          # Quote runtime, LongPort gateway, OpenAPI bootstrap, limiter
+│   ├── normalize/               # WS/REST/SHM 标准化、事件桥接、清洗
+│   ├── state/runtime/           # ChainStateStore + LiveState
+│   ├── services/                # subscription/orchestration/sync/repair/pollers/runtime
+│   ├── projection/snapshot/     # snapshot payload + diagnostics projection
+│   └── contracts/               # facade 小型 contract / callback hooks
 ├── events/                   # 强类型事件 (CleanQuoteEvent, CleanDepthEvent…)
 ├── sanitize/                 # SanitizePipelineV2 + StatisticalBreaker
 ├── store/                    # MVCCChainStateStore（版本化快照隔离）
 ├── rate_governor/            # 4 层自适应限流（TokenBucket + SlidingWindow + CircuitBreaker + Priority）
 ├── quality/                  # DataQualityReport + QualityCollector
 ├── observability/            # OTel + Prometheus 桩（无依赖时 graceful fallback）
-└── tests/                    # pytest 套件
+└── tests/
+    ├── v2/                   # V2 runtime 回归
+    └── *.py                  # 其余中立/基础模块回归
 ```
 
 ## 快速使用
 
 ```python
-from l0_ingest.feeds.option_chain_builder import OptionChainBuilder
+from l0_ingest.v2 import OptionChainBuilder
 
 builder = OptionChainBuilder()
 await builder.initialize()           # 建立 WS 连接，启动限流器
-snapshot = await builder.fetch_chain()  # 返回 { "chain": [...], "spot": 685.0 }
+snapshot = await builder.fetch_snapshot()  # 返回 { "chain": [...], "spot": 685.0 }
 await builder.shutdown()
 ```
 
 ## 限流规格
 
-`rate_limiter.py` 使用 **SingletonRateLimiter**，全局唯一实例保证：
+`v2/source/runtime/rate_limiter.py` 使用统一 `APIRateLimiter`，全局唯一配置保证：
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
@@ -51,7 +48,7 @@ await builder.shutdown()
 
 OI 与 IV REST 源均受同一实例约束，防止并发爆发。
 
-## L0 清洗规则（`sanitization.py`）
+## L0 清洗规则（`v2/normalize/pipeline/sanitization.py`）
 
 | 规则 | 参数 | 说明 |
 |------|------|------|
@@ -60,7 +57,7 @@ OI 与 IV REST 源均受同一实例约束，防止并发爆发。
 | **Bid/Ask 合理性** | `bid > ask` | 倒挂报价丢弃 |
 | **OI 突变检测** | `delta > 5σ` | 极端 OI 跳变过滤 |
 
-## IV 降级链（`iv_baseline_sync.py`）
+## IV 降级链（`v2/services/sync/iv_baseline_sync.py`）
 
 ```
 WS 实时 IV（TTL 满足）
@@ -76,11 +73,11 @@ SABR 外推（L1 层接管）
 
 | 组件 | 说明 |
 |------|------|
-| `chain_state_store.py` | WS 价格字段保护：REST 仅补充，不覆盖 WS 实时价格 |
-| `iv_baseline_sync.py` | `spot_at_sync` 双 TTL 检验（有效 IV 时才更新基线 spot） |
-| `sanitization.py` | 无套利条件过滤 + 报价时效 TTL |
-| `rate_limiter.py` | Singleton Token Bucket，冷却后 token 受限（防爆发） |
-| `tier2_poller.py` | 次 ATM 档位定时补充，Tier3 深度 OTM 精排 |
+| `v2/state/runtime/chain_state_store.py` | WS 价格字段保护：REST 仅补充，不覆盖 WS 实时价格 |
+| `v2/services/sync/iv_baseline_sync.py` | `spot_at_sync` 双 TTL 检验（有效 IV 时才更新基线 spot） |
+| `v2/normalize/pipeline/sanitization.py` | 无套利条件过滤 + 报价时效 TTL |
+| `v2/source/runtime/rate_limiter.py` | Token Bucket + 并发 + cooldown 一体限流 |
+| `v2/services/pollers/*.py` | Tier2/Tier3 档位轮询 |
 
 ## 运行测试
 

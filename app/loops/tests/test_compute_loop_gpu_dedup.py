@@ -93,16 +93,10 @@ class _FakeBuilder:
         self._cursor = 0
         self._iv_cache: dict[str, float] = {}
         self._spot_at_sync: dict[str, float] = {}
-        self.fetch_args: list[tuple[bool, str]] = []
+        self.fetch_include_chain_arrow: list[bool] = []
 
-    async def fetch_chain(
-        self,
-        include_legacy_greeks: bool = False,
-        caller_tag: str = "unspecified",
-        include_chain_arrow: bool = False,
-    ) -> dict[str, Any]:
-        del include_chain_arrow
-        self.fetch_args.append((include_legacy_greeks, caller_tag))
+    async def fetch_snapshot(self, *, include_chain_arrow: bool = False) -> dict[str, Any]:
+        self.fetch_include_chain_arrow.append(include_chain_arrow)
         if self._cursor >= len(self._snapshots):
             raise asyncio.CancelledError()
         snapshot = self._snapshots[self._cursor]
@@ -153,8 +147,7 @@ async def test_compute_loop_skips_duplicate_snapshot_versions(monkeypatch: pytes
         await task
 
     assert ctr.l1_reactor.calls == 2
-    assert all(flag is False for flag, _ in ctr.option_chain_builder.fetch_args)
-    assert all(tag == "compute_loop" for _, tag in ctr.option_chain_builder.fetch_args)
+    assert all(ctr.option_chain_builder.fetch_include_chain_arrow)
     assert [audit.get("compute_id") for audit in ctr.l1_reactor.compute_audits] == [1, 2]
     assert [audit.get("snapshot_version") for audit in ctr.l1_reactor.compute_audits] == [101, 102]
     assert all(str(audit.get("gpu_task_id", "")).startswith("gpu-task-") for audit in ctr.l1_reactor.compute_audits)
@@ -183,6 +176,8 @@ async def test_compute_loop_prefers_chain_arrow_when_available(monkeypatch: pyte
         await task
 
     assert ctr.l1_reactor.calls == 1
+    assert ctr.option_chain_builder.fetch_include_chain_arrow
+    assert all(ctr.option_chain_builder.fetch_include_chain_arrow)
     assert ctr.l1_reactor.chain_inputs[0] is arrow_sentinel
     active_input_diag = state.get_diagnostics()["active_options_input"]
     assert active_input_diag["updates"] == 1

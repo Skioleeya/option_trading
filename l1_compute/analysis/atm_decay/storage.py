@@ -49,6 +49,9 @@ class AtmDecayStorage:
     def _series_cold_jsonl_path(self, date_str: str) -> Path:
         return self._cold_dir / f"atm_series_{date_str}.jsonl"
 
+    def _diagnostic_cold_jsonl_path(self, date_str: str) -> Path:
+        return self._cold_dir / f"atm_anchor_diag_{date_str}.jsonl"
+
     # Backward-compatible alias kept for external diagnostics/tests.
     def _series_cold_path(self, date_str: str) -> Path:
         return self._series_cold_json_path(date_str)
@@ -107,12 +110,33 @@ class AtmDecayStorage:
                 return [json.loads(r) for r in raw]
         return self._load_cold_series_points(date_str)
 
+    async def get_latest_history_point(self, date_str: str) -> dict[str, Any] | None:
+        if self._redis:
+            key = self._series_key_tpl.format(date=date_str)
+            raw = await self._redis.lrange(key, -1, -1)
+            if raw:
+                try:
+                    latest = json.loads(raw[0])
+                except Exception as exc:
+                    logger.error(f"[AtmDecayStorage] Failed decoding latest Redis history point: {exc}")
+                else:
+                    if isinstance(latest, dict):
+                        return latest
+
+        points = self._load_cold_series_points(date_str)
+        if not points:
+            return None
+        latest = points[-1]
+        return latest if isinstance(latest, dict) else None
+
     async def flush_series(self, date_str: str) -> None:
         if self._redis:
             await self._redis.delete(self._series_key_tpl.format(date=date_str))
+            await self._redis.delete(f"app:atm_anchor_diag:{date_str}")
         for cold_history_file in (
             self._series_cold_jsonl_path(date_str),
             self._series_cold_json_path(date_str),
+            self._diagnostic_cold_jsonl_path(date_str),
         ):
             if cold_history_file.exists():
                 try:
@@ -134,6 +158,17 @@ class AtmDecayStorage:
                 fh.write("\n")
         except Exception as exc:
             logger.error(f"[AtmDecayStorage] Cold JSONL append fail: {exc}")
+
+    async def append_anchor_diagnostic(self, date_str: str, data: dict[str, Any]) -> None:
+        payload = json.dumps(data)
+        if self._redis:
+            await self._redis.rpush(f"app:atm_anchor_diag:{date_str}", payload)
+        try:
+            with self._diagnostic_cold_jsonl_path(date_str).open("a", encoding="utf-8") as fh:
+                fh.write(payload)
+                fh.write("\n")
+        except Exception as exc:
+            logger.error(f"[AtmDecayStorage] Cold diagnostics append fail: {exc}")
 
     def _load_cold_series_points(self, date_str: str) -> list[dict[str, Any]]:
         """Load cold series, preferring JSONL and falling back to legacy JSON arrays."""
