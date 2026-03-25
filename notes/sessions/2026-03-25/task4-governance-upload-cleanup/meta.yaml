@@ -4,18 +4,40 @@ scope: "ops"
 owner: "Codex"
 timezone: "America/New_York"
 started_at_et: "2026-03-25 00:04:56 -04:00"
-updated_at_et: "2026-03-25 00:04:56 -04:00"
+updated_at_et: "2026-03-25 00:41:11 -04:00"
 parent_session: "2026-03-24/task3-atm-decay-after-hours-replay"
 
 branch: "chore/sync-all-local-changes-20260313"
 base_commit: "724efb3"
-head_commit: "724efb3"
+head_commit: "18e8f85"
 
-files_changed: []
-commands: []
-tests_passed: []
-tests_failed: []
+files_changed:
+  - "notes/sessions/2026-03-25/task4-governance-upload-cleanup/project_state.md"
+  - "notes/sessions/2026-03-25/task4-governance-upload-cleanup/open_tasks.md"
+  - "notes/sessions/2026-03-25/task4-governance-upload-cleanup/handoff.md"
+  - "notes/sessions/2026-03-25/task4-governance-upload-cleanup/meta.yaml"
+  - "notes/context/handoff.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId task4-governance-upload-cleanup -Title \"Task4 governance upload cleanup\" -Scope \"ops\" -Owner \"Codex\" -ParentSession \"2026-03-24/task3-atm-decay-after-hours-replay\" -Timezone \"America/New_York\" -UpdatePointer"
+  - "git add docs/SOP/L0_DATA_FEED.md docs/SOP/L1_LOCAL_COMPUTATION.md docs/SOP/L4_FRONTEND.md notes/context/project_state.md notes/context/open_tasks.md notes/context/handoff.md notes/sessions/2026-03-24/l0-governance-remediation-20260324 notes/sessions/2026-03-24/l0-l1-live-flow-validation-60s notes/sessions/2026-03-24/l0-live-penetration-test-20s notes/sessions/2026-03-24/l0-static-governance-audit-remediation notes/sessions/2026-03-24/task2-atm-decay-live-60s-validation notes/sessions/2026-03-24/task3-atm-decay-after-hours-replay notes/sessions/2026-03-25/task4-governance-upload-cleanup openspec/changes/refactor-dependency-20260324-atm-decay-after-hours-replay-path openspec/changes/refactor-dependency-20260324-l0-runtime-contract-single-source openspec/changes/refactor-governance-20260324-l0-runtime-dead-path-cleanup"
+  - "git commit -m \"docs: sync governance artifacts for 2026-03-24 sessions\""
+  - "git push origin chore/sync-all-local-changes-20260313"
+  - "git stash push --include-untracked -m \"pre-cleanup-runtime-wip-2026-03-25-003702\""
+  - "git restore --source=HEAD --worktree --staged l0_ingest l1_compute shared tmp/session_validation_diag"
+  - "Add-Content .git\\info\\exclude 'tmp/'"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "git push origin chore/sync-all-local-changes-20260313 -> pushed 18e8f85"
+  - "git stash list --max-count=1 -> stash@{0}: pre-cleanup-runtime-wip-2026-03-25-003702"
+  - "git status --short -> empty"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict -> Session validation passed."
+tests_failed:
+  - "git stash push --include-untracked -m \"pre-cleanup-runtime-wip-2026-03-25-003702\" -> exit code 1 because OS-owned tmp directories could not be removed, though the stash itself was created"
+  - "Remove-Item tmp runtime directories -> access denied"
 blockers: []
-notes: []
+notes:
+  - "Governance commit 18e8f85 was pushed before the task4 completion sync."
+  - "Remaining runtime edits are preserved in stash@{0}."
+  - "Local-only git noise suppression added in .git/info/exclude: tmp/."
 
 
