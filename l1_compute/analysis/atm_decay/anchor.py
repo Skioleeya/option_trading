@@ -51,6 +51,25 @@ def is_spot_stable_for_lock(samples: list[float]) -> tuple[bool, float | None]:
     return span <= SPOT_STABILITY_MAX_RANGE, span
 
 
+def summarize_opening_chain_inputs(
+    chain: list[dict[str, Any]],
+    now: datetime,
+) -> dict[str, int]:
+    """Summarize same-day opening capture inputs for forensic logs."""
+    today_ymd = now.strftime("%y%m%d")
+    zero_dte = [opt for opt in chain if parse_expiry(opt.get("symbol", "")) == today_ymd]
+    integer_strikes = {
+        float(opt["strike"])
+        for opt in zero_dte
+        if isinstance(opt.get("strike"), (int, float)) and is_integer_strike(float(opt["strike"]))
+    }
+    return {
+        "total_contracts": len(chain),
+        "zero_dte_contracts": len(zero_dte),
+        "integer_strikes": len(integer_strikes),
+    }
+
+
 def select_opening_anchor(
     chain: list[dict[str, Any]],
     spot: float,
@@ -64,7 +83,7 @@ def select_opening_anchor(
     today_ymd = now.strftime("%y%m%d")
     zero_dte = [opt for opt in chain if parse_expiry(opt.get("symbol", "")) == today_ymd]
     if not zero_dte:
-        logger.debug(f"[AtmDecay] No 0DTE contracts in chain ({len(chain)} total) for {today_ymd}")
+        logger.info(f"[AtmDecay] No 0DTE contracts in chain ({len(chain)} total) for {today_ymd}")
         return None
 
     strikes = sorted(
@@ -131,6 +150,17 @@ def select_opening_anchor(
 
     ranked = sorted(tradable, key=lambda kv: abs(kv[0] - float(spot)))[:MAX_CAPTURE_CANDIDATES]
     candidate, legs = ranked[0]
+
+    if abs(candidate - float(spot)) > MAX_SPOT_PARITY_STRIKE_GAP:
+        logger.warning(
+            "[AtmDecayTracker] Opening candidate %.2f is too far from spot %.2f (gap=%.2f max=%.2f). Waiting for ATM liquidity.",
+            float(candidate),
+            float(spot),
+            abs(candidate - float(spot)),
+            MAX_SPOT_PARITY_STRIKE_GAP,
+        )
+        return None
+
     return {
         "strike": candidate,
         "base_strike": candidate,

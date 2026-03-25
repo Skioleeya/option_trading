@@ -26,7 +26,7 @@
   - Owner: Codex
   - Definition of Done: During regular session startup with no valid restored anchor, the initial `fetch_chain()` snapshot produces an ATM anchor on the same trade date without waiting for the next day.
   - Done: Forced clean restart produced a fresh same-day anchor in Redis at `2026-03-24 11:32:26 ET` with no persisted carry-over.
-- [ ] P1: Verify first post-lock ATM decay sample persists after same-day startup lock
+- [ ] P1: Verify first post-lock ATM decay sample persists after same-day startup lock. SUPERSEDED-BY: `2026-03-25/atm-decay-anchor-recapture-repair-20260325`
   - Owner: Codex
   - Definition of Done: After same-day startup captures a fresh anchor, `app:atm_decay_series:{date}` and `/api/atm-decay/history` receive the first non-flat valid point and `/history` surfaces non-null `atm`.
   - Status Note: Startup path now performs `bootstrap lock -> immediate mandatory subscription refresh -> bounded one-shot repair -> unconditional decay recompute`, but fresh online restarts at `11:50 ET` and `11:55 ET` still produced same-day anchors with `series_len=0` and `atm=null`.

@@ -3,7 +3,10 @@ from __future__ import annotations
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from app.loops.compute_loop import _build_l1_extra_metadata, _normalize_source_timestamp_utc
+from app.loops.compute_metadata import (
+    _build_l1_extra_metadata,
+    _normalize_source_timestamp_utc,
+)
 
 
 def test_normalize_source_timestamp_prefers_as_of_utc():

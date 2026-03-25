@@ -38,6 +38,7 @@ from l1_compute.microstructure.bbo_v2 import BBOv2
 from l1_compute.microstructure.micro_signal_builder import MicroSignalBuilder
 from l1_compute.microstructure.vpin_v2 import VPINv2, VPINRegime
 from l1_compute.microstructure.vol_accel_v2 import VolAccelV2
+from l1_compute.observability.atm_iv_context import build_atm_iv_context
 from l1_compute.observability.l1_instrumentation import L1Instrumentation
 from l1_compute.output.enriched_snapshot import (
     AggregateGreeks as OutAggregateGreeks,
@@ -147,8 +148,6 @@ class L1ComputeReactor:
             sabr_enabled,
         )
 
-    # ── Public API ─────────────────────────────────────────────────────────────
-
     async def compute(
         self,
         chain_snapshot: Union[List[dict[str, Any]], pa.RecordBatch],
@@ -208,8 +207,6 @@ class L1ComputeReactor:
             self._vpin_map[symbol] = VPINv2()
         self._vpin_map[symbol].update(trades)
 
-    # ── Private synchronous pipeline ──────────────────────────────────────────
-
     def _compute_sync(
         self,
         chain_snapshot: Union[List[dict[str, Any]], pa.RecordBatch],
@@ -220,7 +217,7 @@ class L1ComputeReactor:
         extra_metadata: Optional[dict[str, Any]] = None,
     ) -> EnrichedSnapshot:
         """Full pipeline (runs in thread pool via asyncio.to_thread)."""
-        extra_metadata = extra_metadata or {}
+        extra_metadata = dict(extra_metadata or {})
         t_start = time.monotonic()
         now     = datetime.now(_ET)
 
@@ -326,8 +323,11 @@ class L1ComputeReactor:
         agg_ms = (time.monotonic() - t_agg) * 1000.0
 
         atm_iv = self._extract_atm_iv(strikes_arr[valid_mask], ivs_arr[valid_mask], spot)
+        extra_metadata["atm_iv_context"] = build_atm_iv_context(
+            spot=spot, symbols=symbols, strikes=strikes_arr,
+            resolved_ivs=resolved_ivs, valid_mask=valid_mask,
+        )
 
-        # Arrow output columns
         out_batch = rb.append_column("computed_iv",    pa.array(ivs_arr))
         out_batch = out_batch.append_column("computed_delta", pa.array(matrix.delta))
         out_batch = out_batch.append_column("computed_gamma", pa.array(matrix.gamma))
@@ -350,7 +350,6 @@ class L1ComputeReactor:
                 put_wall_gex=agg.put_wall_gex,
             )
 
-        # Step 7 — Quality report
         nan_count = int(np.sum(~np.isfinite(matrix.delta)))
         self._inst.record_contracts_computed(n_valid)
         self._inst.record_nan_count(nan_count)
@@ -417,8 +416,6 @@ class L1ComputeReactor:
             computed_at=now,
             extra_metadata=extra_metadata,
         )
-
-    # ── Static utilities ──────────────────────────────────────────────────────
 
     @staticmethod
     def _extract_atm_iv(

@@ -1,0 +1,35 @@
+﻿session_id: "2026-03-25/backend-restart-live-diagnostic-verify-20260325"
+title: "Backend restart live diagnostic verify"
+scope: "ops"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-25 09:12:10 -04:00"
+updated_at_et: "2026-03-25 09:15:03 -04:00"
+parent_session: "2026-03-25/snapshot-iv-drift-diagnostic-instrumentation-20260325"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "70cc81b"
+head_commit: "70cc81b"
+
+files_changed:
+  - "notes/sessions/2026-03-25/backend-restart-live-diagnostic-verify-20260325/project_state.md"
+  - "notes/sessions/2026-03-25/backend-restart-live-diagnostic-verify-20260325/open_tasks.md"
+  - "notes/sessions/2026-03-25/backend-restart-live-diagnostic-verify-20260325/handoff.md"
+  - "notes/sessions/2026-03-25/backend-restart-live-diagnostic-verify-20260325/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId backend-restart-live-diagnostic-verify-20260325 -Title \"Backend restart live diagnostic verify\" -Scope \"ops\" -Owner \"Codex\" -ParentSession \"2026-03-25/snapshot-iv-drift-diagnostic-instrumentation-20260325\" -Timezone \"America/New_York\" -UpdatePointer"
+  - "Stop-Process -Id 1548 -Force"
+  - "powershell -ExecutionPolicy Bypass -File scripts/ops/start_backend.ps1 -LogFile logs/backend_runtime.live_diag_verify_20260325.log"
+  - "Invoke-WebRequest http://127.0.0.1:8001/health -UseBasicParsing -TimeoutSec 4"
+  - "Invoke-WebRequest http://127.0.0.1:8001/debug/persistence_status -UseBasicParsing -TimeoutSec 6"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "http://127.0.0.1:8001/health -> 200"
+  - "http://127.0.0.1:8001/debug/persistence_status -> l1_runtime.atm_iv_context live and non-empty"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict -> Session validation passed."
+tests_failed: []
+blockers: []
+notes:
+  - "Frontend on 5173 and Redis on 6380 were intentionally preserved during the backend replacement."
+
+

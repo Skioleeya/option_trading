@@ -28,7 +28,7 @@ l0_ingest/
 ## 快速使用
 
 ```python
-from l0_ingest.v2 import OptionChainBuilder
+from shared.services.l0_runtime import OptionChainBuilder
 
 builder = OptionChainBuilder()
 await builder.initialize()           # 建立 WS 连接，启动限流器
@@ -84,3 +84,4 @@ SABR 外推（L1 层接管）
 ```bash
 python -m pytest l0_ingest/tests/ -v --tb=short
 ```
+

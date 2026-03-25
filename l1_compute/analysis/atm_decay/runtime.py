@@ -192,6 +192,8 @@ def invalidate_tracker(tracker: Any) -> None:
     tracker._warmup_ticks_remaining = 5  # noqa: SLF001 - runtime helper
     tracker._recent_spots.clear()  # noqa: SLF001 - runtime helper
     tracker._opening_tick_pending = False  # noqa: SLF001 - runtime helper
+    tracker._capture_failure_streak = 0  # noqa: SLF001 - runtime helper
+    tracker._raw_pct_failure_streak = 0  # noqa: SLF001 - runtime helper
     tracker.accumulated_factor = default_stitch_factor()
     tracker.accumulated_offset = factor_to_legacy_offset(tracker.accumulated_factor)
     tracker._pending_restore_anchor = None  # noqa: SLF001 - runtime helper
@@ -229,6 +231,8 @@ def reset_for_new_day(tracker: Any, today: str) -> None:
     tracker._strike_changed_flag = False  # noqa: SLF001 - runtime helper
     tracker._recent_spots.clear()  # noqa: SLF001 - runtime helper
     tracker._opening_tick_pending = False  # noqa: SLF001 - runtime helper
+    tracker._capture_failure_streak = 0  # noqa: SLF001 - runtime helper
+    tracker._raw_pct_failure_streak = 0  # noqa: SLF001 - runtime helper
     tracker.accumulated_factor = default_stitch_factor()
     tracker.accumulated_offset = factor_to_legacy_offset(tracker.accumulated_factor)
     tracker._pending_restore_anchor = None  # noqa: SLF001 - runtime helper
@@ -302,6 +306,7 @@ async def persist_anchor(tracker: Any, anchor: dict[str, Any]) -> None:
     anchor["accumulated_offset"] = factor_to_legacy_offset(anchor["accumulated_factor"])
     tracker.anchor = anchor
     tracker._opening_tick_pending = True  # noqa: SLF001 - runtime helper
+    tracker._capture_failure_streak = 0  # noqa: SLF001 - runtime helper
     tracker._today = datetime.fromisoformat(anchor["timestamp"]).strftime("%Y%m%d")  # noqa: SLF001
     await tracker._storage.save_anchor(tracker._today, anchor, settings.opening_atm_redis_ttl_seconds)  # noqa: SLF001
     logger.info(

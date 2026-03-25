@@ -17,8 +17,16 @@ from .anchor import (
     calculate_raw_pct,
     is_spot_stable_for_lock,
     record_spot_sample,
+    summarize_opening_chain_inputs,
 )
-from .models import ET, SPOT_STABILITY_MAX_RANGE, SPOT_STABILITY_MIN_SAMPLES, is_valid_spot
+from .models import (
+    CAPTURE_STALL_LOG_EVERY_FAILURES,
+    ET,
+    MAX_CONSECUTIVE_RAW_PCT_FAILURES,
+    SPOT_STABILITY_MAX_RANGE,
+    SPOT_STABILITY_MIN_SAMPLES,
+    is_valid_spot,
+)
 from .runtime import (
     capture_anchor,
     initialize_tracker,
@@ -64,6 +72,8 @@ class AtmDecayTracker:
         self._pending_restore_anchor: dict[str, Any] | None = None
         self._pending_restore_source: str | None = None
         self._opening_tick_pending: bool = False
+        self._capture_failure_streak: int = 0
+        self._raw_pct_failure_streak: int = 0
         self.is_initialized = False
 
     @property
@@ -122,12 +132,31 @@ class AtmDecayTracker:
     async def pre_fill_history(self) -> None:
         logger.info("[AtmDecayTracker] pre_fill_history skipped (API limitation).")
 
+    def _note_capture_failure(self, chain: list[dict[str, Any]], spot: float, now: datetime, context: str) -> None:
+        self._capture_failure_streak += 1
+        if self._capture_failure_streak % CAPTURE_STALL_LOG_EVERY_FAILURES != 0:
+            return
+        summary = summarize_opening_chain_inputs(chain, now)
+        logger.warning(
+            "[AtmDecayTracker] capture stall: failures=%d context=%s spot=%.2f chain=%d zero_dte=%d integer_strikes=%d",
+            self._capture_failure_streak,
+            context,
+            spot,
+            summary["total_contracts"],
+            summary["zero_dte_contracts"],
+            summary["integer_strikes"],
+        )
+
     async def update(self, chain: list[dict[str, Any]], spot: Any) -> dict[str, Any] | None:
         if not self.is_initialized:
+            logger.debug("[AtmDecayTracker] update skipped: not initialized")
             return None
 
         now = datetime.now(ET)
         today = now.strftime("%Y%m%d")
+        
+        logger.debug("[AtmDecayTracker] update tick: spot=%s chain_size=%s anchor=%s", spot, len(chain), "YES" if self.anchor else "NO")
+
         if today != self._today:
             self._reset_for_new_day(today)
 
@@ -161,6 +190,8 @@ class AtmDecayTracker:
                     )
                 else:
                     await self._capture_anchor(chain, spot_f, now)
+                    if not self.anchor:
+                        self._note_capture_failure(chain, spot_f, now, "update")
 
         if not self.anchor:
             return None
@@ -178,7 +209,7 @@ class AtmDecayTracker:
         return self._calculate_decay(chain)
 
     async def bootstrap_intraday_anchor(self, chain: list[dict[str, Any]], spot: Any) -> dict[str, Any] | None:
-        if not self.is_initialized or self.anchor or self._pending_restore_anchor is not None:
+        if not self.is_initialized or self.anchor:
             return None
 
         now = datetime.now(ET)
@@ -191,8 +222,26 @@ class AtmDecayTracker:
         if not is_valid_spot(spot_f):
             return None
 
+        had_pending_restore = self._pending_restore_anchor is not None
+        if had_pending_restore:
+            await self._try_restore_pending_anchor(spot_f)
+            if self.anchor:
+                logger.info(
+                    "[AtmDecayTracker] Intraday startup bootstrap satisfied by deferred restore: strike=%s spot=%.2f",
+                    self.anchor["strike"],
+                    spot_f,
+                )
+                return self._calculate_decay(chain)
+            if self._pending_restore_anchor is None:
+                logger.info(
+                    "[AtmDecayTracker] Deferred startup anchor was discarded; continuing with fresh intraday capture "
+                    "using spot=%.2f",
+                    spot_f,
+                )
+
         await self._capture_anchor(chain, spot_f, now)
         if not self.anchor:
+            self._note_capture_failure(chain, spot_f, now, "startup_bootstrap")
             return None
 
         logger.info(
@@ -217,9 +266,29 @@ class AtmDecayTracker:
                 diagnostic["timestamp"] = datetime.now(ET).isoformat()
                 logger.warning("[AtmDecay] decay compute skipped; anchor-leg diagnostics=%s", diagnostic)
                 asyncio.ensure_future(self._storage.append_anchor_diagnostic(self._today, diagnostic))
+            self._raw_pct_failure_streak += 1
+            if (
+                self.anchor
+                and self._raw_pct_failure_streak >= MAX_CONSECUTIVE_RAW_PCT_FAILURES
+            ):
+                strike = self.anchor.get("strike")
+                failures = self._raw_pct_failure_streak
+                logger.warning(
+                    "[AtmDecayTracker] Consecutive raw-pct failures hit threshold=%s for strike=%s; "
+                    "invalidating anchor and forcing re-capture.",
+                    MAX_CONSECUTIVE_RAW_PCT_FAILURES,
+                    strike,
+                )
+                self.invalidate_anchor()
+                asyncio.ensure_future(self._storage.delete_anchor(self._today))
+                logger.info(
+                    "[AtmDecayTracker] Persisted anchor cleared after %s consecutive raw-pct failures.",
+                    failures,
+                )
             return None
 
         c_raw, p_raw, s_raw = raw_pcts
+        self._raw_pct_failure_streak = 0
         factors = self.accumulated_factor
         c_pct = stitch_with_factor(c_raw, factors.get("c", 1.0))
         p_pct = stitch_with_factor(p_raw, factors.get("p", 1.0))

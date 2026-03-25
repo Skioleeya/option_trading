@@ -1,0 +1,187 @@
+﻿{
+    "timestamp":  "2026-03-25T13:43:25.578373",
+    "quote_hub":  {
+                      "active":  true,
+                      "ready_event_set":  true
+                  },
+    "l1_runtime":  {
+                       "version":  1773,
+                       "computed_at":  "2026-03-25T13:42:53.419218-04:00",
+                       "atm_iv_context":  {
+                                              "atm_symbol":  "SPY260325C658000.US",
+                                              "atm_strike":  658.0,
+                                              "atm_distance":  0.44,
+                                              "atm_iv":  0.118271,
+                                              "raw_iv":  0.119,
+                                              "iv_source":  "rest",
+                                              "iv_confidence":  0.8,
+                                              "spot":  658.44
+                                          },
+                       "iv_resolution":  {
+                                             "ws":  0,
+                                             "rest":  7094,
+                                             "chain":  0,
+                                             "sabr":  0,
+                                             "missing":  59
+                                         }
+                   },
+    "agent_runner":  {
+                         "running":  true,
+                         "stats":  {
+                                       "total_computations":  73,
+                                       "failed_computations":  0,
+                                       "success_rate":  100.0,
+                                       "last_update_age_seconds":  32.11000000000058,
+                                       "is_running":  true,
+                                       "snapshot_version_iv_probe":  {
+                                                                         "confirm_ticks":  3,
+                                                                         "epsilon":  1E-06,
+                                                                         "activate_lag_seconds":  90.0,
+                                                                         "ongoing_log_interval_seconds":  30.0,
+                                                                         "last_version":  1773,
+                                                                         "last_spy_atm_iv":  0.11827113701817264,
+                                                                         "last_atm_symbol":  "SPY260325C658000.US",
+                                                                         "last_iv_source":  "rest",
+                                                                         "consecutive_drift_ticks":  0,
+                                                                         "mismatch_count":  0,
+                                                                         "drift_active":  false,
+                                                                         "current_lag_seconds":  0.0,
+                                                                         "last_completed_lag_seconds":  0.0,
+                                                                         "degraded_reason":  null,
+                                                                         "suppressed_reason":  "non_reactive_iv_source:rest"
+                                                                     },
+                                       "active_options_input":  {
+                                                                    "updates":  73,
+                                                                    "age_seconds":  32.15699999999924,
+                                                                    "valid":  true,
+                                                                    "chain_size":  100,
+                                                                    "source_version":  1773,
+                                                                    "source_timestamp_utc":  "2026-03-25T17:42:53.418705+00:00",
+                                                                    "invalid_reason":  null
+                                                                },
+                                       "gpu_compute_audit":  {
+                                                                 "compute_ticks_seen":  1319,
+                                                                 "duplicate_snapshot_skips":  1246,
+                                                                 "l1_compute_runs":  73,
+                                                                 "last_snapshot_version":  1773,
+                                                                 "last_compute_id":  73,
+                                                                 "last_gpu_task_id":  "gpu-task-1773-73"
+                                                             }
+                                   },
+                         "last_update_age_seconds":  32.11000000000058
+                     },
+    "active_options_input":  {
+                                 "updates":  73,
+                                 "age_seconds":  32.15699999999924,
+                                 "valid":  true,
+                                 "chain_size":  100,
+                                 "source_version":  1773,
+                                 "source_timestamp_utc":  "2026-03-25T17:42:53.418705+00:00",
+                                 "invalid_reason":  null
+                             },
+    "l3_layer":  {
+                     "l3_reactor":  {
+                                        "total_ticks":  73,
+                                        "failed_ticks":  0,
+                                        "success_rate":  100.0,
+                                        "delta_ratio":  "96.7%"
+                                    },
+                     "l3_store":  {
+                                      "hot_size":  73,
+                                      "total_writes":  73,
+                                      "warm_writes":  0,
+                                      "warm_failures":  0,
+                                      "redis_connected":  false
+                                  },
+                     "research_store":  {
+                                            "root":  "data\\research",
+                                            "pending_labels":  73,
+                                            "export_jobs":  0,
+                                            "raw_retention_days":  7,
+                                            "feature_retention_days":  90,
+                                            "label_retention_days":  365
+                                        }
+                 },
+    "active_options":  {
+                           "rows_total":  5,
+                           "rows_placeholder":  0,
+                           "rows_real":  5,
+                           "rows_real_non_synthetic":  5,
+                           "rows_synthetic_fallback":  0,
+                           "degraded_rows":  0,
+                           "live_rows":  5,
+                           "missing_gamma_rows":  0,
+                           "missing_turnover_rows":  0,
+                           "all_placeholder":  false,
+                           "empty_filter_count":  1,
+                           "last_empty_filter_at_utc":  "2026-03-25T17:21:27.419059+00:00",
+                           "empty_filter_fallback_count":  0,
+                           "last_empty_filter_fallback_at_utc":  null,
+                           "engine_empty_output_fallback_count":  0,
+                           "last_engine_empty_output_fallback_at_utc":  null,
+                           "last_fallback_mode":  null,
+                           "last_update_at_utc":  "2026-03-25T17:42:54.407610+00:00",
+                           "min_volume_threshold":  100,
+                           "empty_filter_fallback_enabled":  true,
+                           "empty_filter_fallback_max_candidates":  120
+                       },
+    "redis":  {
+                  "connected":  true,
+                  "managed_process":  false,
+                  "host":  "127.0.0.1",
+                  "port":  6380
+              },
+    "stores":  {
+                   "initialized":  true,
+                   "gateway":  {
+                                   "connected":  true,
+                                   "rust_started":  true,
+                                   "tracked_symbols":  100,
+                                   "endpoint_profile":  "primary",
+                                   "endpoint_http_url":  "https://openapi.longportapp.com",
+                                   "failover_count":  0,
+                                   "last_failover_error":  null,
+                                   "last_failover_at_utc":  null
+                               },
+                   "store":  {
+                                 "chain_size":  102,
+                                 "version":  1773,
+                                 "spot":  658.44,
+                                 "last_spot_update":  "2026-03-25T13:42:41.970200-04:00",
+                                 "volume_map_size":  160,
+                                 "oi_smooth_entries":  401,
+                                 "ws_price_seen":  32,
+                                 "ws_volume_seen":  16,
+                                 "ws_current_volume_seen":  0,
+                                 "ws_turnover_seen":  17,
+                                 "ws_volume_dropped":  0,
+                                 "ws_current_volume_dropped":  18
+                             },
+                   "governor":  {
+                                    "limiter_profile":  "steady",
+                                    "cooldown_active":  false,
+                                    "cooldown_hits_5m":  0,
+                                    "pending_warmup_symbols":  0
+                                },
+                   "subscription_metadata_cache":  {
+                                                       "hit_rate":  0.043478260869565216,
+                                                       "hits":  3,
+                                                       "misses":  66,
+                                                       "entries":  3,
+                                                       "ttl_sec":  30.0,
+                                                       "weight":  5
+                                                   },
+                   "chain_size":  102,
+                   "version":  1773,
+                   "spot":  658.44,
+                   "last_spot_update":  "2026-03-25T13:42:41.970200-04:00",
+                   "volume_map_size":  160,
+                   "oi_smooth_entries":  401,
+                   "ws_price_seen":  32,
+                   "ws_volume_seen":  16,
+                   "ws_current_volume_seen":  0,
+                   "ws_turnover_seen":  17,
+                   "ws_volume_dropped":  0,
+                   "ws_current_volume_dropped":  18
+               }
+}

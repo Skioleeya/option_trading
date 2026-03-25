@@ -462,6 +462,41 @@ async def test_bootstrap_intraday_anchor_locks_same_day_without_waiting(monkeypa
 
 
 @pytest.mark.asyncio
+async def test_bootstrap_intraday_anchor_recaptures_after_pending_restore_distance_discard(monkeypatch):
+    monkeypatch.setattr(tracker_mod.settings, "opening_atm_cold_storage_root", str(_mk_cold_dir()))
+
+    fixed_now = datetime(2026, 3, 25, 10, 44, 10, tzinfo=ET)
+
+    class _FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return fixed_now
+            return fixed_now.astimezone(tz)
+
+    monkeypatch.setattr(tracker_mod, "datetime", _FixedDateTime)
+
+    tracker = AtmDecayTracker(redis_client=None, quote_ctx=None)
+    tracker.is_initialized = True
+    tracker._pending_restore_anchor = _mk_anchor(fixed_now, 662.0)
+    tracker._pending_restore_source = "cold_json"
+
+    chain = [
+        _mk_opt(fixed_now, 659.0, "C", 1.9, 2.1),
+        _mk_opt(fixed_now, 659.0, "P", 1.8, 2.0),
+        _mk_opt(fixed_now, 660.0, "C", 1.2, 1.4),
+        _mk_opt(fixed_now, 660.0, "P", 1.0, 1.2),
+    ]
+
+    out = await tracker.bootstrap_intraday_anchor(chain, spot=658.6)
+
+    assert tracker._pending_restore_anchor is None  # noqa: SLF001
+    assert tracker.anchor is not None
+    assert tracker.anchor["strike"] == 659.0
+    assert out is None
+
+
+@pytest.mark.asyncio
 async def test_compute_current_decay_returns_first_valid_point_after_startup_repair(monkeypatch):
     monkeypatch.setattr(tracker_mod.settings, "opening_atm_cold_storage_root", str(_mk_cold_dir()))
 
@@ -491,3 +526,48 @@ async def test_compute_current_decay_returns_first_valid_point_after_startup_rep
     assert out is not None
     assert out["strike"] == 659.0
     assert tracker._prev_pcts is not None
+
+
+@pytest.mark.asyncio
+async def test_update_logs_capture_stall_warning_after_threshold(monkeypatch, caplog):
+    monkeypatch.setattr(tracker_mod.settings, "opening_atm_cold_storage_root", str(_mk_cold_dir()))
+
+    fixed_now = datetime(2026, 3, 25, 11, 15, 0, tzinfo=ET)
+
+    class _FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return fixed_now
+            return fixed_now.astimezone(tz)
+
+    monkeypatch.setattr(tracker_mod, "datetime", _FixedDateTime)
+
+    tracker = AtmDecayTracker(redis_client=None, quote_ctx=None)
+    tracker.is_initialized = True
+    tracker._warmup_ticks_remaining = 0
+    tracker._recent_spots = [661.0, 661.0, 661.0]
+    tracker._capture_failure_streak = tracker_mod.CAPTURE_STALL_LOG_EVERY_FAILURES - 1
+
+    failing_chain = [_mk_opt(fixed_now, 661.0, "C", 1.1, 1.3)]
+
+    with caplog.at_level("INFO"):
+        out = await tracker.update(failing_chain, spot=661.0)
+
+    assert out is None
+    assert tracker.anchor is None
+    assert tracker._capture_failure_streak == tracker_mod.CAPTURE_STALL_LOG_EVERY_FAILURES
+    assert "capture stall" in caplog.text
+    assert "context=update" in caplog.text
+    assert "zero_dte=1" in caplog.text
+    assert "integer_strikes=1" in caplog.text
+
+    valid_chain = [
+        _mk_opt(fixed_now, 661.0, "C", 1.1, 1.3),
+        _mk_opt(fixed_now, 661.0, "P", 1.0, 1.2),
+    ]
+    await tracker.update(valid_chain, spot=661.0)
+
+    assert tracker.anchor is not None
+    assert tracker.anchor["strike"] == 661.0
+    assert tracker._capture_failure_streak == 0

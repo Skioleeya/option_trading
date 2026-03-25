@@ -9,6 +9,8 @@ from typing import Any
 
 from redis.asyncio import Redis
 
+from .series_sanitizer import SanitizedSeriesResult, sanitize_series_points
+
 logger = logging.getLogger(__name__)
 
 
@@ -79,14 +81,30 @@ class AtmDecayStorage:
         except Exception as exc:
             logger.error(f"[AtmDecayStorage] Cold JSON write failed: {exc}")
 
+    async def delete_anchor(self, date_str: str) -> None:
+        if self._redis:
+            await self._redis.delete(self._redis_key_tpl.format(date=date_str))
+        anchor_path = self._anchor_cold_path(date_str)
+        if anchor_path.exists():
+            try:
+                anchor_path.unlink()
+            except Exception as exc:
+                logger.error(f"[AtmDecayStorage] Failed deleting cold anchor: {exc}")
+
     async def recover_series_from_cold_if_needed(self, date_str: str, ttl_seconds: int) -> None:
         if not self._redis:
             return
 
         try:
-            history_points = self._load_cold_series_points(date_str)
-            if not history_points:
+            history_points = self._sanitize_series(
+                date_str,
+                self._load_cold_series_points(date_str),
+                source="cold_restore",
+            )
+            if not history_points.points:
                 return
+            if history_points.dropped_total > 0:
+                self._rewrite_cold_series_jsonl(date_str, history_points.points)
 
             series_key = self._series_key_tpl.format(date=date_str)
             current_len = await self._redis.llen(series_key)
@@ -94,11 +112,14 @@ class AtmDecayStorage:
                 return
 
             pipe = self._redis.pipeline()
-            for point in history_points:
+            for point in history_points.points:
                 pipe.rpush(series_key, json.dumps(point))
             pipe.expire(series_key, ttl_seconds)
             await pipe.execute()
-            logger.info(f"[AtmDecayStorage] Recovered {len(history_points)} cold tracking points into Redis.")
+            logger.info(
+                "[AtmDecayStorage] Recovered %s cold tracking points into Redis.",
+                len(history_points.points),
+            )
         except Exception as exc:
             logger.error(f"[AtmDecayStorage] Cold series restore failed: {exc}")
 
@@ -107,26 +128,45 @@ class AtmDecayStorage:
             key = self._series_key_tpl.format(date=date_str)
             raw = await self._redis.lrange(key, 0, -1)
             if raw:
-                return [json.loads(r) for r in raw]
-        return self._load_cold_series_points(date_str)
+                result = self._sanitize_series(
+                    date_str,
+                    [json.loads(r) for r in raw],
+                    source="redis_history",
+                )
+                return result.points
+        result = self._sanitize_series(
+            date_str,
+            self._load_cold_series_points(date_str),
+            source="cold_history",
+        )
+        return result.points
 
     async def get_latest_history_point(self, date_str: str) -> dict[str, Any] | None:
         if self._redis:
             key = self._series_key_tpl.format(date=date_str)
-            raw = await self._redis.lrange(key, -1, -1)
+            raw = await self._redis.lrange(key, 0, -1)
             if raw:
                 try:
-                    latest = json.loads(raw[0])
+                    points = [json.loads(entry) for entry in raw]
                 except Exception as exc:
                     logger.error(f"[AtmDecayStorage] Failed decoding latest Redis history point: {exc}")
                 else:
-                    if isinstance(latest, dict):
-                        return latest
+                    sanitized = self._sanitize_series(
+                        date_str,
+                        points,
+                        source="redis_latest_history",
+                    )
+                    if sanitized.points:
+                        return sanitized.points[-1]
 
-        points = self._load_cold_series_points(date_str)
-        if not points:
+        sanitized = self._sanitize_series(
+            date_str,
+            self._load_cold_series_points(date_str),
+            source="cold_latest_history",
+        )
+        if not sanitized.points:
             return None
-        latest = points[-1]
+        latest = sanitized.points[-1]
         return latest if isinstance(latest, dict) else None
 
     async def flush_series(self, date_str: str) -> None:
@@ -145,7 +185,10 @@ class AtmDecayStorage:
                     logger.error(f"[AtmDecayStorage] Failed to flush cold series history: {exc}")
 
     async def append_series(self, date_str: str, data: dict[str, Any]) -> None:
-        payload = json.dumps(data)
+        sanitized = self._sanitize_series(date_str, [data], source="append_series")
+        if not sanitized.points:
+            return
+        payload = json.dumps(sanitized.points[0])
         if self._redis:
             key = self._series_key_tpl.format(date=date_str)
             await self._redis.rpush(key, payload)
@@ -227,3 +270,37 @@ class AtmDecayStorage:
             logger.info("[AtmDecayStorage] Migrated legacy cold JSON series to JSONL: %s", jsonl_path.name)
         except Exception as exc:
             logger.error(f"[AtmDecayStorage] Failed migrating legacy JSON series to JSONL: {exc}")
+
+    def _sanitize_series(
+        self,
+        date_str: str,
+        points: list[dict[str, Any]],
+        *,
+        source: str,
+    ) -> SanitizedSeriesResult:
+        result = sanitize_series_points(points, date_str=date_str)
+        if result.dropped_total > 0:
+            logger.warning(
+                "[AtmDecayStorage] Sanitized %s: date=%s input=%s kept=%s "
+                "dropped_invalid=%s dropped_wrong_date=%s dropped_future=%s dropped_duplicate=%s",
+                source,
+                date_str,
+                result.input_count,
+                len(result.points),
+                result.dropped_invalid,
+                result.dropped_wrong_date,
+                result.dropped_future,
+                result.dropped_duplicate,
+            )
+        return result
+
+    def _rewrite_cold_series_jsonl(self, date_str: str, points: list[dict[str, Any]]) -> None:
+        path = self._series_cold_jsonl_path(date_str)
+        try:
+            with path.open("w", encoding="utf-8") as fh:
+                for point in points:
+                    fh.write(json.dumps(point))
+                    fh.write("\n")
+            logger.info("[AtmDecayStorage] Rewrote sanitized cold JSONL series: %s", path.name)
+        except Exception as exc:
+            logger.error(f"[AtmDecayStorage] Failed rewriting sanitized JSONL series: {exc}")

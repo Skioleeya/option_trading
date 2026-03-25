@@ -1,22 +1,28 @@
 """Main data fetching and computation loop."""
 
+from __future__ import annotations
+
 import asyncio
 import logging
-import math
 import time
-from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
+from app.loops.atm_live_payload import build_duplicate_snapshot_atm_refresh
+from app.loops.compute_metadata import _build_l1_extra_metadata
+from app.loops.compute_probe import (
+    _SnapshotVersionIvDriftProbe,
+    _extract_runtime_atm_iv_context,
+    _extract_runtime_spy_atm_iv,
+    _extract_snapshot_version,
+    _get_iv_sync_context,
+)
+from app.loops.shared_state import ActiveOptionsInputSnapshot, SharedLoopState
 from shared.config import settings
 from shared.services.active_options.input_adapter import (
     ActiveOptionsInputSnapshotData,
     build_active_options_input_snapshot,
 )
-from app.loops.shared_state import ActiveOptionsInputSnapshot, SharedLoopState
 
-# Only for type hints
-from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from app.container import AppContainer
 
@@ -25,66 +31,6 @@ logger = logging.getLogger(__name__)
 L2_AUDIT_FLUSH_EVERY_TICKS = 60
 LOOP_OVERRUN_SLEEP_SECONDS = 0.01
 ACTIVE_OPTIONS_DEFAULT_GEX_REGIME = "NEUTRAL"
-
-
-def _coerce_utc_datetime(raw: Any) -> datetime | None:
-    if isinstance(raw, datetime):
-        dt = raw
-    elif isinstance(raw, str):
-        text = raw.strip()
-        if not text:
-            return None
-        if text.endswith("Z"):
-            text = f"{text[:-1]}+00:00"
-        try:
-            dt = datetime.fromisoformat(text)
-        except ValueError:
-            return None
-    else:
-        return None
-
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
-
-
-def _normalize_volume_map(raw: Any) -> dict[str, float]:
-    """Normalize volume_map into a JSON-safe strike->volume dict."""
-    if not isinstance(raw, dict):
-        return {}
-
-    out: dict[str, float] = {}
-    for strike, volume in raw.items():
-        try:
-            strike_f = float(strike)
-            volume_f = float(volume)
-        except (TypeError, ValueError):
-            continue
-        if strike_f <= 0 or volume_f < 0:
-            continue
-        out[str(strike)] = volume_f
-    return out
-
-
-def _normalize_source_timestamp_utc(snapshot: dict[str, Any]) -> str | None:
-    """Normalize L0 source timestamp to UTC ISO8601."""
-    raw = snapshot.get("as_of_utc")
-    if raw is None:
-        raw = snapshot.get("as_of")
-    dt = _coerce_utc_datetime(raw)
-    if dt is None:
-        return None
-    return dt.isoformat()
-
-
-def _to_non_negative_float(raw: Any) -> float:
-    try:
-        value = float(raw)
-    except (TypeError, ValueError):
-        return 0.0
-    if not math.isfinite(value) or value < 0.0:
-        return 0.0
-    return value
 
 
 def _to_shared_active_options_input(
@@ -123,166 +69,10 @@ def _select_l1_chain_input(snapshot: dict[str, Any]) -> Any:
     return snapshot.get("chain", [])
 
 
-def _build_l1_extra_metadata(
-    snapshot: dict[str, Any],
-    compute_audit: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    """Build the L0->L1 metadata pass-through contract."""
-    metadata = {
-        "rust_active": snapshot.get("rust_active", False),
-        "shm_stats": snapshot.get("shm_stats"),
-        "volume_map": _normalize_volume_map(snapshot.get("volume_map")),
-        "source_data_timestamp_utc": _normalize_source_timestamp_utc(snapshot),
-        "longport_option_diagnostics": _build_longport_option_diagnostics(snapshot),
-    }
-    if compute_audit:
-        metadata["compute_audit"] = dict(compute_audit)
-    return metadata
-
-
-def _build_longport_option_diagnostics(snapshot: dict[str, Any]) -> dict[str, float | int | str | None]:
-    """Summarize official LongPort premium/standard diagnostics from Tier2/Tier3 caches."""
-    diag: dict[str, float | int | str | None] = {
-        "tier2_contracts": _count_rows(snapshot.get("tier2_chain")),
-        "tier3_contracts": _count_rows(snapshot.get("tier3_chain")),
-        "tier2_standard_ratio": _standard_ratio(snapshot.get("tier2_chain")),
-        "tier3_standard_ratio": _standard_ratio(snapshot.get("tier3_chain")),
-        "tier2_avg_premium": _average_numeric(snapshot.get("tier2_chain"), "premium"),
-        "tier3_avg_premium": _average_numeric(snapshot.get("tier3_chain"), "premium"),
-    }
-    official = snapshot.get("official_hv_diagnostics")
-    official_hv_decimal: float | None = None
-    official_hv_sample_count = 0
-    official_hv_synced_at_utc: str | None = None
-    official_hv_age_sec: float | None = None
-    official_hv_synced_dt: datetime | None = None
-
-    if isinstance(official, dict):
-        raw_hv = official.get("official_hv_decimal")
-        try:
-            hv_val = float(raw_hv)
-        except (TypeError, ValueError):
-            hv_val = None
-        if hv_val is not None and math.isfinite(hv_val) and hv_val > 0.0:
-            official_hv_decimal = hv_val
-
-        raw_count = official.get("official_hv_sample_count")
-        try:
-            count = int(raw_count)
-        except (TypeError, ValueError):
-            count = 0
-        official_hv_sample_count = max(0, count)
-
-        official_hv_synced_dt = _coerce_utc_datetime(official.get("official_hv_synced_at_utc"))
-        if official_hv_synced_dt is not None:
-            official_hv_synced_at_utc = official_hv_synced_dt.isoformat()
-
-    source_dt = _coerce_utc_datetime(snapshot.get("as_of_utc") or snapshot.get("as_of"))
-    if source_dt is not None and official_hv_synced_dt is not None:
-        official_hv_age_sec = max(0.0, (source_dt - official_hv_synced_dt).total_seconds())
-
-    diag.update(
-        {
-            "official_hv_decimal": official_hv_decimal,
-            "official_hv_sample_count": official_hv_sample_count,
-            "official_hv_synced_at_utc": official_hv_synced_at_utc,
-            "official_hv_age_sec": official_hv_age_sec,
-        }
-    )
-    return diag
-
-
 def _count_rows(rows: Any) -> int:
     if not isinstance(rows, list):
         return 0
     return len(rows)
-
-
-def _standard_ratio(rows: Any) -> float:
-    if not isinstance(rows, list) or not rows:
-        return 0.0
-    standard_flags = []
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        standard_flags.append(1 if bool(row.get("standard", False)) else 0)
-    if not standard_flags:
-        return 0.0
-    return sum(standard_flags) / len(standard_flags)
-
-
-def _average_numeric(rows: Any, key: str) -> float:
-    if not isinstance(rows, list) or not rows:
-        return 0.0
-    values: list[float] = []
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        raw = row.get(key)
-        if raw is None:
-            continue
-        try:
-            value = float(raw)
-        except (TypeError, ValueError):
-            continue
-        if math.isfinite(value):
-            values.append(value)
-    if not values:
-        return 0.0
-    return sum(values) / len(values)
-
-
-def _extract_snapshot_version(snapshot: dict[str, Any]) -> int:
-    """Best-effort parse of L0 snapshot version for L1/L2 cache invalidation."""
-    raw = snapshot.get("version")
-    if isinstance(raw, bool):
-        return 0
-    if isinstance(raw, int):
-        return raw
-    if isinstance(raw, float):
-        if not math.isfinite(raw):
-            return 0
-        return int(raw)
-    if isinstance(raw, str):
-        text = raw.strip()
-        if not text:
-            return 0
-        try:
-            return int(text)
-        except ValueError:
-            return 0
-    return 0
-
-
-def _extract_runtime_spy_atm_iv(
-    l1_snapshot: Any,
-    decision: Any,
-) -> float | None:
-    """Best-effort extract current tick SPY ATM IV from runtime objects."""
-    aggregates = getattr(l1_snapshot, "aggregates", None)
-    if aggregates is not None:
-        value = getattr(aggregates, "atm_iv", None)
-        if isinstance(value, (int, float)) and math.isfinite(float(value)):
-            return float(value)
-
-    candidates: list[Any] = []
-    decision_data = getattr(decision, "data", None)
-    if isinstance(decision_data, dict):
-        candidates.extend([decision_data.get("spy_atm_iv"), decision_data.get("atm_iv")])
-
-    for candidate in candidates:
-        if isinstance(candidate, (int, float)) and math.isfinite(float(candidate)):
-            return float(candidate)
-    return None
-
-
-def _get_iv_sync_context(builder: Any) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Read IV sync cache context via public builder API only."""
-    getter = getattr(builder, "get_iv_sync_context", None)
-    if not callable(getter):
-        return {}, {}
-    iv_cache, spot_sync = getter()
-    return dict(iv_cache or {}), dict(spot_sync or {})
 
 
 def _is_duplicate_snapshot(snapshot_version: int, last_processed_version: int | None) -> bool:
@@ -312,7 +102,7 @@ async def _process_snapshot_tick(
     tick_id: int,
     compute_id: int,
     last_processed_version: int | None,
-    version_iv_probe: "_SnapshotVersionIvDriftProbe",
+    version_iv_probe: _SnapshotVersionIvDriftProbe,
     compute_interval: float,
 ) -> tuple[int, int | None]:
     chain_size = _count_rows(snapshot.get("chain"))
@@ -323,13 +113,28 @@ async def _process_snapshot_tick(
     iv_cache_size = len(iv_cache)
 
     if _is_duplicate_snapshot(snapshot_version, last_processed_version):
+        atm_decay_payload = await ctr.atm_decay_tracker.update(
+            snapshot.get("chain", []),
+            snapshot.get("spot", 0.0),
+        )
+        refreshed = build_duplicate_snapshot_atm_refresh(state.frozen, atm_decay_payload)
+        if refreshed is not None:
+            state.update(refreshed, snapshot.get("spot"))
         state.record_duplicate_snapshot_skip(snapshot_version)
         logger.info(
-            "[GPU-AUDIT] duplicate snapshot skipped tick_id=%s snapshot_version=%s last_compute_id=%s",
+            "[GPU-AUDIT] duplicate snapshot skipped tick_id=%s snapshot_version=%s "
+            "last_compute_id=%s",
             tick_id,
             snapshot_version,
             compute_id,
         )
+        if refreshed is not None:
+            logger.info(
+                "[AtmDecay] duplicate snapshot live refresh tick_id=%s snapshot_version=%s atm_timestamp=%s",
+                tick_id,
+                snapshot_version,
+                str((atm_decay_payload or {}).get("timestamp", "")),
+            )
         return compute_id, last_processed_version
 
     agent_start = time.monotonic()
@@ -348,6 +153,7 @@ async def _process_snapshot_tick(
         snapshot_version=snapshot_version,
         spy_atm_iv=_extract_runtime_spy_atm_iv(l1_snap, decision),
         now_monotonic=time.monotonic(),
+        atm_iv_context=_extract_runtime_atm_iv_context(l1_snap),
     )
     state.update_snapshot_version_iv_probe(probe_diag)
     _publish_active_options_input(
@@ -419,9 +225,10 @@ async def _run_l1_l2_pipeline(
     state.update_latest_l1_snapshot(l1_snap)
     decision = await ctr.l2_reactor.decide(l1_snap)
     logger.debug(
-        f"[L2] direction={decision.direction}, "
-        f"conf={decision.confidence:.2f}, "
-        f"lat={decision.latency_ms:.1f}ms"
+        "[L2] direction=%s, conf=%.2f, lat=%.1fms",
+        decision.direction,
+        decision.confidence,
+        decision.latency_ms,
     )
     return next_compute_id, l1_snap, decision
 
@@ -436,15 +243,16 @@ def _log_pipeline_perf(
     spot: Any,
 ) -> None:
     logger.info(
-        f"[PERF] build_payload breakdown: "
-        f"snapshot={snapshot_time*1000:.1f}ms, "
-        f"agent={agent_time*1000:.1f}ms, "
-        f"interval={compute_interval}s"
+        "[PERF] build_payload breakdown: snapshot=%.1fms, agent=%.1fms, interval=%ss",
+        snapshot_time * 1000,
+        agent_time * 1000,
+        compute_interval,
     )
     logger.debug(
-        f"[RACE_PROBE] runner tick: chain_size={chain_size}, "
-        f"iv_cache_size={iv_cache_size}, "
-        f"spot={spot}"
+        "[RACE_PROBE] runner tick: chain_size=%s, iv_cache_size=%s, spot=%s",
+        chain_size,
+        iv_cache_size,
+        spot,
     )
 
 
@@ -473,7 +281,7 @@ async def _run_compute_tick_safe(
     tick_id: int,
     compute_id: int,
     last_processed_version: int | None,
-    version_iv_probe: "_SnapshotVersionIvDriftProbe",
+    version_iv_probe: _SnapshotVersionIvDriftProbe,
     compute_interval: float,
 ) -> tuple[int, int | None]:
     start = time.monotonic()
@@ -481,8 +289,9 @@ async def _run_compute_tick_safe(
         snapshot = await ctr.option_chain_builder.fetch_snapshot(include_chain_arrow=True)
         snapshot_time = time.monotonic() - start
         logger.info(
-            f"[Debug] L0 Fetch: rust_active={snapshot.get('rust_active')} "
-            f"shm_stats={snapshot.get('shm_stats') is not None}"
+            "[Debug] L0 Fetch: rust_active=%s shm_stats=%s",
+            snapshot.get("rust_active"),
+            snapshot.get("shm_stats") is not None,
         )
         return await _process_snapshot_tick(
             ctr,
@@ -499,205 +308,12 @@ async def _run_compute_tick_safe(
         raise
     except Exception as exc:
         state.record_failure()
-        logger.exception(f"[AgentRunner] Error in compute loop: {exc}")
+        logger.exception("[AgentRunner] Error in compute loop: %s", exc)
         return compute_id, last_processed_version
 
 
-@dataclass
-class _SnapshotVersionIvDriftProbe:
-    """Runtime probe for snapshot_version vs spy_atm_iv drift behavior."""
-
-    confirm_ticks: int = int(settings.snapshot_iv_probe_confirm_ticks)
-    epsilon: float = float(settings.snapshot_iv_probe_epsilon)
-    activate_lag_seconds: float = float(settings.snapshot_iv_probe_activate_lag_seconds)
-    ongoing_log_interval_seconds: float = float(settings.snapshot_iv_probe_ongoing_log_interval_seconds)
-    last_version: int | None = None
-    last_iv: float | None = None
-    consecutive_drift_ticks: int = 0
-    mismatch_count: int = 0
-    drift_active: bool = False
-    lag_start_monotonic: float | None = None
-    current_lag_seconds: float = 0.0
-    last_completed_lag_seconds: float = 0.0
-    degraded_reason: str | None = None
-    next_ongoing_log_lag_seconds: float = 0.0
-
-    def observe(
-        self,
-        snapshot_version: Any,
-        spy_atm_iv: Any,
-        now_monotonic: float,
-    ) -> dict[str, Any]:
-        """Observe one compute tick and update internal drift diagnostics."""
-        version = self._coerce_version(snapshot_version)
-        iv_value = self._coerce_iv(spy_atm_iv)
-        if version is None or iv_value is None:
-            self._mark_degraded(version, iv_value)
-            if self.drift_active and self.lag_start_monotonic is not None:
-                self.current_lag_seconds = max(0.0, now_monotonic - self.lag_start_monotonic)
-            return self.snapshot()
-
-        self.degraded_reason = None
-
-        if self.last_version is None or self.last_iv is None:
-            self.last_version = version
-            self.last_iv = iv_value
-            return self.snapshot()
-
-        if version <= self.last_version:
-            if self.drift_active and self.lag_start_monotonic is not None:
-                self.current_lag_seconds = max(0.0, now_monotonic - self.lag_start_monotonic)
-            self.last_version = version
-            self.last_iv = iv_value
-            return self.snapshot()
-
-        if abs(iv_value - self.last_iv) <= self.epsilon:
-            self._on_drift_tick(version, iv_value, now_monotonic)
-        else:
-            self._on_recovery(version, iv_value, now_monotonic)
-
-        return self.snapshot()
-
-    def snapshot(self) -> dict[str, Any]:
-        return {
-            "confirm_ticks": self.confirm_ticks,
-            "epsilon": self.epsilon,
-            "activate_lag_seconds": self.activate_lag_seconds,
-            "ongoing_log_interval_seconds": self.ongoing_log_interval_seconds,
-            "last_version": self.last_version,
-            "last_spy_atm_iv": self.last_iv,
-            "consecutive_drift_ticks": self.consecutive_drift_ticks,
-            "mismatch_count": self.mismatch_count,
-            "drift_active": self.drift_active,
-            "current_lag_seconds": round(self.current_lag_seconds, 3),
-            "last_completed_lag_seconds": round(self.last_completed_lag_seconds, 3),
-            "degraded_reason": self.degraded_reason,
-        }
-
-    def _on_drift_tick(self, version: int, iv_value: float, now_monotonic: float) -> None:
-        self.consecutive_drift_ticks += 1
-        if self.lag_start_monotonic is None:
-            self.lag_start_monotonic = now_monotonic
-
-        if self.lag_start_monotonic is not None:
-            self.current_lag_seconds = max(0.0, now_monotonic - self.lag_start_monotonic)
-
-        can_activate = (
-            self.consecutive_drift_ticks >= self.confirm_ticks
-            and self.current_lag_seconds >= max(0.0, float(self.activate_lag_seconds))
-        )
-        if can_activate and not self.drift_active:
-            self.drift_active = True
-            self.mismatch_count += 1
-            self.next_ongoing_log_lag_seconds = self.current_lag_seconds + max(
-                0.0, float(self.ongoing_log_interval_seconds)
-            )
-            logger.warning(
-                "[OBS] snapshot_version_iv_drift_start version=%s spy_atm_iv=%.6f confirm_ticks=%s lag_seconds=%.3f mismatch_count=%s",
-                version,
-                iv_value,
-                self.confirm_ticks,
-                self.current_lag_seconds,
-                self.mismatch_count,
-            )
-
-        if self.drift_active:
-            if self.current_lag_seconds >= self.next_ongoing_log_lag_seconds:
-                logger.warning(
-                    "[OBS] snapshot_version_iv_drift_ongoing version=%s spy_atm_iv=%.6f drift_ticks=%s lag_seconds=%.3f",
-                    version,
-                    iv_value,
-                    self.consecutive_drift_ticks,
-                    self.current_lag_seconds,
-                )
-                self.next_ongoing_log_lag_seconds = self.current_lag_seconds + max(
-                    0.0, float(self.ongoing_log_interval_seconds)
-                )
-
-        self.last_version = version
-        self.last_iv = iv_value
-
-    def _on_recovery(self, version: int, iv_value: float, now_monotonic: float) -> None:
-        if self.drift_active and self.lag_start_monotonic is not None:
-            lag = max(0.0, now_monotonic - self.lag_start_monotonic)
-            self.last_completed_lag_seconds = lag
-            logger.warning(
-                "[OBS] snapshot_version_iv_drift_recovered version=%s spy_atm_iv=%.6f lag_seconds=%.3f drift_ticks=%s",
-                version,
-                iv_value,
-                lag,
-                self.consecutive_drift_ticks,
-            )
-
-        self.drift_active = False
-        self.consecutive_drift_ticks = 0
-        self.lag_start_monotonic = None
-        self.current_lag_seconds = 0.0
-        self.next_ongoing_log_lag_seconds = 0.0
-        self.last_version = version
-        self.last_iv = iv_value
-
-    def _mark_degraded(self, version: int | None, iv_value: float | None) -> None:
-        if version is None and iv_value is None:
-            reason = "invalid_version_and_iv"
-        elif version is None:
-            reason = "invalid_version"
-        else:
-            reason = "invalid_spy_atm_iv"
-
-        if reason != self.degraded_reason:
-            logger.debug(
-                "[OBS] snapshot_version_iv_probe_degraded reason=%s raw_version=%r raw_spy_atm_iv=%r",
-                reason,
-                version,
-                iv_value,
-            )
-        self.degraded_reason = reason
-
-    @staticmethod
-    def _coerce_version(value: Any) -> int | None:
-        if isinstance(value, bool):
-            return None
-        if isinstance(value, int):
-            return value
-        if isinstance(value, float):
-            if not math.isfinite(value):
-                return None
-            return int(value)
-        if isinstance(value, str):
-            raw = value.strip()
-            if not raw:
-                return None
-            try:
-                return int(raw)
-            except ValueError:
-                return None
-        return None
-
-    @staticmethod
-    def _coerce_iv(value: Any) -> float | None:
-        if isinstance(value, bool) or value is None:
-            return None
-        if isinstance(value, (int, float)):
-            value_f = float(value)
-            return value_f if math.isfinite(value_f) else None
-        if isinstance(value, str):
-            raw = value.strip()
-            if not raw:
-                return None
-            try:
-                value_f = float(raw)
-            except ValueError:
-                return None
-            return value_f if math.isfinite(value_f) else None
-        return None
-
-
-async def run_compute_loop(ctr: 'AppContainer', state: SharedLoopState) -> None:
-    """Compute loop: fetch data → run agents → build payload → save state.
-
-    Runs at a constant cadence defined by websocket_update_interval.
-    """
+async def run_compute_loop(ctr: "AppContainer", state: SharedLoopState) -> None:
+    """Compute loop: fetch data -> run agents -> build payload -> save state."""
     next_tick = time.monotonic()
     tick_id = 0
     compute_id = 0
@@ -706,7 +322,10 @@ async def run_compute_loop(ctr: 'AppContainer', state: SharedLoopState) -> None:
         confirm_ticks=max(1, int(settings.snapshot_iv_probe_confirm_ticks)),
         epsilon=max(0.0, float(settings.snapshot_iv_probe_epsilon)),
         activate_lag_seconds=max(0.0, float(settings.snapshot_iv_probe_activate_lag_seconds)),
-        ongoing_log_interval_seconds=max(0.0, float(settings.snapshot_iv_probe_ongoing_log_interval_seconds)),
+        ongoing_log_interval_seconds=max(
+            0.0,
+            float(settings.snapshot_iv_probe_ongoing_log_interval_seconds),
+        ),
     )
 
     while True:
@@ -722,6 +341,4 @@ async def run_compute_loop(ctr: 'AppContainer', state: SharedLoopState) -> None:
             version_iv_probe=version_iv_probe,
             compute_interval=compute_interval,
         )
-
-        # Drift-corrected sleep with dynamic cadence
         next_tick = await _sleep_until_next_tick(next_tick, compute_interval)

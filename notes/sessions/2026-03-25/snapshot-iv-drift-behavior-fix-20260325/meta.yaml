@@ -1,0 +1,52 @@
+﻿session_id: "2026-03-25/snapshot-iv-drift-behavior-fix-20260325"
+title: "Snapshot IV drift behavior fix"
+scope: "ops"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-25 09:21:52 -04:00"
+updated_at_et: "2026-03-25 09:42:31 -04:00"
+parent_session: "2026-03-25/backend-restart-live-diagnostic-verify-20260325"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "70cc81b"
+head_commit: "70cc81b"
+
+files_changed:
+  - "app/loops/compute_loop.py"
+  - "app/loops/compute_metadata.py"
+  - "app/loops/compute_probe.py"
+  - "app/loops/tests/test_compute_loop_helpers.py"
+  - "app/tests/test_compute_loop_timestamp.py"
+  - "docs/SOP/L1_LOCAL_COMPUTATION.md"
+  - "docs/SOP/SYSTEM_OVERVIEW.md"
+  - "notes/sessions/2026-03-25/snapshot-iv-drift-behavior-fix-20260325/project_state.md"
+  - "notes/sessions/2026-03-25/snapshot-iv-drift-behavior-fix-20260325/open_tasks.md"
+  - "notes/sessions/2026-03-25/snapshot-iv-drift-behavior-fix-20260325/handoff.md"
+  - "notes/sessions/2026-03-25/snapshot-iv-drift-behavior-fix-20260325/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/loops/tests/test_compute_loop_helpers.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/tests/test_compute_loop_timestamp.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/tests/test_health_route_diagnostics.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/loops/tests/test_compute_loop_gpu_dedup.py"
+  - "Stop-Process -Id 13372 -Force"
+  - "powershell -ExecutionPolicy Bypass -File scripts/ops/start_backend.ps1 -LogFile logs/backend_runtime.snapshot_iv_behavior_fix_20260325.log"
+  - "Invoke-RestMethod http://127.0.0.1:8001/debug/persistence_status -TimeoutSec 3 | ConvertTo-Json -Depth 6"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/loops/tests/test_compute_loop_helpers.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/tests/test_compute_loop_timestamp.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/tests/test_health_route_diagnostics.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/loops/tests/test_compute_loop_gpu_dedup.py"
+  - "GET /health -> 200 after backend restart"
+  - "GET /debug/persistence_status -> probe suppressed on rest-sourced ATM IV while source_version advanced"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict -> first run failed on missing command evidence in meta.yaml; rerun passed"
+tests_failed: []
+blockers: []
+notes:
+  - "Probe suppression is intentionally narrow: only iv_source=rest is treated as non-reactive in this session."
+  - "Live restart evidence was captured in logs/backend_runtime.snapshot_iv_behavior_fix_20260325.log."
+
+

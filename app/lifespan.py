@@ -35,6 +35,8 @@ async def lifespan(app: FastAPI):
     await ctr.option_chain_builder.initialize()
     
     # 3. Fetch initial spot to initialize trackers
+    logger.info("[Lifespan] Discarding first 5 seconds of opening data to allow WS quotes to warm up...")
+    await asyncio.sleep(5.0)
     try:
         _init_snapshot = await ctr.option_chain_builder.fetch_snapshot()
         _init_spot = _init_snapshot.get("spot", 0.0)
@@ -44,6 +46,22 @@ async def lifespan(app: FastAPI):
         _init_chain = []
     else:
         _init_chain = ctr.option_chain_builder.get_startup_chain_snapshot()
+
+    # Early REST quote pull for near-ATM symbols to guarantee prices exist for bootstrap
+    if _init_spot > 0 and _init_chain:
+        sorted_chain = sorted(_init_chain, key=lambda x: abs(float(x.get("strike", 0)) - _init_spot))
+        repair_syms = set()
+        for opt in sorted_chain[:20]:  # up to 10 strikes * 2 legs
+            if sym := opt.get("symbol"):
+                repair_syms.add(sym)
+        if repair_syms:
+            logger.info("[Lifespan] Forcing early REST quote pull for %d near-ATM symbols to bootstrap anchor...", len(repair_syms))
+            try:
+                await ctr.option_chain_builder.repair_symbols_once(repair_syms)
+                _init_chain = ctr.option_chain_builder.get_startup_chain_snapshot()
+            except Exception as exc:
+                logger.warning("[Lifespan] Early REST quote pull failed. reason=%s", exc)
+
     await ctr.atm_decay_tracker.initialize(spot=_init_spot)
     if not ctr.atm_decay_tracker.anchor:
         try:

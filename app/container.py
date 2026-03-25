@@ -3,7 +3,7 @@
 import asyncio
 from dataclasses import dataclass
 
-from l0_ingest.v2 import OptionChainBuilder
+from shared.services.l0_runtime import OptionChainBuilder
 from l2_decision.agents.agent_g import AgentG
 from shared.system.redis_service import RedisService
 from shared.system.historical_store import HistoricalStore
@@ -72,3 +72,4 @@ def build_container() -> AppContainer:
         l2_reactor=l2_reactor,
         l3_reactor=l3_reactor
     )
+

@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from app.loops.compute_loop import (
-    _SnapshotVersionIvDriftProbe,
+from app.loops.compute_metadata import (
     _build_l1_extra_metadata,
     _build_longport_option_diagnostics,
+)
+from app.loops.compute_probe import (
+    _SnapshotVersionIvDriftProbe,
     _extract_runtime_spy_atm_iv,
     _extract_snapshot_version,
     _get_iv_sync_context,
@@ -105,6 +107,70 @@ def test_snapshot_iv_probe_requires_lag_seconds_before_activation() -> None:
     assert diag["drift_active"] is True
     assert diag["current_lag_seconds"] == 10.0
     assert diag["mismatch_count"] == 1
+
+
+def test_snapshot_iv_probe_suppresses_non_reactive_rest_source() -> None:
+    probe = _SnapshotVersionIvDriftProbe(
+        confirm_ticks=2,
+        epsilon=1e-9,
+        activate_lag_seconds=0.0,
+        ongoing_log_interval_seconds=5.0,
+    )
+    context = {"atm_symbol": "SPY260325P653000.US", "iv_source": "rest"}
+
+    probe.observe(
+        snapshot_version=100,
+        spy_atm_iv=0.2008,
+        now_monotonic=100.0,
+        atm_iv_context=context,
+    )
+    diag = probe.observe(
+        snapshot_version=180,
+        spy_atm_iv=0.2008,
+        now_monotonic=180.0,
+        atm_iv_context=context,
+    )
+
+    assert diag["drift_active"] is False
+    assert diag["consecutive_drift_ticks"] == 0
+    assert diag["mismatch_count"] == 0
+    assert diag["suppressed_reason"] == "non_reactive_iv_source:rest"
+    assert diag["last_iv_source"] == "rest"
+    assert diag["last_atm_symbol"] == "SPY260325P653000.US"
+
+
+def test_snapshot_iv_probe_resets_when_atm_symbol_changes() -> None:
+    probe = _SnapshotVersionIvDriftProbe(
+        confirm_ticks=2,
+        epsilon=1e-9,
+        activate_lag_seconds=0.0,
+        ongoing_log_interval_seconds=5.0,
+    )
+
+    probe.observe(
+        snapshot_version=10,
+        spy_atm_iv=0.25,
+        now_monotonic=10.0,
+        atm_iv_context={"atm_symbol": "SPY_A", "iv_source": "ws"},
+    )
+    probe.observe(
+        snapshot_version=11,
+        spy_atm_iv=0.25,
+        now_monotonic=11.0,
+        atm_iv_context={"atm_symbol": "SPY_A", "iv_source": "ws"},
+    )
+    diag = probe.observe(
+        snapshot_version=12,
+        spy_atm_iv=0.25,
+        now_monotonic=12.0,
+        atm_iv_context={"atm_symbol": "SPY_B", "iv_source": "ws"},
+    )
+
+    assert diag["drift_active"] is False
+    assert diag["consecutive_drift_ticks"] == 0
+    assert diag["mismatch_count"] == 0
+    assert diag["suppressed_reason"] == "atm_symbol_changed:SPY_A->SPY_B"
+    assert diag["last_atm_symbol"] == "SPY_B"
 
 
 def test_extract_runtime_spy_atm_iv_prefers_l1_aggregates() -> None:

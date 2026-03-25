@@ -1,0 +1,187 @@
+{
+    "timestamp": "2026-03-25T12:38:40.956380",
+    "quote_hub": {
+        "active": true,
+        "ready_event_set": true
+    },
+    "l1_runtime": {
+        "version": 311,
+        "computed_at": "2026-03-25T12:38:38.089185-04:00",
+        "atm_iv_context": {
+            "atm_symbol": "SPY260325P658000.US",
+            "atm_strike": 658.0,
+            "atm_distance": 0.0,
+            "atm_iv": 0.1511,
+            "raw_iv": 0.1511,
+            "iv_source": "rest",
+            "iv_confidence": 0.8,
+            "spot": 658.0
+        },
+        "iv_resolution": {
+            "ws": 0,
+            "rest": 300,
+            "chain": 0,
+            "sabr": 0,
+            "missing": 540
+        }
+    },
+    "agent_runner": {
+        "running": true,
+        "stats": {
+            "total_computations": 6,
+            "failed_computations": 0,
+            "success_rate": 100.0,
+            "last_update_age_seconds": 2.813000000001921,
+            "is_running": true,
+            "snapshot_version_iv_probe": {
+                "confirm_ticks": 3,
+                "epsilon": 1e-06,
+                "activate_lag_seconds": 90.0,
+                "ongoing_log_interval_seconds": 30.0,
+                "last_version": 311,
+                "last_spy_atm_iv": 0.15109999999999998,
+                "last_atm_symbol": "SPY260325P658000.US",
+                "last_iv_source": "rest",
+                "consecutive_drift_ticks": 0,
+                "mismatch_count": 0,
+                "drift_active": false,
+                "current_lag_seconds": 0.0,
+                "last_completed_lag_seconds": 0.0,
+                "degraded_reason": null,
+                "suppressed_reason": "non_reactive_iv_source:rest"
+            },
+            "active_options_input": {
+                "updates": 6,
+                "age_seconds": 2.8440000000045984,
+                "valid": true,
+                "chain_size": 174,
+                "source_version": 311,
+                "source_timestamp_utc": "2026-03-25T16:38:38.087111+00:00",
+                "invalid_reason": null
+            },
+            "gpu_compute_audit": {
+                "compute_ticks_seen": 41,
+                "duplicate_snapshot_skips": 35,
+                "l1_compute_runs": 6,
+                "last_snapshot_version": 311,
+                "last_compute_id": 6,
+                "last_gpu_task_id": "gpu-task-311-6"
+            }
+        },
+        "last_update_age_seconds": 2.813000000001921
+    },
+    "active_options_input": {
+        "updates": 6,
+        "age_seconds": 2.8440000000045984,
+        "valid": true,
+        "chain_size": 174,
+        "source_version": 311,
+        "source_timestamp_utc": "2026-03-25T16:38:38.087111+00:00",
+        "invalid_reason": null
+    },
+    "l3_layer": {
+        "l3_reactor": {
+            "total_ticks": 6,
+            "failed_ticks": 0,
+            "success_rate": 100.0,
+            "delta_ratio": "95.0%"
+        },
+        "l3_store": {
+            "hot_size": 6,
+            "total_writes": 6,
+            "warm_writes": 0,
+            "warm_failures": 0,
+            "redis_connected": false
+        },
+        "research_store": {
+            "root": "data\\research",
+            "pending_labels": 5,
+            "export_jobs": 0,
+            "raw_retention_days": 7,
+            "feature_retention_days": 90,
+            "label_retention_days": 365
+        }
+    },
+    "active_options": {
+        "rows_total": 5,
+        "rows_placeholder": 0,
+        "rows_real": 5,
+        "rows_real_non_synthetic": 5,
+        "rows_synthetic_fallback": 0,
+        "degraded_rows": 1,
+        "live_rows": 4,
+        "missing_gamma_rows": 1,
+        "missing_turnover_rows": 0,
+        "all_placeholder": false,
+        "empty_filter_count": 1,
+        "last_empty_filter_at_utc": "2026-03-25T16:38:00.089484+00:00",
+        "empty_filter_fallback_count": 0,
+        "last_empty_filter_fallback_at_utc": null,
+        "engine_empty_output_fallback_count": 0,
+        "last_engine_empty_output_fallback_at_utc": null,
+        "last_fallback_mode": null,
+        "last_update_at_utc": "2026-03-25T16:38:39.081324+00:00",
+        "min_volume_threshold": 10,
+        "empty_filter_fallback_enabled": true,
+        "empty_filter_fallback_max_candidates": 120
+    },
+    "redis": {
+        "connected": true,
+        "managed_process": false,
+        "host": "127.0.0.1",
+        "port": 6380
+    },
+    "stores": {
+        "initialized": true,
+        "gateway": {
+            "connected": true,
+            "rust_started": true,
+            "tracked_symbols": 360,
+            "endpoint_profile": "primary",
+            "endpoint_http_url": "https://openapi.longportapp.com",
+            "failover_count": 0,
+            "last_failover_error": null,
+            "last_failover_at_utc": null
+        },
+        "store": {
+            "chain_size": 174,
+            "version": 311,
+            "spot": 658.0,
+            "last_spot_update": "2026-03-25T12:38:10.188381-04:00",
+            "volume_map_size": 0,
+            "oi_smooth_entries": 401,
+            "ws_price_seen": 106,
+            "ws_volume_seen": 50,
+            "ws_current_volume_seen": 0,
+            "ws_turnover_seen": 54,
+            "ws_volume_dropped": 0,
+            "ws_current_volume_dropped": 54
+        },
+        "governor": {
+            "limiter_profile": "startup",
+            "cooldown_active": false,
+            "cooldown_hits_5m": 0,
+            "pending_warmup_symbols": 0
+        },
+        "subscription_metadata_cache": {
+            "hit_rate": 0.0,
+            "hits": 0,
+            "misses": 3,
+            "entries": 3,
+            "ttl_sec": 30.0,
+            "weight": 5
+        },
+        "chain_size": 174,
+        "version": 311,
+        "spot": 658.0,
+        "last_spot_update": "2026-03-25T12:38:10.188381-04:00",
+        "volume_map_size": 0,
+        "oi_smooth_entries": 401,
+        "ws_price_seen": 106,
+        "ws_volume_seen": 50,
+        "ws_current_volume_seen": 0,
+        "ws_turnover_seen": 54,
+        "ws_volume_dropped": 0,
+        "ws_current_volume_dropped": 54
+    }
+}

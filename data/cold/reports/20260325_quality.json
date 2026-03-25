@@ -1,0 +1,41 @@
+{
+  "date": "20260325",
+  "classification_mode": "primary_only",
+  "primary_tag": "vol_crush_day",
+  "matched_tags": [
+    "vol_crush_day"
+  ],
+  "status": "LOW_QUALITY_DAY",
+  "reasons": [
+    "raw rows below minimum: 1421 < 5000",
+    "feature rows below minimum: 1421 < 5000",
+    "label rows below minimum: 143 < 5000"
+  ],
+  "rows": {
+    "research_raw": 1421,
+    "research_feature": 1421,
+    "research_label": 143
+  },
+  "raw_metrics": {
+    "rows": 1421,
+    "net_return": 0.004501056370372723,
+    "intraday_followthrough": 0.004501056370372723,
+    "overnight_gap": 0.0,
+    "overnight_gap_available": true,
+    "realized_range": 0.011589454667932347,
+    "open_rv_1m": 0.000971348260470179,
+    "ofi_persistence": 0.0,
+    "max_abs_jump": 0.010211580268838717,
+    "state_switch_rate": 0.01127554615926709,
+    "atm_iv_change_pct": -0.6762948207171314,
+    "atm_iv_available": true,
+    "pin_band_ratio": 0.1717100633356791,
+    "close_to_key_level": 0.03673148049829751,
+    "key_level_coverage": 1.0,
+    "start_timestamp": "2026-03-25T12:49:53.205Z",
+    "end_timestamp": "2026-03-25T19:40:57.543Z",
+    "ofi_source": "bbo_imbalance_raw",
+    "prev_trade_day": "20260324"
+  },
+  "generated_at_utc": "2026-03-25T20:01:02Z"
+}

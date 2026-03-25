@@ -5,14 +5,6 @@ use pyo3::PyResult;
 use std::time::{SystemTime, UNIX_EPOCH};
 use time::{format_description::parse as parse_time_format, Date};
 
-pub fn str_to_32(value: &str) -> [u8; 32] {
-    let mut out = [0u8; 32];
-    let bytes = value.as_bytes();
-    let n = bytes.len().min(32);
-    out[..n].copy_from_slice(&bytes[..n]);
-    out
-}
-
 pub fn now_unix_nanos() -> u64 {
     match SystemTime::now().duration_since(UNIX_EPOCH) {
         Ok(duration) => duration.as_nanos() as u64,

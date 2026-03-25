@@ -1,16 +1,22 @@
-"""Neutral shared-memory bridge for Rust L0 event transport."""
+"""Deprecated shared-memory bridge for the retired Rust ring-buffer transport."""
 
 from __future__ import annotations
 
 import logging
 import mmap
 import struct
+import warnings
 from dataclasses import dataclass
 from typing import Iterator
 
 import pyarrow as pa
 
 logger = logging.getLogger(__name__)
+
+_DEPRECATION_MESSAGE = (
+    "shared.system.rust_shm_bridge.RustBridge is deprecated and no longer used by "
+    "the rust_only live path; prefer Arrow IPC transport via shared.system.ipc_reader."
+)
 
 RUST_EVENT_ARROW_SCHEMA = pa.schema(
     [
@@ -187,6 +193,7 @@ class EventLayoutRegistry:
 
 class RustBridge:
     def __init__(self, shm_path: str):
+        warnings.warn(_DEPRECATION_MESSAGE, DeprecationWarning, stacklevel=2)
         self.shm_path = shm_path
         self.mm = None
         self.mm_path = shm_path

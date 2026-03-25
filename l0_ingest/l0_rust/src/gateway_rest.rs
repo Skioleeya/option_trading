@@ -4,12 +4,12 @@ use crate::helpers::{
     parse_iso_date,
 };
 use crate::rest_rows::{CalcIndexRow, OptionChainInfoRow, OptionExtendRow, OptionQuoteRow, QuoteRow};
+use num_traits::ToPrimitive;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
-#[pymethods]
 impl RustIngestGateway {
-    fn rest_quote(&mut self, symbols: Vec<String>) -> PyResult<String> {
+    pub(crate) fn rest_quote_impl(&mut self, symbols: Vec<String>) -> PyResult<String> {
         self.ensure_quote_ctx()?;
         let ctx = self.clone_quote_ctx()?;
         let rows = self
@@ -29,7 +29,7 @@ impl RustIngestGateway {
         serde_json::to_string(&payload).map_err(|e| PyRuntimeError::new_err(format!("json encode failed: {e}")))
     }
 
-    fn rest_option_quote(&mut self, symbols: Vec<String>) -> PyResult<String> {
+    pub(crate) fn rest_option_quote_impl(&mut self, symbols: Vec<String>) -> PyResult<String> {
         self.ensure_quote_ctx()?;
         let ctx = self.clone_quote_ctx()?;
         let rows = self
@@ -80,7 +80,11 @@ impl RustIngestGateway {
         serde_json::to_string(&payload).map_err(|e| PyRuntimeError::new_err(format!("json encode failed: {e}")))
     }
 
-    fn rest_option_chain_info_by_date(&mut self, symbol: String, expiry_iso: String) -> PyResult<String> {
+    pub(crate) fn rest_option_chain_info_by_date_impl(
+        &mut self,
+        symbol: String,
+        expiry_iso: String,
+    ) -> PyResult<String> {
         self.ensure_quote_ctx()?;
         let ctx = self.clone_quote_ctx()?;
         let expiry_date = parse_iso_date(&expiry_iso)?;
@@ -102,7 +106,7 @@ impl RustIngestGateway {
         serde_json::to_string(&payload).map_err(|e| PyRuntimeError::new_err(format!("json encode failed: {e}")))
     }
 
-    fn rest_calc_indexes(&mut self, symbols: Vec<String>, indexes: Vec<String>) -> PyResult<String> {
+    pub(crate) fn rest_calc_indexes_impl(&mut self, symbols: Vec<String>, indexes: Vec<String>) -> PyResult<String> {
         self.ensure_quote_ctx()?;
         let ctx = self.clone_quote_ctx()?;
         let index_values = indexes

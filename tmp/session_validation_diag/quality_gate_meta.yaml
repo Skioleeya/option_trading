@@ -1,1 +1,3 @@
 ﻿files_changed:
+  - "l0_ingest/l0_rust/src/gateway_core.rs"
+  - "l0_ingest/l0_rust/src/ipc_legacy.rs"

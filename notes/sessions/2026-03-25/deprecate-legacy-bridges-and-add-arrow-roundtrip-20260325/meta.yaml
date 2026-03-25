@@ -1,0 +1,54 @@
+﻿session_id: "2026-03-25/deprecate-legacy-bridges-and-add-arrow-roundtrip-20260325"
+title: "Deprecate legacy bridges and add Arrow roundtrip"
+scope: "feature"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-25 15:27:48 -04:00"
+updated_at_et: "2026-03-25 16:24:00 -04:00"
+parent_session: null
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "70cc81b"
+head_commit: "70cc81b"
+
+files_changed:
+  - "shared/system/rust_shm_bridge.py"
+  - "shared/system/ipc_reader.py"
+  - "shared/services/l0_runtime/facade.py"
+  - "shared/services/l0_runtime/normalize/bridges/__init__.py"
+  - "shared/services/l0_runtime/normalize/bridges/market_event_bridge.py"
+  - "shared/services/l0_runtime/normalize/bridges/rust_event_bridge.py"
+  - "tests/l0_runtime/test_arrow_roundtrip.py"
+  - "l0_ingest/l0_rust/src/gateway_core.rs"
+  - "l0_ingest/l0_rust/src/ipc_legacy.rs"
+  - "docs/SOP/L0_DATA_FEED.md"
+  - "openspec/changes/rewrite-l0-in-rust/tasks.md"
+  - "openspec/changes/rewrite-l0-in-rust/specs/l0-rust-ipc/spec.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-25/cutover-arrow-consumer-and-retire-legacy-dual-write-20260325/open_tasks.md"
+  - "notes/sessions/2026-03-25/deprecate-legacy-bridges-and-add-arrow-roundtrip-20260325/project_state.md"
+  - "notes/sessions/2026-03-25/deprecate-legacy-bridges-and-add-arrow-roundtrip-20260325/open_tasks.md"
+  - "notes/sessions/2026-03-25/deprecate-legacy-bridges-and-add-arrow-roundtrip-20260325/handoff.md"
+  - "notes/sessions/2026-03-25/deprecate-legacy-bridges-and-add-arrow-roundtrip-20260325/meta.yaml"
+commands:
+  - "python -m py_compile shared/system/ipc_reader.py shared/services/l0_runtime/facade.py shared/services/l0_runtime/normalize/bridges/market_event_bridge.py shared/services/l0_runtime/normalize/bridges/rust_event_bridge.py shared/system/rust_shm_bridge.py tests/l0_runtime/test_arrow_roundtrip.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 tests/l0_runtime/test_arrow_roundtrip.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 tests/l0_runtime/test_rust_event_bridge.py tests/l0_runtime/test_option_chain_builder_rust_events.py tests/l0_runtime/test_arrow_ipc_signal.py tests/l0_runtime/test_arrow_roundtrip.py"
+  - "cargo test"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "python -m py_compile shared/system/ipc_reader.py shared/services/l0_runtime/facade.py shared/services/l0_runtime/normalize/bridges/market_event_bridge.py shared/services/l0_runtime/normalize/bridges/rust_event_bridge.py shared/system/rust_shm_bridge.py tests/l0_runtime/test_arrow_roundtrip.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 tests/l0_runtime/test_arrow_roundtrip.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 tests/l0_runtime/test_rust_event_bridge.py tests/l0_runtime/test_option_chain_builder_rust_events.py tests/l0_runtime/test_arrow_ipc_signal.py tests/l0_runtime/test_arrow_roundtrip.py"
+  - "cargo test"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_failed: []
+blockers: []
+notes:
+  - "Resolved final Arrow cutover backlog items: explicit legacy bridge deprecation and roundtrip integration coverage."
+  - "Roundtrip validation required releasing the GIL inside Rust stress_test so Python could attach concurrently to the named mapping."
+  - "OpenSpec proposal status synced to the final implemented state, including the ipc_legacy.rs rename."
+
+

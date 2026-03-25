@@ -11,6 +11,16 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+Write-Output "[backend-start] Scanning for existing backend processes..."
+$procs = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "uvicorn" -and $_.CommandLine -match "main:app" }
+if ($procs) {
+    foreach ($p in $procs) {
+        Write-Output "[backend-start] Stopping existing backend PID: $($p.ProcessId)"
+        Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue
+    }
+    Start-Sleep -Seconds 1
+}
+
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
 Set-Location $repoRoot
 

@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from app.loops.housekeeping_loop import run_housekeeping_loop
+from app.loops.housekeeping_loop import _sync_anchor_symbols, run_housekeeping_loop
 from app.loops.shared_state import ActiveOptionsInputSnapshot, SharedLoopState
 from shared.config import settings
 
@@ -22,13 +22,17 @@ class _FakeActiveOptionsService:
 
 
 class _FakeAtmDecayTracker:
+    def __init__(self, symbols: set[str] | None = None) -> None:
+        self._symbols = set(symbols or set())
+
     def get_anchor_symbols(self) -> set[str]:
-        return set()
+        return set(self._symbols)
 
 
 class _FakeBuilder:
     def __init__(self) -> None:
         self.fetch_calls = 0
+        self.last_mandatory_symbols: set[str] | None = None
 
     async def fetch_snapshot(self, *, include_chain_arrow: bool = False) -> dict[str, Any]:
         del include_chain_arrow
@@ -36,7 +40,7 @@ class _FakeBuilder:
         return {"chain": [], "spot": 0.0}
 
     def set_mandatory_symbols(self, symbols: set[str]) -> None:
-        del symbols
+        self.last_mandatory_symbols = set(symbols)
 
 
 class _FakeContainer:
@@ -111,3 +115,11 @@ async def test_housekeeping_degrades_when_shared_input_is_invalid(monkeypatch: p
     assert ctr.active_options_service.calls >= 1
     assert ctr.active_options_service.last_kwargs.get("chain") == []
     assert ctr.active_options_service.last_kwargs.get("spot") == pytest.approx(0.0)
+
+
+def test_sync_anchor_symbols_clears_mandatory_symbols_when_anchor_is_empty() -> None:
+    ctr = _FakeContainer()
+
+    _sync_anchor_symbols(ctr)
+
+    assert ctr.option_chain_builder.last_mandatory_symbols == set()

@@ -1,16 +1,16 @@
 ﻿# Project State (Index)
 
 ## Active Session
-- Path: notes/sessions/2026-03-25/task4-governance-upload-cleanup/project_state.md
-- Meta: notes/sessions/2026-03-25/task4-governance-upload-cleanup/meta.yaml
+- Path: notes/sessions/2026-03-25/deprecate-legacy-bridges-and-add-arrow-roundtrip-20260325/project_state.md
+- Meta: notes/sessions/2026-03-25/deprecate-legacy-bridges-and-add-arrow-roundtrip-20260325/meta.yaml
 - Status: ACTIVE
 
 ## Recent Sessions
-- notes/sessions/2026-03-25/task4-governance-upload-cleanup/
-- notes/sessions/2026-03-24/task3-atm-decay-after-hours-replay/
-- notes/sessions/2026-03-24/task2-atm-decay-live-60s-validation/
-- notes/sessions/2026-03-24/l0-l1-live-flow-validation-60s/
-- notes/sessions/2026-03-24/l0-live-penetration-test-20s/
+- notes/sessions/2026-03-25/deprecate-legacy-bridges-and-add-arrow-roundtrip-20260325/
+- notes/sessions/2026-03-25/cutover-arrow-consumer-and-retire-legacy-dual-write-20260325/
+- notes/sessions/2026-03-25/rewrite-l0-in-rust-implementation-20260325/
+- notes/sessions/2026-03-25/atm-decay-capture-stall-diagnostics-20260325/
+- notes/sessions/2026-03-25/atm-decay-fresh-capture-relock-fix-20260325/
 
 ## Global Rules
 - Session folders are immutable records; do not overwrite prior sessions.

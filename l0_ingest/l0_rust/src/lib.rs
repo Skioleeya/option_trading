@@ -3,12 +3,15 @@ use pyo3::prelude::*;
 mod gateway_core;
 mod gateway_rest;
 mod helpers;
-pub mod ipc;
+pub mod ipc_legacy;
+mod ipc_writer;
 mod rest_rows;
 pub mod schema;
 pub mod threat;
+mod windows_signal;
 
 pub use gateway_core::RustIngestGateway;
+pub use ipc_writer::ArrowBatchWriter;
 
 #[pymodule]
 fn l0_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {

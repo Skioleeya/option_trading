@@ -50,6 +50,30 @@ class _DummyActiveOptionsService:
 
 
 class _DummyState:
+    latest_l1_snapshot = SimpleNamespace(
+        version=777,
+        computed_at="2026-03-25T12:00:00+00:00",
+        quality=SimpleNamespace(
+            iv_ws_count=1,
+            iv_rest_count=8,
+            iv_chain_count=0,
+            iv_sabr_count=0,
+            iv_missing_count=2,
+        ),
+        extra_metadata={
+            "atm_iv_context": {
+                "atm_symbol": "SPY260325C653000.US",
+                "atm_strike": 653.0,
+                "atm_distance": 0.18,
+                "atm_iv": 0.2008,
+                "raw_iv": 0.2008,
+                "iv_source": "rest",
+                "iv_confidence": 0.8,
+                "spot": 653.18,
+            }
+        },
+    )
+
     @staticmethod
     def get_diagnostics() -> dict[str, object]:
         return {
@@ -107,3 +131,6 @@ def test_persistence_status_includes_active_options_and_failover_contracts() -> 
     assert "stores" in body
     assert body["stores"]["gateway"]["endpoint_profile"] == "official_longbridge"
     assert body["stores"]["gateway"]["failover_count"] == 1
+    assert body["l1_runtime"]["version"] == 777
+    assert body["l1_runtime"]["atm_iv_context"]["atm_symbol"] == "SPY260325C653000.US"
+    assert body["l1_runtime"]["iv_resolution"]["rest"] == 8

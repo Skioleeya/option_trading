@@ -143,8 +143,7 @@ async def _update_active_options_from_shared_input(
 
 def _sync_anchor_symbols(ctr: "AppContainer") -> None:
     anchor_symbols = ctr.atm_decay_tracker.get_anchor_symbols()
-    if anchor_symbols:
-        ctr.option_chain_builder.set_mandatory_symbols(anchor_symbols)
+    ctr.option_chain_builder.set_mandatory_symbols(anchor_symbols)
 
 
 async def _sleep_until_next_tick(next_tick: float, update_interval: float) -> float:

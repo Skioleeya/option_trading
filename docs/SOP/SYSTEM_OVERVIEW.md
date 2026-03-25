@@ -25,7 +25,7 @@ flowchart LR
   end
 
   subgraph L1["L1 Local Computation"]
-    L1A[RustBridge SHM/Arrow]
+    L1A[Arrow IPC RecordBatch]
     L1B[L1ComputeReactor]
     L1C[Greeks + Trackers]
     L1D[EnrichedSnapshot]
@@ -175,8 +175,12 @@ sequenceDiagram
 
 - `/health`
 - `/debug/persistence_status`
+- ATM decay live continuity 必须允许“L1/L2 dedup、ATM 续推”并存：重复 `snapshot_version` 不得重跑 GPU/L2，但若 tracker 产生新 ATM sample，L3/L4 仍必须收到新的 `atm` payload
+- ATM decay history restore/API 暴露必须经过 timestamp sanitizer，避免同日 future/out-of-order 样本污染 cold boot 与增量图表
 - `snapshot_version_iv_probe` 告警阈值必须由配置驱动（`snapshot_iv_probe_*`），禁止在探针逻辑中写死 tick/秒阈值
 - 漂移告警启用推荐为“时间阈值 + 连续tick阈值”联合触发，避免 IV 平台期造成噪声误报
+- `snapshot_version_iv_probe` 必须读取 `l1_runtime.atm_iv_context.iv_source`；当当前 ATM IV 来源为慢 cadence baseline（当前为 `rest`）时，禁止仅因 `snapshot_version` 前进而累计 drift
+- `snapshot_version_iv_probe` 比较基线必须与观测对象绑定；若 `atm_symbol` 或 `iv_source` 发生切换，必须重置 probe 计数，禁止跨 ATM 合约或跨 source 串联 drift
 
 ## 7. Verification Standard
 
