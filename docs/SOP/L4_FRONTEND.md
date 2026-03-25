@@ -72,6 +72,7 @@ flowchart LR
 - `AtmDecayChart` 在 `init/update/interaction/resize` 任一阶段发生图表引擎异常时，必须进入显式 degraded 模式并执行 chart runtime teardown；degraded 后禁止继续执行图表副作用，但不得阻断 L4 其余模块渲染与广播消费链路
 - 冷启动历史拉取 `/api/atm-decay/history` 必须使用字段投影（最小集：`timestamp,straddle_pct,call_pct,put_pct,strike_changed`），禁止传输完整行字段到浏览器
 - 历史接口默认以 `schema=v2`（columnar-json）消费；`schema=v1` 仅用于兼容/回放验证
+- 盘后 ATM replay 验证必须继续复用同一个 `/api/atm-decay/history` + `/ws/dashboard` 消费路径，前端不得引入 replay-only 分支；若 history 存在且曲线非平台化，TradingView 应在 cold boot 后恢复显示而不是长期 `-- PENDING`
 - 前端对 columnar 包络仅负责解码为对象行，不得改变既有图表/store 业务语义
 - `dashboardStore` 的 sticky merge 与 `atmHistory` 必须按 ET 交易日隔离；跨日不得保留旧帧或旧日历史点。
 - `dashboardStore.smartMergeUiState` 对 `wall_migration/depth_profile` 必须采用“空数组显式清空”语义；仅 `null/undefined`（字段缺失）允许 sticky 兜底，避免与 `GexStatusBar` 同 tick 口径漂移。

@@ -29,6 +29,8 @@ flowchart LR
 - `l0_ingest/v2` 是唯一正式运行树；禁止恢复 `l0_ingest/feeds/*` 平铺目录。
 - `v2` 内部依赖固定为 `source -> normalize -> state -> services -> projection -> facade`。
 - 顶层 `l0_ingest/` 仅允许保留稳定入口、基础中立目录与测试目录，禁止继续堆放新的业务编排文件。
+- `v2/source/runtime/` 仅允许保留现役 runtime/provider 与其直接支撑模块；未接入 `factory.py` / `facade.py` 主链路的孤立 adapter 不得留在正式 runtime 树内。
+- `v2/normalize/events/` 只允许保留当前 facade 实际消费的事件处理器；被替代的历史处理器必须移出或删除，禁止在正式运行树内并存。
 
 ## 3. Runtime Flow
 
@@ -37,6 +39,8 @@ flowchart LR
 2. `OptionSubscriptionManager` 通过 runtime 抽象触发 Rust 订阅与 REST 拉取。
  - 订阅池执行硬上限：`subscription_max` 会被运行时钳制到官方上限 `500`。
  - 超过上限时按离 spot 距离优先保留近端合约，输出 drop 诊断日志。
+ - `L0QuoteRuntime.subscribe()` 的输入语义是“当前应生效的完整 symbol 集”；运行时必须把该全集实际 reconcile 到活跃会话，禁止仅在 Python 侧更新 tracked symbols 而不下发到 Rust 会话。
+ - runtime diagnostics 应区分 `desired_symbols` 与 `applied_symbols`，`SubscriptionManager.subscribed_symbols` 只能反映已实际应用的集合。
 3. `ChainStateStore` 聚合并提供 `fetch_snapshot()` 快照。
 4. L0 flow 字段所有权约束（ActiveOptions 关键）:
  - `DEPTH` 事件只允许更新价位簿价格（bid/ask），不得写入 `volume/current_volume/turnover`。
@@ -54,6 +58,13 @@ flowchart LR
 - `iv_baseline_sync.py` 只负责生命周期与流程编排（warm_up / staggered loop）。
 - `iv_baseline_sync_support.py` 负责批次切片、IV/OI 解析、cooldown 判定等纯 helper 逻辑。
 - 行为契约保持不变：dedupe window、`301607` cooldown、ATM-first chunk 顺序、`spot_at_sync` 写入语义不变。
+
+### 3.4 Metadata / Normalization Single Source
+
+- `SanitizationPipeline` 是 L0 字段规范化唯一 source-of-truth：IV 百分比/小数归一、OI 数值清洗、REST/WS 价量字段清洗必须从同一实现导出。
+- Tier1 warm-up、Tier2/Tier3 poller、startup OI preload、price repair 回填不得各自复制 IV/OI 解析逻辑；兼容 wrapper 只能委托到统一规范化实现。
+- 到期日扫描与 `symbol -> strike/standard` metadata 构建必须走共享 resolver，禁止 `SubscriptionManager`、Tier2、Tier3 各自维护独立扫描逻辑。
+- symbol strike fallback 解析必须走共享 helper，禁止在运行路径中继续硬编码 `symbol[10:]` 这类切片推断。
 
 ## 3.1 官方网关与环境变量对齐（Rust SDK）
 
@@ -94,7 +105,7 @@ flowchart LR
 语义要求:
 
 - `version` 单调递增，用于下游缓存失效
-- `as_of_utc` 是链路主数据时间戳
+- `as_of_utc` 是链路主数据时间戳，必须绑定最近一次有效 L0 source update，而不是 `fetch_snapshot()` 投影时刻
 - fallback 快照（`uninitialized` / `error`）也必须稳定输出 `rust_active`、`rust_shm_path` 与 `shm_stats`：
   - `uninitialized`: `rust_active=false`, `shm_stats.status=UNINITIALIZED`
   - `error`: `rust_active=false`, `shm_stats.status=ERROR`

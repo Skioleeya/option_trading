@@ -1,0 +1,41 @@
+﻿session_id: "2026-03-24/task2-atm-decay-live-60s-validation"
+title: "Task2 ATM decay live 60s validation"
+scope: "test"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-24 23:04:38 -04:00"
+updated_at_et: "2026-03-24 23:16:39 -04:00"
+parent_session: null
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "724efb3"
+head_commit: "724efb3"
+
+files_changed:
+  - "scripts/test/atm_decay_frontend_live_validation_60s.py"
+  - "notes/sessions/2026-03-24/task2-atm-decay-live-60s-validation/project_state.md"
+  - "notes/sessions/2026-03-24/task2-atm-decay-live-60s-validation/open_tasks.md"
+  - "notes/sessions/2026-03-24/task2-atm-decay-live-60s-validation/handoff.md"
+  - "notes/sessions/2026-03-24/task2-atm-decay-live-60s-validation/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId task2-atm-decay-live-60s-validation -Title \"Task2 ATM decay live 60s validation\" -Scope \"test\" -Owner \"Codex\" -Timezone \"America/New_York\" -UpdatePointer"
+  - "powershell -ExecutionPolicy Bypass -File scripts/ops/start_backend.ps1"
+  - "cmd.exe /c \"npm --prefix l4_ui run dev -- --host 0.0.0.0 --port 5173\""
+  - "python scripts/test/atm_decay_frontend_live_validation_60s.py --duration 60 --output tmp/task2_atm_decay_frontend_live_validation_60s.json"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "Invoke-WebRequest http://127.0.0.1:8001/health -> status ok"
+  - "Invoke-WebRequest http://127.0.0.1:5173 -> 200"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict -> PASS"
+tests_failed:
+  - "python scripts/test/atm_decay_frontend_live_validation_60s.py --duration 60 --output tmp/task2_atm_decay_frontend_live_validation_60s.json -> classification=NO_DATA"
+blockers: []
+notes:
+  - "SOP-EXEMPT: no runtime behavior changed; this session only adds and runs a validation harness."
+  - "OPENSPEC-EXEMPT: no runtime code under l0_ingest/l1_compute/l2_decision/l3_assembly/l4_ui/app/shared changed in this session."
+  - "Observed after-hours state: anchor file exists for 20260324, but ATM history series is absent and frontend overlay remains pending."
+
+

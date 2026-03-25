@@ -1,9 +1,10 @@
 ﻿# Open Tasks (Index)
 
 ## Active Session Tasks
-- Path: notes/sessions/2026-03-24/l0-ingest-structure-governance/open_tasks.md
+- Path: notes/sessions/2026-03-25/task4-governance-upload-cleanup/open_tasks.md
 
 ## Global Backlog (Cross-Session)
+- [ ] P1: Investigate implausible WS `current_volume` values dropped during the 2026-03-24 L0 after-hours penetration run and confirm whether the fault is upstream payload quality or local decode/layout mismatch. (Owner: Codex, DUE: 2026-03-26, session: `2026-03-24/l0-live-penetration-test-20s`).
 - [ ] P1: 杩佺Щ鍓╀綑 `l4_ui` 闈炲彸渚ф祴璇曞埌 Vitest globals API 鎴栫粺涓€ compat shim锛屾仮澶嶅叏閲?`npm --prefix l4_ui run test` 缁胯壊 (Owner: Codex, DUE: 2026-03-19, session: `2026-03-13/l4-ui-asian-color-semantics-audit-fix`).
 - [ ] P1: Configure GitHub branch protection required check `validate-session` (Owner: Repo Admin, DUE: 2026-03-19, session: `2026-03-13/anti-garbage-code-gate-hardening`).
 - [ ] P2: 鏀跺彛骞跺綊妗?`refactor-governance-20260317-l0-l2-data-path-remediation-chain` 鍙婂叾鍓╀綑瀛愭彁妗?(Owner: Codex, DUE: 2026-03-21, session: `2026-03-17/apply-fix-20260317-p2-gpu-temp-noise-and-archive`).

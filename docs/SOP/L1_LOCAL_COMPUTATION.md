@@ -77,6 +77,7 @@ flowchart LR
 - NaN/Inf 输入必须被清洗或隔离
 - 越界衰减值需约束（例如不低于 -100%）
 - 盘后策略按交易时段停更
+- 盘后如启用 `ATM_DECAY_REPLAY_ENABLED`，仅允许走 test-only replay：L1 tracker 必须把历史 ATM 序列映射到当天标准 history/anchor，并通过既有 `update()` / `compute_current_decay()` 返回 replay tick；默认 live 盘后停更语义不得改变
 - Opening ATM 在启动阶段若 `spot` 不可用，已持久化 anchor 必须进入 deferred-restore，待首个有效 `spot` 再执行严格距离校验恢复，禁止直接新开锚覆盖盘中历史
 - Wall Migration 历史必须支持后端冷存储恢复（按交易日 JSONL），服务重启后恢复最近窗口，保证盘中历史连续
 - Wall Migration 持久化失败必须显式日志降级，不得阻断 L1->L4 广播链路
@@ -91,6 +92,7 @@ flowchart LR
 - Opening anchor 刚锁定后的首个 decay tick 若仍是完全平值（`call/put/straddle = 0`），不得立刻写入主历史序列；应等待锁定后首次真实价格偏移，给 L0 mandatory-symbol price repair 留出恢复窗口
 - Restore/deferred-restore 读取已持久化 anchor 时，若当日最新 ATM history 点与该 anchor 的 `locked_at` 对齐且 `call/put/straddle` 全为 `0`，必须视为坏锚并直接丢弃，禁止把这类 flat-zero opening point 恢复成当前活动 anchor
 - 若系统在盘中启动且当天不存在可恢复的有效 anchor，启动阶段必须基于首个 `fetch_chain()` 快照立即尝试一次 intraday bootstrap lock；禁止把当天锁锚延迟到“下个交易日”或仅依赖后续慢热门槛
+- After-hours replay source 选择必须排除平台化窗口；首尾 `0/0/0` flat row 不得作为回放窗口边界写入 today history
 
 ## 7. Observability
 
