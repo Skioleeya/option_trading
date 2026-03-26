@@ -46,6 +46,7 @@ from l1_compute.output.enriched_snapshot import (
     EnrichedSnapshot,
     MicroSignals,
 )
+from l1_compute.reactor_support import empty_snapshot, extract_atm_iv
 from l1_compute.time.ttm_v2 import SettlementType, get_trading_ttm_v2_scalar
 
 # Tracker imports (Phase 1 Refactor — Agent B → L1)
@@ -171,7 +172,7 @@ class L1ComputeReactor:
             Immutable EnrichedSnapshot ready for L2 Decision Layer.
         """
         if not chain_snapshot or spot <= 0:
-            return self._empty_snapshot(l0_version, extra_metadata=extra_metadata or {})
+            return empty_snapshot(l0_version, extra_metadata=extra_metadata or {})
 
         iv_cache     = iv_cache     or {}
         spot_at_sync = spot_at_sync or {}
@@ -228,7 +229,7 @@ class L1ComputeReactor:
 
         if n == 0 or spot <= 0.0:
             logger.debug("[L1ComputeReactor] Skipping: snapshot empty or spot <= 0")
-            return self._empty_snapshot(l0_version, extra_metadata=extra_metadata)
+            return empty_snapshot(l0_version, extra_metadata=extra_metadata)
 
         # Step 1 — IV Resolution
         ttm_years = get_trading_ttm_v2_scalar(now)
@@ -278,7 +279,7 @@ class L1ComputeReactor:
 
         if n_valid == 0:
             logger.info("[L1ComputeReactor] compute bypassed: n_valid=0 (n=%d)", n)
-            return self._empty_snapshot(l0_version, extra_metadata=extra_metadata)
+            return empty_snapshot(l0_version, extra_metadata=extra_metadata)
 
         # Step 4 — Greeks batch compute
         t_greeks = time.monotonic()
@@ -289,15 +290,22 @@ class L1ComputeReactor:
             )
         compute_audit = extra_metadata.get("compute_audit", {}) if isinstance(extra_metadata, dict) else {}
         if isinstance(compute_audit, dict):
+            longport_diag = extra_metadata.get("longport_option_diagnostics", {}) if isinstance(extra_metadata, dict) else {}
             logger.info(
                 "[GPU-AUDIT] l1_dispatch tick_id=%s snapshot_version=%s compute_id=%s "
-                "gpu_task_id=%s tier=%s chain_size=%s",
+                "gpu_task_id=%s tier=%s chain_size=%s rust_active=%s shm_status=%s "
+                "source_ts=%s tier2=%s tier3=%s",
                 compute_audit.get("tick_id"),
                 compute_audit.get("snapshot_version", l0_version),
                 compute_audit.get("compute_id"),
                 compute_audit.get("gpu_task_id"),
                 decision.tier.value,
                 n_valid,
+                bool(extra_metadata.get("rust_active", False)),
+                (extra_metadata.get("shm_stats") or {}).get("status"),
+                extra_metadata.get("source_data_timestamp_utc"),
+                longport_diag.get("tier2_contracts"),
+                longport_diag.get("tier3_contracts"),
             )
         greeks_ms = (time.monotonic() - t_greeks) * 1000.0
         self._inst.record_greeks_latency(greeks_ms / 1000.0)
@@ -322,7 +330,7 @@ class L1ComputeReactor:
             agg = self._aggregator.snapshot()
         agg_ms = (time.monotonic() - t_agg) * 1000.0
 
-        atm_iv = self._extract_atm_iv(strikes_arr[valid_mask], ivs_arr[valid_mask], spot)
+        atm_iv = extract_atm_iv(strikes_arr[valid_mask], ivs_arr[valid_mask], spot)
         extra_metadata["atm_iv_context"] = build_atm_iv_context(
             spot=spot, symbols=symbols, strikes=strikes_arr,
             resolved_ivs=resolved_ivs, valid_mask=valid_mask,
@@ -401,8 +409,12 @@ class L1ComputeReactor:
         ttm_seconds = ttm_years * 252.0 * 6.5 * 3600.0
         total_ms    = (time.monotonic() - t_start) * 1000.0
         logger.info(
-            "[L1ComputeReactor] compute n=%d tier=%s t=%.1fms gex=%.2f",
-            n_valid, decision.tier.value, total_ms, agg.net_gex,
+            "[L1ComputeReactor] compute n=%d tier=%s t=%.1fms gex=%.2f vanna=%.4f "
+            "charm=%.4f atm_iv=%.4f svol_state=%s svol_corr=%s rust_active=%s shm_status=%s",
+            n_valid, decision.tier.value, total_ms, agg.net_gex, agg.net_vanna_raw_sum,
+            agg.net_charm_raw_sum, atm_iv, (micro_sig.vanna_flow_result or {}).get("state", "UNAVAILABLE"),
+            (micro_sig.vanna_flow_result or {}).get("correlation"),
+            bool(extra_metadata.get("rust_active", False)), (extra_metadata.get("shm_stats") or {}).get("status"),
         )
 
         return EnrichedSnapshot(
@@ -415,33 +427,4 @@ class L1ComputeReactor:
             version=l0_version,
             computed_at=now,
             extra_metadata=extra_metadata,
-        )
-
-    @staticmethod
-    def _extract_atm_iv(
-        strikes: np.ndarray,
-        ivs: np.ndarray,
-        spot: float,
-    ) -> float:
-        """IV of the option strike closest to ATM."""
-        if len(strikes) == 0:
-            return 0.0
-        idx = int(np.argmin(np.abs(strikes - spot)))
-        return float(ivs[idx]) if ivs[idx] > 0 else 0.0
-
-    def _empty_snapshot(
-        self,
-        l0_version: int,
-        extra_metadata: Optional[dict[str, Any]] = None,
-    ) -> EnrichedSnapshot:
-        return EnrichedSnapshot(
-            spot=0.0,
-            chain=None,
-            aggregates=OutAggregateGreeks(),
-            microstructure=MicroSignals(),
-            quality=ComputeQualityReport(),
-            ttm_seconds=0.0,
-            version=l0_version,
-            computed_at=datetime.now(_ET),
-            extra_metadata=dict(extra_metadata or {}),
         )

@@ -1,0 +1,50 @@
+﻿session_id: "2026-03-25/capture-dashboard-delta-and-surface-raw-vanna-20260325"
+title: "Capture dashboard delta and surface raw vanna"
+scope: "feature"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-25 23:04:30 -04:00"
+updated_at_et: "2026-03-25 23:24:15 -04:00"
+parent_session: null
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "2b286ae"
+head_commit: "2b286ae"
+
+files_changed:
+  - "l3_assembly/assembly/ui_state_tracker.py"
+  - "l3_assembly/tests/test_ui_state_tracker.py"
+  - "l4_ui/src/types/dashboard.ts"
+  - "l4_ui/src/components/right/rightPanelModel.ts"
+  - "l4_ui/src/components/right/RawVannaCard.tsx"
+  - "l4_ui/src/components/right/RightPanel.tsx"
+  - "l4_ui/src/components/__tests__/rightPanelModel.test.ts"
+  - "l4_ui/src/components/__tests__/rightPanelContract.integration.test.tsx"
+  - "docs/SOP/L3_OUTPUT_ASSEMBLY.md"
+  - "docs/SOP/L4_FRONTEND.md"
+  - "openspec/changes/live-raw-vanna-diagnostic-card-20260325/proposal.md"
+  - "openspec/changes/live-raw-vanna-diagnostic-card-20260325/design.md"
+  - "openspec/changes/live-raw-vanna-diagnostic-card-20260325/tasks.md"
+  - "openspec/changes/live-raw-vanna-diagnostic-card-20260325/specs/skew-and-raw-greek-contracts/spec.md"
+  - "notes/sessions/2026-03-25/capture-dashboard-delta-and-surface-raw-vanna-20260325/project_state.md"
+  - "notes/sessions/2026-03-25/capture-dashboard-delta-and-surface-raw-vanna-20260325/open_tasks.md"
+  - "notes/sessions/2026-03-25/capture-dashboard-delta-and-surface-raw-vanna-20260325/handoff.md"
+  - "notes/sessions/2026-03-25/capture-dashboard-delta-and-surface-raw-vanna-20260325/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId capture-dashboard-delta-and-surface-raw-vanna-20260325 -Title \"Capture dashboard delta and surface raw vanna\" -Scope feature -Owner Codex -Timezone America/New_York -UpdatePointer"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l3_assembly/tests/test_ui_state_tracker.py"
+  - "npm --prefix l4_ui run test -- rightPanelModel rightPanelContract"
+  - "powershell -ExecutionPolicy Bypass -File scripts/ops/start_backend.ps1"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+  - "python websocket capture against ws://127.0.0.1:8001/ws/dashboard"
+tests_passed:
+  - "pytest l3_assembly/tests/test_ui_state_tracker.py (12 passed)"
+  - "vitest rightPanelModel rightPanelContract (7 passed)"
+tests_failed: []
+blockers: []
+notes:
+  - "After-hours live capture was heartbeat-dominant: 26/37 dashboard_delta frames only carried heartbeat/is_stale."
+  - "Canonical raw vanna is now visible live at agent_g.data.micro_structure.micro_structure_state.net_vanna_raw_sum."
+  - "Strict validation passed after session metadata sync."
+
+

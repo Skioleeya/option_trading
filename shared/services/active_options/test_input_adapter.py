@@ -125,3 +125,39 @@ def test_adapter_marks_invalid_when_spot_non_positive() -> None:
     )
     assert adapted.valid is False
     assert adapted.invalid_reason == ACTIVE_OPTIONS_INPUT_REASON_INVALID_SPOT
+
+
+def test_adapter_logs_l1_field_promotion_trace(caplog) -> None:
+    l0_snapshot = {
+        "spot": 560.0,
+        "version": 100,
+        "as_of_utc": "2026-03-19T14:00:00+00:00",
+        "chain": [{"symbol": "SPY260319C00560000", "option_type": "CALL", "strike": 560.0}],
+    }
+    l1_snapshot = _FakeL1Snapshot(
+        chain=[{
+            "symbol": "SPY260319C00560000",
+            "option_type": "CALL",
+            "strike": 560.0,
+            "computed_gamma": 0.012,
+            "computed_vanna": 0.034,
+            "computed_iv": 0.22,
+            "computed_delta": 0.48,
+        }],
+        spot=561.0,
+        version=101,
+        atm_iv=0.21,
+    )
+
+    with caplog.at_level("DEBUG"):
+        build_active_options_input_snapshot(
+            l0_snapshot=l0_snapshot,
+            l1_snapshot=l1_snapshot,
+        )
+
+    assert "[ActiveOptionsInput]" in caplog.text
+    assert "source_version=101" in caplog.text
+    assert "promoted_gamma=1" in caplog.text
+    assert "promoted_vanna=1" in caplog.text
+    assert "promoted_iv=1" in caplog.text
+    assert "promoted_delta=1" in caplog.text

@@ -15,10 +15,34 @@ class _FakeActiveOptionsService:
     def __init__(self) -> None:
         self.calls = 0
         self.last_kwargs: dict[str, Any] = {}
+        self._latest: list[dict[str, Any]] = []
 
     async def update_background(self, **kwargs: Any) -> None:
         self.calls += 1
         self.last_kwargs = dict(kwargs)
+        chain = kwargs.get("chain") or []
+        if chain:
+            row = dict(chain[0])
+            self._latest = [{
+                "symbol": row.get("symbol", "SPY"),
+                "option_type": row.get("option_type", row.get("type", "CALL")),
+                "strike": row.get("strike", 0.0),
+                "flow": 125000.0,
+                "flow_score": 1.25,
+                "flow_signal_state": "LIVE",
+            }]
+            return
+        self._latest = [{
+            "symbol": "—",
+            "option_type": "CALL",
+            "strike": 0.0,
+            "flow": 0.0,
+            "flow_score": 0.0,
+            "flow_signal_state": "DEGRADED",
+        }]
+
+    def get_latest(self) -> list[dict[str, Any]]:
+        return list(self._latest)
 
 
 class _FakeAtmDecayTracker:
@@ -115,6 +139,39 @@ async def test_housekeeping_degrades_when_shared_input_is_invalid(monkeypatch: p
     assert ctr.active_options_service.calls >= 1
     assert ctr.active_options_service.last_kwargs.get("chain") == []
     assert ctr.active_options_service.last_kwargs.get("spot") == pytest.approx(0.0)
+
+
+@pytest.mark.asyncio
+async def test_housekeeping_logs_active_options_flow_trace(monkeypatch: pytest.MonkeyPatch, caplog) -> None:
+    monkeypatch.setattr(settings, "websocket_update_interval", 0.001, raising=False)
+
+    ctr = _FakeContainer()
+    state = SharedLoopState()
+    state.update_active_options_input(
+        ActiveOptionsInputSnapshot(
+            chain=[{"symbol": "SPY.TEST.C", "strike": 560.0, "type": "CALL", "volume": 500}],
+            spot=561.0,
+            atm_iv=0.22,
+            gex_regime="NEUTRAL",
+            ttm_seconds=900.0,
+            source_version=778,
+            source_timestamp_utc="2026-03-19T15:40:00+00:00",
+            valid=True,
+            invalid_reason=None,
+        )
+    )
+
+    with caplog.at_level("DEBUG"):
+        task = asyncio.create_task(run_housekeeping_loop(ctr, state))
+        await asyncio.sleep(0.02)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    assert "[ActiveOptionsFlow]" in caplog.text
+    assert "source_version=778" in caplog.text
+    assert "SPY.TEST.C/CALL/560.0" in caplog.text
+    assert "flow=125000.0" in caplog.text
 
 
 def test_sync_anchor_symbols_clears_mandatory_symbols_when_anchor_is_empty() -> None:

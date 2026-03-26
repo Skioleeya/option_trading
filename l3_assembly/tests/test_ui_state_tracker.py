@@ -10,6 +10,7 @@ from shared.config import settings
 
 def _make_snapshot(
     atm_iv: float = 0.15,
+    net_vanna_raw_sum: float = 5.0,
     net_charm_raw_sum: float = 10.0,
     net_charm_legacy: float = 10.0,
     microstructure: dict[str, object] | None = None,
@@ -19,6 +20,7 @@ def _make_snapshot(
         net_gex=1000.0,
         call_wall=600.0,
         put_wall=590.0,
+        net_vanna_raw_sum=net_vanna_raw_sum,
         net_charm_raw_sum=net_charm_raw_sum,
         net_charm=net_charm_legacy,
     )
@@ -125,6 +127,17 @@ def test_tick_uses_net_charm_raw_sum_as_live_source() -> None:
         decision=None,
     )
     assert out["net_charm"] == pytest.approx(-3.5)
+
+
+def test_tick_surfaces_net_vanna_raw_sum_in_micro_structure_payload() -> None:
+    tracker = UIStateTracker()
+    out = tracker.tick(
+        _make_snapshot(net_vanna_raw_sum=12.75),
+        decision=None,
+    )
+
+    micro = out["micro_structure"]["micro_structure_state"]
+    assert micro["net_vanna_raw_sum"] == pytest.approx(12.75)
 
 
 def test_tick_prefers_snapshot_mtf_consensus_when_available() -> None:

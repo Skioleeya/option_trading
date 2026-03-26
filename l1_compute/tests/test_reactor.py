@@ -282,6 +282,35 @@ class TestL1ComputeReactor:
         assert snap.extra_metadata.get("compute_audit") == audit
 
     @pytest.mark.asyncio
+    async def test_compute_logs_l0_l1_dataflow_summary(self, caplog):
+        reactor = L1ComputeReactor(sabr_enabled=False)
+        chain = _make_chain_entries(20)
+        metadata = {
+            "rust_active": True,
+            "shm_stats": {"status": "OK", "head": 9, "tail": 9},
+            "source_data_timestamp_utc": "2026-03-25T14:31:00+00:00",
+            "longport_option_diagnostics": {"tier2_contracts": 20, "tier3_contracts": 20},
+            "compute_audit": {
+                "tick_id": 7,
+                "snapshot_version": 88,
+                "compute_id": 2,
+                "gpu_task_id": "gpu-task-88-2",
+            },
+        }
+
+        with caplog.at_level("INFO"):
+            await reactor.compute(chain, spot=560.0, l0_version=88, extra_metadata=metadata)
+
+        assert "[GPU-AUDIT] l1_dispatch" in caplog.text
+        assert "rust_active=True" in caplog.text
+        assert "source_ts=2026-03-25T14:31:00+00:00" in caplog.text
+        assert "[L1ComputeReactor] compute" in caplog.text
+        assert "gex=" in caplog.text
+        assert "vanna=" in caplog.text
+        assert "charm=" in caplog.text
+        assert "svol_state=" in caplog.text
+
+    @pytest.mark.asyncio
     async def test_wall_context_emitted_for_l3_contract(self):
         reactor = L1ComputeReactor(sabr_enabled=False)
         chain = _make_chain_entries(40)

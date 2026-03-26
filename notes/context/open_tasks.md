@@ -1,9 +1,11 @@
 ﻿# Open Tasks (Index)
 
 ## Active Session Tasks
-- Path: notes/sessions/2026-03-25/deprecate-legacy-bridges-and-add-arrow-roundtrip-20260325/open_tasks.md
+- Path: notes/sessions/2026-03-25/trace-depth-profile-and-tradingview-live-path-20260325/open_tasks.md
 
 ## Global Backlog (Cross-Session)
+- [ ] P1: Verify regular-hours live `atm` payload continuity with the new `[L3-PAYLOAD]` marker so `call_pct/put_pct/straddle_pct` are observed in-session, not just via history hydrate. (Owner: Codex, DUE: 2026-03-27, session: `2026-03-25/trace-depth-profile-and-tradingview-live-path-20260325`).
+- [ ] P1: Verify raw-vanna card cadence during regular-hours source activity and compare metric-refresh density against the observed after-hours heartbeat baseline. (Owner: Codex, DUE: 2026-03-27, session: `2026-03-25/capture-dashboard-delta-and-surface-raw-vanna-20260325`).
 - [x] P1: Switch `shared/services/l0_runtime` live consumer path from legacy SHM/event bridge to `shared/system/ipc_reader.py` on the Arrow IPC named-event contract, then add roundtrip verification. (Owner: Codex, DUE: 2026-03-27, session: `2026-03-25/rewrite-l0-in-rust-implementation-20260325`). COMPLETED-IN: `2026-03-25/cutover-arrow-consumer-and-retire-legacy-dual-write-20260325`
 - [x] P1: Retire Rust legacy SHM compatibility dual-write after the Arrow IPC consumer path is live and validation stays green. (Owner: Codex, DUE: 2026-03-27, session: `2026-03-25/rewrite-l0-in-rust-implementation-20260325`). COMPLETED-IN: `2026-03-25/cutover-arrow-consumer-and-retire-legacy-dual-write-20260325`
 - [x] P1: Add explicit deprecation markers for `shared/system/rust_shm_bridge.py` and the legacy rust event bridge now that `rust_only` no longer depends on them. (Owner: Codex, DUE: 2026-03-27, session: `2026-03-25/cutover-arrow-consumer-and-retire-legacy-dual-write-20260325`). COMPLETED-IN: `2026-03-25/deprecate-legacy-bridges-and-add-arrow-roundtrip-20260325`

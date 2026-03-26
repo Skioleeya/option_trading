@@ -1,0 +1,48 @@
+﻿session_id: "2026-03-25/trace-depth-profile-and-tradingview-live-path-20260325"
+title: "Trace depth profile and tradingview live path"
+scope: "debug"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-25 23:27:12 -04:00"
+updated_at_et: "2026-03-25 23:36:10 -04:00"
+parent_session: null
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "2b286ae"
+head_commit: "2b286ae"
+
+files_changed:
+  - "app/loops/payload_debug.py"
+  - "app/loops/compute_loop.py"
+  - "app/loops/tests/test_payload_debug.py"
+  - "l4_ui/src/components/App.tsx"
+  - "docs/SOP/L3_OUTPUT_ASSEMBLY.md"
+  - "docs/SOP/L4_FRONTEND.md"
+  - "openspec/changes/visual-payload-debug-observability-20260325/proposal.md"
+  - "openspec/changes/visual-payload-debug-observability-20260325/design.md"
+  - "openspec/changes/visual-payload-debug-observability-20260325/tasks.md"
+  - "openspec/changes/visual-payload-debug-observability-20260325/specs/l3-l4-visual-payload-debug/spec.md"
+  - "notes/sessions/2026-03-25/trace-depth-profile-and-tradingview-live-path-20260325/project_state.md"
+  - "notes/sessions/2026-03-25/trace-depth-profile-and-tradingview-live-path-20260325/open_tasks.md"
+  - "notes/sessions/2026-03-25/trace-depth-profile-and-tradingview-live-path-20260325/handoff.md"
+  - "notes/sessions/2026-03-25/trace-depth-profile-and-tradingview-live-path-20260325/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId trace-depth-profile-and-tradingview-live-path-20260325 -Title \"Trace depth profile and tradingview live path\" -Scope debug -Owner Codex -Timezone America/New_York -UpdatePointer"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/loops/tests/test_payload_debug.py"
+  - "npm --prefix l4_ui run build"
+  - "powershell -ExecutionPolicy Bypass -File scripts/ops/start_backend.ps1"
+  - "python websocket capture against ws://127.0.0.1:8001/ws/dashboard"
+  - "curl.exe -s \"http://127.0.0.1:8001/api/atm-decay/history?fields=timestamp,straddle_pct,call_pct,put_pct,strike_changed&schema=v2\""
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "pytest app/loops/tests/test_payload_debug.py (2 passed)"
+  - "npm --prefix l4_ui run build"
+tests_failed: []
+blockers: []
+notes:
+  - "Depth Profile is live in the websocket payload: dashboard_init carried 14 rows and later frames refreshed the same depth block."
+  - "After-hours TradingView ATM live payload is null by design because AtmDecayTracker gates update() outside 09:30-16:00 ET."
+  - "Backend now emits [L3-PAYLOAD] summaries so operators can distinguish MISSING_OUTSIDE_RTH from a real in-hours missing payload."
+  - "Strict validation passed after session metadata sync."
+
+

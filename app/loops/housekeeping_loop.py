@@ -77,6 +77,40 @@ def _is_duplicate_source_version(
     return source_version > 0 and last_source_version == source_version
 
 
+def _log_active_options_flow_snapshot(
+    ctr: "AppContainer",
+    *,
+    source_version: int | None,
+) -> None:
+    service = getattr(ctr, "active_options_service", None)
+    if service is None or not hasattr(service, "get_latest"):
+        return
+    rows = service.get_latest()
+    if not isinstance(rows, list):
+        return
+    top_rows = []
+    for row in rows[:3]:
+        if not isinstance(row, dict):
+            continue
+        top_rows.append(
+            "%s/%s/%s flow=%s score=%s state=%s"
+            % (
+                row.get("symbol"),
+                row.get("option_type"),
+                row.get("strike"),
+                row.get("flow"),
+                row.get("flow_score"),
+                row.get("flow_signal_state"),
+            )
+        )
+    logger.debug(
+        "[ActiveOptionsFlow] source_version=%s rows=%d top=%s",
+        source_version,
+        len(rows),
+        " | ".join(top_rows) if top_rows else "none",
+    )
+
+
 async def _update_active_options_with_degraded_input(
     ctr: "AppContainer",
     *,
@@ -96,6 +130,7 @@ async def _update_active_options_with_degraded_input(
         redis=ctr.redis_service.client,
         limit=ACTIVE_OPTIONS_LIMIT,
     )
+    _log_active_options_flow_snapshot(ctr, source_version=None)
 
 
 async def _update_active_options_from_shared_input(
@@ -137,6 +172,10 @@ async def _update_active_options_from_shared_input(
         ttm_seconds=snapshot.ttm_seconds,
         redis=ctr.redis_service.client,
         limit=ACTIVE_OPTIONS_LIMIT,
+    )
+    _log_active_options_flow_snapshot(
+        ctr,
+        source_version=int(snapshot.source_version or 0),
     )
     return _next_input_version(snapshot, last_source_version)
 

@@ -1,0 +1,41 @@
+﻿session_id: "2026-03-25/verify-l0-l1-longbridge-field-penetration-20260325"
+title: "Verify L0-L1 Longbridge field penetration and add L1 debug flow logs"
+scope: "feature"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-25 22:44:21 -04:00"
+updated_at_et: "2026-03-25 22:53:29 -04:00"
+parent_session: null
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "2b286ae"
+head_commit: "2b286ae"
+
+files_changed:
+  - "l1_compute/reactor.py"
+  - "l1_compute/reactor_support.py"
+  - "l1_compute/tests/test_reactor.py"
+  - "shared/services/active_options/input_adapter.py"
+  - "shared/services/active_options/test_input_adapter.py"
+  - "app/loops/housekeeping_loop.py"
+  - "app/loops/tests/test_housekeeping_gpu_dedup.py"
+  - "notes/sessions/2026-03-25/verify-l0-l1-longbridge-field-penetration-20260325/project_state.md"
+  - "notes/sessions/2026-03-25/verify-l0-l1-longbridge-field-penetration-20260325/open_tasks.md"
+  - "notes/sessions/2026-03-25/verify-l0-l1-longbridge-field-penetration-20260325/handoff.md"
+  - "notes/sessions/2026-03-25/verify-l0-l1-longbridge-field-penetration-20260325/meta.yaml"
+commands:
+  - "python -m py_compile l1_compute/reactor.py l1_compute/reactor_support.py shared/services/active_options/input_adapter.py app/loops/housekeeping_loop.py l1_compute/tests/test_reactor.py shared/services/active_options/test_input_adapter.py app/loops/tests/test_housekeeping_gpu_dedup.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 tests/l0_runtime/test_arrow_roundtrip.py tests/l0_runtime/test_option_chain_builder_rust_events.py tests/l0_runtime/test_fetch_chain_components.py l1_compute/tests/test_reactor.py shared/services/active_options/test_input_adapter.py app/loops/tests/test_housekeeping_gpu_dedup.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "python -m py_compile l1_compute/reactor.py l1_compute/reactor_support.py shared/services/active_options/input_adapter.py app/loops/housekeeping_loop.py l1_compute/tests/test_reactor.py shared/services/active_options/test_input_adapter.py app/loops/tests/test_housekeeping_gpu_dedup.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 tests/l0_runtime/test_arrow_roundtrip.py tests/l0_runtime/test_option_chain_builder_rust_events.py tests/l0_runtime/test_fetch_chain_components.py l1_compute/tests/test_reactor.py shared/services/active_options/test_input_adapter.py app/loops/tests/test_housekeeping_gpu_dedup.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_failed: []
+blockers: []
+notes:
+  - "Instrumentation remains boundary-safe: no contract/schema changes, only observability on existing L0->L1 and Active Options paths."
+  - "L1 compute logs now expose rust/shm ingress plus gex/vanna/charm/svol summary in a single traceable compute cycle."
+  - "Active Options flow logs are emitted downstream after shared input fusion so the user can trace computed fields into final flow rows."
+
+

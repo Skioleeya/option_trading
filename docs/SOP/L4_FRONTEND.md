@@ -36,6 +36,7 @@ flowchart LR
 - `payload.timestamp/data_timestamp` 按 L0 数据时间解释
 - `heartbeat_timestamp` 按链路心跳解释
 - 右栏模型必须先 normalize 再渲染
+- Right Panel 诊断型数值卡片（如 raw Greek）应优先从 `agent_g.data.micro_structure.micro_structure_state.*` 派生，避免扩大 `ui_state` presenter 合同
 - 亚洲盘语义必须保持一致：`红=涨/多头(BULLISH)`，`绿=跌/空头(BEARISH)`；`NET GEX`、`Call/Put Wall` 的颜色映射必须由状态归一化模块统一管理，组件不得各自反向硬编码
 - 方向色 token 治理：`market.up/down` 是唯一方向源；`accent.red/green` 必须分别与 `market.up/down` 对齐，`text-market-*` 与 `text-accent-*` 只允许同向别名，不得出现反向映射。
 - Wall 展示治理：Center/Left 的 CALL WALL 必须使用 market.up(红)，PUT WALL 必须使用 market.down(绿)，未知标签必须回退中性色，禁止默认归入 PUT 语义。
@@ -77,7 +78,9 @@ flowchart LR
 - 前端对 columnar 包络仅负责解码为对象行，不得改变既有图表/store 业务语义
 - `dashboardStore` 的 sticky merge 与 `atmHistory` 必须按 ET 交易日隔离；跨日不得保留旧帧或旧日历史点。
 - 即使 compute loop 因重复 `snapshot_version` 跳过 L1/L2，前端也应继续通过既有 `atm` payload 消费到新的 live ATM sample；若 `dashboard_delta` 长期不含 `changes.atm`，应优先排查后端 dedup/live continuity，而不是在 L4 伪造中间点
+- `dashboard_delta` 仅含 `heartbeat_timestamp` 时，前端必须将其解释为 transport liveness；禁止把 heartbeat-only 帧误判为指标刷新
 - `dashboardStore.smartMergeUiState` 对 `wall_migration/depth_profile` 必须采用“空数组显式清空”语义；仅 `null/undefined`（字段缺失）允许 sticky 兜底，避免与 `GexStatusBar` 同 tick 口径漂移。
+- `App.tsx` 在 ATM history cold-boot hydrate 成功时必须打印一次 `[L4 ATM]` 日志，最少包含 `rows / last timestamp / straddle / call / put`，用于确认 TradingView 曲线数据已进入浏览器侧
 - Left `stable` 适配层必须优先消费 canonical wall 行字段（`label/strike/history/lights`），并兼容 legacy 字段（`type_label/current/h1/h2`），禁止在 stable 路径锁死旧合同。
 - `WallMigration` 当前墙位数值（`CALL/PUT` 的 `strike`）必须以 `gamma_walls.call_wall/put_wall` 为 canonical source；`wall_migration` 仅承载迁移状态与历史上下文，不得反向覆盖主墙位数值。
 - Left `MicroStats.wall_dyn` 的 badge 必须由前端本地状态语义归一化（与 `WallMigration` 一致）生成，禁止直接信任后端 badge：`RETREAT/BREACH/COLLAPSE -> amber`，`DECAY/SIEGE/PINCH -> neutral`，`REINFORCED` 按方向映射红/绿；未知/未收录状态必须硬切为 `neutral`，不得回退后端原始 badge。

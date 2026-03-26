@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from app.loops.atm_live_payload import build_duplicate_snapshot_atm_refresh
 from app.loops.compute_metadata import _build_l1_extra_metadata
+from app.loops.payload_debug import emit_payload_debug, should_log_duplicate_payload_debug
 from app.loops.compute_probe import (
     _SnapshotVersionIvDriftProbe,
     _extract_runtime_atm_iv_context,
@@ -134,6 +135,14 @@ async def _process_snapshot_tick(
                 tick_id,
                 snapshot_version,
                 str((atm_decay_payload or {}).get("timestamp", "")),
+            )
+        if refreshed is not None or should_log_duplicate_payload_debug(tick_id):
+            emit_payload_debug(
+                logger,
+                frozen=refreshed or state.frozen,
+                tick_id=tick_id,
+                snapshot_version=snapshot_version,
+                duplicate_snapshot=True,
             )
         return compute_id, last_processed_version
 
@@ -270,6 +279,13 @@ async def _build_and_store_payload(
         snapshot=l1_snap,
         atm_decay=atm_decay_payload,
         active_options=ctr.active_options_service.get_latest(),
+    )
+    emit_payload_debug(
+        logger,
+        frozen=frozen,
+        tick_id=state.compute_ticks_seen,
+        snapshot_version=int(getattr(frozen, "version", 0) or 0),
+        duplicate_snapshot=False,
     )
     state.update(frozen, spot)
 

@@ -3,6 +3,7 @@ import { useDashboardStore, selectPayload } from '../../store/dashboardStore'
 import { ActiveOptions } from './ActiveOptions'
 import { DecisionEngine } from './DecisionEngine'
 import { MtfFlow } from './MtfFlow'
+import { RawVannaCard } from './RawVannaCard'
 import { SkewDynamics } from './SkewDynamics'
 import { TacticalTriad } from './TacticalTriad'
 import { deriveRightPanelContracts, type RightPanelContracts } from './rightPanelModel'
@@ -20,6 +21,7 @@ export const RightPanel: React.FC<RightPanelProps> = memo(({ mode }) => {
             <>
                 <DecisionEngine fused={stableContracts.fused} netGex={stableContracts.netGex} preferProp />
                 <TacticalTriad uiState={stableContracts.tacticalTriad} preferProp />
+                <RawVannaCard state={stableContracts.rawVanna} />
                 <SkewDynamics uiState={stableContracts.skewDynamics} preferProp />
                 <div className="border-t border-bg-border flex-1"><ActiveOptions options={stableContracts.activeOptions} preferProp /></div>
                 <MtfFlow uiState={stableContracts.mtfFlow} preferProp />
@@ -31,6 +33,7 @@ export const RightPanel: React.FC<RightPanelProps> = memo(({ mode }) => {
         <>
             <DecisionEngine />
             <TacticalTriad />
+            <RawVannaCard state={stableContracts.rawVanna} />
             <SkewDynamics />
             <div className="border-t border-bg-border flex-1"><ActiveOptions /></div>
             <MtfFlow />

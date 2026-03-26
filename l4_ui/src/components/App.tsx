@@ -111,7 +111,18 @@ export const App: React.FC = () => {
         ; (async () => {
             const rows = await fetchAtmHistoryV2()
             if (rows && rows.length > 0) {
+                const last = rows[rows.length - 1]
+                console.info(
+                    '[L4 ATM] history hydrate rows=%s last_ts=%s straddle=%s call=%s put=%s',
+                    rows.length,
+                    last?.timestamp ?? 'NA',
+                    last?.straddle_pct ?? 'NA',
+                    last?.call_pct ?? 'NA',
+                    last?.put_pct ?? 'NA',
+                )
                 useDashboardStore.getState().hydrateAtmHistory(rows)
+            } else {
+                console.info('[L4 ATM] history hydrate rows=0')
             }
         })()
 

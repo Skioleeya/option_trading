@@ -28,6 +28,7 @@ flowchart LR
 - `timestamp/data_timestamp`（L0 源数据时钟）
 - `broadcast_timestamp/heartbeat_timestamp`（L3 广播时钟）
 - `ui_state`
+- `agent_g.data.micro_structure`（诊断通道；可承载 canonical raw Greek live debug 字段，如 `micro_structure_state.net_vanna_raw_sum`）
 - `rust_active`
 - `shm_stats`
 
@@ -88,12 +89,18 @@ flowchart LR
 - 高频循环优先发送 patch/delta
 - 周期性全量刷新用于纠偏
 - 精度收敛与窗口裁剪防止带宽放大
+- 当 payload 业务字段未变化时，`dashboard_delta` 允许仅携带 `heartbeat_timestamp`；这表示链路存活，不表示指标重算
 
 ## 6. Observability
 
 关键日志:
 
 - `[L3 Assembler]`
+- `[L3-PAYLOAD]` payload 可视化摘要：必须显式输出 `depth_profile` 行数/关键 strikes 与 `atm` 状态
+- `atm_status` 语义必须区分：
+  - `LIVE`
+  - `MISSING_OUTSIDE_RTH`
+  - `MISSING`
 - payload size / delta ratio
 - broadcast backlog and client lag
 

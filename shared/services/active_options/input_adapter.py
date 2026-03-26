@@ -9,8 +9,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+import logging
 import math
 from typing import Any, Mapping
+
+logger = logging.getLogger(__name__)
 
 
 ACTIVE_OPTIONS_INPUT_REASON_EMPTY_CHAIN = "empty_chain"
@@ -51,6 +54,20 @@ def build_active_options_input_snapshot(
     source_version = _resolve_source_version(l0_snapshot=l0_snapshot, l1_snapshot=l1_snapshot)
     source_timestamp_utc = _resolve_source_timestamp_utc(l0_snapshot=l0_snapshot)
     valid, invalid_reason = _evaluate_validity(chain=merged_rows, spot=spot)
+    logger.debug(
+        "[ActiveOptionsInput] source_version=%s source_ts=%s valid=%s chain_rows=%d "
+        "promoted_gamma=%d promoted_vanna=%d promoted_iv=%d promoted_delta=%d spot=%.4f atm_iv=%.4f",
+        source_version,
+        source_timestamp_utc,
+        valid,
+        len(merged_rows),
+        _count_promoted_field(merged_rows, "computed_gamma", "gamma"),
+        _count_promoted_field(merged_rows, "computed_vanna", "vanna"),
+        _count_promoted_field(merged_rows, "computed_iv", "implied_volatility"),
+        _count_promoted_field(merged_rows, "computed_delta", "delta"),
+        spot,
+        atm_iv,
+    )
 
     return ActiveOptionsInputSnapshotData(
         chain=merged_rows,
@@ -229,6 +246,20 @@ def _evaluate_validity(
     if spot <= 0.0:
         return False, ACTIVE_OPTIONS_INPUT_REASON_INVALID_SPOT
     return True, None
+
+
+def _count_promoted_field(
+    rows: list[dict[str, Any]],
+    computed_key: str,
+    alias_key: str,
+) -> int:
+    count = 0
+    for row in rows:
+        if _is_missing(row.get(computed_key)) or _is_missing(row.get(alias_key)):
+            continue
+        if row.get(computed_key) == row.get(alias_key):
+            count += 1
+    return count
 
 
 def _to_non_negative_float(raw: Any) -> float:

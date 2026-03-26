@@ -39,8 +39,14 @@ class UIStateTracker:
         # Phase G live canonical cutover: tactical charm source must use
         # canonical raw sum (`net_charm_raw_sum`), not legacy alias (`net_charm`).
         net_charm = self._to_float(self._get(agg, "net_charm_raw_sum", 0.0), default=0.0)
+        net_vanna_raw_sum = self._to_float(
+            self._get(agg, "net_vanna_raw_sum", self._get(agg, "net_vanna", 0.0)),
+            default=0.0,
+        )
 
         micro_state = self._extract_micro_state(snapshot)
+        micro_structure_state = dict(micro_state)
+        micro_structure_state["net_vanna_raw_sum"] = net_vanna_raw_sum
 
         vanna_raw = micro_state.get("vanna_flow_result") or micro_state.get("vanna_flow")
         wall_raw = micro_state.get("wall_migration")
@@ -93,7 +99,7 @@ class UIStateTracker:
             "svol_corr": svol_corr,
             "svol_state": svol_state,
             "iv_velocity": iv_velocity,
-            "micro_structure": {"micro_structure_state": micro_state},
+            "micro_structure": {"micro_structure_state": micro_structure_state},
             "spot": spot,
         }
 
