@@ -212,3 +212,16 @@ def test_tick_wall_payload_preserves_wall_context() -> None:
 async def test_set_redis_client_is_noop() -> None:
     tracker = UIStateTracker()
     await tracker.set_redis_client(object())
+
+
+def test_tick_includes_header_volatility_when_service_is_present() -> None:
+    class _FakeService:
+        def build(self, *, snapshot, spot, atm_iv):
+            assert spot == pytest.approx(595.0)
+            assert atm_iv == pytest.approx(0.15)
+            return {"ivr": 50.0, "term_structure": {"primary": {"ratio": 1.1}}}
+
+    tracker = UIStateTracker(header_volatility_service=_FakeService())
+    out = tracker.tick(_make_snapshot(), decision=None)
+
+    assert out["header_volatility"]["ivr"] == pytest.approx(50.0)

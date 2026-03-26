@@ -71,6 +71,7 @@ def build_snapshot_payload(
         runtime_status=runtime_status,
         governor_telemetry=governor_telemetry,
         official_hv_diagnostics=services.orchestrator.official_hv_diagnostics,
+        header_volatility_aux_diagnostics=services.orchestrator.header_volatility_aux_diagnostics,
     )
     payload.pop("aggregate_greeks", None)
     payload.pop("ttm_seconds", None)

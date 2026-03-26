@@ -31,6 +31,36 @@ export interface IVVelocityResult {
     spot_roc: number | null
 }
 
+export interface HeaderVolatilityTermAnchor {
+    anchor: string
+    symbol: string
+    expiry?: string | null
+    iv?: number | null
+    iv_decimal?: number | null
+    ratio: number | null
+    state: 'INVERTED' | 'FLAT' | 'NORMAL' | 'UNAVAILABLE' | string
+}
+
+export interface HeaderVolatilityRelation {
+    window_seconds: number
+    iv_change_pp: number | null
+    price_change_pct: number | null
+    beta_pp_per_pct: number | null
+    state: 'INVERSE_CONFIRM' | 'POSITIVE_DIVERGENCE' | 'VOL_LEAD' | 'PRICE_LEAD' | 'UNAVAILABLE' | string
+}
+
+export interface HeaderVolatilityContext {
+    lookback_days: number
+    lookback_effective_days: number
+    ivr: number | null
+    ivp: number | null
+    term_structure: {
+        primary: HeaderVolatilityTermAnchor
+        secondary: HeaderVolatilityTermAnchor
+    }
+    iv_price_relation: HeaderVolatilityRelation
+}
+
 export interface VannaFlowResult {
     state: VannaFlowState
     correlation: number | null
@@ -183,6 +213,7 @@ export interface AgentGResult {
         gamma_walls: GammaWalls
         gamma_flip_level: number | null
         spy_atm_iv: number | null
+        header_volatility?: HeaderVolatilityContext | null
         trap_state: string
         fused_signal: FusedSignal
         micro_structure: { micro_structure_state: MicroStructureState } | null

@@ -21,6 +21,7 @@ import type {
     DashboardPayload,
     ConnectionStatus,
     AtmDecay,
+    HeaderVolatilityContext,
 } from '../types/dashboard'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -46,6 +47,7 @@ export interface DashboardState {
     // ── Field-level slices (for component selectors) ─────────────────────────
     spot: number | null
     ivPct: number | null
+    headerVolatility: HeaderVolatilityContext | null
     /** Monotonic version counter; incremented on every state write. */
     version: number
 
@@ -182,6 +184,10 @@ function extractIvPct(p: DashboardPayload): number | null {
     return p?.agent_g?.data?.spy_atm_iv ?? null
 }
 
+function extractHeaderVolatility(p: DashboardPayload): HeaderVolatilityContext | null {
+    return p?.agent_g?.data?.header_volatility ?? null
+}
+
 function extractAtm(p: DashboardPayload): AtmDecay | null {
     // FrozenPayload.to_dict() places atm at the payload root (payload.atm),
     // NOT inside agent_g.data.ui_state. UIState.to_dict() emits no 'atm' key.
@@ -235,6 +241,7 @@ export const useDashboardStore = create<DashboardState>()(
         payload: null,
         spot: null,
         ivPct: null,
+        headerVolatility: null,
         atm: null,
         atmHistory: [],
         version: 0,
@@ -263,6 +270,7 @@ export const useDashboardStore = create<DashboardState>()(
                     payload: merged,
                     spot: extractSpot(merged),
                     ivPct: extractIvPct(merged),
+                    headerVolatility: extractHeaderVolatility(merged),
                     atm,
                     atmHistory: nextHistory,
                     version: state.version + 1,
@@ -292,6 +300,7 @@ export const useDashboardStore = create<DashboardState>()(
                     payload: merged,
                     spot: extractSpot(merged),
                     ivPct: extractIvPct(merged),
+                    headerVolatility: extractHeaderVolatility(merged),
                     atm,
                     atmHistory: nextHistory,
                     version: state.version + 1,
@@ -354,6 +363,8 @@ export const selectSpot = (s: DashboardState) => s.spot
 
 /** Selector: iv% */
 export const selectIvPct = (s: DashboardState) => s.ivPct
+
+export const selectHeaderVolatility = (s: DashboardState) => s.headerVolatility
 
 /** Selector: ATM decay (latest tick) */
 export const selectAtm = (s: DashboardState) => s.atm

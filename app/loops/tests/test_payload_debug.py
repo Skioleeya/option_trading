@@ -25,6 +25,7 @@ class _Frozen:
     ui_state: _UiState
     atm: dict[str, object] | None
     version: int
+    header_volatility: dict[str, object] | None = None
 
 
 def test_should_log_duplicate_payload_debug_every_30_ticks() -> None:
@@ -47,6 +48,20 @@ def test_emit_payload_debug_logs_depth_and_atm_summary(caplog) -> None:
             "put_pct": 0.02,
         },
         version=1149,
+        header_volatility={
+            "lookback_days": 20,
+            "lookback_effective_days": 12,
+            "ivr": 55.0,
+            "ivp": 66.7,
+            "term_structure": {
+                "primary": {"ratio": 1.0345, "state": "FLAT"},
+                "secondary": {"ratio": 1.1823, "state": "INVERTED"},
+            },
+            "iv_price_relation": {
+                "state": "INVERSE_CONFIRM",
+                "beta_pp_per_pct": -1.5,
+            },
+        },
     )
 
     with caplog.at_level(logging.INFO):
@@ -58,10 +73,16 @@ def test_emit_payload_debug_logs_depth_and_atm_summary(caplog) -> None:
             duplicate_snapshot=False,
         )
 
-    message = caplog.messages[-1]
+    message = caplog.messages[-2]
     assert "[L3-PAYLOAD]" in message
     assert "depth_rows=2" in message
     assert "depth_spot=657.00" in message
     assert "depth_flip=656.00" in message
     assert "atm_status=LIVE" in message
     assert "atm_straddle=0.03" in message
+    header_message = caplog.messages[-1]
+    assert "header_volatility" in header_message
+    assert "lookback=20" in header_message
+    assert "ivr=55.0000" in header_message
+    assert "term_1d_state=FLAT" in header_message
+    assert "relation_state=INVERSE_CONFIRM" in header_message

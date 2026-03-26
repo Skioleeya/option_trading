@@ -12,6 +12,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from shared.config import settings
+from shared.services.header_volatility_context import HeaderVolatilityContextService
 from shared.system.tactical_triad_logic import (
     classify_vrp_state,
     compute_vrp,
@@ -22,6 +23,12 @@ from shared.system.tactical_triad_logic import (
 
 class UIStateTracker:
     """Maps EnrichedSnapshot + DecisionOutput contracts to UI metrics."""
+
+    def __init__(
+        self,
+        header_volatility_service: HeaderVolatilityContextService | None = None,
+    ) -> None:
+        self._header_volatility_service = header_volatility_service
 
     async def set_redis_client(self, client: Any) -> None:
         """Compatibility no-op. UI tracker is contract-only and stateless."""
@@ -85,6 +92,11 @@ class UIStateTracker:
 
         skew_dynamics = self._extract_skew_dynamics(decision)
         momentum_direction = self._extract_momentum(decision)
+        header_volatility = self._build_header_volatility(
+            snapshot=snapshot,
+            spot=spot,
+            atm_iv=atm_iv,
+        )
 
         return {
             "wall_migration_data": wall_payload,
@@ -101,7 +113,23 @@ class UIStateTracker:
             "iv_velocity": iv_velocity,
             "micro_structure": {"micro_structure_state": micro_structure_state},
             "spot": spot,
+            "header_volatility": header_volatility,
         }
+
+    def _build_header_volatility(
+        self,
+        *,
+        snapshot: Any,
+        spot: float,
+        atm_iv: float,
+    ) -> dict[str, Any] | None:
+        if self._header_volatility_service is None:
+            return None
+        return self._header_volatility_service.build(
+            snapshot=snapshot,
+            spot=spot,
+            atm_iv=atm_iv,
+        )
 
     @classmethod
     def _extract_aggregates(cls, snapshot: Any) -> Any | None:

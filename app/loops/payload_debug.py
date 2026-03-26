@@ -39,6 +39,7 @@ def emit_payload_debug(
     flip_row = next((row for row in depth_rows if bool(getattr(row, "is_flip", False))), None)
 
     atm = getattr(frozen, "atm", None)
+    header_volatility = getattr(frozen, "header_volatility", None)
     now_et = datetime.now(ET)
     in_regular_hours = (
         (now_et.hour > 9 or (now_et.hour == 9 and now_et.minute >= 30))
@@ -66,6 +67,22 @@ def emit_payload_debug(
         _atm_value(atm, "call_pct"),
         _atm_value(atm, "put_pct"),
     )
+    if isinstance(header_volatility, dict):
+        logger.info(
+            "[L3-PAYLOAD] tick_id=%s header_volatility lookback=%s effective_days=%s "
+            "ivr=%s ivp=%s term_1d_ratio=%s term_1d_state=%s term_vx_ratio=%s "
+            "relation_state=%s relation_beta=%s",
+            tick_id,
+            header_volatility.get("lookback_days"),
+            header_volatility.get("lookback_effective_days"),
+            _header_scalar(header_volatility.get("ivr")),
+            _header_scalar(header_volatility.get("ivp")),
+            _header_ratio(header_volatility, ("term_structure", "primary", "ratio")),
+            _header_text(header_volatility, ("term_structure", "primary", "state")),
+            _header_ratio(header_volatility, ("term_structure", "secondary", "ratio")),
+            _header_text(header_volatility, ("iv_price_relation", "state")),
+            _header_scalar(_nested_get(header_volatility, ("iv_price_relation", "beta_pp_per_pct"))),
+        )
 
 
 def _row_strike(row: Any) -> str:
@@ -95,3 +112,31 @@ def _atm_value(atm: Any, field: str) -> str:
     if value is None:
         return "NA"
     return str(value)
+
+
+def _nested_get(payload: Any, path: tuple[str, ...]) -> Any:
+    current = payload
+    for key in path:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(key)
+    return current
+
+
+def _header_ratio(payload: dict[str, Any], path: tuple[str, ...]) -> str:
+    return _header_scalar(_nested_get(payload, path))
+
+
+def _header_text(payload: dict[str, Any], path: tuple[str, ...]) -> str:
+    value = _nested_get(payload, path)
+    if value is None:
+        return "NA"
+    return str(value)
+
+
+def _header_scalar(value: Any) -> str:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return "NA"
+    return f"{numeric:.4f}"

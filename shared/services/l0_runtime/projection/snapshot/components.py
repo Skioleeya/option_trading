@@ -135,6 +135,7 @@ def compose_fetch_chain_payload(
     runtime_status: dict[str, Any],
     governor_telemetry: dict[str, Any],
     official_hv_diagnostics: dict[str, Any],
+    header_volatility_aux_diagnostics: dict[str, Any],
 ) -> dict[str, Any]:
     payload = {
         "spot": spot,
@@ -152,6 +153,7 @@ def compose_fetch_chain_payload(
         "shm_stats": runtime_status.get("shm_stats"),
         "governor_telemetry": governor_telemetry,
         "official_hv_diagnostics": official_hv_diagnostics,
+        "header_volatility_aux_diagnostics": header_volatility_aux_diagnostics,
     }
     if chain_arrow is not None:
         payload["chain_arrow"] = chain_arrow

@@ -30,6 +30,8 @@ def _build_l1_runtime_diag(snapshot: Any) -> dict[str, Any]:
             "sabr": int(getattr(quality, "iv_sabr_count", 0) or 0),
             "missing": int(getattr(quality, "iv_missing_count", 0) or 0),
         },
+        "header_volatility_aux": metadata.get("header_volatility_aux", {}),
+        "source_data_timestamp_utc": metadata.get("source_data_timestamp_utc"),
     }
 
 
@@ -59,6 +61,28 @@ def _extract_active_options_payload(payload_dict: Any) -> dict[str, Any]:
         "rows_total": len(rows),
         "rows_real": max(0, len(rows) - placeholder_rows),
         "rows_placeholder": placeholder_rows,
+    }
+
+
+def _extract_header_volatility_payload(payload_dict: Any) -> dict[str, Any]:
+    if not isinstance(payload_dict, dict):
+        return {}
+    agent_g = payload_dict.get("agent_g") or {}
+    agent_data = agent_g.get("data") or {}
+    header_volatility = agent_data.get("header_volatility")
+    if not isinstance(header_volatility, dict):
+        return {}
+    return deepcopy(header_volatility)
+
+
+def _extract_payload_meta(payload_dict: Any) -> dict[str, Any]:
+    if not isinstance(payload_dict, dict):
+        return {"version": 0, "data_timestamp": None}
+    agent_g = payload_dict.get("agent_g") or {}
+    agent_data = agent_g.get("data") or {}
+    return {
+        "version": int(agent_data.get("version", payload_dict.get("version", 0)) or 0),
+        "data_timestamp": payload_dict.get("data_timestamp") or payload_dict.get("timestamp"),
     }
 
 
@@ -103,6 +127,7 @@ def _is_sparse_active_options_window(
         return False
     return filtered_candidates <= max(5, displayed_real)
 
+
 @router.get("/health")
 async def health():
     """Health check endpoint."""
@@ -122,6 +147,9 @@ async def persistence_status(request: Request):
     active_options_service = getattr(container, "active_options_service", None)
     if active_options_service is not None and hasattr(active_options_service, "get_diagnostics"):
         active_options_diag = active_options_service.get_diagnostics()
+    l1_diag = _build_l1_runtime_diag(getattr(state, "latest_l1_snapshot", None))
+    payload_dict = getattr(state, "payload_dict", None)
+    payload_meta = _extract_payload_meta(payload_dict)
 
     return {
         "timestamp": datetime.now().isoformat(),
@@ -129,13 +157,19 @@ async def persistence_status(request: Request):
             "active": quote_hub_active,
             "ready_event_set": quote_hub_active,
         },
-        "l1_runtime": _build_l1_runtime_diag(getattr(state, "latest_l1_snapshot", None)),
+        "l1_runtime": l1_diag,
         "agent_runner": {
             "running": runner_stats.get("is_running"),
             "stats": runner_stats,
             "last_update_age_seconds": runner_stats.get("last_update_age_seconds"),
         },
         "active_options_input": active_options_input_diag,
+        "header_volatility": {
+            "payload": _extract_header_volatility_payload(payload_dict),
+            "payload_version": payload_meta["version"],
+            "payload_data_timestamp": payload_meta["data_timestamp"],
+            "l1_aux": l1_diag.get("header_volatility_aux", {}),
+        },
         "l3_layer": container.l3_reactor.get_diagnostics() if container.l3_reactor else {},
         "active_options": active_options_diag,
         "redis": container.redis_service.get_diagnostics(),

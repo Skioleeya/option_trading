@@ -29,6 +29,7 @@ flowchart LR
 - `broadcast_timestamp/heartbeat_timestamp`（L3 广播时钟）
 - `ui_state`
 - `agent_g.data.micro_structure`（诊断通道；可承载 canonical raw Greek live debug 字段，如 `micro_structure_state.net_vanna_raw_sum`）
+- `agent_g.data.header_volatility`（标题栏动态波动上下文；固定包含 `lookback_days/lookback_effective_days/ivr/ivp/term_structure/iv_price_relation`）
 - `rust_active`
 - `shm_stats`
 
@@ -97,12 +98,14 @@ flowchart LR
 
 - `[L3 Assembler]`
 - `[L3-PAYLOAD]` payload 可视化摘要：必须显式输出 `depth_profile` 行数/关键 strikes 与 `atm` 状态
+- `[L3-PAYLOAD]` 当 `agent_g.data.header_volatility` 存在时，必须额外输出 `lookback/effective_days/ivr/ivp/term_structure/iv_price_relation` 摘要，便于盘中核对标题栏上下文是否连续刷新
 - `atm_status` 语义必须区分：
   - `LIVE`
   - `MISSING_OUTSIDE_RTH`
   - `MISSING`
 - payload size / delta ratio
 - broadcast backlog and client lag
+- `/debug/persistence_status` 必须可同时观察 `header_volatility.payload` 与 `l1_runtime.header_volatility_aux`，用于确认 L0 辅助取数、L3 payload 合同和 L4 标题栏消费链路连续一致
 
 ## 7. Verification
 

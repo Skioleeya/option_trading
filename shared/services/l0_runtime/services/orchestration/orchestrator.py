@@ -6,11 +6,14 @@ import asyncio
 import logging
 import math
 import time
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import TYPE_CHECKING, Any, Callable
 from zoneinfo import ZoneInfo
 
 from shared.config import settings
+from shared.services.l0_runtime.services.orchestration.header_volatility_support import (
+    build_header_volatility_aux,
+)
 from shared.services.l0_runtime.services.repair.price_repair import repair_symbol_prices
 
 if TYPE_CHECKING:
@@ -65,6 +68,10 @@ class FeedOrchestrator:
         self._official_hv_decimal: float | None = None
         self._official_hv_sample_count: int = 0
         self._official_hv_synced_at_utc: str | None = None
+        self._header_volatility_aux: dict[str, Any] = {}
+        self._header_volatility_aux_synced_at_utc: str | None = None
+        self._header_volatility_aux_last_mono = 0.0
+        self._header_volatility_aux_ttl_sec = 60.0
 
     async def run(self) -> None:
         self._running = True
@@ -102,6 +109,12 @@ class FeedOrchestrator:
             "official_hv_sample_count": self._official_hv_sample_count,
             "official_hv_synced_at_utc": self._official_hv_synced_at_utc,
         }
+
+    @property
+    def header_volatility_aux_diagnostics(self) -> dict[str, Any]:
+        payload = dict(self._header_volatility_aux)
+        payload["synced_at_utc"] = self._header_volatility_aux_synced_at_utc
+        return payload
 
     def _subscription_refresh_due(self, now_mono: float) -> bool:
         return (now_mono - self._last_refresh_mono) >= self._refresh_min_interval_sec
@@ -152,6 +165,11 @@ class FeedOrchestrator:
         )
 
         spot = await self._refresh_spot_if_needed(spot, now)
+        await self._refresh_header_volatility_aux(
+            spot=spot,
+            now_mono=now_mono,
+            trade_day=now.date(),
+        )
 
         if spot and self._subscription_refresh_due(now_mono):
             prev_symbols = set(self._sub_mgr.subscribed_symbols)
@@ -353,4 +371,35 @@ class FeedOrchestrator:
         self._official_hv_decimal = sum(hv_samples) / len(hv_samples)
         self._official_hv_sample_count = len(hv_samples)
         self._official_hv_synced_at_utc = datetime.now(timezone.utc).isoformat()
+
+    async def _refresh_header_volatility_aux(
+        self,
+        *,
+        spot: float | None,
+        now_mono: float,
+        trade_day: date,
+    ) -> None:
+        if spot is None or spot <= 0.0:
+            return
+        if (now_mono - self._header_volatility_aux_last_mono) < self._header_volatility_aux_ttl_sec:
+            return
+
+        self._header_volatility_aux = await build_header_volatility_aux(
+            quote_runtime=self._quote_runtime,
+            limiter=self._limiter,
+            spot=spot,
+            trade_day=trade_day,
+            logger=logger,
+        )
+        self._header_volatility_aux_synced_at_utc = datetime.now(timezone.utc).isoformat()
+        self._header_volatility_aux_last_mono = now_mono
+        logger.info(
+            "[FeedOrchestrator] header volatility aux refreshed: spot=%.2f next_expiry=%s "
+            "atm_iv_1dte=%s atm_iv_1dte_strike=%s vix_iv_decimal=%s",
+            spot,
+            self._header_volatility_aux.get("next_expiry"),
+            self._header_volatility_aux.get("atm_iv_1dte"),
+            self._header_volatility_aux.get("atm_iv_1dte_strike"),
+            self._header_volatility_aux.get("vix_iv_decimal"),
+        )
 

@@ -68,6 +68,7 @@ def _build_l1_extra_metadata(
         "volume_map": _normalize_volume_map(snapshot.get("volume_map")),
         "source_data_timestamp_utc": _normalize_source_timestamp_utc(snapshot),
         "longport_option_diagnostics": _build_longport_option_diagnostics(snapshot),
+        "header_volatility_aux": dict(snapshot.get("header_volatility_aux_diagnostics") or {}),
     }
     if compute_audit:
         metadata["compute_audit"] = dict(compute_audit)

@@ -37,6 +37,9 @@ flowchart LR
 - `heartbeat_timestamp` 按链路心跳解释
 - 右栏模型必须先 normalize 再渲染
 - Right Panel 诊断型数值卡片（如 raw Greek）应优先从 `agent_g.data.micro_structure.micro_structure_state.*` 派生，避免扩大 `ui_state` presenter 合同
+- 标题栏 IV 主值必须继续消费 `spy_atm_iv`；动态补充信息单独消费 `agent_g.data.header_volatility`
+- 标题栏动态 token 顺序固定为 `R{ivr}`、`P{ivp}`、`1D {ratio}`、`VX {ratio}`、`β {state}`
+- 标题栏动态 token 缺值时必须显示 `—`，禁止沿用旧值 sticky
 - 亚洲盘语义必须保持一致：`红=涨/多头(BULLISH)`，`绿=跌/空头(BEARISH)`；`NET GEX`、`Call/Put Wall` 的颜色映射必须由状态归一化模块统一管理，组件不得各自反向硬编码
 - 方向色 token 治理：`market.up/down` 是唯一方向源；`accent.red/green` 必须分别与 `market.up/down` 对齐，`text-market-*` 与 `text-accent-*` 只允许同向别名，不得出现反向映射。
 - Wall 展示治理：Center/Left 的 CALL WALL 必须使用 market.up(红)，PUT WALL 必须使用 market.down(绿)，未知标签必须回退中性色，禁止默认归入 PUT 语义。

@@ -4,12 +4,13 @@
  */
 import React, { memo } from 'react'
 import { fmtPrice } from '../../lib/utils'
-import type { ConnectionStatus } from '../../types/dashboard'
+import type { ConnectionStatus, HeaderVolatilityContext } from '../../types/dashboard'
 import { Zap } from 'lucide-react'
 import {
     useDashboardStore,
     selectSpot,
     selectIvPct,
+    selectHeaderVolatility,
     selectConnectionStatus,
     selectPayloadTimestamp,
     selectFusedIvRegime,
@@ -32,6 +33,33 @@ interface Props {
     as_of?: string | null
 }
 
+function formatTokenValue(value: number | null | undefined, digits = 0): string {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return '—'
+    return value.toFixed(digits)
+}
+
+function formatRatio(value: number | null | undefined): string {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return '—'
+    return value.toFixed(2)
+}
+
+function relationBadgeState(context: HeaderVolatilityContext | null): string {
+    const state = context?.iv_price_relation?.state
+    if (!state || state === 'UNAVAILABLE') return '—'
+    if (state === 'INVERSE_CONFIRM') return 'INV'
+    if (state === 'POSITIVE_DIVERGENCE') return 'POS'
+    if (state === 'VOL_LEAD') return 'VOL'
+    if (state === 'PRICE_LEAD') return 'PX'
+    return state
+}
+
+function termTokenClass(state: string | undefined): string {
+    if (state === 'INVERTED') return 'text-[#ef4444]'
+    if (state === 'FLAT') return 'text-[#f59e0b]'
+    if (state === 'NORMAL') return 'text-[#10b981]'
+    return 'text-[#71717a]'
+}
+
 export const Header: React.FC<Props> = memo(({
     spot: propSpot,
     ivPct: propIvPct,
@@ -47,6 +75,7 @@ export const Header: React.FC<Props> = memo(({
     const timestamp = useDashboardStore(selectPayloadTimestamp)
     const ivRegimeRaw = useDashboardStore(selectFusedIvRegime)
     const storeIvVelocity = useDashboardStore(selectUiStateIvVelocity)
+    const headerVolatility = useDashboardStore(selectHeaderVolatility)
 
     const spot = storeSpot ?? propSpot ?? null
     const ivPct = storeIvPct ?? propIvPct ?? null
@@ -98,6 +127,17 @@ export const Header: React.FC<Props> = memo(({
                                     {storeIvVelocity.state.includes('EXPANSION') || storeIvVelocity.state.includes('MOVE') ? '↑' : storeIvVelocity.state.includes('DROP') ? '↓' : '•'} {storeIvVelocity.state}
                                 </span>
                             )}
+                        </div>
+                        <div className="flex items-center gap-2 text-[7px] font-mono tracking-normal mt-[1px]">
+                            <span>R{formatTokenValue(headerVolatility?.ivr, 0)}</span>
+                            <span>P{formatTokenValue(headerVolatility?.ivp, 0)}</span>
+                            <span className={termTokenClass(headerVolatility?.term_structure?.primary?.state)}>
+                                1D {formatRatio(headerVolatility?.term_structure?.primary?.ratio)}
+                            </span>
+                            <span className="text-[#71717a]">
+                                VX {formatRatio(headerVolatility?.term_structure?.secondary?.ratio)}
+                            </span>
+                            <span>β {relationBadgeState(headerVolatility)}</span>
                         </div>
                     </span>
                 </div>

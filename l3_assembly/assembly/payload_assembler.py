@@ -1,125 +1,75 @@
-"""l3_assembly.assembly.payload_assembler — PayloadAssemblerV2.
-
-Copy-on-Write assembler that replaces legacy SnapshotBuilder.build().
-
-Key improvements over legacy:
-    1. Accepts typed L2 DecisionOutput + L1 EnrichedSnapshot (not raw dicts)
-    2. Builds FrozenPayload (immutable) — no deepcopy needed
-    3. Calls Presenter V2 wrappers for strong-typed UIState
-    4. Drift detection logic encapsulated here (not in _broadcast_loop)
-    5. Pure function: no module-level state, fully testable
-
-Legacy schema compatibility:
-    FrozenPayload.to_dict() produces the SAME dict that SnapshotBuilder
-    previously returned, so the React frontend is unaffected.
-"""
+"""Copy-on-write payload assembler for L3."""
 
 from __future__ import annotations
 
 import logging
-import math
 import time
 from datetime import datetime, timezone
 from typing import Any
 
+from l3_assembly.assembly.payload_assembler_support import (
+    SnapshotData,
+    convert_active_option,
+    extract_wall_dyn_payload,
+    normalize_volume_map,
+    to_utc_iso,
+)
 from l3_assembly.events.payload_events import (
     FrozenPayload,
-    SignalData,
-    UIState,
     MicroStatsState,
-    TacticalTriadState,
     MTFFlowState,
+    SignalData,
+    TacticalTriadState,
+    UIState,
 )
-from l3_assembly.events.active_options_contract import active_option_row_from_dict
-from l3_assembly.presenters.micro_stats import MicroStatsPresenterV2
-from l3_assembly.presenters.tactical_triad import TacticalTriadPresenterV2
-from l3_assembly.presenters.wall_migration import WallMigrationPresenterV2
 from l3_assembly.presenters.depth_profile import DepthProfilePresenterV2
+from l3_assembly.presenters.micro_stats import MicroStatsPresenterV2
 from l3_assembly.presenters.mtf_flow import MTFFlowPresenterV2
 from l3_assembly.presenters.skew_dynamics import SkewDynamicsPresenterV2
+from l3_assembly.presenters.tactical_triad import TacticalTriadPresenterV2
+from l3_assembly.presenters.wall_migration import WallMigrationPresenterV2
 
 logger = logging.getLogger(__name__)
 
 
 class PayloadAssemblerV2:
-    """Copy-on-Write payload assembler.
-
-    Usage:
-        assembler = PayloadAssemblerV2()
-        frozen = assembler.assemble(decision, snapshot, atm_decay, active_options)
-        payload_dict = frozen.to_dict()   # backward-compatible with legacy frontend
-    """
+    """Assemble immutable payloads from L1/L2 contracts."""
 
     def assemble(
         self,
-        decision: Any,            # L2 DecisionOutput (typed)
-        snapshot: Any,            # L1 EnrichedSnapshot (typed)  OR  legacy dict
+        decision: Any,
+        snapshot: Any,
         atm_decay: dict[str, Any] | None,
-        active_options: Any = None,  # tuple[ActiveOptionRow, ...] or []
-        ui_metrics: dict[str, Any] = None,
+        active_options: Any = None,
+        ui_metrics: dict[str, Any] | None = None,
     ) -> FrozenPayload:
-        """Assemble an immutable FrozenPayload from L2+L1 inputs.
-
-        Args:
-            decision:       L2 DecisionOutput frozen dataclass.
-            snapshot:       L1 EnrichedSnapshot frozen dataclass (or legacy dict).
-            atm_decay:      ATM decay dict from AtmDecayTracker (pass-through).
-            active_options: Pre-computed active options rows from background loop.
-
-        Returns:
-            FrozenPayload — immutable, serialization-ready.
-        """
         start = time.monotonic()
-
-        # ── 1. Signal data from L2 decision ────────────────────────────────
         try:
             signal = SignalData.from_decision_output(decision)
         except Exception as exc:
-            logger.warning(f"[L3 Assembler] SignalData extraction failed: {exc}")
+            logger.warning("[L3 Assembler] SignalData extraction failed: %s", exc)
             signal = SignalData.neutral()
 
-        # ── 2. Extract raw fields for presenters ───────────────────────────
         try:
             snap_data = self._extract_snapshot_data(snapshot, decision, ui_metrics)
         except Exception as exc:
-            logger.warning(f"[L3 Assembler] Snapshot extraction failed: {exc}")
-            snap_data = _SnapshotData()
+            logger.warning("[L3 Assembler] Snapshot extraction failed: %s", exc)
+            snap_data = SnapshotData()
 
-        # ── 3. Drift detection ─────────────────────────────────────────────
         drift_ms, drift_warning = self._compute_drift(
             snap_data.source_data_timestamp_utc,
             signal,
         )
-
-        # ── 4. Build UIState via Presenter V2 calls ────────────────────────
         ui_state = self._build_ui_state(snap_data, active_options or ())
-
-        # ── 5. Extract fused_signal & micro_structure from L2/UI sources ──────────
-        # AgentG._decide_impl writes fused_signal under AgentResult.data["fused_signal"]
-        # and micro_structure under AgentResult.data["micro_structure"].
-        # DecisionOutput shim provides 'fused_signal' under decision.data property.
-        # Microstructure is now primarily provided via ui_metrics from UIStateTracker.
-        fused_signal_dict: dict | None = None
-        micro_structure_dict: dict | None = None
-        try:
-            if decision is not None:
-                raw_data = getattr(decision, "data", None) or {}
-                fused_signal_dict = raw_data.get("fused_signal")
-                # Fallback to decision data, but UI metrics take priority
-                micro_structure_dict = raw_data.get("micro_structure")
-                
-            if ui_metrics and "micro_structure" in ui_metrics:
-                micro_structure_dict = ui_metrics["micro_structure"]
-
-        except Exception as exc:
-            logger.warning(f"[L3 Assembler] data extraction failed: {exc}")
-
-        # ── 6. Timestamps ─────────────────────────────────────────────────────
+        fused_signal, micro_structure = self._extract_l2_payload(decision, ui_metrics)
         now_iso = datetime.now(timezone.utc).isoformat()
-        data_timestamp = self._resolve_data_timestamp(snap_data.source_data_timestamp_utc, signal, now_iso)
 
         payload = FrozenPayload(
-            data_timestamp=data_timestamp,
+            data_timestamp=self._resolve_data_timestamp(
+                snap_data.source_data_timestamp_utc,
+                signal,
+                now_iso,
+            ),
             broadcast_timestamp=now_iso,
             spot=snap_data.spot,
             version=signal.version,
@@ -131,26 +81,33 @@ class PayloadAssemblerV2:
             atm_iv=snap_data.atm_iv,
             net_gex=snap_data.net_gex,
             gamma_walls={"call_wall": snap_data.call_wall, "put_wall": snap_data.put_wall},
-            gamma_flip_level=snap_data.zero_gamma_level if snap_data.zero_gamma_level else snap_data.flip_level_cumulative,
-            fused_signal=fused_signal_dict,
-            micro_structure=micro_structure_dict,
+            gamma_flip_level=(
+                snap_data.zero_gamma_level
+                if snap_data.zero_gamma_level
+                else snap_data.flip_level_cumulative
+            ),
+            fused_signal=fused_signal,
+            micro_structure=micro_structure,
+            header_volatility=snap_data.header_volatility,
             rust_active=snap_data.rust_active,
             shm_stats=snap_data.shm_stats,
         )
-
         logger.debug(
-            f"[L3 Assembler] assembled in {(time.monotonic() - start)*1000:.2f}ms, "
-            f"spot={snap_data.spot}, version={signal.version}"
+            "[L3 Assembler] assembled in %.2fms, spot=%s, version=%s",
+            (time.monotonic() - start) * 1000.0,
+            snap_data.spot,
+            signal.version,
         )
         return payload
 
-    # ── Private helpers ────────────────────────────────────────────────────
+    def _extract_snapshot_data(
+        self,
+        snapshot: Any,
+        decision: Any,
+        ui_metrics: dict[str, Any] | None,
+    ) -> SnapshotData:
+        data = SnapshotData()
 
-    def _extract_snapshot_data(self, snapshot: Any, decision: Any, ui_metrics: dict[str, Any] = None) -> "_SnapshotData":
-        """Extract raw display fields from snapshot (supports both typed + legacy dict)."""
-        data = _SnapshotData()
-
-        # L1 EnrichedSnapshot (typed)
         if hasattr(snapshot, "spot") and hasattr(snapshot, "aggregates"):
             aggregates = getattr(snapshot, "aggregates", None)
             data.spot = float(snapshot.spot or 0.0)
@@ -161,42 +118,37 @@ class PayloadAssemblerV2:
             )
             data.zero_gamma_level = float(getattr(aggregates, "zero_gamma_level", 0.0) or 0.0)
             data.snapshot_time = getattr(snapshot, "computed_at", None)
-            # Aggregated GEX per strike (legacy presenters expect list[dict])
             data.per_strike_gex = getattr(aggregates, "per_strike_gex", [])
-
             data.net_gex = float(getattr(aggregates, "net_gex", 0.0) or 0.0)
             data.call_wall = float(getattr(aggregates, "call_wall", 0.0) or 0.0)
             data.put_wall = float(getattr(aggregates, "put_wall", 0.0) or 0.0)
-            
-            # Metadata support (Phase 1 fix: Rust status)
+
             metadata = getattr(snapshot, "extra_metadata", {}) or {}
             data.rust_active = bool(metadata.get("rust_active", False))
             data.shm_stats = metadata.get("shm_stats")
-            data.volume_map = self._normalize_volume_map(
+            data.volume_map = normalize_volume_map(
                 metadata.get("volume_map", getattr(snapshot, "volume_map", {}))
             )
             data.source_data_timestamp_utc = metadata.get("source_data_timestamp_utc")
-
-        # Legacy dict (from OptionChainBuilder.fetch_chain())
         elif isinstance(snapshot, dict):
             data.spot = float(snapshot.get("spot", 0.0) or 0.0)
             data.atm_iv = float(snapshot.get("atm_iv", snapshot.get("spy_atm_iv", 0.0)) or 0.0)
             data.snapshot_time = snapshot.get("as_of")
             data.source_data_timestamp_utc = snapshot.get("as_of_utc") or snapshot.get("as_of")
-            data.volume_map = self._normalize_volume_map(snapshot.get("volume_map"))
+            data.volume_map = normalize_volume_map(snapshot.get("volume_map"))
             data.net_gex = float(snapshot.get("net_gex", 0.0) or 0.0)
             data.call_wall = float(snapshot.get("call_wall", 0.0) or 0.0)
             data.put_wall = float(snapshot.get("put_wall", 0.0) or 0.0)
             data.flip_level = float(snapshot.get("flip_level", 0.0) or 0.0)
-            data.flip_level_cumulative = float(snapshot.get("flip_level_cumulative", data.flip_level) or 0.0)
+            data.flip_level_cumulative = float(
+                snapshot.get("flip_level_cumulative", data.flip_level) or 0.0
+            )
             data.zero_gamma_level = float(snapshot.get("zero_gamma_level", 0.0) or 0.0)
             data.rust_active = bool(snapshot.get("rust_active", False))
             data.shm_stats = snapshot.get("shm_stats")
 
-        # Supplement from L2 decision's data block if available
         if decision is not None:
             try:
-                # L2 DecisionOutput (typed) — extract from signal_summary
                 data.gex_regime = decision.signal_summary.get("gex_regime", "NEUTRAL")
                 data.vanna_state = decision.signal_summary.get("vanna_state", "NORMAL")
             except AttributeError:
@@ -211,38 +163,48 @@ class PayloadAssemblerV2:
             data.net_charm = ui_metrics.get("net_charm", data.net_charm)
             data.svol_corr = ui_metrics.get("svol_corr", data.svol_corr)
             data.svol_state = ui_metrics.get("svol_state", data.svol_state)
-            wall_migration_data = ui_metrics.get("wall_migration_data", data.wall_migration_data)
-            data.wall_migration_data = wall_migration_data
-            data.wall_dyn = self._extract_wall_dyn_payload(wall_migration_data)
+            data.wall_migration_data = ui_metrics.get(
+                "wall_migration_data",
+                data.wall_migration_data,
+            )
+            data.wall_dyn = extract_wall_dyn_payload(data.wall_migration_data)
             data.mtf_consensus = ui_metrics.get("mtf_consensus", data.mtf_consensus)
             data.skew_dynamics = ui_metrics.get("skew_dynamics", data.skew_dynamics)
             data.iv_velocity = ui_metrics.get("iv_velocity", data.iv_velocity)
+            data.header_volatility = ui_metrics.get(
+                "header_volatility",
+                data.header_volatility,
+            )
 
         return data
 
-    @classmethod
+    @staticmethod
+    def _extract_l2_payload(
+        decision: Any,
+        ui_metrics: dict[str, Any] | None,
+    ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+        fused_signal: dict[str, Any] | None = None
+        micro_structure: dict[str, Any] | None = None
+        try:
+            if decision is not None:
+                raw_data = getattr(decision, "data", None) or {}
+                fused_signal = raw_data.get("fused_signal")
+                micro_structure = raw_data.get("micro_structure")
+            if ui_metrics and "micro_structure" in ui_metrics:
+                micro_structure = ui_metrics["micro_structure"]
+        except Exception as exc:
+            logger.warning("[L3 Assembler] data extraction failed: %s", exc)
+        return fused_signal, micro_structure
+
+    @staticmethod
     def _resolve_data_timestamp(
-        cls,
         source_timestamp: Any,
         signal: SignalData,
         default_now_iso: str,
     ) -> str:
-        """Resolve payload data_timestamp with L0 source timestamp priority."""
-        source_iso = cls._to_utc_iso(source_timestamp)
-        if source_iso:
-            return source_iso
-        computed_iso = cls._to_utc_iso(signal.computed_at)
-        if computed_iso:
-            return computed_iso
-        return default_now_iso
+        return to_utc_iso(source_timestamp) or to_utc_iso(signal.computed_at) or default_now_iso
 
-    def _build_ui_state(
-        self,
-        snap: "_SnapshotData",
-        active_options: Any,
-    ) -> UIState:
-        """Call all 7 Presenter V2 and assemble UIState."""
-        # MicroStats
+    def _build_ui_state(self, snap: SnapshotData, active_options: Any) -> UIState:
         try:
             micro_stats = MicroStatsPresenterV2.build(
                 gex_regime=snap.gex_regime,
@@ -251,10 +213,9 @@ class PayloadAssemblerV2:
                 momentum=snap.momentum,
             )
         except Exception as exc:
-            logger.warning(f"[L3 Assembler] MicroStats failed: {exc}")
+            logger.warning("[L3 Assembler] MicroStats failed: %s", exc)
             micro_stats = MicroStatsState.zero_state()
 
-        # TacticalTriad
         try:
             tactical_triad = TacticalTriadPresenterV2.build(
                 vrp=snap.vrp,
@@ -265,19 +226,15 @@ class PayloadAssemblerV2:
                 fused_signal_direction=snap.fused_signal_direction,
             )
         except Exception as exc:
-            import traceback
-            traceback.print_exc()
-            logger.warning(f"[L3 Assembler] TacticalTriad failed: {exc}")
+            logger.warning("[L3 Assembler] TacticalTriad failed: %s", exc)
             tactical_triad = TacticalTriadState.zero_state()
 
-        # WallMigration
         try:
             wall_migration = WallMigrationPresenterV2.build(snap.wall_migration_data)
         except Exception as exc:
-            logger.warning(f"[L3 Assembler] WallMigration failed: {exc}")
+            logger.warning("[L3 Assembler] WallMigration failed: %s", exc)
             wall_migration = ()
 
-        # DepthProfile
         try:
             depth_profile = DepthProfilePresenterV2.build(
                 per_strike_gex=snap.per_strike_gex,
@@ -285,48 +242,44 @@ class PayloadAssemblerV2:
                 flip_level=snap.flip_level_cumulative if snap.flip_level_cumulative else None,
             )
         except Exception as exc:
-            logger.warning(f"[L3 Assembler] DepthProfile failed: {exc}")
+            logger.warning("[L3 Assembler] DepthProfile failed: %s", exc)
             depth_profile = ()
 
-        # Active Options (already computed in background loop)
         try:
-            if hasattr(active_options, '__iter__'):
+            if hasattr(active_options, "__iter__"):
                 from l3_assembly.events.payload_events import ActiveOptionRow
+
                 active_opts = tuple(
-                    r for r in active_options
-                    if isinstance(r, ActiveOptionRow)
+                    row for row in active_options if isinstance(row, ActiveOptionRow)
                 ) or tuple(
-                    # Fallback: raw dicts from legacy presenter
-                    _convert_active_option(r) for r in active_options
-                    if isinstance(r, dict)
+                    convert_active_option(row)
+                    for row in active_options
+                    if isinstance(row, dict)
                 )
             else:
                 active_opts = ()
         except Exception as exc:
-            logger.warning(f"[L3 Assembler] ActiveOptions failed: {exc}")
+            logger.warning("[L3 Assembler] ActiveOptions failed: %s", exc)
             active_opts = ()
 
-        # MTFFlow
         try:
             mtf_flow = MTFFlowPresenterV2.build(snap.mtf_consensus)
         except Exception as exc:
-            logger.warning(f"[L3 Assembler] MTFFlow failed: {exc}")
+            logger.warning("[L3 Assembler] MTFFlow failed: %s", exc)
             mtf_flow = MTFFlowState.zero_state()
 
-        # SkewDynamics
         try:
             skew_dynamics = SkewDynamicsPresenterV2.build(snap.skew_dynamics)
         except Exception as exc:
-            logger.warning(f"[L3 Assembler] SkewDynamics failed: {exc}")
+            logger.warning("[L3 Assembler] SkewDynamics failed: %s", exc)
             skew_dynamics = {}
 
-        # IV Velocity
         try:
             iv_velocity = getattr(snap, "iv_velocity", None)
             if iv_velocity and hasattr(iv_velocity, "model_dump"):
                 iv_velocity = iv_velocity.model_dump()
         except Exception as exc:
-            logger.warning(f"[L3 Assembler] IV Velocity fallback failed: {exc}")
+            logger.warning("[L3 Assembler] IV Velocity fallback failed: %s", exc)
             iv_velocity = None
 
         return UIState(
@@ -341,143 +294,17 @@ class PayloadAssemblerV2:
             iv_velocity=iv_velocity,
         )
 
-    @classmethod
-    def _compute_drift(
-        cls,
-        source_timestamp: Any,
-        signal: SignalData,
-    ) -> tuple[float, bool]:
-        """Calculate drift between L2 compute time and L0 source timestamp."""
+    @staticmethod
+    def _compute_drift(source_timestamp: Any, signal: SignalData) -> tuple[float, bool]:
         try:
-            source_iso = cls._to_utc_iso(source_timestamp)
-            computed_iso = cls._to_utc_iso(signal.computed_at)
+            source_iso = to_utc_iso(source_timestamp)
+            computed_iso = to_utc_iso(signal.computed_at)
             if not source_iso or not computed_iso:
                 return 0.0, False
-
-            source_dt = datetime.fromisoformat(source_iso)
-            computed_dt = datetime.fromisoformat(computed_iso)
-            delay = (computed_dt - source_dt).total_seconds()
-            drift_ms = delay * 1000.0
-            return drift_ms, delay > 0.8
+            delay = (
+                datetime.fromisoformat(computed_iso) - datetime.fromisoformat(source_iso)
+            ).total_seconds()
+            return delay * 1000.0, delay > 0.8
         except Exception as exc:
-            logger.warning(f"[L3 Assembler] Drift calculation failed: {exc}")
+            logger.warning("[L3 Assembler] Drift calculation failed: %s", exc)
             return 0.0, False
-
-    @staticmethod
-    def _to_utc_iso(value: Any) -> str | None:
-        """Convert datetime/ISO8601 input into canonical UTC ISO string."""
-        if isinstance(value, datetime):
-            dt = value
-        elif isinstance(value, str):
-            raw = value.strip()
-            if not raw:
-                return None
-            if raw.endswith("Z"):
-                raw = f"{raw[:-1]}+00:00"
-            try:
-                dt = datetime.fromisoformat(raw)
-            except ValueError:
-                return None
-        else:
-            return None
-
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        else:
-            dt = dt.astimezone(timezone.utc)
-        return dt.isoformat()
-
-    @staticmethod
-    def _normalize_volume_map(raw: Any) -> dict[str, float]:
-        """Normalize volume_map to a finite non-negative strike->volume map."""
-        if not isinstance(raw, dict):
-            return {}
-
-        out: dict[str, float] = {}
-        for strike, volume in raw.items():
-            try:
-                strike_f = float(strike)
-                volume_f = float(volume)
-            except (TypeError, ValueError):
-                continue
-            if not math.isfinite(strike_f) or not math.isfinite(volume_f):
-                continue
-            if strike_f <= 0.0 or volume_f < 0.0:
-                continue
-            out[str(strike)] = volume_f
-        return out
-
-    @staticmethod
-    def _extract_wall_dyn_payload(raw: Any) -> dict[str, Any]:
-        """Normalize wall-migration payload into MicroStats wall_dyn contract."""
-        if not isinstance(raw, dict):
-            return {}
-
-        call_state = raw.get("call_wall_state")
-        put_state = raw.get("put_wall_state")
-        wall_context = raw.get("wall_context")
-        if call_state is None and put_state is None:
-            return {}
-
-        payload = {
-            "call_wall_state": str(call_state) if call_state is not None else "",
-            "put_wall_state": str(put_state) if put_state is not None else "",
-        }
-        if isinstance(wall_context, dict) and wall_context:
-            payload["wall_context"] = dict(wall_context)
-        return payload
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Internal snapshot data container
-# ─────────────────────────────────────────────────────────────────────────────
-
-class _SnapshotData:
-    """Mutable accumulator for extracted snapshot fields.
-
-    Used internally by PayloadAssemblerV2._extract_snapshot_data().
-    Not exposed as a public API.
-    """
-    __slots__ = (
-        "spot", "atm_iv", "flip_level", "flip_level_cumulative", "zero_gamma_level", "snapshot_time", "gex_regime", "vanna_state",
-        "momentum", "vrp", "vrp_state", "net_charm", "svol_corr", "svol_state",
-        "fused_signal_direction", "wall_dyn", "wall_migration_data",
-        "per_strike_gex", "mtf_consensus", "skew_dynamics", "volume_map",
-        "net_gex", "call_wall", "put_wall", "iv_velocity",
-        "rust_active", "shm_stats", "source_data_timestamp_utc",
-    )
-
-    def __init__(self) -> None:
-        self.spot: float = 0.0
-        self.atm_iv: float = 0.0
-        self.flip_level: float = 0.0
-        self.flip_level_cumulative: float = 0.0
-        self.zero_gamma_level: float = 0.0
-        self.snapshot_time: Any = None
-        self.gex_regime: str = "NEUTRAL"
-        self.vanna_state: str = "NORMAL"
-        self.momentum: str = "NEUTRAL"
-        self.vrp: float | None = None
-        self.vrp_state: str | None = None
-        self.net_charm: float | None = None
-        self.svol_corr: float | None = None
-        self.svol_state: str | None = None
-        self.fused_signal_direction: str | None = None
-        self.wall_dyn: dict = {}
-        self.wall_migration_data: dict = {}
-        self.per_strike_gex: list = []
-        self.mtf_consensus: dict = {}
-        self.skew_dynamics: dict = {}
-        self.volume_map: dict = {}
-        self.net_gex: float = 0.0
-        self.call_wall: float = 0.0
-        self.put_wall: float = 0.0
-        self.iv_velocity: dict | None = None
-        self.rust_active: bool = False
-        self.shm_stats: dict | None = None
-        self.source_data_timestamp_utc: Any = None
-
-
-def _convert_active_option(d: dict) -> Any:
-    """Convert legacy dict row to ActiveOptionRow (best-effort)."""
-    return active_option_row_from_dict(d)

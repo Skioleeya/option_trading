@@ -123,6 +123,10 @@ flowchart LR
 - `fetch_snapshot()` 只负责 L0 原始快照与诊断投影，禁止在 L0 内补算 legacy Greeks / TTM 兼容字段
 - `fetch_snapshot(include_chain_arrow=true)` 允许为 L1 compute 快路径附带内部字段 `chain_arrow`（`RecordBatch`）；该字段仅供进程内 L0->L1 使用，不作为外部 API 稳定合同
 - `aggregate_greeks` 与 `ttm_seconds` 不再属于 L0 输出合同；若下游需要，必须由 L1 或 shared 中立服务产出
+- `header_volatility_aux_diagnostics` 允许作为 L0 低频辅助诊断字段透传，当前用于标题栏波动上下文：
+  - `.VIX.US` 归一化 `vix_iv_decimal`
+  - `1DTE` 最近 ATM 合约 `atm_iv_1dte`
+  - `next_expiry`
 - 当 ActiveOptions 在 `min_volume` 过滤后为空且链路仍有有效候选（如 `turnover/open_interest`）时，允许运行时使用 fallback candidates 继续输出真实行，避免长期全占位降级；该路径必须保留结构化日志与诊断计数。
 - ActiveOptions 行合同允许附加质量标记字段（向后兼容）：`row_quality`、`fallback_reason`、`is_synthetic_fallback`，用于区分真实可交易行与合成降级行。
 

@@ -82,6 +82,17 @@ class _DummyState:
         "agent_g": {
             "data": {
                 "version": 999,
+                "header_volatility": {
+                    "lookback_days": 20,
+                    "lookback_effective_days": 12,
+                    "ivr": 54.0,
+                    "ivp": 60.0,
+                    "term_structure": {
+                        "primary": {"ratio": 1.01, "state": "FLAT"},
+                        "secondary": {"ratio": 1.18, "state": "INVERTED"},
+                    },
+                    "iv_price_relation": {"state": "INVERSE_CONFIRM"},
+                },
                 "ui_state": {
                     "active_options": [
                         {
@@ -119,7 +130,15 @@ class _DummyState:
                 "iv_source": "rest",
                 "iv_confidence": 0.8,
                 "spot": 653.18,
-            }
+            },
+            "header_volatility_aux": {
+                "next_expiry": "2026-03-26",
+                "atm_iv_1dte": 0.205,
+                "atm_iv_1dte_strike": 653.0,
+                "vix_symbol": ".VIX.US",
+                "vix_iv_decimal": 0.19,
+            },
+            "source_data_timestamp_utc": "2026-03-19T15:40:00+00:00",
         },
     )
 
@@ -192,6 +211,12 @@ def test_persistence_status_includes_active_options_and_failover_contracts() -> 
     assert body["l1_runtime"]["version"] == 777
     assert body["l1_runtime"]["atm_iv_context"]["atm_symbol"] == "SPY260325C653000.US"
     assert body["l1_runtime"]["iv_resolution"]["rest"] == 8
+    assert body["l1_runtime"]["header_volatility_aux"]["atm_iv_1dte"] == 0.205
+    assert body["header_volatility"]["payload"]["ivr"] == 54.0
+    assert body["header_volatility"]["payload"]["term_structure"]["primary"]["state"] == "FLAT"
+    assert body["header_volatility"]["payload_version"] == 999
+    assert body["header_volatility"]["payload_data_timestamp"] == "2026-03-19T15:40:00+00:00"
+    assert body["header_volatility"]["l1_aux"]["vix_symbol"] == ".VIX.US"
 
 
 def test_active_options_capture_exposes_same_version_input_and_payload() -> None:

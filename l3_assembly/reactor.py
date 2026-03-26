@@ -46,6 +46,7 @@ from l3_assembly.broadcast.broadcast_governor import BroadcastGovernor
 from l3_assembly.storage.timeseries_store import TimeSeriesStoreV2
 from l3_assembly.observability.l3_instrumentation import L3Instrumentation
 from l3_assembly.assembly.ui_state_tracker import UIStateTracker
+from shared.services.header_volatility_context import HeaderVolatilityContextService
 from shared.services.research_feature_store import ResearchFeatureStore
 
 logger = logging.getLogger(__name__)
@@ -74,7 +75,11 @@ class L3AssemblyReactor:
         self.store = TimeSeriesStoreV2(max_hot=max_hot, redis=redis)
         self.research_store = ResearchFeatureStore()
         self.instrumentation = L3Instrumentation()
-        self.ui_tracker = UIStateTracker()
+        self.ui_tracker = UIStateTracker(
+            header_volatility_service=HeaderVolatilityContextService(
+                research_store=self.research_store,
+            )
+        )
         self.shadow_mode = shadow_mode
 
         self._total_ticks = 0

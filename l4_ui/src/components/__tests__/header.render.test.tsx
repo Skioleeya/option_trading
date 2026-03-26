@@ -10,6 +10,7 @@ afterEach(() => {
         connectionStatus: 'connecting',
         spot: null,
         ivPct: null,
+        headerVolatility: null,
     } as any)
 })
 
@@ -19,6 +20,23 @@ describe('Header component render', () => {
             connectionStatus: 'connected',
             spot: 512.34,
             ivPct: 0.245,
+            headerVolatility: {
+                lookback_days: 20,
+                lookback_effective_days: 12,
+                ivr: 72,
+                ivp: 68,
+                term_structure: {
+                    primary: { anchor: '1DTE', symbol: 'SPY.US', ratio: 1.12, state: 'INVERTED' },
+                    secondary: { anchor: '.VIX.US', symbol: '.VIX.US', ratio: 1.08, state: 'INVERTED' },
+                },
+                iv_price_relation: {
+                    window_seconds: 120,
+                    iv_change_pp: 2.2,
+                    price_change_pct: -0.3,
+                    beta_pp_per_pct: 7.3,
+                    state: 'INVERSE_CONFIRM',
+                },
+            },
             payload: {
                 type: 'dashboard_update',
                 timestamp: '2026-03-06T15:30:45Z',
@@ -38,6 +56,23 @@ describe('Header component render', () => {
                             gex_intensity: 'NEUTRAL',
                             explanation: '',
                             components: {},
+                        },
+                        header_volatility: {
+                            lookback_days: 20,
+                            lookback_effective_days: 12,
+                            ivr: 72,
+                            ivp: 68,
+                            term_structure: {
+                                primary: { anchor: '1DTE', symbol: 'SPY.US', ratio: 1.12, state: 'INVERTED' },
+                                secondary: { anchor: '.VIX.US', symbol: '.VIX.US', ratio: 1.08, state: 'INVERTED' },
+                            },
+                            iv_price_relation: {
+                                window_seconds: 120,
+                                iv_change_pp: 2.2,
+                                price_change_pct: -0.3,
+                                beta_pp_per_pct: 7.3,
+                                state: 'INVERSE_CONFIRM',
+                            },
                         },
                         ui_state: {
                             iv_velocity: {
@@ -59,6 +94,11 @@ describe('Header component render', () => {
         expect(screen.getByText('RUST')).toBeInTheDocument()
         expect(screen.getByText(/VOL_EXPANSION/)).toBeInTheDocument()
         expect(screen.getByText('24.50%')).toBeInTheDocument()
+        expect(screen.getByText('R72')).toBeInTheDocument()
+        expect(screen.getByText('P68')).toBeInTheDocument()
+        expect(screen.getByText('1D 1.12')).toBeInTheDocument()
+        expect(screen.getByText('VX 1.08')).toBeInTheDocument()
+        expect(screen.getByText('β INV')).toBeInTheDocument()
     })
 
     it('uses prop timestamp fallback when payload timestamp is missing', () => {

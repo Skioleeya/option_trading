@@ -125,6 +125,7 @@ Payload 核心语义:
 - `timestamp/data_timestamp`: L0 源数据时间
 - `broadcast_timestamp/heartbeat_timestamp`: L3 广播时钟
 - `ui_state`: 前端唯一消费状态源
+- `agent_g.data.header_volatility`: 标题栏动态波动上下文，固定包含 `IVR/IVP`、`term_structure`、`iv_price_relation`
 - `rust_active/shm_stats`: 诊断链路连续透传
 
 ## 5. Startup and Degraded Mode
@@ -177,6 +178,11 @@ sequenceDiagram
 - `/health`
 - `/debug/persistence_status`
 - `/debug/active_options_capture`：必须返回同一服务端版本下的 ActiveOptions 原始输入链、显示 Top5、版本对齐状态，以及 `sparse_window` 判定，便于区分“候选池不稀疏”与“显示面/输入面版本错位”
+- 标题栏波动上下文必须固定口径：
+  - `IVR/IVP` 基于最近 `20` 个已完成交易日的收盘 ATM IV
+  - `term_structure.primary` 基于 `0DTE ATM IV / 1DTE ATM IV`
+  - `term_structure.secondary` 基于 `0DTE ATM IV / .VIX.US`
+  - `iv_price_relation` 基于 `120s` rolling `ΔIV / ΔPrice`
 - ATM decay live continuity 必须允许“L1/L2 dedup、ATM 续推”并存：重复 `snapshot_version` 不得重跑 GPU/L2，但若 tracker 产生新 ATM sample，L3/L4 仍必须收到新的 `atm` payload
 - ATM decay history restore/API 暴露必须经过 timestamp sanitizer，避免同日 future/out-of-order 样本污染 cold boot 与增量图表
 - `snapshot_version_iv_probe` 告警阈值必须由配置驱动（`snapshot_iv_probe_*`），禁止在探针逻辑中写死 tick/秒阈值

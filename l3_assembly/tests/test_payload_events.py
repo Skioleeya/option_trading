@@ -78,6 +78,7 @@ def _frozen_payload() -> FrozenPayload:
         signal=_signal_data(),
         ui_state=_ui_state(),
         atm=None,
+        header_volatility={"ivr": 55.0},
     )
 
 
@@ -323,6 +324,7 @@ class TestFrozenPayload:
         assert "agent_g" in d
         assert "data" in d["agent_g"]
         assert "ui_state" in d["agent_g"]["data"]
+        assert d["agent_g"]["data"]["header_volatility"]["ivr"] == pytest.approx(55.0)
 
     def test_to_dict_top_level_keys(self):
         d = _frozen_payload().to_dict()

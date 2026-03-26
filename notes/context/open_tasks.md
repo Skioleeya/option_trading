@@ -1,9 +1,10 @@
-﻿# Open Tasks (Index)
+# Open Tasks (Index)
 
 ## Active Session Tasks
-- Path: notes/sessions/2026-03-26/active-options-min-volume-ab-startup-fix-20260326/open_tasks.md
+- Path: notes/sessions/2026-03-26/header-iv-dynamic-threshold-context-20260326/open_tasks.md
 
 ## Global Backlog (Cross-Session)
+- [ ] P1: Restore a strict fresh-launch backend path for the title-bar IV volatility session; as of 2026-03-26 15:49 ET, healthy restarts work via `scripts/ops/start_backend.ps1 -Degraded`, but strict startup still fails on quote-token connectivity probing. (Owner: Codex, DUE: 2026-03-27, session: `2026-03-26/header-iv-dynamic-threshold-context-20260326`).
 - [ ] P1: Verify regular-hours live `atm` payload continuity with the new `[L3-PAYLOAD]` marker so `call_pct/put_pct/straddle_pct` are observed in-session, not just via history hydrate. (Owner: Codex, DUE: 2026-03-27, session: `2026-03-25/trace-depth-profile-and-tradingview-live-path-20260325`).
 - [ ] P1: Verify raw-vanna card cadence during regular-hours source activity and compare metric-refresh density against the observed after-hours heartbeat baseline. (Owner: Codex, DUE: 2026-03-27, session: `2026-03-25/capture-dashboard-delta-and-surface-raw-vanna-20260325`).
 - [x] P1: Switch `shared/services/l0_runtime` live consumer path from legacy SHM/event bridge to `shared/system/ipc_reader.py` on the Arrow IPC named-event contract, then add roundtrip verification. (Owner: Codex, DUE: 2026-03-27, session: `2026-03-25/rewrite-l0-in-rust-implementation-20260325`). COMPLETED-IN: `2026-03-25/cutover-arrow-consumer-and-retire-legacy-dual-write-20260325`
