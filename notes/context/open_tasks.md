@@ -1,7 +1,7 @@
 ﻿# Open Tasks (Index)
 
 ## Active Session Tasks
-- Path: notes/sessions/2026-03-25/trace-depth-profile-and-tradingview-live-path-20260325/open_tasks.md
+- Path: notes/sessions/2026-03-26/active-options-partial-fallback-runtime-repair/open_tasks.md
 
 ## Global Backlog (Cross-Session)
 - [ ] P1: Verify regular-hours live `atm` payload continuity with the new `[L3-PAYLOAD]` marker so `call_pct/put_pct/straddle_pct` are observed in-session, not just via history hydrate. (Owner: Codex, DUE: 2026-03-27, session: `2026-03-25/trace-depth-profile-and-tradingview-live-path-20260325`).

@@ -233,93 +233,6 @@ def mark_rows_as_synthetic_fallback(
     return tagged
 
 
-def _with_synthetic_volume_for_fallback(
-    row: dict[str, Any],
-    *,
-    force_minimum: bool = False,
-) -> dict[str, Any]:
-    """Ensure fallback candidate has minimal positive volume for DEG engines."""
-    out = dict(row)
-    volume = _to_int(out.get("volume"), 0)
-    if volume > 0:
-        return out
-
-    turnover = _to_float(out.get("turnover"), 0.0)
-    if turnover <= 0.0:
-        if _to_int(out.get("open_interest"), 0) > 0:
-            out["volume"] = 1
-        elif force_minimum:
-            out["volume"] = 1
-        return out
-
-    last_price = _to_float(out.get("last_price"), 0.0)
-    if last_price > 0.0:
-        inferred = int(turnover / max(1e-6, last_price * 100.0))
-        out["volume"] = max(1, inferred)
-        return out
-
-    out["volume"] = 1
-    return out
-
-
-def fallback_candidates_when_empty(
-    *,
-    chain: list[dict[str, Any]],
-    max_candidates: int,
-) -> tuple[list[dict[str, Any]], str]:
-    """Build fallback candidates when min-volume filter returns empty.
-
-    Priority: turnover desc -> open_interest desc -> stable key.
-    """
-    target = max(0, int(max_candidates))
-    if target == 0:
-        return [], "none"
-
-    normalized = [normalize_chain_volume_fields(option_row) for option_row in chain]
-    eligible = [
-        row
-        for row in normalized
-        if _to_float(row.get("turnover"), 0.0) > 0.0 or _to_int(row.get("open_interest"), 0) > 0
-    ]
-    if eligible:
-        ranked = sorted(
-            eligible,
-            key=lambda row: (
-                -_to_float(row.get("turnover"), 0.0),
-                -_to_int(row.get("open_interest"), 0),
-                str(row.get("symbol", "")),
-                _to_float(row.get("strike"), 0.0),
-                str(row.get("option_type", row.get("type", ""))),
-            ),
-        )
-        candidates = ranked[:target]
-        return (
-            [_with_synthetic_volume_for_fallback(row) for row in candidates],
-            "turnover_open_interest",
-        )
-
-    if not normalized:
-        return [], "none"
-
-    ranked_hard = sorted(
-        normalized,
-        key=lambda row: (
-            -_to_int(row.get("volume"), 0),
-            -_to_int(row.get("open_interest"), 0),
-            -_to_float(row.get("turnover"), 0.0),
-            -_to_float(row.get("last_price"), 0.0),
-            str(row.get("symbol", "")),
-            _to_float(row.get("strike"), 0.0),
-            str(row.get("option_type", row.get("type", ""))),
-        ),
-    )
-    candidates = ranked_hard[:target]
-    return (
-        [_with_synthetic_volume_for_fallback(row, force_minimum=True) for row in candidates],
-        "hard_chain",
-    )
-
-
 def rank_outputs(outputs: list[FlowEngineOutput]) -> list[FlowEngineOutput]:
     return sorted(
         outputs,
@@ -334,61 +247,6 @@ def rank_outputs(outputs: list[FlowEngineOutput]) -> list[FlowEngineOutput]:
     )
 
 
-def build_neutral_outputs_from_chain(
-    *,
-    filtered: list[dict[str, Any]],
-    limit: int,
-) -> list[FlowEngineOutput]:
-    target = max(0, int(limit))
-    if target <= 0:
-        return []
-    if not filtered:
-        return []
-
-    ranked = sorted(
-        filtered,
-        key=lambda row: (
-            -_to_int(row.get("volume"), 0),
-            -_to_float(row.get("turnover"), 0.0),
-            -_to_int(row.get("open_interest"), 0),
-            str(row.get("symbol", "")),
-            _to_float(row.get("strike"), 0.0),
-            str(row.get("option_type", row.get("type", ""))),
-        ),
-    )[:target]
-
-    outputs: list[FlowEngineOutput] = []
-    for row in ranked:
-        option_type = str(row.get("option_type", "CALL")).strip().upper()
-        if option_type not in {"CALL", "PUT"}:
-            option_type = "CALL" if bool(row.get("is_call")) else "PUT"
-        outputs.append(
-            FlowEngineOutput(
-                symbol=str(row.get("symbol", "SPY")),
-                option_type=option_type,
-                strike=float(_to_float(row.get("strike"), 0.0)),
-                implied_volatility=float(_to_float(row.get("implied_volatility"), 0.0)),
-                volume=max(0, _to_int(row.get("volume"), 0)),
-                turnover=max(0.0, _to_float(row.get("turnover"), 0.0)),
-                flow_d=0.0,
-                flow_e=0.0,
-                flow_g=0.0,
-                flow_d_z=0.0,
-                flow_e_z=0.0,
-                flow_g_z=0.0,
-                flow_deg=0.0,
-                impact_index=0.0,
-                is_sweep=False,
-                flow_direction=_OUTPUT_FALLBACK_DEFAULT_DIRECTION,
-                flow_intensity=_OUTPUT_FALLBACK_DEFAULT_INTENSITY,
-                engine_d_active=False,
-                engine_e_active=False,
-                engine_g_active=False,
-            )
-        )
-    return outputs
-
-
 def format_row(o: FlowEngineOutput, *, slot_index: int = 1) -> dict[str, Any]:
     # UI semantics are amount-first: displayed FLOW sign must match direction/color.
     flow_amount = o.flow_d + o.flow_e + o.flow_g
@@ -399,6 +257,7 @@ def format_row(o: FlowEngineOutput, *, slot_index: int = 1) -> dict[str, Any]:
 
     return {
         "symbol": "SPY",
+        "contract_symbol": o.symbol,
         "option_type": o.option_type,
         "strike": o.strike,
         "implied_volatility": o.implied_volatility,
@@ -431,6 +290,7 @@ def placeholder_row(slot_index: int) -> dict[str, Any]:
     idx = max(1, int(slot_index))
     return {
         "symbol": "—",
+        "contract_symbol": None,
         "option_type": "CALL",
         "strike": 0.0,
         "implied_volatility": 0.0,
