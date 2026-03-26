@@ -152,6 +152,7 @@ sequenceDiagram
 - 当显式关闭 strict 开关时，Runtime 建连失败可降级运行，但必须输出结构化诊断日志。
 - Runtime 建连失败需有限次退避重试后再判定失败（避免瞬时网络抖动直接进入长时间降级）。
 - 降级模式必须有明确日志。
+- lifespan 启动期的 bootstrap/repair 门槛必须先将初始 `spot` 归一为非负浮点；当 `fetch_snapshot().spot` 缺失或为 `null` 时，必须按 `0.0` 处理并继续降级启动，禁止在 near-ATM repair gate 上因 `None` 比较直接抛错。
 - 运维启动必须遵循 probe-first：先检查 `/health`、`5173`、`6380`，仅对 DOWN 组件执行启动，避免重复启动导致 `WinError 10048`。
 - 当 `8001` 端口冲突时，先以 `/health` 判定是否已有健康实例在跑；仅在需要替换实例时才释放端口占用进程。
 - LongPort Quote API 配额守卫必须持续生效:
@@ -175,6 +176,7 @@ sequenceDiagram
 
 - `/health`
 - `/debug/persistence_status`
+- `/debug/active_options_capture`：必须返回同一服务端版本下的 ActiveOptions 原始输入链、显示 Top5、版本对齐状态，以及 `sparse_window` 判定，便于区分“候选池不稀疏”与“显示面/输入面版本错位”
 - ATM decay live continuity 必须允许“L1/L2 dedup、ATM 续推”并存：重复 `snapshot_version` 不得重跑 GPU/L2，但若 tracker 产生新 ATM sample，L3/L4 仍必须收到新的 `atm` payload
 - ATM decay history restore/API 暴露必须经过 timestamp sanitizer，避免同日 future/out-of-order 样本污染 cold boot 与增量图表
 - `snapshot_version_iv_probe` 告警阈值必须由配置驱动（`snapshot_iv_probe_*`），禁止在探针逻辑中写死 tick/秒阈值

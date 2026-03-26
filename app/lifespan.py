@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI
 
@@ -16,6 +17,16 @@ from app.loops.housekeeping_loop import run_housekeeping_loop
 logger = logging.getLogger(__name__)
 _ATM_BOOTSTRAP_RETRIES = 20
 _ATM_BOOTSTRAP_DELAY_SECONDS = 0.5
+
+
+def _coerce_non_negative_spot(raw: Any) -> float:
+    try:
+        spot = float(raw)
+    except (TypeError, ValueError):
+        return 0.0
+    if spot < 0.0:
+        return 0.0
+    return spot
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -39,7 +50,7 @@ async def lifespan(app: FastAPI):
     await asyncio.sleep(5.0)
     try:
         _init_snapshot = await ctr.option_chain_builder.fetch_snapshot()
-        _init_spot = _init_snapshot.get("spot", 0.0)
+        _init_spot = _coerce_non_negative_spot(_init_snapshot.get("spot", 0.0))
     except Exception as exc:
         logger.warning("[Lifespan] Initial fetch_chain failed, using spot=0. reason=%s", exc)
         _init_spot = 0.0

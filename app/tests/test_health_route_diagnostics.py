@@ -61,6 +61,44 @@ class _DummyActiveOptionsService:
 
 
 class _DummyState:
+    latest_active_options_input = SimpleNamespace(
+        chain=[
+            {"symbol": "SPY260319C00560000.US", "strike": 560.0, "volume": 12},
+            {"symbol": "SPY260319P00559000.US", "strike": 559.0, "volume": 11},
+        ],
+        spot=560.25,
+        atm_iv=0.22,
+        gex_regime="NEUTRAL",
+        ttm_seconds=3600.0,
+        source_version=999,
+        source_timestamp_utc="2026-03-19T15:40:00+00:00",
+        valid=True,
+        invalid_reason=None,
+    )
+    payload_dict = {
+        "version": 999,
+        "timestamp": "2026-03-19T15:40:00+00:00",
+        "data_timestamp": "2026-03-19T15:40:00+00:00",
+        "agent_g": {
+            "data": {
+                "version": 999,
+                "ui_state": {
+                    "active_options": [
+                        {
+                            "symbol": "SPY260319C00560000.US",
+                            "slot_index": 1,
+                            "is_placeholder": False,
+                        },
+                        {
+                            "symbol": "SPY260319P00559000.US",
+                            "slot_index": 2,
+                            "is_placeholder": False,
+                        },
+                    ]
+                },
+            }
+        },
+    }
     latest_l1_snapshot = SimpleNamespace(
         version=777,
         computed_at="2026-03-25T12:00:00+00:00",
@@ -154,3 +192,21 @@ def test_persistence_status_includes_active_options_and_failover_contracts() -> 
     assert body["l1_runtime"]["version"] == 777
     assert body["l1_runtime"]["atm_iv_context"]["atm_symbol"] == "SPY260325C653000.US"
     assert body["l1_runtime"]["iv_resolution"]["rest"] == 8
+
+
+def test_active_options_capture_exposes_same_version_input_and_payload() -> None:
+    with _client() as client:
+        resp = client.get("/debug/active_options_capture")
+    assert resp.status_code == 200
+    body = resp.json()
+
+    assert body["version_alignment"]["aligned"] is True
+    assert body["version_alignment"]["input_source_version"] == 999
+    assert body["version_alignment"]["payload_source_version"] == 999
+    assert body["active_options_input"]["chain_size"] == 2
+    assert body["active_options_input"]["chain"][0]["symbol"] == "SPY260319C00560000.US"
+    assert body["displayed_payload"]["rows_total"] == 2
+    assert body["displayed_payload"]["rows_real"] == 2
+    assert body["displayed_payload"]["rows"][0]["slot_index"] == 1
+    assert body["active_options_diagnostics"]["filtered_candidates_count"] == 2
+    assert body["sparse_window"]["is_sparse_window"] is True

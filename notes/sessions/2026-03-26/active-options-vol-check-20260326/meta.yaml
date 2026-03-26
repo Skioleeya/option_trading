@@ -1,0 +1,47 @@
+﻿session_id: "2026-03-26/active-options-vol-check-20260326"
+title: "ActiveOptions VOL live check"
+scope: "feature"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-26 13:32:19 -04:00"
+updated_at_et: "2026-03-26 13:46:35 -04:00"
+parent_session: "2026-03-26/active-options-partial-fallback-runtime-repair"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "fc31039"
+head_commit: "fc31039"
+
+files_changed:
+  - "notes/sessions/2026-03-26/active-options-vol-check-20260326/project_state.md"
+  - "notes/sessions/2026-03-26/active-options-vol-check-20260326/open_tasks.md"
+  - "notes/sessions/2026-03-26/active-options-vol-check-20260326/handoff.md"
+  - "notes/sessions/2026-03-26/active-options-vol-check-20260326/meta.yaml"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+commands:
+  - "inline Python fetch of /health and /debug/persistence_status"
+  - "Get-Content logs/backend_runtime.current.log -Tail 300"
+  - "inline Python websocket sampler for one merged ActiveOptions snapshot"
+  - "inline Python websocket sampler for 15 merged ActiveOptions frames"
+  - "inline Python websocket sampler for a fresh sparse-window ActiveOptions snapshot"
+  - "inline Python fetch of active_options from /debug/persistence_status"
+  - "python scripts/diag/check_active_options_no_data_cause.py --json"
+  - "python scripts/diag/audit_intraday_core_flow.py --json"
+  - "powershell -ExecutionPolicy Bypass -File scripts/ops/verify_active_options_hotfix.ps1"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 shared/services/active_options/test_runtime_service.py -q"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "verify_active_options_hotfix.ps1 PASS with chain_size=112, real=5, live_rows=2, degraded_rows=3, missing_turnover_rows=0"
+  - "15 merged websocket ActiveOptions frames: 0 VOL order violations, 15/15 frames with synthetic fallback rows"
+  - "shared/services/active_options/test_runtime_service.py: 23 passed"
+  - "check_active_options_no_data_cause.py --json classified the live state as min_volume-filter degradation while runtime/feed health stayed OK"
+  - "audit_intraday_core_flow.py --json still passed broader live continuity, implying the issue is ActiveOptions quality not pipeline liveness"
+tests_failed: []
+blockers: []
+notes:
+  - "Live VOL values and ordering are healthy in the sampled regular-hours window."
+  - "The same sampled window still averaged about two FALLBACK_SYNTHETIC rows per frame, and a later sparse window degraded further to one real row plus four synthetic rows."
+  - "Repository contracts and tests still confirm current_volume fallback and implausible-volume sanitization."
+  - "Latest evidence points to threshold/candidate-pool sparsity as the primary cause, with the 3-tick switch gate only affecting transient visible carryover."
+
+

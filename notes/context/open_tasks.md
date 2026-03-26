@@ -1,7 +1,7 @@
 ﻿# Open Tasks (Index)
 
 ## Active Session Tasks
-- Path: notes/sessions/2026-03-26/active-options-partial-fallback-runtime-repair/open_tasks.md
+- Path: notes/sessions/2026-03-26/active-options-min-volume-ab-startup-fix-20260326/open_tasks.md
 
 ## Global Backlog (Cross-Session)
 - [ ] P1: Verify regular-hours live `atm` payload continuity with the new `[L3-PAYLOAD]` marker so `call_pct/put_pct/straddle_pct` are observed in-session, not just via history hydrate. (Owner: Codex, DUE: 2026-03-27, session: `2026-03-25/trace-depth-profile-and-tradingview-live-path-20260325`).
@@ -20,7 +20,10 @@
 - [ ] P1: Configure GitHub branch protection required check `validate-session` (Owner: Repo Admin, DUE: 2026-03-19, session: `2026-03-13/anti-garbage-code-gate-hardening`).
 - [ ] P2: 閺€璺哄經楠炶泛缍婂?`refactor-governance-20260317-l0-l2-data-path-remediation-chain` 閸欏﹤鍙鹃崜鈺€缍戠€涙劖褰佸?(Owner: Codex, DUE: 2026-03-21, session: `2026-03-17/apply-fix-20260317-p2-gpu-temp-noise-and-archive`).
 - [ ] P2: L0-L2 dechaos Stage-2 绾剟妲囬崐鍏兼暪閸欙綇绱橝gentG/IVBaselineSync閿?Owner: Codex, DUE: 2026-03-19, session: `2026-03-17/apply-refactor-governance-20260317-l0-l2-dechaos-chain-p1-implementation`).
-- [ ] P1-CARRY: Online active-options volume verification pending (env process launch limitation). Owner: User. DUE: 2026-03-20. Session: active-options-volume-sanitize-20260319. SUPERSEDES: debt from prior session.
+- [x] P1-CARRY: Online active-options volume verification pending (env process launch limitation). Owner: User. DUE: 2026-03-20. Session: active-options-volume-sanitize-20260319. COMPLETED-IN: `2026-03-26/active-options-vol-check-20260326`
+- [x] P0: Restore one healthy backend restart path after the 2026-03-26 ActiveOptions A/B attempt replaced the long-lived live instance; current fresh launches lose Arrow IPC mapping and/or fail strict quote-token startup connectivity. Owner: Codex. DUE: 2026-03-27. Session: `2026-03-26/active-options-min-volume-ab-startup-fix-20260326`. COMPLETED-IN: `2026-03-26/active-options-min-volume-ab-startup-fix-20260326`
+- [x] P1: Capture one raw-chain vs displayed-top5 sparse-window artifact and run a bounded `FLOW_ACTIVE_MIN_VOLUME` A/B to confirm the remaining ActiveOptions issue is policy strictness / candidate-pool sparsity rather than source-decoding failure. Owner: Codex. DUE: 2026-03-27. Session: `2026-03-26/active-options-vol-check-20260326`. COMPLETED-IN: `2026-03-26/active-options-min-volume-ab-startup-fix-20260326`
+- [ ] P1: Capture one same-version sparse-window raw-chain vs displayed-top5 artifact from the healthy server runtime path; the bounded `FLOW_ACTIVE_MIN_VOLUME` A/B is already complete and aligned capture infrastructure now exists, but the current live window has not yet produced `sparse_window=true`. Owner: Codex. DUE: 2026-03-27. Session: `2026-03-26/active-options-min-volume-ab-startup-fix-20260326`.
 - [ ] P1: Verify live ATM anchor diagnostics after restart when quote connectivity is healthy. Owner: Codex. DUE: 2026-03-25. Session: 2026-03-24/fix-oi-rest-path-depth-zero-20260324.
 - [ ] P1: Verify bounded `option_quote()` price repair for ATM anchor/mandatory symbols after healthy restart. Owner: Codex. DUE: 2026-03-25. Session: 2026-03-24/fix-oi-rest-path-depth-zero-20260324.
 - [ ] P1: Verify a fresh ATM lock no longer persists a flat opening `0/0/0` point after the opening-tick suppression patch. Owner: Codex. DUE: 2026-03-25. Session: 2026-03-24/fix-oi-rest-path-depth-zero-20260324.
