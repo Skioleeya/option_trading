@@ -1,12 +1,12 @@
-# Handoff (Index)
+﻿# Handoff (Index)
 
 ## Active Handoff
-- Path: notes/sessions/2026-03-26/header-iv-dynamic-threshold-context-20260326/handoff.md
-- Meta: notes/sessions/2026-03-26/header-iv-dynamic-threshold-context-20260326/meta.yaml
+- Path: notes/sessions/2026-03-28/commit-clean-worktree-20260328/handoff.md
+- Meta: notes/sessions/2026-03-28/commit-clean-worktree-20260328/meta.yaml
 
 ## Latest Outcome
-- Session: 2026-03-26/header-iv-dynamic-threshold-context-20260326
-- Summary: Implemented the title-bar IV dynamic-threshold feature, added dedicated header-volatility debug observability, then completed a real elevated degraded backend restart and confirmed live continuity on the new instance via advancing aligned versions and fresh log markers. The final strict validation rerun is green.
+- Session: 2026-03-28/commit-clean-worktree-20260328
+- Summary: In progress. Fresh bounded regression evidence is green (`42 passed`) and critical cold-manifest sync is green for `20260312/20260326/20260327`; next step is strict validation plus the final commit.
 
 ## Next Session Bootstrap
 1. Read this file.

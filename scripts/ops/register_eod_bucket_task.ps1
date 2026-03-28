@@ -5,6 +5,10 @@ param(
     [string]$DataRoot = "data",
     [string]$OutRoot = "data/cold",
     [string]$TaskPrefix = "EODBucket",
+    [double]$SettleStableWindowSeconds = 30,
+    [double]$SettleTimeoutSeconds = 900,
+    [double]$SettlePollSeconds = 5,
+    [int]$MaxAttempts = 2,
     [switch]$Apply
 )
 
@@ -26,29 +30,55 @@ if (-not (Test-Path $runnerPath)) {
 $primaryTask = "${TaskPrefix}Primary"
 $retryTask = "${TaskPrefix}Retry"
 
-$runCmd = "powershell -NoProfile -ExecutionPolicy Bypass -File `"$runnerPath`""
+$sharedArgs = @(
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    $runnerPath,
+    "-ConfigPath",
+    $ConfigPath,
+    "-DataRoot",
+    $DataRoot,
+    "-OutRoot",
+    $OutRoot,
+    "-SettleStableWindowSeconds",
+    "$SettleStableWindowSeconds",
+    "-SettleTimeoutSeconds",
+    "$SettleTimeoutSeconds",
+    "-SettlePollSeconds",
+    "$SettlePollSeconds",
+    "-MaxAttempts",
+    "$MaxAttempts"
+)
 
-$primaryCreate = "schtasks /Create /F /TN `"$primaryTask`" /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 16:01 /TR `"$runCmd`""
-$retryCreate = "schtasks /Create /F /TN `"$retryTask`" /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 17:00 /TR `"$runCmd`""
+$primaryArgs = @($sharedArgs + @("-RunLabel", "Primary"))
+$retryArgs = @($sharedArgs + @("-RunLabel", "Retry"))
+$primaryArgText = [string]::Join(" ", @($primaryArgs | ForEach-Object {
+    if ($_ -match '\s') { '"{0}"' -f $_ } else { "$_" }
+}))
+$retryArgText = [string]::Join(" ", @($retryArgs | ForEach-Object {
+    if ($_ -match '\s') { '"{0}"' -f $_ } else { "$_" }
+}))
+$primaryAction = New-ScheduledTaskAction -Execute "powershell" -Argument $primaryArgText
+$retryAction = New-ScheduledTaskAction -Execute "powershell" -Argument $retryArgText
+$weekDays = @("Monday", "Tuesday", "Wednesday", "Thursday", "Friday")
+$primaryTrigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekDays -At "4:01 PM"
+$retryTrigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $weekDays -At "4:04 PM"
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew
 
 Write-Host "[EODBucketTask] Preview commands:"
-Write-Host $primaryCreate
-Write-Host $retryCreate
+Write-Host ("TaskName={0} Trigger=16:01 StartWhenAvailable=True Execute={1} Arguments={2}" -f $primaryTask, $primaryAction.Execute, $primaryAction.Arguments)
+Write-Host ("TaskName={0} Trigger=16:04 StartWhenAvailable=True Execute={1} Arguments={2}" -f $retryTask, $retryAction.Execute, $retryAction.Arguments)
 Write-Host ""
 Write-Host "[EODBucketTask] Query commands:"
-Write-Host "schtasks /Query /TN `"$primaryTask`" /V /FO LIST"
-Write-Host "schtasks /Query /TN `"$retryTask`" /V /FO LIST"
+Write-Host "Get-ScheduledTask -TaskName `"$primaryTask`" | Format-List TaskName,State,Actions,Triggers"
+Write-Host "Get-ScheduledTask -TaskName `"$retryTask`" | Format-List TaskName,State,Actions,Triggers"
 
 if ($Apply) {
     Write-Host ""
     Write-Host "[EODBucketTask] Applying scheduled tasks..."
-    cmd /c $primaryCreate | Out-Host
-    if ($LASTEXITCODE -ne 0) {
-        throw "Failed creating task: $primaryTask (exit=$LASTEXITCODE)"
-    }
-    cmd /c $retryCreate | Out-Host
-    if ($LASTEXITCODE -ne 0) {
-        throw "Failed creating task: $retryTask (exit=$LASTEXITCODE)"
-    }
+    Register-ScheduledTask -TaskName $primaryTask -Action $primaryAction -Trigger $primaryTrigger -Settings $settings -Force | Out-Null
+    Register-ScheduledTask -TaskName $retryTask -Action $retryAction -Trigger $retryTrigger -Settings $settings -Force | Out-Null
     Write-Host "[EODBucketTask] Applied."
 }

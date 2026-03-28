@@ -1,17 +1,17 @@
-# Project State (Index)
+﻿# Project State (Index)
 
 ## Active Session
-- Path: notes/sessions/2026-03-26/header-iv-dynamic-threshold-context-20260326/project_state.md
-- Meta: notes/sessions/2026-03-26/header-iv-dynamic-threshold-context-20260326/meta.yaml
+- Path: notes/sessions/2026-03-28/commit-clean-worktree-20260328/project_state.md
+- Meta: notes/sessions/2026-03-28/commit-clean-worktree-20260328/meta.yaml
 - Status: ACTIVE
-- Latest Snapshot: 2026-03-26 15:51 ET, title-bar IV dynamic-threshold feature is implemented, header-volatility debug observability is in place, the backend was truly restarted on an elevated degraded path, repeated live polls confirmed aligned advancing payload/dataflow on the new instance, and the final strict validation rerun is green.
+- Latest Summary: Commit-packaging session is staging a single clean commit for the current EOD/archive maintenance work after a fresh 42-test regression pass.
 
 ## Recent Sessions
-- notes/sessions/2026-03-26/header-iv-dynamic-threshold-context-20260326/
-- notes/sessions/2026-03-26/active-options-min-volume-ab-startup-fix-20260326/
-- notes/sessions/2026-03-26/active-options-vol-check-20260326/
-- notes/sessions/2026-03-26/active-options-partial-fallback-runtime-repair/
-- notes/sessions/2026-03-26/intraday-longbridge-field-flow-and-latency-check/
+- notes/sessions/2026-03-28/commit-clean-worktree-20260328/
+- notes/sessions/2026-03-28/fix-20260327-feature-sparsity-quality-gate/
+- notes/sessions/2026-03-28/fix-gap-trend-vs-trend-overlap/
+- notes/sessions/2026-03-27/fix-20260326-classification-and-rerun-bucket/
+- notes/sessions/2026-03-27/recover-20260312-canonical-raw-and-rearchive/
 
 ## Global Rules
 - Session folders are immutable records; do not overwrite prior sessions.

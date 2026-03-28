@@ -1,0 +1,35 @@
+﻿session_id: "2026-03-27/hardcode-correct-startup-plan-20260327"
+title: "Hardcode correct startup plan into AGENTS"
+scope: "ops"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-27 09:40:42 -04:00"
+updated_at_et: "2026-03-27 09:40:42 -04:00"
+parent_session: "2026-03-27/restart-backend-dataflow-repair-20260327"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "6dfd9c5"
+head_commit: "6dfd9c5"
+
+files_changed:
+  - "AGENTS.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-27/hardcode-correct-startup-plan-20260327/project_state.md"
+  - "notes/sessions/2026-03-27/hardcode-correct-startup-plan-20260327/open_tasks.md"
+  - "notes/sessions/2026-03-27/hardcode-correct-startup-plan-20260327/handoff.md"
+  - "notes/sessions/2026-03-27/hardcode-correct-startup-plan-20260327/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId hardcode-correct-startup-plan-20260327 -Title \"Hardcode correct startup plan into AGENTS\" -Scope \"ops\" -Owner \"Codex\" -ParentSession \"2026-03-27/restart-backend-dataflow-repair-20260327\" -Timezone \"America/New_York\" -UpdatePointer"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "AGENTS.md contains the 2-line hard startup rule"
+  - "scripts/validate_session.ps1 -Strict passed"
+tests_failed: []
+blockers: []
+notes:
+  - "The requested startup guidance was compressed to 2 lines."
+  - "No runtime code changed in this session."
+
+

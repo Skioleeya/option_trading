@@ -1,0 +1,43 @@
+﻿session_id: "2026-03-27/restart-backend-dataflow-repair-20260327"
+title: "Restart backend and repair live dataflow"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-27 09:33:14 -04:00"
+updated_at_et: "2026-03-27 09:37:34 -04:00"
+parent_session: "2026-03-27/restart-system-clean-20260327"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "6dfd9c5"
+head_commit: "6dfd9c5"
+
+files_changed:
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-27/restart-backend-dataflow-repair-20260327/project_state.md"
+  - "notes/sessions/2026-03-27/restart-backend-dataflow-repair-20260327/open_tasks.md"
+  - "notes/sessions/2026-03-27/restart-backend-dataflow-repair-20260327/handoff.md"
+  - "notes/sessions/2026-03-27/restart-backend-dataflow-repair-20260327/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId restart-backend-dataflow-repair-20260327 -Title \"Restart backend and repair live dataflow\" -Scope \"hotfix + modularization\" -Owner \"Codex\" -ParentSession \"2026-03-27/restart-system-clean-20260327\" -Timezone \"America/New_York\" -UpdatePointer"
+  - "sandbox broker probe via RustQuoteRuntime.quote(['SPY.US']) for both endpoint profiles"
+  - "external broker probe via RustQuoteRuntime.quote(['SPY.US']) for both endpoint profiles"
+  - "powershell -ExecutionPolicy Bypass -File scripts/ops/start_backend.ps1 -LogFile logs/backend_runtime.current.log"
+  - "Invoke-RestMethod http://127.0.0.1:8001/health"
+  - "Invoke-RestMethod http://127.0.0.1:8001/debug/persistence_status"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "sandbox probe reproduced broker connectivity failure inside the sandbox"
+  - "external probe succeeded on both endpoint profiles and returned live SPY quotes"
+  - "external strict backend restart restored live dataflow"
+  - "/debug/persistence_status reported rust_started=true transport.status=OK chain_size=100 version=2987"
+  - "backend log reported live MarketEventBridge, GPU-AUDIT, and atm_status=LIVE payloads"
+  - "scripts/validate_session.ps1 -Strict passed"
+tests_failed: []
+blockers: []
+notes:
+  - "Root cause was operational: the broken backend had been started inside the sandbox, not in the real host environment."
+  - "No runtime code changes were required."
+
+

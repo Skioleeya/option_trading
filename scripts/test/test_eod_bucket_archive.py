@@ -49,7 +49,14 @@ def _default_cfg() -> dict:
         ],
         "thresholds": {
             "high_vol_open": {"window": "09:30-10:00", "open_rv_1m_threshold": 0.0015},
-            "trend_day": {"abs_ret_threshold": 0.0070, "ofi_persistence_threshold": 0.55},
+            "trend_day": {
+                "abs_ret_threshold": 0.0070,
+                "ofi_persistence_threshold": 0.55,
+                "directional_efficiency_min": 0.60,
+                "open_side_persistence_min": 0.65,
+                "close_to_extreme_max": 0.20,
+                "state_switch_rate_max": 0.35,
+            },
             "range_day": {"realized_range_threshold": 0.0120, "net_return_cap": 0.0030},
             "gap_trend_day": {
                 "overnight_gap_abs_min": 0.0060,
@@ -168,6 +175,9 @@ def _base_metrics() -> dict:
         "overnight_gap_available": False,
         "atm_iv_change_pct": 0.0,
         "atm_iv_available": False,
+        "directional_efficiency": 0.0,
+        "open_side_persistence": 0.0,
+        "close_to_extreme": 1.0,
         "close_to_key_level": 1.0,
         "pin_band_ratio": 0.0,
         "key_level_coverage": 0.0,

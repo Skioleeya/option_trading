@@ -16,7 +16,11 @@
     },
     "trend_day": {
       "abs_ret_threshold": 0.0070,
-      "ofi_persistence_threshold": 0.55
+      "ofi_persistence_threshold": 0.55,
+      "directional_efficiency_min": 0.60,
+      "open_side_persistence_min": 0.65,
+      "close_to_extreme_max": 0.20,
+      "state_switch_rate_max": 0.35
     },
     "range_day": {
       "realized_range_threshold": 0.0120,
@@ -42,6 +46,9 @@
       "state_switch_rate_min": 0.55,
       "realized_range_min": 0.0120,
       "net_return_cap": 0.0040
+    },
+    "raw_sanitizer": {
+      "spot_trim_quantile": 0.001
     },
     "quality_gate": {
       "min_rows_raw": 5000,

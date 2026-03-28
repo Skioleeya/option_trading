@@ -1,0 +1,45 @@
+﻿session_id: "2026-03-27/fix-20260326-classification-and-rerun-bucket"
+title: "Fix 20260326 classification and rerun bucket"
+scope: "implementation"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-27 23:54:43 -04:00"
+updated_at_et: "2026-03-27 23:59:31 -04:00"
+parent_session: null
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "6dfd9c5"
+head_commit: "6dfd9c5"
+
+files_changed:
+  - "scripts/diagnostics/eod_bucket_metrics.py"
+  - "scripts/diagnostics/config/eod_bucket_thresholds.json"
+  - "scripts/test/test_eod_bucket_rth_sanitizer.py"
+  - "data/cold/daily/20260326/manifest.json"
+  - "data/cold/reports/20260326_quality.json"
+  - "data/cold/by_regime/trend_day/20260326/manifest.json"
+  - "notes/sessions/2026-03-27/fix-20260326-classification-and-rerun-bucket/project_state.md"
+  - "notes/sessions/2026-03-27/fix-20260326-classification-and-rerun-bucket/open_tasks.md"
+  - "notes/sessions/2026-03-27/fix-20260326-classification-and-rerun-bucket/handoff.md"
+  - "notes/sessions/2026-03-27/fix-20260326-classification-and-rerun-bucket/meta.yaml"
+  - "notes/context/handoff.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId fix-20260326-classification-and-rerun-bucket -Title \"Fix 20260326 classification and rerun bucket\" -Scope implementation -UpdatePointer"
+  - "python -m py_compile scripts/diagnostics/eod_bucket_archive.py scripts/diagnostics/eod_bucket_metrics.py scripts/diagnostics/eod_bucket_rules.py scripts/test/test_eod_bucket_archive.py scripts/test/test_eod_bucket_classification_fallback.py scripts/test/test_eod_bucket_guards.py scripts/test/test_eod_bucket_rth_sanitizer.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 scripts/test/test_eod_bucket_archive.py scripts/test/test_eod_bucket_classification_fallback.py scripts/test/test_eod_bucket_guards.py scripts/test/test_eod_bucket_rth_sanitizer.py"
+  - "python scripts/diagnostics/eod_bucket_archive.py --date 20260326 --root data --out-root data/cold --strict-quality"
+  - "Remove-Item data/cold/by_regime/unclassified/20260326 -Recurse -Force"
+  - "python scripts/diagnostics/check_eod_manifest_sync.py --date 20260326 --out-root data/cold"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "py_compile for classifier and test files"
+  - "pytest: 24 passed"
+  - "archive rerun: 20260326 primary=trend_day quality=PASS"
+  - "manifest sync: ok=true for data/cold/daily/20260326/manifest.json"
+tests_failed: []
+blockers: []
+notes:
+  - "Root cause was regime metrics consuming premarket rows and isolated bad spot ticks."
+  - "Sanitizer config added: raw_sanitizer.spot_trim_quantile=0.001."
+
+

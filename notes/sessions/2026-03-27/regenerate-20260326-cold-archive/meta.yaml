@@ -1,0 +1,37 @@
+﻿session_id: "2026-03-27/regenerate-20260326-cold-archive"
+title: "Regenerate 20260326 cold archive after stale manifest"
+scope: "ops"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-27 22:47:56 -04:00"
+updated_at_et: "2026-03-27 22:49:00 -04:00"
+parent_session: "2026-03-27/hardcode-correct-startup-plan-20260327"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "6dfd9c5"
+head_commit: "6dfd9c5"
+
+files_changed:
+  - "data/cold/daily/20260326/manifest.json"
+  - "data/cold/by_regime/unclassified/20260326/manifest.json"
+  - "data/cold/reports/20260326_quality.json"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-27/regenerate-20260326-cold-archive/project_state.md"
+  - "notes/sessions/2026-03-27/regenerate-20260326-cold-archive/open_tasks.md"
+  - "notes/sessions/2026-03-27/regenerate-20260326-cold-archive/handoff.md"
+  - "notes/sessions/2026-03-27/regenerate-20260326-cold-archive/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId regenerate-20260326-cold-archive -Title \"Regenerate 20260326 cold archive after stale manifest\" -Scope \"ops\" -Owner \"Codex\" -ParentSession \"2026-03-27/hardcode-correct-startup-plan-20260327\" -Timezone \"America/New_York\" -UpdatePointer"
+  - "python scripts/diagnostics/eod_bucket_archive.py --date 20260326 --config scripts/diagnostics/config/eod_bucket_thresholds.json --root data --out-root data/cold --strict-quality"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "Regenerated 20260326 cold manifest matches all six source files by size and sha256"
+  - "Regenerated parquet row metrics match actual rows for raw/feature/label"
+  - "20260326 quality report remains PASS after refresh"
+tests_failed: []
+blockers: []
+notes: []
+
+

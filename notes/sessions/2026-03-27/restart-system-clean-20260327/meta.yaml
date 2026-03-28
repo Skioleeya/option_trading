@@ -1,0 +1,48 @@
+﻿session_id: "2026-03-27/restart-system-clean-20260327"
+title: "Clean backend redis/python restart and external system boot"
+scope: "ops"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-27 09:10:27 -04:00"
+updated_at_et: "2026-03-27 09:21:22 -04:00"
+parent_session: "2026-03-26/header-iv-dynamic-threshold-context-20260326"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "6dfd9c5"
+head_commit: "6dfd9c5"
+
+files_changed:
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-27/restart-system-clean-20260327/project_state.md"
+  - "notes/sessions/2026-03-27/restart-system-clean-20260327/open_tasks.md"
+  - "notes/sessions/2026-03-27/restart-system-clean-20260327/handoff.md"
+  - "notes/sessions/2026-03-27/restart-system-clean-20260327/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId restart-system-clean-20260327 -Title \"Clean backend redis/python restart and external system boot\" -Scope \"ops\" -Owner \"Codex\" -ParentSession \"2026-03-26/header-iv-dynamic-threshold-context-20260326\" -Timezone \"America/New_York\" -UpdatePointer"
+  - "Remove-Item infra/redis/data/*"
+  - "powershell -ExecutionPolicy Bypass -File scripts/ops/start_backend.ps1 -LogFile logs/backend_runtime.current.log"
+  - "powershell -ExecutionPolicy Bypass -File scripts/ops/start_backend.ps1 -Degraded -LogFile logs/backend_runtime.current.log"
+  - "Invoke-RestMethod http://127.0.0.1:8001/health"
+  - "Invoke-RestMethod http://127.0.0.1:8001/debug/persistence_status"
+  - "cmd.exe /c \"npm --prefix l4_ui run dev -- --host 0.0.0.0 --port 5173\""
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "Redis appendonly.aof was removed and the local Redis data directory was cleaned before restart"
+  - "backend degraded launch recovered /health on port 8001"
+  - "/debug/persistence_status returned redis.connected=true with live degraded diagnostics"
+  - "frontend relaunch succeeded and http://127.0.0.1:5173 returned 200"
+  - "netstat confirmed 8001 and 6380 are listening on the restarted runtime"
+  - "scripts/validate_session.ps1 -Strict passed"
+tests_failed:
+  - "strict backend launch failed during startup connectivity probing for /v2/socket/token"
+  - "sandboxed frontend start failed with spawn EPERM before the external retry succeeded"
+blockers:
+  - "strict quote runtime startup connectivity remains unavailable"
+  - "degraded runtime still reports Arrow IPC mapping unavailable and chain_size=0"
+notes:
+  - "This session performed operational restart and documentation sync only; no runtime-layer source files changed."
+  - "Frontend launch required an external retry because the sandbox could not spawn Vite/esbuild."
+
+

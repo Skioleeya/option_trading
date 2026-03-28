@@ -1,0 +1,55 @@
+﻿session_id: "2026-03-28/fix-gap-trend-vs-trend-overlap"
+title: "Fix gap trend vs trend overlap"
+scope: "implementation"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-28 00:10:51 -04:00"
+updated_at_et: "2026-03-28 00:10:51 -04:00"
+parent_session: null
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "6dfd9c5"
+head_commit: "6dfd9c5"
+
+updated_at_et: "2026-03-28 00:13:53 -04:00"
+
+files_changed:
+  - "scripts/diagnostics/eod_bucket_rules.py"
+  - "scripts/test/test_eod_bucket_classification_fallback.py"
+  - "data/cold/daily/20260327/manifest.json"
+  - "data/cold/reports/20260327_quality.json"
+  - "data/cold/by_regime/gap_trend_day/20260327/manifest.json"
+  - "data/cold/daily/20260326/manifest.json"
+  - "data/cold/reports/20260326_quality.json"
+  - "data/cold/by_regime/trend_day/20260326/manifest.json"
+  - "notes/sessions/2026-03-28/fix-gap-trend-vs-trend-overlap/project_state.md"
+  - "notes/sessions/2026-03-28/fix-gap-trend-vs-trend-overlap/open_tasks.md"
+  - "notes/sessions/2026-03-28/fix-gap-trend-vs-trend-overlap/handoff.md"
+  - "notes/sessions/2026-03-28/fix-gap-trend-vs-trend-overlap/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId fix-gap-trend-vs-trend-overlap -Title \"Fix gap trend vs trend overlap\" -Scope implementation -UpdatePointer"
+  - "python -m py_compile scripts/diagnostics/eod_bucket_archive.py scripts/diagnostics/eod_bucket_metrics.py scripts/diagnostics/eod_bucket_rules.py scripts/test/test_eod_bucket_archive.py scripts/test/test_eod_bucket_classification_fallback.py scripts/test/test_eod_bucket_rth_sanitizer.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 scripts/test/test_eod_bucket_archive.py scripts/test/test_eod_bucket_classification_fallback.py scripts/test/test_eod_bucket_rth_sanitizer.py"
+  - "python scripts/diagnostics/eod_bucket_archive.py --date 20260327 --root data --out-root data/cold --strict-quality"
+  - "python scripts/diagnostics/eod_bucket_archive.py --date 20260327 --root data --out-root data/cold"
+  - "python scripts/diagnostics/eod_bucket_archive.py --date 20260326 --root data --out-root data/cold --strict-quality"
+  - "python scripts/diagnostics/check_eod_manifest_sync.py --date 20260327 --out-root data/cold"
+  - "python scripts/diagnostics/check_eod_manifest_sync.py --date 20260326 --out-root data/cold"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "py_compile for classifier and targeted regression tests"
+  - "pytest: 20 passed"
+  - "archive rerun: 20260327 primary=gap_trend_day matched=gap_trend_day"
+  - "archive rerun: 20260326 primary=trend_day matched=trend_day quality=PASS"
+  - "manifest sync: ok=true for 20260327 and 20260326"
+  - "strict validation: Session validation passed."
+tests_failed:
+  - "initial strict validation failed because meta.yaml commands did not yet include validate_session.ps1 -Strict evidence"
+blockers:
+  - "20260327 strict-quality rerun remains red because research_feature rows are 229, below the existing 5000-row minimum."
+notes: []
+
+

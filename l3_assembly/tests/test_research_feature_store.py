@@ -344,3 +344,35 @@ def test_rejects_too_many_fields() -> None:
         )
     )
     assert "error" in result
+
+
+def test_feature_append_survives_null_then_typed_hv_columns() -> None:
+    store = ResearchFeatureStore(root_dir=_mk_store_dir())
+    base = datetime(2026, 3, 9, 14, 0, tzinfo=timezone.utc)
+
+    d0, s0, p0 = _mk_tick(base, 560.0, 1)
+    s0.extra_metadata["longport_option_diagnostics"]["official_hv_decimal"] = None
+    s0.extra_metadata["longport_option_diagnostics"]["official_hv_age_sec"] = None
+    store.append_tick(decision=d0, snapshot=s0, payload=p0)
+
+    d1, s1, p1 = _mk_tick(base + timedelta(seconds=5), 561.0, 2)
+    s1.extra_metadata["longport_option_diagnostics"]["official_hv_decimal"] = 0.18
+    s1.extra_metadata["longport_option_diagnostics"]["official_hv_age_sec"] = 30.0
+    store.append_tick(decision=d1, snapshot=s1, payload=p1)
+
+    result = asyncio.run(
+        store.query(
+            start=base.isoformat(),
+            end=(base + timedelta(seconds=10)).isoformat(),
+            view="feature",
+            fields=["l0_version", "longport_official_hv_decimal", "longport_official_hv_age_sec"],
+            interval="1s",
+            fmt="jsonl",
+        )
+    )
+
+    assert result["status"] == "ok"
+    assert result["count"] == 2
+    assert result["records"][0]["longport_official_hv_decimal"] is None
+    assert result["records"][1]["longport_official_hv_decimal"] == pytest.approx(0.18)
+    assert result["records"][1]["longport_official_hv_age_sec"] == pytest.approx(30.0)

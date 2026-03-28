@@ -269,6 +269,8 @@ SLA:
 ## 11. Scripted Enforcement Summary
 
 - Bootstrap: `scripts/new_session.ps1`
+- Live broker-dependent backend startup MUST run on the real host environment (outside sandbox); sandbox-local backend launches are invalid evidence for broker/runtime health.
+- Startup order MUST be: `powershell -ExecutionPolicy Bypass -File scripts/ops/start_backend.ps1`; only if the real-host strict launch fails on broker connectivity may agent retry `powershell -ExecutionPolicy Bypass -File scripts/ops/start_backend.ps1 -Degraded`.
 - Validation: `scripts/validate_session.ps1 -Strict`
 - Architecture policy: `scripts/policy/layer_boundary_rules.json`
 - Quality thresholds: `scripts/policy/quality_thresholds.json`

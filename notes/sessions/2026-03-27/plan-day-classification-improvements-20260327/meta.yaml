@@ -1,0 +1,35 @@
+﻿session_id: "2026-03-27/plan-day-classification-improvements-20260327"
+title: "Plan day classification improvements"
+scope: "analysis"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-27 23:28:52 -04:00"
+updated_at_et: "2026-03-27 23:28:52 -04:00"
+parent_session: null
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "6dfd9c5"
+head_commit: "6dfd9c5"
+
+files_changed:
+  - "notes/sessions/2026-03-27/plan-day-classification-improvements-20260327/project_state.md"
+  - "notes/sessions/2026-03-27/plan-day-classification-improvements-20260327/open_tasks.md"
+  - "notes/sessions/2026-03-27/plan-day-classification-improvements-20260327/handoff.md"
+  - "notes/sessions/2026-03-27/plan-day-classification-improvements-20260327/meta.yaml"
+commands:
+  - "Read codex-plan-research skill"
+  - "Read notes/context/*"
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId plan-day-classification-improvements-20260327 -Title \"Plan day classification improvements\" -Scope analysis -UpdatePointer"
+  - "Read docs/SOP/*.md"
+  - "Read scripts/diagnostics/eod_bucket_archive.py"
+  - "Read scripts/diagnostics/config/eod_bucket_thresholds.json"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "Planning consistency check against current classifier logic and known day cases"
+tests_failed: []
+blockers: []
+notes:
+  - "Recommended path: preserve explicit hard classes, add price-path directional fallback, demote OFI from sole trend gate to confidence boost."
+  - "20260312 is the motivating failure case; 20260327 is the retained positive gap-trend case."
+
+

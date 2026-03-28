@@ -2,29 +2,31 @@
   "version": "v2",
   "classification_mode": "primary_only",
   "date": "20260312",
-  "primary_tag": "unclassified",
+  "primary_tag": "trend_day",
   "tags": [
-    "unclassified"
+    "trend_day"
   ],
-  "matched_tags": [],
+  "matched_tags": [
+    "trend_day"
+  ],
   "source_files": [
     {
       "role": "research_raw",
       "path": "data/research/raw/raw_20260312.parquet",
-      "size_bytes": 1140327,
-      "sha256": "ebb7232b86d7c3c5b96bc1054d1bbe02a53595ccb3fdc35eb1a5ffcecc434cc8"
+      "size_bytes": 1149338,
+      "sha256": "372da89463386ce84d10edaff2a0d88afbf9529c23fb42304452bc790d1a5d00"
     },
     {
       "role": "research_feature",
       "path": "data/research/feature/feature_20260312.parquet",
-      "size_bytes": 2448221,
-      "sha256": "eec012c290a84bd614a7b2afbde4d470882a593ae93d6cffa189f8ace7fa46b4"
+      "size_bytes": 2466209,
+      "sha256": "62a342a6b6ac32ba883dd791863d1b77826d1ef01e5e72acb34180ecbc58cfff"
     },
     {
       "role": "research_label",
       "path": "data/research/label/label_20260312.parquet",
-      "size_bytes": 584456,
-      "sha256": "b1c7f2912ac89d72828fe8ddda005d41984e5b7103281f109805dfdef3c59bfe"
+      "size_bytes": 594470,
+      "sha256": "67138d2cdfb22758f8ad4fd60b86e656adbd82a2508d5610fcfba2fb0eb637a7"
     },
     {
       "role": "atm_series",
@@ -35,40 +37,44 @@
     {
       "role": "mtf_iv_series",
       "path": "data/mtf_iv/mtf_iv_series_20260312.jsonl",
-      "size_bytes": 1683479,
-      "sha256": "7212dbd13b4715226d11ce577dc7f9cda2b08702057ef2883991a21676adceba"
+      "size_bytes": 1709023,
+      "sha256": "5969f7282afbcb6e78b6738c95ae65e80c779df38bb2a64131cfb135e4314b33"
     },
     {
       "role": "wall_series",
       "path": "data/wall_migration/wall_series_20260312.jsonl",
-      "size_bytes": 17375,
-      "sha256": "310df348cb7ea68819b4f90f1ef625d34824a6c600645c07cf0dc75bbcb55f1c"
+      "size_bytes": 17500,
+      "sha256": "3d77d50eb6ebb51b8f57d88c7ae5cf0f92dbdf2ce1fd53af7ff81996fc588acd"
     }
   ],
   "metrics": {
     "rows": {
-      "research_raw": 18110,
-      "research_feature": 18110,
-      "research_label": 19672
+      "research_raw": 18355,
+      "research_feature": 18355,
+      "research_label": 20004
     },
     "raw_day": {
-      "rows": 18110,
+      "rows": 18355,
       "net_return": -0.01521446631082471,
       "intraday_followthrough": -0.01521446631082471,
       "overnight_gap": 0.0,
-      "overnight_gap_available": true,
+      "overnight_gap_available": false,
       "realized_range": 0.015301701831946011,
       "open_rv_1m": 0.00021879881676673912,
       "ofi_persistence": 0.0,
+      "ofi_nonzero_coverage": 0.0,
+      "directional_efficiency": 0.9942989660836826,
+      "open_side_persistence": 1.0,
+      "close_to_extreme": 0.005701033916317404,
       "max_abs_jump": 0.008620052341312733,
       "state_switch_rate": 0.0,
-      "atm_iv_change_pct": -0.7705744651945267,
+      "atm_iv_change_pct": -0.5651447661469933,
       "atm_iv_available": true,
       "pin_band_ratio": 0.0,
-      "close_to_key_level": 0.016575581046183358,
+      "close_to_key_level": 0.019578403699477456,
       "key_level_coverage": 1.0,
       "start_timestamp": "2026-03-12T13:15:00.936Z",
-      "end_timestamp": "2026-03-12T20:01:04.206Z",
+      "end_timestamp": "2026-03-12T20:06:37.212Z",
       "ofi_source": "bbo_imbalance_raw",
       "prev_trade_day": "20260311"
     },
@@ -89,6 +95,8 @@
       "net_gex": 0.0
     }
   },
-  "rule_hits": [],
-  "generated_at_utc": "2026-03-12T20:01:04Z"
+  "rule_hits": [
+    "trend_day: directional-path fallback passed"
+  ],
+  "generated_at_utc": "2026-03-28T03:50:39Z"
 }
