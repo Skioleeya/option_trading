@@ -1,14 +1,10 @@
 {
-  "version": "v2",
-  "classification_mode": "primary_only",
+  "version": "v3",
+  "classification_mode": "primary_plus_context_v1",
   "date": "20260326",
-  "primary_tag": "trend_day",
-  "tags": [
-    "trend_day"
-  ],
-  "matched_tags": [
-    "trend_day"
-  ],
+  "primary_day_type": "trend_day",
+  "context_modifiers": [],
+  "close_profile": "strong_close",
   "source_files": [
     {
       "role": "research_raw",
@@ -78,6 +74,8 @@
       "start_timestamp": "2026-03-26T13:30:02.551Z",
       "end_timestamp": "2026-03-26T20:00:59.928Z",
       "ofi_source": "bbo_imbalance_raw",
+      "midday_return": -0.008084406686763586,
+      "afternoon_return": -0.009731239735384003,
       "prev_trade_day": "20260325"
     },
     "source_count": 6
@@ -100,5 +98,5 @@
   "rule_hits": [
     "trend_day: directional-path fallback passed"
   ],
-  "generated_at_utc": "2026-03-28T04:13:04Z"
+  "generated_at_utc": "2026-03-31T06:12:09Z"
 }

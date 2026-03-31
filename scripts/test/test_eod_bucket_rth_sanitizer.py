@@ -74,7 +74,12 @@ def test_read_raw_metrics_uses_rth_and_trims_spot_outlier():
     )
     metrics = mod.read_raw_metrics(
         path,
-        {"high_vol_open": {"window": "09:30-10:00"}, "pinning_day": {"pin_band_width": 0.0020}, "raw_sanitizer": {"spot_trim_quantile": 0.1}},
+        {
+            "high_vol_open": {"window": "09:30-10:00"},
+            "pinning": {"pin_band_width": 0.0020},
+            "raw_sanitizer": {"spot_trim_quantile": 0.1},
+            "reversal_day": {"midday_pivot_time": "12:00"},
+        },
         None,
     )
     assert metrics["start_timestamp"].startswith("2026-03-26T14:00:00")
@@ -102,6 +107,8 @@ def test_rth_sanitizer_allows_trend_day_classification_despite_dirty_tick():
         "pin_band_ratio": 0.0,
         "key_level_coverage": 1.0,
         "state_switch_rate": 0.001,
+        "midday_return": -0.009,
+        "afternoon_return": -0.008,
     }
     thresholds = {
         "high_vol_open": {"window": "09:30-10:00", "open_rv_1m_threshold": 0.0015},
@@ -113,14 +120,15 @@ def test_rth_sanitizer_allows_trend_day_classification_despite_dirty_tick():
             "close_to_extreme_max": 0.20,
             "state_switch_rate_max": 0.35,
         },
-        "range_day": {"realized_range_threshold": 0.0120, "net_return_cap": 0.0030},
-        "gap_trend_day": {"overnight_gap_abs_min": 0.0060, "intraday_followthrough_abs_min": 0.0040, "require_same_direction": True},
-        "vol_crush_day": {"atm_iv_change_pct_max": -0.12, "net_return_cap": 0.0050, "realized_range_cap": 0.0150},
-        "pinning_day": {"close_to_key_level_max": 0.0015, "pin_band_ratio_min": 0.30, "pin_band_width": 0.0020, "realized_range_cap": 0.0150},
+        "reversal_day": {"midday_pivot_time": "12:00", "opening_leg_abs_min": 0.0035, "reversal_leg_abs_min": 0.0040, "net_return_abs_min": 0.0025, "state_switch_rate_max": 0.45},
+        "balance_day": {"net_return_cap": 0.0050, "directional_efficiency_max": 0.55},
+        "gap_open": {"overnight_gap_abs_min": 0.0060},
+        "vol_crush": {"atm_iv_change_pct_max": -0.12, "net_return_cap": 0.0050, "realized_range_cap": 0.0150},
+        "pinning": {"close_to_key_level_max": 0.0015, "pin_band_ratio_min": 0.30, "pin_band_width": 0.0020, "realized_range_cap": 0.0150},
         "whipsaw_day": {"state_switch_rate_min": 0.55, "realized_range_min": 0.0120, "net_return_cap": 0.0040},
+        "close_profile": {"strong_close_max": 0.10, "mid_close_max": 0.35},
     }
-    priority = ["high_vol_open", "gap_trend_day", "vol_crush_day", "pinning_day", "whipsaw_day", "trend_day", "range_day"]
-    matched, primary, hits = archive._classify_metrics(metrics, thresholds, priority)
-    assert "trend_day" in matched
-    assert primary == "trend_day"
-    assert any("directional-path fallback" in hit for hit in hits)
+    priority = ["whipsaw_day", "reversal_day", "trend_day", "balance_day"]
+    result = archive._classify_metrics(metrics, thresholds, priority)
+    assert result["primary_day_type"] == "trend_day"
+    assert any("directional-path fallback" in hit for hit in result["rule_hits"])

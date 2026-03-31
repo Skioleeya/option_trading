@@ -1,0 +1,52 @@
+﻿session_id: "2026-03-31/backfill-day-taxonomy-history-20260331"
+title: "Backfill canonical day taxonomy history"
+scope: "implementation"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-31 01:53:48 -04:00"
+updated_at_et: "2026-03-31 02:00:55 -04:00"
+parent_session: null
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "6ba6cb2"
+head_commit: "6ba6cb2"
+
+files_changed:
+  - "data/cold/daily/20260324/manifest.json"
+  - "data/cold/daily/20260325/manifest.json"
+  - "data/cold/daily/20260326/manifest.json"
+  - "data/cold/daily/20260327/manifest.json"
+  - "data/cold/daily/20260330/manifest.json"
+  - "data/cold/reports/20260324_quality.json"
+  - "data/cold/reports/20260325_quality.json"
+  - "data/cold/reports/20260326_quality.json"
+  - "data/cold/reports/20260327_quality.json"
+  - "data/cold/reports/20260330_quality.json"
+  - "data/cold/by_regime/balance_day/20260324/manifest.json"
+  - "data/cold/by_regime/balance_day/20260325/manifest.json"
+  - "data/cold/by_regime/trend_day/20260326/manifest.json"
+  - "data/cold/by_regime/trend_day/20260327/manifest.json"
+  - "data/cold/by_regime/reversal_day/20260330/manifest.json"
+  - "data/cold/by_regime/vol_crush_day/20260325/manifest.json"
+  - "data/cold/by_regime/gap_trend_day/20260327/manifest.json"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-31/backfill-day-taxonomy-history-20260331/project_state.md"
+  - "notes/sessions/2026-03-31/backfill-day-taxonomy-history-20260331/open_tasks.md"
+  - "notes/sessions/2026-03-31/backfill-day-taxonomy-history-20260331/handoff.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId backfill-day-taxonomy-history-20260331 -Title \"Backfill canonical day taxonomy history\" -Scope implementation -UpdatePointer"
+  - "powershell preview loop: python scripts/diagnostics/eod_bucket_archive.py --date <date> --root data --out-root tmp/day_taxonomy_backfill_preview for 20260324,20260325,20260326,20260327,20260330"
+  - "powershell backfill loop: remove stale data/cold/by_regime/*/<date> and run python scripts/diagnostics/eod_bucket_archive.py --date <date> --root data --out-root data/cold for 20260324,20260325,20260326,20260327,20260330"
+  - "powershell sync loop: python scripts/diagnostics/check_eod_manifest_sync.py --date <date> --out-root data/cold for 20260324,20260325,20260326,20260327,20260330"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "preview archive rerun: 20260324/20260325/20260326/20260327/20260330"
+  - "manifest sync: 20260324/20260325/20260326/20260327/20260330"
+  - "strict validation: validate_session.ps1 -Strict passed after recording command evidence in meta.yaml"
+tests_failed: []
+blockers: []
+notes: []
+
+

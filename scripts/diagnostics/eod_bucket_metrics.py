@@ -75,6 +75,14 @@ def _parse_open_window(text: str) -> tuple[int, int, int, int]:
     return start_h, start_m, end_h, end_m
 
 
+def _parse_clock(text: str, default_hour: int, default_minute: int) -> tuple[int, int]:
+    try:
+        hour, minute = [int(x) for x in str(text).split(":", 1)]
+        return hour, minute
+    except (TypeError, ValueError):
+        return default_hour, default_minute
+
+
 def _default_raw_metrics(rows: int, ofi_source: str) -> dict[str, Any]:
     return {
         "rows": rows,
@@ -101,6 +109,8 @@ def _default_raw_metrics(rows: int, ofi_source: str) -> dict[str, Any]:
         "start_timestamp": "",
         "end_timestamp": "",
         "ofi_source": ofi_source,
+        "midday_return": 0.0,
+        "afternoon_return": 0.0,
     }
 
 
@@ -255,6 +265,20 @@ def read_raw_metrics(raw_path: Path, cfg_thresholds: dict[str, Any], prev_close_
             open_window_returns.append(step_returns[i - 1])
     open_rv_1m = pstdev(open_window_returns) if len(open_window_returns) >= 2 else 0.0
 
+    reversal_cfg = cfg_thresholds.get("reversal_day", {})
+    pivot_h, pivot_m = _parse_clock(reversal_cfg.get("midday_pivot_time", "12:00"), 12, 0)
+    pivot_idx = next(
+        (
+            i
+            for i, ts in enumerate(ts_vals)
+            if ts.hour > pivot_h or (ts.hour == pivot_h and ts.minute >= pivot_m)
+        ),
+        max(1, len(spots) // 2),
+    )
+    pivot_price = spots[pivot_idx]
+    midday_return = (pivot_price - open_price) / open_price if open_price else 0.0
+    afternoon_return = (close_price - pivot_price) / pivot_price if pivot_price else 0.0
+
     direction = _sign(net_return)
     aligned = 0
     considered = 0
@@ -279,7 +303,8 @@ def read_raw_metrics(raw_path: Path, cfg_thresholds: dict[str, Any], prev_close_
     atm_iv_available = len(finite_ivs) >= 2
     atm_iv_change_pct = ((finite_ivs[-1] - finite_ivs[0]) / finite_ivs[0]) if atm_iv_available else 0.0
 
-    pin_width = float(cfg_thresholds["pinning_day"]["pin_band_width"])
+    pin_cfg = cfg_thresholds.get("pinning", cfg_thresholds.get("pinning_day", {"pin_band_width": 0.0020}))
+    pin_width = float(pin_cfg["pin_band_width"])
     key_eligible = 0
     key_inside = 0
     close_key: float | None = None
@@ -328,6 +353,8 @@ def read_raw_metrics(raw_path: Path, cfg_thresholds: dict[str, Any], prev_close_
         "start_timestamp": _to_iso_z(ts_vals[0]),
         "end_timestamp": _to_iso_z(ts_vals[-1]),
         "ofi_source": ofi_source,
+        "midday_return": midday_return,
+        "afternoon_return": afternoon_return,
     }
 
 

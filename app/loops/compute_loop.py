@@ -7,7 +7,7 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
-from app.loops.atm_live_payload import build_duplicate_snapshot_atm_refresh
+from app.loops.atm_live_payload import build_duplicate_snapshot_live_refresh
 from app.loops.compute_metadata import _build_l1_extra_metadata
 from app.loops.payload_debug import emit_payload_debug, should_log_duplicate_payload_debug
 from app.loops.compute_probe import (
@@ -118,7 +118,23 @@ async def _process_snapshot_tick(
             snapshot.get("chain", []),
             snapshot.get("spot", 0.0),
         )
-        refreshed = build_duplicate_snapshot_atm_refresh(state.frozen, atm_decay_payload)
+        previous_frozen = state.frozen
+        active_options_rows = ctr.active_options_service.get_latest()
+        refreshed = build_duplicate_snapshot_live_refresh(
+            state.frozen,
+            atm_decay_payload,
+            active_options_rows=active_options_rows,
+        )
+        atm_changed = bool(
+            refreshed is not None
+            and previous_frozen is not None
+            and refreshed.atm != previous_frozen.atm
+        )
+        active_options_changed = bool(
+            refreshed is not None
+            and previous_frozen is not None
+            and refreshed.ui_state.active_options != previous_frozen.ui_state.active_options
+        )
         if refreshed is not None:
             state.update(refreshed, snapshot.get("spot"))
         state.record_duplicate_snapshot_skip(snapshot_version)
@@ -129,12 +145,19 @@ async def _process_snapshot_tick(
             snapshot_version,
             compute_id,
         )
-        if refreshed is not None:
+        if atm_changed:
             logger.info(
                 "[AtmDecay] duplicate snapshot live refresh tick_id=%s snapshot_version=%s atm_timestamp=%s",
                 tick_id,
                 snapshot_version,
                 str((atm_decay_payload or {}).get("timestamp", "")),
+            )
+        if active_options_changed:
+            logger.info(
+                "[ActiveOptions] duplicate snapshot live refresh tick_id=%s snapshot_version=%s rows=%s",
+                tick_id,
+                snapshot_version,
+                len(active_options_rows) if isinstance(active_options_rows, list) else 0,
             )
         if refreshed is not None or should_log_duplicate_payload_debug(tick_id):
             emit_payload_debug(

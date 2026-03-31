@@ -164,6 +164,16 @@ class TestDepthProfilePresenterV2:
         result = DepthProfilePresenterV2.build(per_strike_gex=[], spot=None, flip_level=None)
         assert isinstance(result, tuple)
 
+    def test_keeps_flip_row_visible_when_flip_is_one_strike_above_spot_window(self):
+        result = DepthProfilePresenterV2.build(
+            per_strike_gex=self._sample_gex(),
+            spot=636.0,
+            flip_level=643.32,
+        )
+        assert len(result) == 14
+        assert any(row.is_spot for row in result)
+        assert any(row.is_flip and row.strike == pytest.approx(643.0) for row in result)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ActiveOptionsPresenterV2

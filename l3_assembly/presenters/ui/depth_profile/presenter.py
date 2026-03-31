@@ -21,6 +21,7 @@ from typing import Any
 import numpy as np
 
 from l3_assembly.presenters.ui.depth_profile import mappings, thresholds
+from l3_assembly.presenters.ui.depth_profile.window import build_contiguous_strikes
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ try:
     del _probe
     _CUPY_AVAILABLE = True
     logger.info("[DepthProfile EMA] CuPy/CUDA detected — GPU EMA ACTIVE (Tier 1).")
-except Exception:
+except (AttributeError, ImportError, MemoryError, RuntimeError, TypeError, ValueError):
     _CUPY_AVAILABLE = False
     logger.info("[DepthProfile EMA] CuPy unavailable — will use Numba JIT (Tier 2).")
 
@@ -147,7 +148,7 @@ def _apply_ema_batch(
             _prev_calls = out_calls.copy()
             _prev_puts  = out_puts.copy()
             return out_calls, out_puts
-        except Exception as exc:
+        except (AttributeError, ImportError, MemoryError, RuntimeError, TypeError, ValueError) as exc:
             logger.warning(
                 f"[DepthProfile EMA] CuPy path failed ({exc}), falling back to Numba."
             )
@@ -248,10 +249,11 @@ class DepthProfilePresenter:
         snapped_center = _stable_center(raw_center, spacing)
 
         count = thresholds.STRIKE_COUNT
-        half  = count // 2
-        contiguous_strikes = sorted(
-            [round(snapped_center + i * spacing, 2) for i in range(-half, count - half)],
-            reverse=True,
+        contiguous_strikes = build_contiguous_strikes(
+            center=snapped_center,
+            spacing=spacing,
+            count=count,
+            flip_level=flip_level,
         )
 
         if not raw_by_strike:

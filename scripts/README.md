@@ -16,7 +16,7 @@
 ### 🧾 [diagnostics/](./diagnostics/) — 在线对账与 EOD 归档
 - `reconcile_net_gex_online.py`: WS 原始 `net_gex` 与前端展示逐 tick 对账证据导出。
 - `reconcile_depth_profile_online.py`: Depth Profile 逐 tick 对账证据导出。
-- `eod_bucket_archive.py`: 收盘后按规则阈值分桶（7 类，主标签唯一：`high_vol_open/gap_trend_day/vol_crush_day/pinning_day/whipsaw_day/trend_day/range_day`），输出 `daily/by_regime` manifest 与质量报告；交易日按 `XNYS` 日历校验，非交易日直接失败。
+- `eod_bucket_archive.py`: 收盘后按 canonical taxonomy 分桶，只输出 `primary_day_type + context_modifiers + close_profile` 作为日型合同；`by_regime` 目录按 canonical `primary_day_type` 建立索引，交易日按 `XNYS` 日历校验，非交易日直接失败。
 - `wait_for_eod_sources_settle.py`: 归档前等待 `research/raw|feature|label` 与可选 cold 源文件进入稳定窗口，默认 5 分钟稳定、40 分钟超时。
 - `check_eod_manifest_sync.py`: 校验 `data/cold/daily/<date>/manifest.json` 是否与当前源文件的 size/hash/rows 完全一致。
 - `check_payload_size.py`: Redis 快照 payload 体积与 UI 关键字段规模核查。

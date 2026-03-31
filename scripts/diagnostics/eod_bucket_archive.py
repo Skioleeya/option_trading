@@ -34,7 +34,7 @@ from eod_bucket_rules import classify_metrics
 DEFAULT_CONFIG = Path("scripts/diagnostics/config/eod_bucket_thresholds.json")
 DEFAULT_ROOT = Path("data")
 DEFAULT_OUT_ROOT = Path("data/cold")
-VERSION = "v2"
+VERSION = "v3"
 XNYS_CAL = xc.get_calendar("XNYS")
 
 
@@ -148,12 +148,12 @@ def _empty_raw_metrics() -> dict[str, Any]:
         "end_timestamp": "",
         "ofi_source": "missing",
         "prev_trade_day": "",
+        "midday_return": 0.0,
+        "afternoon_return": 0.0,
     }
 
 
-def _classify_metrics(
-    metrics: dict[str, Any], thresholds: dict[str, Any], primary_priority: list[str]
-) -> tuple[list[str], str, list[str]]:
+def _classify_metrics(metrics: dict[str, Any], thresholds: dict[str, Any], primary_priority: list[str]) -> dict[str, Any]:
     return classify_metrics(metrics, thresholds, primary_priority)
 
 
@@ -170,10 +170,10 @@ def run_archive(
     thresholds = cfg["thresholds"]
     quality_gate = thresholds["quality_gate"]
     primary_priority = list(cfg["primary_priority"])
-    classification_mode = str(cfg.get("classification_mode", "primary_only"))
+    classification_mode = str(cfg.get("classification_mode", "primary_plus_context_v1"))
 
-    if classification_mode != "primary_only":
-        raise ValueError("Only classification_mode=primary_only is supported in v2.")
+    if classification_mode != "primary_plus_context_v1":
+        raise ValueError("Only classification_mode=primary_plus_context_v1 is supported.")
 
     source_files: list[dict[str, Any]] = []
     quality_reasons: list[str] = []
@@ -224,16 +224,20 @@ def run_archive(
         elif float(pct) > max_null_pct:
             quality_reasons.append(f"raw key column null ratio too high: {col}={float(pct):.4f}")
 
-    matched_tags, primary_tag, rule_hits = _classify_metrics(raw_metrics, thresholds, primary_priority)
+    classification = _classify_metrics(raw_metrics, thresholds, primary_priority)
+    primary_day_type = str(classification["primary_day_type"])
+    context_modifiers = list(classification["context_modifiers"])
+    close_profile = str(classification["close_profile"])
+    rule_hits = list(classification["rule_hits"])
     quality_status = "LOW_QUALITY_DAY" if required_missing > 0 or quality_reasons else "PASS"
 
     manifest = {
         "version": VERSION,
         "classification_mode": classification_mode,
         "date": date_str,
-        "primary_tag": primary_tag,
-        "tags": [primary_tag],
-        "matched_tags": matched_tags,
+        "primary_day_type": primary_day_type,
+        "context_modifiers": context_modifiers,
+        "close_profile": close_profile,
         "source_files": source_files,
         "metrics": {"rows": rows_by_role, "raw_day": raw_metrics, "source_count": len(source_files)},
         "quality": {
@@ -252,7 +256,7 @@ def run_archive(
 
     daily_manifest = out_root / "daily" / date_str / "manifest.json"
     quality_report = out_root / "reports" / f"{date_str}_quality.json"
-    by_regime_manifest = out_root / "by_regime" / primary_tag / date_str / "manifest.json"
+    by_regime_manifest = out_root / "by_regime" / primary_day_type / date_str / "manifest.json"
     for path in (daily_manifest, quality_report, by_regime_manifest):
         path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -264,8 +268,9 @@ def run_archive(
             {
                 "date": date_str,
                 "classification_mode": classification_mode,
-                "primary_tag": primary_tag,
-                "matched_tags": matched_tags,
+                "primary_day_type": primary_day_type,
+                "context_modifiers": context_modifiers,
+                "close_profile": close_profile,
                 "status": quality_status,
                 "reasons": quality_reasons,
                 "rows": rows_by_role,
@@ -279,7 +284,9 @@ def run_archive(
     )
 
     print(
-        f"[EODBucket] date={date_str} primary={primary_tag} matched={','.join(matched_tags) if matched_tags else 'none'} "
+        f"[EODBucket] date={date_str} primary_day_type={primary_day_type} "
+        f"modifiers={','.join(context_modifiers) if context_modifiers else 'none'} "
+        f"close_profile={close_profile} "
         f"quality={quality_status} sources={len(source_files)}"
     )
     print(f"[EODBucket] daily_manifest={daily_manifest.as_posix()}")

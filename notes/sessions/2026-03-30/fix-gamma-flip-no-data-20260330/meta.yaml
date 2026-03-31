@@ -1,0 +1,44 @@
+﻿session_id: "2026-03-30/fix-gamma-flip-no-data-20260330"
+title: "Fix gamma flip no data"
+scope: "implementation"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-30 09:44:20 -04:00"
+updated_at_et: "2026-03-30 09:56:55 -04:00"
+parent_session: null
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "6ba6cb2"
+head_commit: "6ba6cb2"
+
+files_changed:
+  - "docs/SOP/L3_OUTPUT_ASSEMBLY.md"
+  - "l3_assembly/presenters/ui/depth_profile/presenter.py"
+  - "l3_assembly/presenters/ui/depth_profile/window.py"
+  - "l3_assembly/tests/test_presenters.py"
+  - "notes/context/handoff.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/project_state.md"
+  - "notes/sessions/2026-03-30/fix-gamma-flip-no-data-20260330"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId fix-gamma-flip-no-data-20260330 -Title \"Fix gamma flip no data\" -Scope implementation -UpdatePointer"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l3_assembly/tests/test_presenters.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/ops/start_backend.ps1"
+  - "powershell -ExecutionPolicy Bypass -File scripts/ops/start_backend.ps1 -Degraded"
+  - "python - (inline DepthProfilePresenterV2 deterministic verification)"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "pytest: l3_assembly/tests/test_presenters.py"
+  - "depth profile deterministic verification: spot=636.0 flip=643.32 -> flip_rows=[643.0]"
+  - "strict validation: scripts/validate_session.ps1 -Strict"
+tests_failed:
+  - "real-host backend strict restart failed: startup connectivity probe QuoteContext token/connect timeout"
+  - "real-host backend degraded restart failed: startup connectivity probe QuoteContext token/connect timeout"
+  - "initial strict validation failed because meta.yaml did not yet record validate_session.ps1 -Strict evidence"
+blockers:
+  - "External broker connectivity blocked fresh real-host backend verification after the patch."
+notes:
+  - "Root cause: gamma_flip_level was already present in payload, but the fixed-width depth-profile strike window was centered on spot and could exclude the flip row by one or more strikes."
+  - "Fix: add a dedicated strike-window helper and shift the window minimally so a finite flip level remains visible in the depth profile."
+
+

@@ -57,6 +57,7 @@ flowchart LR
 - `mtf_flow` 严禁携带视觉字段（如 `dot_color/text_color/border/animate/align_color`）与统计语义字段（如 `zscore/z/strength`）
 - 保留 `impact_index` 与 `is_sweep`
 - 不返回空结构破坏前端渲染
+- `ui_state.depth_profile` 的可见 strike 窗口必须优先覆盖 `spot` 与 `gamma_flip_level` 关键位；当 flip 仅落在 spot 居中窗口外侧时，L3 必须最小幅度平移窗口以保留可见 `is_flip` 行，禁止只输出顶层 `gamma_flip_level` 数值而让深度图显示“无 flip 行”
 - `/history` 默认视图必须为 `compact`，禁止默认返回重字段全量 payload
 - 研究下载必须走字段投影（`fields`）与时间降采样（`interval`），超限查询进入异步导出
 - 历史查询接口支持版本协商：`schema=v1|v2`（默认 `v2`，`v1` 仅兼容保留）

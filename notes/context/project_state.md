@@ -1,17 +1,16 @@
 ﻿# Project State (Index)
 
 ## Active Session
-- Path: notes/sessions/2026-03-28/commit-clean-worktree-20260328/project_state.md
-- Meta: notes/sessions/2026-03-28/commit-clean-worktree-20260328/meta.yaml
+- Path: notes/sessions/2026-03-31/hard-cut-day-taxonomy-20260331/project_state.md
+- Meta: notes/sessions/2026-03-31/hard-cut-day-taxonomy-20260331/meta.yaml
 - Status: ACTIVE
-- Latest Summary: Commit-packaging session is staging a single clean commit for the current EOD/archive maintenance work after a fresh 42-test regression pass.
 
 ## Recent Sessions
-- notes/sessions/2026-03-28/commit-clean-worktree-20260328/
-- notes/sessions/2026-03-28/fix-20260327-feature-sparsity-quality-gate/
-- notes/sessions/2026-03-28/fix-gap-trend-vs-trend-overlap/
-- notes/sessions/2026-03-27/fix-20260326-classification-and-rerun-bucket/
-- notes/sessions/2026-03-27/recover-20260312-canonical-raw-and-rearchive/
+- notes/sessions/2026-03-31/hard-cut-day-taxonomy-20260331/
+- notes/sessions/2026-03-31/backfill-day-taxonomy-history-20260331/
+- notes/sessions/2026-03-31/implement-day-taxonomy-cutover-20260331/
+- notes/sessions/2026-03-31/propose-day-taxonomy-openspec-20260331/
+- notes/sessions/2026-03-30/fix-gamma-flip-no-data-20260330/
 
 ## Global Rules
 - Session folders are immutable records; do not overwrite prior sessions.

@@ -1,9 +1,13 @@
 ﻿# Open Tasks (Index)
 
 ## Active Session Tasks
-- Path: notes/sessions/2026-03-28/commit-clean-worktree-20260328/open_tasks.md
+- Path: notes/sessions/2026-03-31/hard-cut-day-taxonomy-20260331/open_tasks.md
 
 ## Global Backlog (Cross-Session)
+- [x] P1: Implement the approved non-overlapping day taxonomy so EOD archives emit `primary_day_type + context_modifiers (+ close_profile)` instead of overlapping flat labels. (Owner: Codex, DUE: 2026-04-02, session: `2026-03-31/propose-day-taxonomy-openspec-20260331`). COMPLETED-IN: `2026-03-31/implement-day-taxonomy-cutover-20260331`
+- [x] P1: Backfill historical cold manifests and quality reports onto the canonical v3 taxonomy contract after the cutover implementation. (Owner: Codex, DUE: 2026-04-02, session: `2026-03-31/implement-day-taxonomy-cutover-20260331`). COMPLETED-IN: `2026-03-31/backfill-day-taxonomy-history-20260331`
+- [x] P1: Recover or formally retire legacy-only cold manifests for `20260311/12/13/17`, which cannot be canonicalized today because `research/raw` sources are missing. (Owner: Codex, DUE: 2026-04-02, session: `2026-03-31/backfill-day-taxonomy-history-20260331`). COMPLETED-IN: `2026-03-31/hard-cut-day-taxonomy-20260331`
+- [x] P1: Remove archive compatibility aliases and complete the day-taxonomy hard cut so active cold outputs are canonical-only. (Owner: Codex, DUE: 2026-04-02, session: `2026-03-31/hard-cut-day-taxonomy-20260331`). COMPLETED-IN: `2026-03-31/hard-cut-day-taxonomy-20260331`
 - [x] P1: Remove semantic overlap between `gap_trend_day` and `trend_day` so gap-trend sessions do not emit both tags in `matched_tags`. (Owner: Codex, DUE: 2026-03-30, session: `2026-03-28/fix-gap-trend-vs-trend-overlap`). COMPLETED-IN: `2026-03-28/fix-gap-trend-vs-trend-overlap`
 - [x] P2: Investigate why `data/research/feature/feature_20260327.parquet` contains only `229` rows and decide whether `20260327` should remain blocked by the existing strict quality gate. (Owner: Codex, DUE: 2026-03-30, session: `2026-03-28/fix-gap-trend-vs-trend-overlap`). COMPLETED-IN: `2026-03-28/fix-20260327-feature-sparsity-quality-gate`
 - [ ] P2: If exact post-`09:40 ET` decision-derived feature-only values for `20260327` are ever required, recover an external archive source and replace the raw-derived backfill rows. (Owner: Codex, DUE: 2026-03-30, session: `2026-03-28/fix-20260327-feature-sparsity-quality-gate`).

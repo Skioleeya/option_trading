@@ -1,10 +1,11 @@
 {
   "date": "20260327",
-  "classification_mode": "primary_only",
-  "primary_tag": "gap_trend_day",
-  "matched_tags": [
-    "gap_trend_day"
+  "classification_mode": "primary_plus_context_v1",
+  "primary_day_type": "trend_day",
+  "context_modifiers": [
+    "gap_open"
   ],
+  "close_profile": "strong_close",
   "status": "PASS",
   "reasons": [],
   "rows": {
@@ -37,7 +38,9 @@
     "start_timestamp": "2026-03-27T13:36:59.126Z",
     "end_timestamp": "2026-03-27T20:00:59.677Z",
     "ofi_source": "bbo_imbalance_raw",
+    "midday_return": 0.0010236214319760157,
+    "afternoon_return": -0.009929122303056818,
     "prev_trade_day": "20260326"
   },
-  "generated_at_utc": "2026-03-28T04:31:19Z"
+  "generated_at_utc": "2026-03-31T06:12:11Z"
 }

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import pytest
 
 from app.loops.compute_loop import run_compute_loop
 from app.loops.shared_state import SharedLoopState
+from l3_assembly.events.active_options_contract import active_option_row_from_dict
 from l3_assembly.events.payload_events import FrozenPayload, SignalData, UIState
 from shared.config import settings
 
@@ -69,6 +70,11 @@ class _FakeL3Reactor:
     async def tick(self, **kwargs: Any) -> FrozenPayload:
         snapshot = kwargs["snapshot"]
         atm_decay = kwargs["atm_decay"]
+        active_options = tuple(
+            active_option_row_from_dict(row)
+            for row in (kwargs.get("active_options") or [])
+            if isinstance(row, dict)
+        )
         return FrozenPayload(
             data_timestamp="2026-03-25T14:00:00+00:00",
             broadcast_timestamp="2026-03-25T14:00:00+00:00",
@@ -77,7 +83,7 @@ class _FakeL3Reactor:
             drift_ms=0.0,
             drift_warning=False,
             signal=SignalData.neutral(),
-            ui_state=UIState.zero_state(),
+            ui_state=replace(UIState.zero_state(), active_options=active_options),
             atm=atm_decay,
         )
 
@@ -100,8 +106,12 @@ class _FakeAtmDecayTracker:
 
 
 class _FakeActiveOptionsService:
+    def __init__(self) -> None:
+        self.calls = 0
+
     def get_latest(self) -> list[dict[str, Any]]:
-        return []
+        self.calls += 1
+        return [_active_options_row(strike=560.0 + self.calls, flow=float(self.calls))]
 
 
 class _FakeBuilder:
@@ -143,6 +153,37 @@ def _snapshot(version: int) -> dict[str, Any]:
     }
 
 
+def _active_options_row(*, strike: float, flow: float) -> dict[str, Any]:
+    return {
+        "symbol": "SPY",
+        "option_type": "CALL",
+        "strike": strike,
+        "implied_volatility": 0.22,
+        "volume": 1000,
+        "turnover": 100000.0,
+        "flow": flow,
+        "flow_score": flow,
+        "impact_index": 1.0,
+        "is_sweep": False,
+        "flow_deg_formatted": "$1",
+        "flow_volume_label": "1K",
+        "flow_color": "text-accent-red",
+        "flow_glow": "",
+        "flow_intensity": "LOW",
+        "flow_direction": "BULLISH",
+        "flow_d_z": 0.0,
+        "flow_e_z": 0.0,
+        "flow_g_z": 0.0,
+        "is_placeholder": False,
+        "slot_index": 1,
+        "row_quality": "REAL",
+        "fallback_reason": None,
+        "is_synthetic_fallback": False,
+        "flow_signal_state": "LIVE",
+        "flow_signal_reason": None,
+    }
+
+
 @pytest.mark.asyncio
 async def test_duplicate_snapshot_tick_keeps_atm_live_updates(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "websocket_update_interval", 0.001, raising=False)
@@ -164,3 +205,24 @@ async def test_duplicate_snapshot_tick_keeps_atm_live_updates(monkeypatch: pytes
     gpu_diag = state.get_diagnostics()["gpu_compute_audit"]
     assert gpu_diag["duplicate_snapshot_skips"] >= 2
     assert gpu_diag["l1_compute_runs"] == 1
+
+
+@pytest.mark.asyncio
+async def test_duplicate_snapshot_tick_keeps_active_options_live_updates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "websocket_update_interval", 0.001, raising=False)
+
+    ctr = _FakeContainer([_snapshot(101), _snapshot(101), _snapshot(101)])
+    state = SharedLoopState()
+
+    task = asyncio.create_task(run_compute_loop(ctr, state))
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert ctr.l1_reactor.calls == 1
+    assert ctr.active_options_service.calls == 3
+    assert state.frozen is not None
+    assert state.frozen.ui_state.active_options
+    assert state.frozen.ui_state.active_options[0].strike == pytest.approx(563.0)
+    assert state.frozen.ui_state.active_options[0].flow == pytest.approx(3.0)

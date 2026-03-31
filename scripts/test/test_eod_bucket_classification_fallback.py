@@ -19,13 +19,10 @@ def _load_module():
 def _cfg() -> dict:
     return {
         "primary_priority": [
-            "high_vol_open",
-            "gap_trend_day",
-            "vol_crush_day",
-            "pinning_day",
             "whipsaw_day",
+            "reversal_day",
             "trend_day",
-            "range_day",
+            "balance_day",
         ],
         "thresholds": {
             "high_vol_open": {"window": "09:30-10:00", "open_rv_1m_threshold": 0.0015},
@@ -37,18 +34,21 @@ def _cfg() -> dict:
                 "close_to_extreme_max": 0.20,
                 "state_switch_rate_max": 0.35,
             },
-            "range_day": {"realized_range_threshold": 0.0120, "net_return_cap": 0.0030},
-            "gap_trend_day": {
-                "overnight_gap_abs_min": 0.0060,
-                "intraday_followthrough_abs_min": 0.0040,
-                "require_same_direction": True,
+            "reversal_day": {
+                "midday_pivot_time": "12:00",
+                "opening_leg_abs_min": 0.0035,
+                "reversal_leg_abs_min": 0.0040,
+                "net_return_abs_min": 0.0025,
+                "state_switch_rate_max": 0.45,
             },
-            "vol_crush_day": {
+            "balance_day": {"net_return_cap": 0.0050, "directional_efficiency_max": 0.55},
+            "gap_open": {"overnight_gap_abs_min": 0.0060},
+            "vol_crush": {
                 "atm_iv_change_pct_max": -0.12,
                 "net_return_cap": 0.0050,
                 "realized_range_cap": 0.0150,
             },
-            "pinning_day": {
+            "pinning": {
                 "close_to_key_level_max": 0.0015,
                 "pin_band_ratio_min": 0.30,
                 "pin_band_width": 0.0020,
@@ -59,6 +59,7 @@ def _cfg() -> dict:
                 "realized_range_min": 0.0120,
                 "net_return_cap": 0.0040,
             },
+            "close_profile": {"strong_close_max": 0.10, "mid_close_max": 0.35},
         },
     }
 
@@ -81,6 +82,8 @@ def _base_metrics() -> dict:
         "pin_band_ratio": 0.0,
         "key_level_coverage": 0.0,
         "state_switch_rate": 0.0,
+        "midday_return": 0.0,
+        "afternoon_return": 0.0,
     }
 
 
@@ -98,10 +101,9 @@ def test_trend_day_directional_fallback_matches_without_ofi_confirmation():
             "ofi_persistence": 0.0,
         }
     )
-    matched, primary, hits = mod._classify_metrics(metrics, _cfg()["thresholds"], _cfg()["primary_priority"])
-    assert "trend_day" in matched
-    assert primary == "trend_day"
-    assert any("directional-path fallback" in hit for hit in hits)
+    result = mod._classify_metrics(metrics, _cfg()["thresholds"], _cfg()["primary_priority"])
+    assert result["primary_day_type"] == "trend_day"
+    assert any("directional-path fallback" in hit for hit in result["rule_hits"])
 
 
 def test_trend_day_fallback_does_not_match_whipsaw_like_day():
@@ -117,26 +119,47 @@ def test_trend_day_fallback_does_not_match_whipsaw_like_day():
             "state_switch_rate": 0.74,
         }
     )
-    matched, _, _ = mod._classify_metrics(metrics, _cfg()["thresholds"], _cfg()["primary_priority"])
-    assert "trend_day" not in matched
+    result = mod._classify_metrics(metrics, _cfg()["thresholds"], _cfg()["primary_priority"])
+    assert "trend_day" not in result["primary_candidates"]
 
 
-def test_gap_trend_excludes_trend_day_when_gap_rule_matches():
+def test_gap_open_is_context_modifier_while_trend_remains_primary():
     mod = _load_module()
     metrics = _base_metrics()
     metrics.update(
         {
             "net_return": -0.009,
-            "intraday_followthrough": -0.009,
             "overnight_gap_available": True,
             "overnight_gap": -0.008,
             "directional_efficiency": 0.70,
             "open_side_persistence": 0.80,
             "close_to_extreme": 0.12,
             "state_switch_rate": 0.08,
+            "midday_return": -0.006,
+            "afternoon_return": -0.003,
         }
     )
-    matched, primary, _ = mod._classify_metrics(metrics, _cfg()["thresholds"], _cfg()["primary_priority"])
-    assert "gap_trend_day" in matched
-    assert "trend_day" not in matched
-    assert primary == "gap_trend_day"
+    result = mod._classify_metrics(metrics, _cfg()["thresholds"], _cfg()["primary_priority"])
+    assert result["primary_day_type"] == "trend_day"
+    assert "gap_open" in result["context_modifiers"]
+    assert "legacy_primary_tag" not in result
+
+
+def test_reversal_day_is_not_upgraded_to_reversal_trend():
+    mod = _load_module()
+    metrics = _base_metrics()
+    metrics.update(
+        {
+            "net_return": -0.0035,
+            "realized_range": 0.017,
+            "directional_efficiency": 0.20,
+            "open_side_persistence": 0.41,
+            "close_to_extreme": 0.26,
+            "state_switch_rate": 0.10,
+            "midday_return": 0.005,
+            "afternoon_return": -0.008,
+        }
+    )
+    result = mod._classify_metrics(metrics, _cfg()["thresholds"], _cfg()["primary_priority"])
+    assert result["primary_day_type"] == "reversal_day"
+    assert result["close_profile"] == "mid_close"
