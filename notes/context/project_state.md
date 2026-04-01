@@ -1,16 +1,12 @@
-﻿# Project State (Index)
+# Project State (Index)
 
 ## Active Session
-- Path: notes/sessions/2026-03-31/hard-cut-day-taxonomy-20260331/project_state.md
-- Meta: notes/sessions/2026-03-31/hard-cut-day-taxonomy-20260331/meta.yaml
+- Path: notes/sessions/2026-04-01/wave12-shared-rust-foundation/project_state.md
+- Meta: notes/sessions/2026-04-01/wave12-shared-rust-foundation/meta.yaml
 - Status: ACTIVE
 
 ## Recent Sessions
-- notes/sessions/2026-03-31/hard-cut-day-taxonomy-20260331/
-- notes/sessions/2026-03-31/backfill-day-taxonomy-history-20260331/
-- notes/sessions/2026-03-31/implement-day-taxonomy-cutover-20260331/
-- notes/sessions/2026-03-31/propose-day-taxonomy-openspec-20260331/
-- notes/sessions/2026-03-30/fix-gamma-flip-no-data-20260330/
+- notes/sessions/2026-04-01/wave12-shared-rust-foundation
 
 ## Global Rules
 - Session folders are immutable records; do not overwrite prior sessions.

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from shared.models.flow_engine import FlowEngineOutput
+from shared_rust.models import FlowEngineOutput
 from . import runtime_service_support as support
 from .constants import ACTIVE_OPTIONS_SIGNATURE_STRIKE_ROUND_DIGITS
 
@@ -44,6 +44,40 @@ def _with_synthetic_volume_for_fallback(
     return out
 
 
+def _rank_rows_by_volume(
+    rows: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    return sorted(
+        rows,
+        key=lambda row: (
+            -support._to_int(row.get("volume"), 0),
+            -support._to_float(row.get("turnover"), 0.0),
+            -support._to_int(row.get("open_interest"), 0),
+            str(row.get("symbol", "")),
+            support._to_float(row.get("strike"), 0.0),
+            str(row.get("option_type", row.get("type", ""))),
+        ),
+    )
+
+
+def _prefer_positive_volume_candidates(
+    normalized: list[dict[str, object]],
+    *,
+    target: int,
+) -> tuple[list[dict[str, object]], str | None]:
+    if target <= 0:
+        return [], None
+    positive_volume_rows = [
+        row for row in normalized if support._to_int(row.get("volume"), 0) > 0
+    ]
+    if not positive_volume_rows:
+        return [], None
+    return (
+        _rank_rows_by_volume(positive_volume_rows)[:target],
+        support.FALLBACK_REASON_SUBTHRESHOLD_VOLUME,
+    )
+
+
 def fallback_candidates_when_empty(
     *,
     chain: list[dict[str, object]],
@@ -55,6 +89,13 @@ def fallback_candidates_when_empty(
         return [], "none"
 
     normalized = [support.normalize_chain_volume_fields(option_row) for option_row in chain]
+    preferred_rows, preferred_mode = _prefer_positive_volume_candidates(
+        normalized,
+        target=target,
+    )
+    if preferred_rows:
+        return preferred_rows, str(preferred_mode or "none")
+
     eligible = [
         row
         for row in normalized
@@ -203,8 +244,37 @@ def mark_rows_with_fallback_signatures(
             round(float(support._to_float(updated.get("strike"), 0.0)), ACTIVE_OPTIONS_SIGNATURE_STRIKE_ROUND_DIGITS),
         )
         if signature in signatures:
-            updated["row_quality"] = support.ROW_QUALITY_FALLBACK_SYNTHETIC
             updated["fallback_reason"] = fallback_reason
+            if fallback_reason == support.FALLBACK_REASON_SUBTHRESHOLD_VOLUME:
+                updated["row_quality"] = support.ROW_QUALITY_REAL
+                updated["is_synthetic_fallback"] = False
+            else:
+                updated["row_quality"] = support.ROW_QUALITY_FALLBACK_SYNTHETIC
+                updated["is_synthetic_fallback"] = True
+                updated["flow_signal_state"] = support.ACTIVE_OPTIONS_FLOW_SIGNAL_STATE_DEGRADED
+                if support._is_missing(updated.get("flow_signal_reason")):
+                    updated["flow_signal_reason"] = fallback_reason
+        tagged.append(updated)
+    return tagged
+
+
+def mark_real_rows_with_fallback_reason(
+    rows: list[dict[str, object]],
+    *,
+    fallback_reason: str,
+) -> list[dict[str, object]]:
+    tagged: list[dict[str, object]] = []
+    for row in rows:
+        updated = dict(row)
+        if bool(updated.get("is_placeholder", False)):
+            tagged.append(updated)
+            continue
+        updated["fallback_reason"] = fallback_reason
+        if fallback_reason == support.FALLBACK_REASON_SUBTHRESHOLD_VOLUME:
+            updated["row_quality"] = support.ROW_QUALITY_REAL
+            updated["is_synthetic_fallback"] = False
+        else:
+            updated["row_quality"] = support.ROW_QUALITY_FALLBACK_SYNTHETIC
             updated["is_synthetic_fallback"] = True
             updated["flow_signal_state"] = support.ACTIVE_OPTIONS_FLOW_SIGNAL_STATE_DEGRADED
             if support._is_missing(updated.get("flow_signal_reason")):

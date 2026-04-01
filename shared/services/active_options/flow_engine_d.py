@@ -8,7 +8,7 @@ dealer inventory truth.
 Composite formula:
     FLOW_D_i = Volume_i x Gamma_i x Spot^2 x 0.01 x sign(Type)
 
-See `shared.contracts.metric_semantics:get_metric_semantics("FLOW_D")` for the
+See `shared_rust.contracts:get_metric_semantics("FLOW_D")` for the
 canonical provenance record.
 """
 
@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from shared.models.flow_engine import FlowComponentResult, FlowEngineInput
+from shared_rust.models import FlowComponentResult, FlowEngineInput
 
 logger = logging.getLogger(__name__)
 

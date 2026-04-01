@@ -20,7 +20,7 @@ from l1_compute.trackers.vanna.gex_classifier import (
 )
 from l1_compute.trackers.vanna.pearson_engine import PearsonEngine, SpotIVPoint
 from l1_compute.trackers.vanna.acceleration_engine import IVAccelerationEngine
-from shared.models.microstructure import (
+from shared_rust.models import (
     GexRegime,
     VannaAccelerationState,
     VannaFlowState,

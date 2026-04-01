@@ -14,7 +14,7 @@ from typing import Any
 from shared.config import settings
 
 logger = logging.getLogger(__name__)
-from shared.models.microstructure import (
+from shared_rust.models import (
     FusedSignalResult,
     GexIntensity,
     IVRegime,
@@ -185,7 +185,7 @@ class DynamicWeightEngine:
             direction = "NEUTRAL"
 
         # Determine regime label
-        regime = f"{self._gex_intensity.value}_{self._iv_regime.value}"
+        regime = f"{self._gex_intensity}_{self._iv_regime}"
 
         # Build explanation
         top_driver = max(components.items(), key=lambda x: x[1]["weight"] * x[1]["confidence"])

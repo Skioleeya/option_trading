@@ -9,7 +9,7 @@ Composite formula:
 
 Degradation: if Redis OI cache is unavailable, returns 0 (no signal).
 
-See `shared.contracts.metric_semantics:get_metric_semantics("FLOW_G")` for the
+See `shared_rust.contracts:get_metric_semantics("FLOW_G")` for the
 canonical provenance record.
 """
 
@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from shared.models.flow_engine import FlowComponentResult, FlowEngineInput
+from shared_rust.models import FlowComponentResult, FlowEngineInput
 from shared.cache.oi_snapshot import get_oi_delta
 from shared.system.persistent_oi_store import PersistentOIStore
 

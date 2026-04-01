@@ -15,7 +15,7 @@ from typing import Any, Optional
 import logging
 import rust_kernel
 
-from shared.models.microstructure import VIBResult, VIBTimeframeResult
+from shared_rust.models import VIBResult, VIBTimeframeResult
 
 logger = logging.getLogger(__name__)
 

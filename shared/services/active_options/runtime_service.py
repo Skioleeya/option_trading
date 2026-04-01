@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 
 from shared.cache.oi_snapshot import save_oi_snapshot
 from shared.config import settings
-from shared.models.flow_engine import FlowEngineInput, FlowEngineOutput
+from shared_rust.models import FlowEngineInput, FlowEngineOutput
 from shared.system.persistent_oi_store import PersistentOIStore
 from . import runtime_service_fallbacks as fallback_support
 from . import runtime_service_mutations as mutations
@@ -166,6 +166,11 @@ class ActiveOptionsRuntimeService:
                 rows,
                 fallback_reason=partial_fallback_mode,
                 signatures=partial_fallback_signatures,
+            )
+        elif empty_filter_fallback_mode == support.FALLBACK_REASON_SUBTHRESHOLD_VOLUME:
+            rows = fallback_support.mark_real_rows_with_fallback_reason(
+                rows,
+                fallback_reason=empty_filter_fallback_mode,
             )
         elif empty_filter_fallback_mode is not None:
             rows = support.mark_rows_as_synthetic_fallback(

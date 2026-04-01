@@ -11,7 +11,7 @@ Composite formula:
         If IV > HV (premium):  sign = +1 for CALL, -1 for PUT
         If IV <= HV (discount): sign is inverted
 
-See `shared.contracts.metric_semantics:get_metric_semantics("FLOW_E")` for the
+See `shared_rust.contracts:get_metric_semantics("FLOW_E")` for the
 canonical provenance record.
 """
 
@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import logging
 
-from shared.models.flow_engine import FlowComponentResult, FlowEngineInput
+from shared_rust.models import FlowComponentResult, FlowEngineInput
 
 logger = logging.getLogger(__name__)
 

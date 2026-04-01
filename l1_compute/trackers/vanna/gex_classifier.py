@@ -15,7 +15,7 @@ import logging
 from typing import Any
 
 from shared.config import settings
-from shared.models.microstructure import GexRegime, VannaFlowState, VannaFlowResult
+from shared_rust.models import GexRegime, VannaFlowState, VannaFlowResult
 
 logger = logging.getLogger(__name__)
 

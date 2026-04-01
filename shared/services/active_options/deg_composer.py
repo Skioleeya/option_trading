@@ -24,7 +24,7 @@ from collections import defaultdict
 from typing import Literal
 
 from shared.config import settings
-from shared.models.flow_engine import FlowComponentResult, FlowEngineOutput
+from shared_rust.models import FlowComponentResult, FlowEngineOutput
 
 logger = logging.getLogger(__name__)
 

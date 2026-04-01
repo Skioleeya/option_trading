@@ -18,7 +18,7 @@ from l2_decision.agents.services.agent_g_decision_support import (
 )
 from l2_decision.signals.fusion.dynamic_weight_engine import DynamicWeightEngine
 from shared.config import settings
-from shared.models.agent_output import AgentB1Output
+from shared_rust.models import AgentB1Output
 from shared.system.tactical_triad_logic import classify_vrp_state, compute_vrp
 
 
@@ -320,8 +320,8 @@ class AgentG:
                     "confidence": fused_signal.confidence,
                     "weights": fused_signal.weights,
                     "regime": fused_signal.regime,
-                    "iv_regime": fused_signal.iv_regime.value,
-                    "gex_intensity": fused_signal.gex_intensity.value,
+                    "iv_regime": str(fused_signal.iv_regime),
+                    "gex_intensity": str(fused_signal.gex_intensity),
                     "explanation": fused_signal.explanation,
                     "components": fused_signal.components,
                     "raw_vpin": avg_atm_vpin,

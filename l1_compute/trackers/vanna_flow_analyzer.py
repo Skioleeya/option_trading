@@ -23,7 +23,7 @@ from zoneinfo import ZoneInfo
 
 import logging
 
-from shared.models.microstructure import VannaFlowResult, VannaFlowState
+from shared_rust.models import VannaFlowResult, VannaFlowState
 
 from l1_compute.trackers.dynamic_thresholds import get_dynamic_threshold_service
 from l1_compute.trackers.vanna.pearson_engine import PearsonEngine, SpotIVPoint

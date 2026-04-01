@@ -1,7 +1,7 @@
 import pytest
 import pyarrow as pa
 from l2_decision.signals.flow.deg_composer import InstitutionalSweepDetector, DEGComposer
-from shared.models.flow_engine import FlowEngineInput, FlowEngineOutput, FlowComponentResult
+from shared_rust.models import FlowEngineInput, FlowEngineOutput, FlowComponentResult
 from l2_decision.feature_store.extractors import _MaxImpactExtractor
 
 def test_sweep_detection_positive():
@@ -20,7 +20,7 @@ def test_sweep_detection_positive():
     assert sweeps["SPY260310C00402000"] is True
 
 def test_ofii_calculation_logic():
-    from shared.models.flow_engine import FlowComponentResult
+    from shared_rust.models import FlowComponentResult
     composer = DEGComposer()
     
     # Mock inputs with TWO strikes to avoid 0.0 Z-score (std dev > 0)

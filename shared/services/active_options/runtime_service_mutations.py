@@ -6,7 +6,7 @@ import logging
 from typing import Any
 
 from shared.config import settings
-from shared.models.flow_engine import FlowEngineOutput
+from shared_rust.models import FlowEngineOutput
 from . import runtime_service_fallbacks as fallback_support
 from . import runtime_service_support as support
 

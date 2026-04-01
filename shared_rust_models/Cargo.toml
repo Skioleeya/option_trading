@@ -1,0 +1,11 @@
+[package]
+name = "shared_rust_models"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "models"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.23", features = ["extension-module", "abi3-py310"] }

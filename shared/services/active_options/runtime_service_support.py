@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from shared.models.flow_engine import FlowEngineOutput
+from shared_rust.models import FlowEngineOutput
 from .constants import (
     ACTIVE_OPTIONS_FLOW_SIGNAL_REASON_ALL_ENGINES_INACTIVE,
     ACTIVE_OPTIONS_FLOW_SIGNAL_REASON_MISSING_GAMMA,
@@ -54,6 +54,7 @@ ROW_QUALITY_FALLBACK_SYNTHETIC = "FALLBACK_SYNTHETIC"
 ROW_QUALITY_PLACEHOLDER = "PLACEHOLDER"
 FALLBACK_REASON_TURNOVER_OPEN_INTEREST = "turnover_open_interest"
 FALLBACK_REASON_HARD_CHAIN = "hard_chain"
+FALLBACK_REASON_SUBTHRESHOLD_VOLUME = "subthreshold_volume"
 FALLBACK_REASON_ENGINE_EMPTY_OUTPUT = "engine_empty_output"
 MAX_CHAIN_VOLUME = 1_000_000_000
 

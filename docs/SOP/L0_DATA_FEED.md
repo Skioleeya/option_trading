@@ -29,13 +29,13 @@ flowchart LR
 - `l0_ingest/v2` 是唯一正式运行树；禁止恢复 `l0_ingest/feeds/*` 平铺目录。
 - `v2` 内部依赖固定为 `source -> normalize -> state -> services -> projection -> facade`。
 - 顶层 `l0_ingest/` 仅允许保留稳定入口、基础中立目录与测试目录，禁止继续堆放新的业务编排文件。
-- `v2/source/runtime/` 仅允许保留现役 runtime/provider 与其直接支撑模块；未接入 `factory.py` / `facade.py` 主链路的孤立 adapter 不得留在正式 runtime 树内。
+- `v2/source/runtime/` 仅允许保留现役 runtime/provider 与其直接支撑模块；旧 shell 文件 `factory.py` / `openapi_bootstrap.py` / `quote_runtime.py` / `market_data_gateway.py` 已退出正式 runtime 树，禁止恢复。
 - `v2/normalize/events/` 只允许保留当前 facade 实际消费的事件处理器；被替代的历史处理器必须移出或删除，禁止在正式运行树内并存。
 
 ## 3. Runtime Flow
 
-1. 生命周期阶段构建 `L0QuoteRuntime`（默认 `rust_only`）。
-   - `shared/config/api_credentials.py::longport_runtime_mode` 默认值为 `rust_only`。
+1. 生命周期阶段只构建 Rust `L0QuoteRuntime`。
+   - Python fallback runtime 已退出正式 L0 运行链。
 2. `OptionSubscriptionManager` 通过 runtime 抽象触发 Rust 订阅与 REST 拉取。
  - 订阅池执行硬上限：`subscription_max` 会被运行时钳制到官方上限 `500`。
  - 超过上限时按离 spot 距离优先保留近端合约，输出 drop 诊断日志。
@@ -56,8 +56,14 @@ flowchart LR
    - Rust hot path 只写 `${shm_path}_arrow` 共享段，批次合同由 Rust `ARROW_IPC_SCHEMA` 定义；legacy ring buffer 双写已退出热路径；
    - Arrow IPC signal 合同固定为 `L0_IPC_SIGNAL_NAME`；默认值跟随 Arrow 段名，即 `${shm_path}_arrow_signal`；
    - Rust `windows_signal.rs` 与 Python `shared/system/ipc_signal.py` 必须按 create-or-open 语义对齐同一个 Windows named event；
-   - Python `shared/system/ipc_reader.py` 在 Windows 上必须附着已有 named mapping 并读取长度前缀 Arrow payload，禁止再把 live attach 建立在 legacy ring buffer 或历史事件轮询之上；
-   - `shared/services/l0_runtime/facade.py` 在 `rust_only` 模式下必须通过 `ArrowIpcReader` 消费 Arrow batch；`_event_consumer_loop` 仅保留给 `python_fallback`；
+ - Python `shared/system/ipc_reader.py` 在 Windows 上必须附着已有 named mapping 并读取长度前缀 Arrow payload，禁止再把 live attach 建立在 legacy ring buffer 或历史事件轮询之上；
+- `shared/system/ipc_reader.py` 与 `shared/system/ipc_signal.py` 现为 Rust-backed wrappers；Windows named-event wait 与 shared-memory attach 的 owner 位于 `l0_ingest/l0_rust/src/ipc_runtime.rs`、`ipc_legacy.rs`、`windows_signal.rs`；
+- `shared/services/l0_runtime/facade.py` 必须通过 `ArrowIpcReader` 消费 Arrow batch；Python event-queue fallback 已退出正式运行链；
+- `shared/services/l0_runtime/normalize/bridges/market_event_bridge.py` 现为 Rust-backed wrapper；market event parse、depth side shaping、trade payload direction 语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_market_bridge.rs`；
+- `shared/services/l0_runtime/normalize/pipeline/sanitization.py` 现为 Rust-backed wrapper；QUOTE/DEPTH 基础清洗、IV/OI 归一化、crossed quote 防御与 top-of-book depth 提取语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_sanitization.rs`；
+- `shared/services/l0_runtime/normalize/events/chain_event_processor.py` 与 `state_event_processor.py` 现为 Rust-backed wrappers；SPY spot quote 提取与 trade payload 归一化语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_event_support.rs`；
+- `shared/services/l0_runtime/state/runtime/chain_state_store.py` 现为 Rust-backed wrapper；entry 初始化、WS/REST flow owner merge、depth merge 语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_state_support.rs`；
+- `shared/services/l0_runtime/projection/snapshot/components.py` 现为 Rust-backed wrapper；fallback snapshot、runtime-status、governor telemetry 与 fetch payload compose 语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_projection.rs`；
    - `fetch_snapshot().shm_stats.head/tail` 在 Arrow 路径下保持原键名，但语义切换为“最近消费到的 Arrow `batch_id`”，用于维持 L0→L4 诊断链连续；
    - `shared/system/rust_shm_bridge.py` 与 `shared/services/l0_runtime/normalize/bridges/rust_event_bridge.py` 现仅保留 deprecated compatibility wrapper；`rust_only` live path 不得再依赖它们；
    - `tests/l0_runtime/test_arrow_roundtrip.py` 必须覆盖 Rust producer -> Python `ArrowIpcReader` 的 batch roundtrip，验证 `batch_id`/`arrival_mono_ns`/schema 合同；
@@ -68,18 +74,66 @@ flowchart LR
 
 - `iv_baseline_sync.py` 只负责生命周期与流程编排（warm_up / staggered loop）。
 - `iv_baseline_sync_support.py` 负责批次切片、IV/OI 解析、cooldown 判定等纯 helper 逻辑。
+- `shared/services/l0_runtime/services/sync/support.py` 与 `shared/services/l0_runtime/services/repair/price_repair.py` 的 helper owner 现已迁入 Rust native exports：
+  - subscription cap clamp
+  - safe batch size
+  - sync chunk split
+  - IV/OI parse
+  - rate-limit error detect
+  - price-repair candidate selection
+  - price-repair row apply summary
+- Python 侧在该 cluster 中只允许保留 async runtime call、rate limiter acquire、logging 与 facade API，不得重新复制上述 helper 语义。
+- `shared/services/l0_runtime/services/subscription/manager.py` 的稳定 helper owner 现部分迁入 Rust native exports：
+  - official subscription cap clamp
+  - option-chain row -> target symbol / strike-map collect
+  - subscription pool cap trim / mandatory keep / strike-map filter
+- Python 侧在 subscription cluster 中仍保留：
+  - metadata TTL cache
+  - async `option_chain_info_by_date()` 拉取
+  - runtime `subscribe()` 调用
+  - diagnostics/logging/public manager API
+- `shared/services/l0_runtime/services/orchestration/support.py` 与 `header_volatility_support.py` 的纯 helper owner 现已迁入 Rust native exports：
+  - option symbol -> strike fallback parse
+  - SHM u64 read helper
+  - next-trading-day helper
+  - positive-float / decimal-ratio normalize
+  - valid average helper
+  - nearest chain item selection
+  - option IV decimal extraction
+- Python 侧在 orchestration helper cluster 中仍保留：
+  - `CleanQuoteEvent` 构造与 store mutation
+  - async `.VIX` / `1DTE` quote fetch
+  - limiter acquire
+  - logging and public helper API
+- `shared/services/l0_runtime/services/pollers/tier2_poller.py` 与 `tier3_poller.py` 的共享 helper owner 现已迁入 Rust native exports：
+  - option-chain metadata -> `symbol/strike/standard` map shaping
+  - `calc_indexes()` row normalize
+  - Top-N OI anchor retention
+- `shared/services/l0_runtime/services/native_support.py` 现为 services 层统一 native facade：
+  - subscription helper exports
+  - orchestration helper exports
+  - poller helper exports
+- 小体量 Python thin wrappers `_native_subscription_support.py`、`_native_orchestration_support.py`、`pollers/_native_poller_support.py`、`pollers/shared.py`、`pollers/factory.py` 已退出正式运行树，禁止恢复分散 wrapper owner。
+- Python 侧在 poller helper cluster 中仍保留：
+  - expiry date scan / weekly selection
+  - async `option_chain_info_by_date()` / `calc_indexes()` 拉取
+  - limiter acquire
+  - cache / diagnostics / logging / public poller API
 - 行为契约保持不变：dedupe window、`301607` cooldown、ATM-first chunk 顺序、`spot_at_sync` 写入语义不变。
 
 ### 3.4 Metadata / Normalization Single Source
 
 - `SanitizationPipeline` 是 L0 字段规范化唯一 source-of-truth：IV 百分比/小数归一、OI 数值清洗、REST/WS 价量字段清洗必须从同一实现导出。
+- `SanitizationPipeline` 的 live parse owner 已迁入 Rust native exports；Python 侧只允许保留 dataclass/result facade，不得重新复制 quote/depth 清洗分支。
+- `ChainEventProcessor` / `StateEventProcessor` 的 SPY spot quote 提取与 trade callback payload 归一化已迁入 Rust native exports；Python 侧只允许保留 store/depth callback 编排，不得重新定义 trade direction/volume/timestamp 归一化逻辑。
+- `ChainStateStore` 的 entry default、WS/REST owner merge、depth merge 语义已迁入 Rust native exports；Python 侧只允许保留版本号、日志、datetime 打点和公开对象 API，不得重新复制 flow ownership 判定分支。
 - Tier1 warm-up、Tier2/Tier3 poller、startup OI preload、price repair 回填不得各自复制 IV/OI 解析逻辑；兼容 wrapper 只能委托到统一规范化实现。
 - 到期日扫描与 `symbol -> strike/standard` metadata 构建必须走共享 resolver，禁止 `SubscriptionManager`、Tier2、Tier3 各自维护独立扫描逻辑。
 - symbol strike fallback 解析必须走共享 helper，禁止在运行路径中继续硬编码 `symbol[10:]` 这类切片推断。
 
 ## 3.1 官方网关与环境变量对齐（Rust SDK）
 
-按 Longport Rust `Config::from_env` 契约，L0 默认应使用以下主网关：
+按 Longport Rust runtime 契约，L0 默认应使用以下主网关：
 
 - `https://openapi.longportapp.com`
 - `wss://openapi-quote.longportapp.com/v2`
@@ -87,12 +141,25 @@ flowchart LR
 
 运行时要求：
 
-- 同时兼容 `LONGPORT_*` 与 `LONGBRIDGE_*` 两套环境变量名。
-- 启动阶段必须将配置同步到两套别名，避免 Python/Rust bridge 读取键名不一致导致初始化失败。
+- 同时兼容 `LONGPORT_*` 与 `LONGBRIDGE_*` 两套环境变量名作为配置输入。
+- 正式运行链不再依赖 Python env bridge；配置必须直接进入 Rust runtime owner。
 - Rust runtime 必须维护端点候选序列（primary -> fallback），默认顺序：`longportapp -> longbridge`。
 - 当 `socket/token` 建连出现 `client error (Connect)` 等网络类错误时，允许切换后备端点并重试一次。
 - 若故障发生在运行中（WS 会话已建立），允许执行 `stop -> 切端点 -> 重建 gateway -> 用 tracked_symbols 重订阅` 的自愈流程；单次操作最多一次切端点与一次重试，禁止无限切换循环。
 - `RustQuoteRuntime.diagnostics()` 必须持续提供 `failover_count`、`last_failover_error`、`last_failover_at_utc` 供 `/debug/persistence_status` 透出。
+- `QuoteContext` 生命周期、订阅以及 callback fan-in 必须全部由 Rust owner 负责；Python 不得再持有 `QuoteContext` 或 callback queue owner。
+- Python 对生成扩展的消费必须直连 `shared.services.l0_runtime._native_generated.l0_rust`；`shared/services/l0_runtime/l0_rust.py` shim 已退出主路径。
+- `shared.contracts.*` Python contract wrappers 已退出仓库；中立 contract import 面现统一为 `shared_rust.contracts`，contract source-of-truth 位于 `shared_rust/src/*`。
+- LongPort Quote REST contract normalize 与 endpoint/profile 构建现为 Rust-backed owner：
+  - `quote_api_build_option_quote_contract` / `quote_api_build_option_chain_strike_contract` / `quote_api_build_calc_index_contract`
+  - `quote_api_build_endpoint_profiles` / `quote_api_build_gateway_config`
+  - source-of-truth 位于 `l0_ingest/l0_rust/src/quote_contract_support.rs` 与 `quote_profile_support.rs`
+- `RustQuoteRuntime` 的 quote REST 调用面现优先消费 Rust row-contract exports：
+  - `quote_api_rest_quote_rows`
+  - `quote_api_rest_option_quote_contracts`
+  - `quote_api_rest_option_chain_info_by_date_contracts`
+  - `quote_api_rest_calc_indexes_contracts`
+  - source-of-truth 位于 `l0_ingest/l0_rust/src/gateway_rest.rs`
 
 ## 4. Degraded Startup Contract
 
@@ -128,6 +195,7 @@ flowchart LR
   - `1DTE` 最近 ATM 合约 `atm_iv_1dte`
   - `next_expiry`
 - 当 ActiveOptions 在 `min_volume` 过滤后为空且链路仍有有效候选（如 `turnover/open_interest`）时，允许运行时使用 fallback candidates 继续输出真实行，避免长期全占位降级；该路径必须保留结构化日志与诊断计数。
+- 当 ActiveOptions 因 `min_volume` 过滤导致 Top5 不足时，补位顺序必须先选真实的次阈值正成交量候选（`volume/current_volume > 0`，仍按 `VOL desc -> turnover desc -> impact_index desc`），仅在真实量能仍不足时才退化到 `turnover/open_interest` 合成 fallback。
 - ActiveOptions 行合同允许附加质量标记字段（向后兼容）：`row_quality`、`fallback_reason`、`is_synthetic_fallback`，用于区分真实可交易行与合成降级行。
 
 ## 5.1 LongPort REST Runtime Contract
@@ -139,17 +207,20 @@ LongPort 期权 REST 契约在 `L0QuoteRuntime` 内统一对齐，当前只发�
 - 顶层字段：`symbol`, `last_done`, `prev_close`, `open`, `high`, `low`, `timestamp`, `volume`, `turnover`, `trade_status`
 - 兼容别名：`open_interest`, `implied_volatility`, `expiry_date`, `strike_price`, `contract_multiplier`, `contract_type`, `contract_size`, `direction`, `historical_volatility`, `underlying_symbol`
 - nested 保真字段：`option_extend.{implied_volatility, open_interest, expiry_date, strike_price, contract_multiplier, contract_type, contract_size, direction, historical_volatility, underlying_symbol}`
+- 归一化 owner 现位于 Rust native contract builder；Python 仅保留 dataclass facade，不得重新复制 expiry/IV/strike 归一化逻辑
 
 `option_chain_info_by_date()` 现保留：
 
 - `price`, `call_symbol`, `put_symbol`, `standard`
 - 兼容语义别名：`strike_price`
+- 归一化 owner 现位于 Rust native contract builder；Python 仅保留 facade
 
 `calc_indexes()` 现保留：
 
 - `symbol`, `last_done`, `change_val`, `change_rate`, `volume`, `turnover`
 - `expiry_date`, `strike_price`, `premium`
 - `implied_volatility`, `open_interest`, `delta`, `gamma`, `theta`, `vega`, `rho`
+- 归一化 owner 现位于 Rust native contract builder；Python 仅保留 facade
 
 研究/诊断透传规则：
 
@@ -168,6 +239,7 @@ Raw + Normalized 规则：
 
 - L0 消费者应优先读取 `implied_volatility_decimal` 与 `expiry_date_iso`
 - 旧字段继续保留用于兼容现有调用方，不允许在本轮替换式改名
+- `RustQuoteRuntime.quote()/option_quote()/option_chain_info_by_date()/calc_indexes()` 已切到 Rust row exports + Python facade 组合；真实 native path 不再依赖 Python 先收 JSON 再本地重组 contract
 - Active Options turnover 修复轮（2026-03-19）已升级 SHM Push schema 到 v2：
   - 头部元数据新增 `magic/schema_version/event_size`（保留 `head@0`、`tail@64`、`buffer@128`）
   - 事件尾部新增 `current_volume/turnover/current_turnover`

@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from shared_rust.contracts import SHM_STATUS_DISCONNECTED, SHM_STATUS_ERROR, SHM_STATUS_OK, build_shm_stats
 from shared.config import settings
 from shared.system.ipc_reader import ArrowIpcReader
 from shared.services.l0_runtime.contracts import CallbackHooks, SnapshotRequest
@@ -31,7 +32,7 @@ from shared.services.l0_runtime.services.orchestration.support import (
 )
 from shared.services.l0_runtime.services.runtime.services import RuntimeServices
 from shared.services.l0_runtime.source import build_runtime_bundle
-from shared.services.l0_runtime.source.runtime.openapi_bootstrap import _startup_connectivity_probe
+from shared.services.l0_runtime.source.runtime.sdk_bootstrap import _startup_connectivity_probe
 from shared.services.l0_runtime.state import LiveState
 
 logger = logging.getLogger(__name__)
@@ -53,7 +54,7 @@ class OptionChainBuilder:
         self._mgmt_task: asyncio.Task | None = None
         self._arrow_reader: ArrowIpcReader | None = None
         self._last_arrow_batch_id = 0
-        self._transport_status = "DISCONNECTED"
+        self._transport_status = SHM_STATUS_DISCONNECTED
         self._transport_error: str | None = None
         self._last_trade_price: dict[str, float] = {}
 
@@ -85,7 +86,7 @@ class OptionChainBuilder:
             try:
                 self._connect_arrow_reader()
             except RuntimeError as exc:
-                self._transport_status = "DISCONNECTED"
+                self._transport_status = SHM_STATUS_DISCONNECTED
                 self._transport_error = str(exc)
                 logger.info("[OptionChainBuilderV2] Arrow reader attach deferred until writer is live: %s", exc)
         self._services.iv_sync.set_event_loop(asyncio.get_event_loop())
@@ -166,7 +167,7 @@ class OptionChainBuilder:
         reader = ArrowIpcReader()
         reader.connect(shm_name, signal_name)
         self._arrow_reader = reader
-        self._transport_status = "DISCONNECTED"
+        self._transport_status = SHM_STATUS_DISCONNECTED
         self._transport_error = None
 
     async def _arrow_consumer_loop(self) -> None:
@@ -183,7 +184,7 @@ class OptionChainBuilder:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                self._transport_status = "ERROR"
+                self._transport_status = SHM_STATUS_ERROR
                 self._transport_error = str(exc)
                 logger.error("[OptionChainBuilderV2] Arrow consumer loop error: %s", exc)
                 if self._arrow_reader is not None:
@@ -195,7 +196,7 @@ class OptionChainBuilder:
         batch_id = batch_id_from_batch(batch)
         if batch_id is not None:
             self._last_arrow_batch_id = max(self._last_arrow_batch_id, batch_id)
-        self._transport_status = "OK"
+        self._transport_status = SHM_STATUS_OK
         self._transport_error = None
 
     def _handle_arrow_batch(self, batch: Any) -> None:
@@ -305,19 +306,19 @@ class OptionChainBuilder:
             return {
                 "rust_active": False,
                 "rust_shm_path": None,
-                "shm_stats": {"head": 0, "tail": 0, "status": "DISCONNECTED"},
+                "shm_stats": build_shm_stats(SHM_STATUS_DISCONNECTED),
             }
         transport_contract = (
             getattr(self._runtime_bundle.quote_runtime, "transport_contract", lambda: {})() or {}
         )
         rust_started = bool(gateway_diag.get("rust_started", False))
         status = self._transport_status
-        if status != "ERROR":
-            status = "OK" if rust_started else "DISCONNECTED"
+        if status != SHM_STATUS_ERROR:
+            status = SHM_STATUS_OK if rust_started else SHM_STATUS_DISCONNECTED
         batch_id = self._last_arrow_batch_id if rust_started else 0
         return {
             "rust_active": rust_started,
             "rust_shm_path": transport_contract.get("shm_path") if rust_started else None,
-            "shm_stats": {"head": batch_id, "tail": batch_id, "status": status},
+            "shm_stats": build_shm_stats(status, head=batch_id, tail=batch_id),
         }
 

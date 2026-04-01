@@ -15,7 +15,7 @@ from __future__ import annotations
 from collections import deque
 from typing import Optional
 
-from shared.models.microstructure import VannaAccelerationState
+from shared_rust.models import VannaAccelerationState
 
 
 # ── Constants ─────────────────────────────────────────────────────────────────

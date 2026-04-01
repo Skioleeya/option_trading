@@ -1,0 +1,12 @@
+[package]
+name = "shared_rust_contracts"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "contracts"
+crate-type = ["cdylib"]
+
+[dependencies]
+arrow = { version = "53.0", features = ["ipc"] }
+pyo3 = { version = "0.23", features = ["extension-module", "abi3-py310"] }

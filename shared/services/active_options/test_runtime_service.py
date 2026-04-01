@@ -1,8 +1,8 @@
 import pytest
 
-from shared.contracts.metric_semantics import get_metric_semantics
+from shared_rust.contracts import get_metric_semantics
 from shared.config import settings
-from shared.models.flow_engine import FlowEngineOutput
+from shared_rust.models import FlowEngineOutput
 from shared.services.active_options.runtime_service import ActiveOptionsRuntimeService
 
 

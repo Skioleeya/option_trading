@@ -13,7 +13,7 @@ from typing import NamedTuple
 from zoneinfo import ZoneInfo
 
 from shared.config import settings
-from shared.models.microstructure import IVVelocityResult, IVVelocityState
+from shared_rust.models import IVVelocityResult, IVVelocityState
 
 
 class _DataPoint(NamedTuple):

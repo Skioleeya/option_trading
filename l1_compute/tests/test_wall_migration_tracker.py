@@ -9,7 +9,7 @@ import pytest
 
 from l1_compute.trackers.wall_migration_tracker import WallMigrationTracker
 from shared.config import settings
-from shared.models.microstructure import (
+from shared_rust.models import (
     WallMigrationCallState,
     WallMigrationPutState,
     WallMigrationResult,

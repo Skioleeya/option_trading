@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from shared.contracts.option_chain_arrow import dicts_to_record_batch
+from shared_rust.contracts import dicts_to_record_batch
 from shared.services.l0_runtime.projection.snapshot.components import (
     build_error_snapshot,
     build_governor_telemetry,

@@ -1,6 +1,6 @@
 """Backward-compatible re-export of the neutral option-chain Arrow contract."""
 
-from shared.contracts.option_chain_arrow import (
+from shared_rust.contracts import (
     OPTION_CHAIN_SCHEMA,
     dicts_to_record_batch,
     ensure_record_batch,

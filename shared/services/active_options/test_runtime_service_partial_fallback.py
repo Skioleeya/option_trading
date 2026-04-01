@@ -1,6 +1,6 @@
 import pytest
 
-from shared.models.flow_engine import FlowEngineOutput
+from shared_rust.models import FlowEngineOutput
 from shared.services.active_options.runtime_service import ActiveOptionsRuntimeService
 
 
