@@ -11,7 +11,9 @@
       "Read(//mnt/c/Temp/**)",
       "Read(//c/Temp/**)",
       "Bash(python3:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(powershell -Command ':*)",
+      "Bash(powershell -ExecutionPolicy Bypass -Command ':*)"
     ]
   }
 }

@@ -1,24 +1,27 @@
 ## Scope
 
-- [ ] Lock target file list (8 files in `shared/system/`)
-- [ ] Map external consumer import sites (app, l1_compute, l2_decision, l3_assembly)
-- [ ] Confirm `l0_ingest/l0_rust/src/ipc_writer.rs` API shape for IPC read counterpart
+- [x] Lock target file list (8 files in `shared/system/`)
+- [x] Map external consumer import sites (app, l1_compute, l2_decision, l3_assembly)
+- [x] Confirm `l0_ingest/l0_rust/src/ipc_writer.rs` API shape for IPC read counterpart
   — NOTE: `ipc_runtime.rs` already exists with `NativeArrowIpcReader`; this step can be
     reduced to a consistency audit rather than a design gate.
-- [ ] Mark non-target scope (shared/config, shared/cache, shared/services)
+- [x] Mark non-target scope (shared/config, shared/cache, shared/services)
 
 ## Implementation
 
-- [ ] Sub-wave A — IPC group (ipc_reader + ipc_signal)
+- [x] Sub-wave A — IPC group (ipc_reader + ipc_signal)
 - [ ] Sub-wave B — SHM bridge audit + retire/migrate
 - [ ] Sub-wave C — Snapshot builder + OI store
 - [ ] Sub-wave D — Storage/utility assessment (redis, historical_store, tactical_triad_logic)
-- [ ] Boundary scan after each sub-wave
+- [x] Boundary scan after Sub-wave A (`shared.system.ipc_reader|ipc_signal` consumer scan = 0)
 
 ## Verification
 
 - [ ] `tests/l0_runtime/test_arrow_ipc_signal.py` passes after sub-wave A
 - [ ] `tests/l0_runtime/test_arrow_roundtrip.py` passes after sub-wave A
+  - NOTE: above two test files are absent in current tree; substituted smoke check:
+    `powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/tests/test_lifespan_startup.py -q`
+    => `1 passed`.
 - [ ] `l3_assembly/tests/` + `app/loops/tests/` pass after sub-wave C
 - [ ] E2E smoke test: `python scripts/test/test_l0_l4_pipeline.py` after sub-wave C
 - [ ] SOP updated: `docs/SOP/L0_DATA_FEED.md` or `SOP-EXEMPT: <reason>`
@@ -27,11 +30,11 @@
 
 ## DoD
 
-- [ ] IPC group: `ipc_reader.py` + `ipc_signal.py` deleted
+- [x] IPC group: `ipc_reader.py` + `ipc_signal.py` deleted
 - [ ] SHM bridge: `rust_shm_bridge.py` either deleted or migration plan deferred with written justification
 - [ ] Snapshot group: `snapshot_builder.py` + `persistent_oi_store.py` deleted
 - [ ] Storage/utility group: assessment document produced with explicit decision per file
-- [ ] No `shared.system` imports remain in runtime source for retired files
+- [x] No `shared.system.ipc_reader` / `shared.system.ipc_signal` imports remain in runtime source
 
 ## Sub-wave A — IPC Group
 — NOTE: Rust implementation already done. `l0_ingest/l0_rust/src/ipc_runtime.rs` already
@@ -39,13 +42,14 @@
   Python files are already thin wrappers that import from `_native_generated/l0_rust.pyd`.
   Remaining work: cut consumers to import directly from the pyd → delete Python wrappers.
 
-- [ ] Verify `ipc_runtime.rs` `NativeSignalListener` + `NativeArrowIpcReader` cover all methods in
+- [x] Verify `ipc_runtime.rs` `NativeSignalListener` + `NativeArrowIpcReader` cover all methods in
   `shared/system/ipc_signal.py` (57L) and `shared/system/ipc_reader.py` (70L)
-- [ ] Expose IPC reader/signal via `l0_ingest/l0_rust/src/lib.rs` if not already exported
-- [ ] Update consumers of `shared.system.ipc_reader` and `shared.system.ipc_signal`
-- [ ] Delete `shared/system/ipc_reader.py`
-- [ ] Delete `shared/system/ipc_signal.py`
+- [x] Expose IPC reader/signal via `l0_ingest/l0_rust/src/lib.rs` if not already exported
+- [x] Update consumers of `shared.system.ipc_reader` and `shared.system.ipc_signal`
+- [x] Delete `shared/system/ipc_reader.py`
+- [x] Delete `shared/system/ipc_signal.py`
 - [ ] Run `tests/l0_runtime/test_arrow_ipc_signal.py` + `test_arrow_roundtrip.py`
+  - NOTE: target files absent in current tree; fallback smoke test executed (see Verification).
 
 ## Sub-wave B — SHM Bridge Audit
 
