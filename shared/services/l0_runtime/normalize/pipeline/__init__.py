@@ -10,7 +10,7 @@ from itertools import count
 from pathlib import Path
 from typing import Any, Literal
 
-from shared.services.l0_runtime._native_extension_loader import load_l0_rust
+from shared.services.l0_runtime.native_loader import load_l0_rust
 
 logger = logging.getLogger(__name__)
 

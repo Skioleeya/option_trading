@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from shared.services.l0_runtime._native_extension_loader import load_l0_rust
+from shared.services.l0_runtime.native_loader import load_l0_rust
 from shared.services.l0_runtime.normalize.pipeline import EventType
 
 _PACKAGE_DIR = Path(__file__).resolve().parents[2] / "_native_generated"

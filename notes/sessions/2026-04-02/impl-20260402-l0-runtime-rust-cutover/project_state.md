@@ -1,17 +1,38 @@
 # Project State
 
 ## Snapshot
-- DateTime (ET): 2026-04-02 10:16:09 -04:00
+- DateTime (ET): 2026-04-02 12:44:36 -04:00
 - Branch: `chore/sync-all-local-changes-20260313`
-- Last Commit: `7fb0f53`
+- Last Commit: `d48b89c`
 - Environment:
   - Market: `CLOSED`
   - Data Feed: `DEGRADED`
   - L0-L4 Pipeline: `OK`
 
 ## Current Focus
-- Primary Goal: continue the existing prerequisite/impl chain by completing Sub-wave C (`normalize/bridges + events`) owner consolidation
+- Primary Goal: close Sub-wave F/G remaining gates (dual-run evidence + regression/verification blockers) after code-side consolidation
 - Scope In:
+- `scripts/test/spy_us_rust_stream_mvp.py`
+- `shared/services/l0_runtime/native_loader.py`
+- `shared/services/l0_runtime/_native_extension_loader.py` (deleted)
+- `shared/services/l0_runtime/_native_generated/__init__.py` (deleted)
+- `shared/system/{ipc_reader.py,ipc_signal.py,tactical_triad_logic.py}`
+- `shared/services/l0_runtime/{normalize,projection,state,services,source}/**` native-loader import retargets
+- `shared/services/l0_runtime/state/runtime/__init__.py`
+  - `shared/services/l0_runtime/projection/snapshot/__init__.py`
+  - `shared/services/l0_runtime/state/runtime/{chain_state_store.py,live_state.py,_native_state_support.py}` (retired)
+  - `shared/services/l0_runtime/projection/snapshot/{components.py,payload.py,_native_projection_support.py}` (retired)
+  - `shared/services/l0_runtime/state/__init__.py`
+  - `shared/services/l0_runtime/projection/__init__.py`
+  - `shared/services/l0_runtime/services/orchestration/orchestrator.py`
+  - `docs/SOP/L0_DATA_FEED.md`
+  - `openspec/changes/impl-20260402-l0-runtime-rust-cutover/tasks.md`
+  - `openspec/changes/impl-20260402-l0-runtime-rust-cutover/task-audit-2026-04-02.md`
+  - session records for this execution
+  - `notes/context/project_state.md`
+  - `notes/context/open_tasks.md`
+  - `notes/context/handoff.md`
+- Scope In (completed earlier in same session):
   - `shared/services/l0_runtime/normalize/bridges/__init__.py`
   - `shared/services/l0_runtime/normalize/events/__init__.py`
   - `shared/services/l0_runtime/normalize/bridges/{market_event_bridge.py,arrow_batch_bridge.py,rust_event_bridge.py,_native_bridge_support.py}` (retired)
@@ -25,11 +46,57 @@
   - `openspec/changes/impl-20260402-l0-runtime-rust-cutover/task-audit-2026-04-02.md`
   - session records for this execution
 - Scope Out:
-  - Sub-wave D-G runtime owner replacement
-  - full market-session dual-run (Sub-wave F)
+  - none for code-side G deletion (already completed in this session)
+  - full market-session dual-run evidence execution remains pending by market/backend availability
 
 ## What Changed (Latest Session)
 - Files:
+  - `shared/services/l0_runtime/services/__init__.py`
+  - `shared/services/l0_runtime/services/_native_helpers.py`
+  - `shared/services/l0_runtime/services/orchestration/__init__.py`
+  - `shared/services/l0_runtime/services/orchestration/feed_orchestrator.py`
+  - `shared/services/l0_runtime/services/pollers/__init__.py`
+  - `shared/services/l0_runtime/services/repair/__init__.py`
+  - `shared/services/l0_runtime/services/subscription/__init__.py`
+  - `shared/services/l0_runtime/services/sync/__init__.py`
+  - `shared/services/l0_runtime/services/sync/core.py`
+  - `shared/services/l0_runtime/services/runtime/__init__.py`
+  - `shared/services/l0_runtime/facade.py` (deleted)
+  - `l1_compute/analysis/greeks_engine.py`
+  - `shared/services/l0_runtime/services/orchestration/orchestrator.py` (deleted)
+  - `shared/services/l0_runtime/services/orchestration/support.py` (deleted)
+  - `shared/services/l0_runtime/services/orchestration/header_volatility_support.py` (deleted)
+  - `shared/services/l0_runtime/services/pollers/tier2_poller.py` (deleted)
+  - `shared/services/l0_runtime/services/pollers/tier3_poller.py` (deleted)
+  - `shared/services/l0_runtime/services/repair/price_repair.py` (deleted)
+  - `shared/services/l0_runtime/services/subscription/manager.py` (deleted)
+  - `shared/services/l0_runtime/services/sync/iv_baseline_sync.py` (deleted)
+  - `shared/services/l0_runtime/services/sync/support.py` (deleted)
+  - `shared/services/l0_runtime/services/sync/_native_sync_support.py` (deleted)
+  - `shared/services/l0_runtime/services/runtime/services.py` (deleted)
+  - `shared/services/l0_runtime/services/native_support.py` (deleted)
+  - `shared/services/l0_runtime/state/runtime/__init__.py`
+  - `shared/services/l0_runtime/projection/snapshot/__init__.py`
+  - `shared/services/l0_runtime/state/__init__.py`
+  - `shared/services/l0_runtime/projection/__init__.py`
+  - `shared/services/l0_runtime/services/orchestration/orchestrator.py`
+  - `shared/services/l0_runtime/state/runtime/chain_state_store.py` (deleted)
+  - `shared/services/l0_runtime/state/runtime/live_state.py` (deleted)
+  - `shared/services/l0_runtime/state/runtime/_native_state_support.py` (deleted)
+  - `shared/services/l0_runtime/projection/snapshot/components.py` (deleted)
+  - `shared/services/l0_runtime/projection/snapshot/payload.py` (deleted)
+  - `shared/services/l0_runtime/projection/snapshot/_native_projection_support.py` (deleted)
+  - `docs/SOP/L0_DATA_FEED.md`
+  - `openspec/changes/impl-20260402-l0-runtime-rust-cutover/tasks.md`
+  - `openspec/changes/impl-20260402-l0-runtime-rust-cutover/task-audit-2026-04-02.md`
+  - `notes/context/project_state.md`
+  - `notes/context/open_tasks.md`
+  - `notes/context/handoff.md`
+  - `notes/sessions/2026-04-02/impl-20260402-l0-runtime-rust-cutover/project_state.md`
+  - `notes/sessions/2026-04-02/impl-20260402-l0-runtime-rust-cutover/open_tasks.md`
+  - `notes/sessions/2026-04-02/impl-20260402-l0-runtime-rust-cutover/handoff.md`
+  - `notes/sessions/2026-04-02/impl-20260402-l0-runtime-rust-cutover/meta.yaml`
+- Files (completed earlier in same session):
   - `shared/services/l0_runtime/normalize/bridges/__init__.py`
   - `shared/services/l0_runtime/normalize/events/__init__.py`
   - `shared/services/l0_runtime/normalize/bridges/market_event_bridge.py` (deleted)
@@ -52,24 +119,68 @@
   - `notes/sessions/2026-04-02/impl-20260402-l0-runtime-rust-cutover/handoff.md`
   - `notes/sessions/2026-04-02/impl-20260402-l0-runtime-rust-cutover/meta.yaml`
 - Behavior:
+  - unified native loading into `shared.services.l0_runtime.native_loader`
+  - retired `_native_extension_loader.py` and `_native_generated/__init__.py`
+  - `native_loader.py` now reuses `sys.modules['l0_rust']` to enforce single extension instance and keep Rust type identity coherent across runtime helpers
+- `source/runtime` owner surface consolidated to `source/runtime/__init__.py` + `source/runtime/bootstrap.py` + `source/runtime/_native_helpers.py` + `source/runtime/quote_runtime/{__init__.py,helpers.py}`
+  - removed Sub-wave F legacy source/runtime files (11 files): `longport_adapter.py`, `base_feed.py`, `longport_option_contracts.py`, `rate_limiter.py`, `runtime_bundle.py`, `sdk_bootstrap.py`, `_native_quote_api_support.py`, `_native_quote_profile_support.py`, `quote_runtime/{contracts.py,shared.py,rust_runtime.py}`
+  - `facade.py` startup probe import switched to `shared.services.l0_runtime.source.runtime` package entrypoint
+  - `services` root now exports the stable consumer surface for `RuntimeServices`, `apply_preloaded_oi_events`, and `apply_rest_update`
+  - `services/_native_helpers.py` now owns shared Rust-backed helper bindings, eliminating root-package circular import pressure
+  - `services/sync/__init__.py` now owns sync helper/export surface and `services/sync/core.py` owns `IVBaselineSync`
+  - removed Sub-wave E legacy service files (12 files)
+  - `facade.py` and `l1_compute/analysis/greeks_engine.py` now import from package entrypoints instead of deleted leaf modules
+  - `state/runtime` owner surface consolidated into `state/runtime/__init__.py`
+  - `projection/snapshot` owner surface consolidated into `projection/snapshot/__init__.py`
+  - removed Sub-wave D legacy state/projection files (6 files)
+  - consumer imports stay on package-level entrypoints (no new shim)
+- Behavior (completed earlier in same session):
   - `normalize/bridges` owner surface consolidated into `bridges/__init__.py`
   - `normalize/events` owner surface consolidated into `events/__init__.py`
   - removed Sub-wave C legacy bridge/event files (7 files)
   - bridge/event consumers continue through package-level entrypoints (no new shim)
   - synchronized OpenSpec task/audit status to mark Sub-wave C complete
 - Verification:
+  - `python scripts/test/spy_us_rust_stream_mvp.py --symbol SPY.US --timeout-sec 30` passed on real host (`ok=true`, `rest_quote_rows=1`, `rest_spot=654.343`, `stream_rows=21`, transport=`arrow_ipc_named_event`)
+  - `python -c` import smoke on `shared.services.l0_runtime.native_loader` passed (`native-loader-ok`)
+  - `python -c` import smoke on `shared.system.*` passed (`shared-system-imports-ok`)
+  - `python -c` import smoke on `shared.services.l0_runtime.*` affected modules passed (`l0-runtime-imports-ok`)
+  - `python -c` import smoke on native helpers passed (`native-helper-imports-ok`)
+  - `python -c` import smoke on `source.runtime` passed (`runtime-root-ok`)
+  - `python -c` import smoke on `app.container` + runtime builder path passed (`builder-container-ok`)
+  - `python -c` import smoke on `quote_runtime` package passed (`quote-runtime-ok`)
+  - `python -c` import smoke on `services` package passed (`services-ok`)
+  - residual-reference scan confirms no runtime code references to deleted Sub-wave F modules
+  - all changed `source/runtime` `.py` files remain <= 400 lines
+  - `python -c` import smoke on `services` root passed (`services-root-ok`)
+  - `python -c` import smoke on services subpackages passed (`services-subpkg-ok`)
+  - `python -c` import smoke on `services.runtime.builder.OptionChainBuilder` passed (`builder-ok`)
+  - residual-reference scan confirms no runtime code references to deleted Sub-wave E modules
+  - all changed service `.py` files remain <= 400 lines
+  - `openspec validate refactor-dependency-20260402-l0-runtime-owner-api-prereq` passed
+  - `openspec validate impl-20260402-l0-runtime-rust-cutover` passed
+  - `python scripts/policy/check_openspec_chain.py ...` passed (`status: PASS`)
+  - `powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict` passed
+  - `python -c` import smoke on `state` passed (`state-ok`)
+  - `python -c` import smoke on `projection` passed (`projection-ok`)
+  - `python -c` import smoke on `services.runtime.builder.OptionChainBuilder` passed (`builder-import-ok`)
+  - boundary scan confirms no runtime code references to deleted Sub-wave D modules
+  - `powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict` passed
+- Verification (completed earlier in same session):
   - `python -c` import smoke on `normalize.bridges` passed
   - `python -c` import smoke on `normalize.events` passed
-  - `python -c` import smoke on `facade.OptionChainBuilder` passed
+  - `python -c` import smoke on `services.runtime.builder.OptionChainBuilder` passed
+  - `python scripts/test/test_l0_l4_pipeline.py` attempted twice; first run connection refused, second run established websocket but timed out waiting enriched payload
+  - `powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 tests/l0_runtime/` attempted; blocked by `tmp/pytest_cache` ACL owner mismatch (`CodexSandboxOffline`)
   - `openspec validate refactor-dependency-20260402-l0-runtime-owner-api-prereq` passed
   - `openspec validate impl-20260402-l0-runtime-rust-cutover` passed
   - `python scripts/policy/check_openspec_chain.py ...` passed (`status: PASS`)
   - `powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict` passed
 
 ## Risks / Constraints
-- Risk 1: Sub-wave D-G cannot be closed by deletion-only work; Rust owner classes are still missing for runtime/service surfaces.
-- Risk 2: Sub-wave F requires one full market-session dual-run evidence window and cannot be closed in a market-closed window.
+- Risk 1: Sub-wave F still needs one full market-session dual-run evidence window before closure.
+- Risk 2: Sub-wave G code-side deletions are complete, but E2E still requires live enriched payload window and full-suite remains blocked by pytest-cache ACL ownership.
 
 ## Next Action
-- Immediate Next Step: continue with Sub-wave D (`state + projection`) owner replacement and parity gate.
+- Immediate Next Step: unblock environment gates (backend at `ws://localhost:8001`, `tmp/pytest_cache` ACL), then run G 回归门禁（E2E + full l0 suite）并补齐 Sub-wave F dual-run evidence。
 - Owner: Codex

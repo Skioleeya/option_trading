@@ -1,10 +1,10 @@
-# Open Tasks (Index)
+﻿# Open Tasks (Index)
 
 ## Active Session Tasks
-- Path: notes/sessions/2026-04-02/impl-20260402-l0-runtime-rust-cutover/open_tasks.md
+- Path: notes/sessions/2026-04-02/impl-20260402-shared-system-rust-cutover/open_tasks.md
 
 ## Global Backlog (Cross-Session)
-- [ ] Continue `shared/services` retirement with `l0_runtime`.
+- [ ] Continue `shared/services` retirement with `l0_runtime` (SPY.US Rust MVP real-host connectivity passed; next: Sub-wave F dual-run evidence window; Sub-wave G code-side deletion done, remaining regression blockers are live enriched-payload window and pytest-cache ACL ownership).
 - [ ] Collapse temporary Rust-only service module names into the final `shared_rust.services` namespace.
 
 ## Process

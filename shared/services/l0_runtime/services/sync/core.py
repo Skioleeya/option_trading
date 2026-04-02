@@ -1,4 +1,4 @@
-"""IV/OI warm-up and staggered sync."""
+"""IV/OI warm-up and staggered sync owner."""
 
 from __future__ import annotations
 
@@ -11,8 +11,9 @@ from zoneinfo import ZoneInfo
 
 from longport.openapi import CalcIndex
 
-from shared.services.l0_runtime.services.repair.price_repair import repair_symbol_prices
-from shared.services.l0_runtime.services.sync.support import (
+from shared.config import settings
+from shared.system.persistent_oi_store import PersistentOIStore
+from shared.services.l0_runtime.services.sync import (
     SYNC_CHUNK_COUNT,
     SYNC_COOLDOWN_SLEEP_SECONDS,
     WARMUP_COOLDOWN_SECONDS,
@@ -22,14 +23,11 @@ from shared.services.l0_runtime.services.sync.support import (
     iter_batches,
     parse_implied_volatility,
     parse_open_interest,
-    pick_price_repair_candidates,
     safe_batch_size,
     split_sync_chunks,
 )
-from shared.config import settings
-from shared.system.persistent_oi_store import PersistentOIStore
+from shared.services.l0_runtime.source.runtime import APIRateLimiter
 from shared.services.l0_runtime.source.runtime.quote_runtime import L0QuoteRuntime
-from shared.services.l0_runtime.source.runtime.rate_limiter import APIRateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +39,6 @@ class IVBaselineSync:
         self.iv_cache: dict[str, float] = {}
         self.oi_cache: dict[str, int] = {}
         self.spot_at_sync: dict[str, float] = {}
-
         self._on_update: Callable[[str, Any], None] | None = None
         self._task: asyncio.Task | None = None
         self._warming_up = False
@@ -70,8 +67,7 @@ class IVBaselineSync:
                 self.oi_cache[symbol] = oi
                 loaded += 1
         logger.warning(
-            "[IVBaselineSync] OI HOT-START: preloaded %d/%d entries from disk baseline %s. "
-            "GEX will be non-zero from first tick.",
+            "[IVBaselineSync] OI HOT-START: preloaded %d/%d entries from disk baseline %s. GEX will be non-zero from first tick.",
             loaded,
             len(baseline),
             date_str,
@@ -82,12 +78,10 @@ class IVBaselineSync:
         chain_like = [{"symbol": sym, "open_interest": oi} for sym, oi in self.oi_cache.items() if oi > 0]
         if not chain_like:
             return
-        ok = self._oi_store.save_baseline(date_str, chain_like)
-        if ok:
+        if self._oi_store.save_baseline(date_str, chain_like):
             logger.info("[IVBaselineSync] Persisted %d OI entries to disk for %s.", len(chain_like), date_str)
 
     def apply_iv_update(self, symbol: str, iv: float | None, oi: int | None = None) -> None:
-        """Controlled write point for iv_cache / oi_cache."""
         if iv is not None:
             self.iv_cache[symbol] = iv
         if oi is not None:
@@ -102,7 +96,6 @@ class IVBaselineSync:
         get_price_repair_symbols_fn: Callable[[], set[str]] | None = None,
         needs_price_repair_fn: Callable[[str], bool] | None = None,
     ) -> None:
-        """Start the background sync loop."""
         self._runtime = runtime
         self._get_symbols = get_symbols_fn
         self._get_spot = get_spot_fn
@@ -113,7 +106,6 @@ class IVBaselineSync:
             self._task = asyncio.create_task(self._loop_task())
 
     async def stop(self) -> None:
-        """Cancel the background task."""
         if self._task:
             self._task.cancel()
             try:
@@ -138,24 +130,14 @@ class IVBaselineSync:
             return False
         if (now_ts - self._last_warmup_ts) >= self._warmup_dedupe_window_sec:
             return False
-        logger.info(
-            "[IVSync] Warm-up deduplicated: %d symbols within %.0fs window.",
-            len(signature),
-            self._warmup_dedupe_window_sec,
-        )
+        logger.info("[IVSync] Warm-up deduplicated: %d symbols within %.0fs window.", len(signature), self._warmup_dedupe_window_sec)
         return True
 
     def _mark_warm_up_signature(self, symbols: list[str], now_ts: float) -> None:
         self._last_warmup_signature = frozenset(symbols)
         self._last_warmup_ts = now_ts
 
-    def _apply_batch_items(
-        self,
-        *,
-        results: list[Any] | None,
-        spot_ref: float | None,
-        track_any_update: bool,
-    ) -> bool:
+    def _apply_batch_items(self, *, results: list[Any] | None, spot_ref: float | None, track_any_update: bool) -> bool:
         any_update = False
         for item in results or []:
             iv = parse_implied_volatility(item)
@@ -172,19 +154,13 @@ class IVBaselineSync:
     async def _fetch_batch_results(self, batch: list[str], warm_up_mode: bool) -> list[Any] | None:
         async with self._limiter.acquire(weight=len(batch)):
             try:
-                return await self._runtime.calc_indexes(
-                    batch,
-                    [CalcIndex.ImpliedVolatility, CalcIndex.OpenInterest],
-                )
+                return await self._runtime.calc_indexes(batch, [CalcIndex.ImpliedVolatility, CalcIndex.OpenInterest])
             except Exception as exc:
                 await self._handle_batch_exception(exc, warm_up_mode)
                 return None
 
     async def _handle_batch_exception(self, exc: Exception, warm_up_mode: bool) -> None:
-        if warm_up_mode:
-            logger.warning("[IVSync] Warm-up batch failed: %s", exc)
-        else:
-            logger.warning("[IVBaselineSync] Batch failed: %s", exc)
+        logger.warning("[IVSync] Warm-up batch failed: %s", exc) if warm_up_mode else logger.warning("[IVBaselineSync] Batch failed: %s", exc)
         if not is_rate_limit_error(exc):
             return
         if warm_up_mode:
@@ -194,34 +170,19 @@ class IVBaselineSync:
         self._limiter.trigger_cooldown()
         await asyncio.sleep(SYNC_COOLDOWN_SLEEP_SECONDS)
 
-    async def _sync_batches(
-        self,
-        *,
-        symbols: list[str],
-        spot_provider: Callable[[], float | None],
-        warm_up_mode: bool,
-        warm_up_batch_offset: int = 0,
-    ) -> bool:
+    async def _sync_batches(self, *, symbols: list[str], spot_provider: Callable[[], float | None], warm_up_mode: bool, warm_up_batch_offset: int = 0) -> bool:
         any_update = False
         batch_size = self._safe_batch_size()
         for batch_index, batch in enumerate(iter_batches(symbols, batch_size), start=1):
             if warm_up_mode:
-                logger.warning(
-                    "[IVSync] Warm-up batch %d STARTING (batch size %d)...",
-                    warm_up_batch_offset + batch_index,
-                    len(batch),
-                )
+                logger.warning("[IVSync] Warm-up batch %d STARTING (batch size %d)...", warm_up_batch_offset + batch_index, len(batch))
             spot_ref_now = spot_provider()
             results = await self._fetch_batch_results(batch, warm_up_mode)
             if results is None:
                 continue
             if warm_up_mode:
                 logger.warning("[IVSync] Batch SUCCESS: Received %d results.", len(results or []))
-            updated = self._apply_batch_items(
-                results=results,
-                spot_ref=spot_ref_now,
-                track_any_update=warm_up_mode,
-            )
+            updated = self._apply_batch_items(results=results, spot_ref=spot_ref_now, track_any_update=warm_up_mode)
             await self._repair_batch_prices(batch)
             if updated:
                 any_update = True
@@ -230,6 +191,8 @@ class IVBaselineSync:
     async def _repair_batch_prices(self, batch: list[str]) -> None:
         if not self._on_update or not self._get_price_repair_symbols or not self._needs_price_repair:
             return
+        from shared.services.l0_runtime.services.repair import repair_symbol_prices
+
         await repair_symbol_prices(
             batch=batch,
             repair_symbols=self._get_price_repair_symbols(),
@@ -243,44 +206,33 @@ class IVBaselineSync:
         )
 
     async def warm_up(self, symbols: list[str]) -> None:
-        """Initial baseline sync for freshly subscribed symbols (ATM-first)."""
         if not symbols or self._warming_up:
             return
-
         subscription_cap = clamp_subscription_cap(settings.subscription_max)
         if len(symbols) > subscription_cap:
             logger.warning("[IVSync] Warm-up symbols exceed cap: %d -> %d", len(symbols), subscription_cap)
             symbols = self._sort_by_proximity(symbols)[:subscription_cap]
-
         now_ts = time.monotonic()
         if self._should_skip_warm_up(symbols, now_ts):
             return
         self._mark_warm_up_signature(symbols, now_ts)
-
         self._warming_up = True
         any_update = False
         try:
             logger.info("[IVBaselineSync] Warming up %d symbols.", len(symbols))
             symbols = self._sort_by_proximity(symbols)
             warm_up_spot = self._get_spot()
-            any_update = await self._sync_batches(
-                symbols=symbols,
-                spot_provider=lambda: warm_up_spot,
-                warm_up_mode=True,
-            )
+            any_update = await self._sync_batches(symbols=symbols, spot_provider=lambda: warm_up_spot, warm_up_mode=True)
         except Exception as exc:
             logger.info("[IVBaselineSync] Warm-up session error: %s", exc)
         finally:
             self._warming_up = False
             if any_update:
                 self._bootstrap_warmup_done = True
-            today_str = datetime.now(ZoneInfo("US/Eastern")).strftime("%Y%m%d")
-            self._persist_oi_to_disk(today_str)
+            self._persist_oi_to_disk(datetime.now(ZoneInfo("US/Eastern")).strftime("%Y%m%d"))
 
     async def _loop_task(self) -> None:
-        """Background loop: initial warm-up, then staggered sync every 60s."""
         logger.warning("[IVSync] Background loop task STARTED.")
-
         await asyncio.sleep(3.0)
         try:
             symbols = list(self._get_symbols())
@@ -288,16 +240,11 @@ class IVBaselineSync:
                 logger.info("[IVSync] Triggering initial warm_up for %d symbols.", len(symbols))
                 await self.warm_up(symbols)
             elif symbols:
-                logger.info(
-                    "[IVSync] Initial warm_up skipped: already bootstrapped (symbols=%d iv_cache=%d).",
-                    len(symbols),
-                    len(self.iv_cache),
-                )
+                logger.info("[IVSync] Initial warm_up skipped: already bootstrapped (symbols=%d iv_cache=%d).", len(symbols), len(self.iv_cache))
             else:
                 logger.warning("[IVSync] No symbols yet for initial warm_up — will retry in 60s loop.")
         except Exception as exc:
             logger.error("[IVSync] Initial warm_up failed: %s", exc)
-
         while True:
             try:
                 symbols = self._get_symbols()
@@ -313,67 +260,27 @@ class IVBaselineSync:
         if not chunk:
             return
         iv_before = len(self.iv_cache)
-        logger.warning(
-            "[IVSync] chunk %d/%d START: %d syms, iv_cache_size=%d, spot=%s",
-            chunk_index,
-            SYNC_CHUNK_COUNT,
-            len(chunk),
-            iv_before,
-            self._get_spot(),
-        )
-        await self._sync_batches(
-            symbols=chunk,
-            spot_provider=self._get_spot,
-            warm_up_mode=False,
-        )
+        logger.warning("[IVSync] chunk %d/%d START: %d syms, iv_cache_size=%d, spot=%s", chunk_index, SYNC_CHUNK_COUNT, len(chunk), iv_before, self._get_spot())
+        await self._sync_batches(symbols=chunk, spot_provider=self._get_spot, warm_up_mode=False)
         iv_after = len(self.iv_cache)
-        logger.warning(
-            "[IVSync] chunk %d/%d END: iv_cache_size=%d (+%d added), spot_at_sync_entries=%d",
-            chunk_index,
-            SYNC_CHUNK_COUNT,
-            iv_after,
-            iv_after - iv_before,
-            len(self.spot_at_sync),
-        )
+        logger.warning("[IVSync] chunk %d/%d END: iv_cache_size=%d (+%d added), spot_at_sync_entries=%d", chunk_index, SYNC_CHUNK_COUNT, iv_after, iv_after - iv_before, len(self.spot_at_sync))
 
     async def _staggered_sync(self, symbols: list[str]) -> None:
-        """2-chunk staggered sync: ATM chunk first, then OTM chunk."""
         symbols = self._sort_by_proximity(symbols)
-        total = len(symbols)
-        logger.warning(
-            "[IVSync] FULL CYCLE START: %d symbols, iv_cache_size=%d, spot=%s",
-            total,
-            len(self.iv_cache),
-            self._get_spot(),
-        )
-
+        logger.warning("[IVSync] FULL CYCLE START: %d symbols, iv_cache_size=%d, spot=%s", len(symbols), len(self.iv_cache), self._get_spot())
         for idx, chunk in enumerate(split_sync_chunks(symbols), start=1):
             await self._sync_chunk(chunk, idx)
-
         logger.warning("[IVSync] FULL CYCLE END: iv_cache_size=%d", len(self.iv_cache))
-        today_str = datetime.now(ZoneInfo("US/Eastern")).strftime("%Y%m%d")
-        self._persist_oi_to_disk(today_str)
+        self._persist_oi_to_disk(datetime.now(ZoneInfo("US/Eastern")).strftime("%Y%m%d"))
 
-    def _sort_by_proximity(
-        self,
-        symbols: list[str],
-        symbol_to_strike: dict[str, float] | None = None,
-    ) -> list[str]:
-        """Sort symbols by distance from current spot price.
-
-        P1-6 FIX: Uses symbol_to_strike dict lookup (from SubscriptionManager) when available,
-        falling back to hardcoded character-offset parsing only if the dict misses.
-        """
+    def _sort_by_proximity(self, symbols: list[str], symbol_to_strike: dict[str, float] | None = None) -> list[str]:
         spot = self._get_spot()
         if not spot:
             return symbols
 
         def get_dist(symbol: str) -> float:
-            # Prefer dict lookup (reliable, no format assumptions)
             if symbol_to_strike and symbol in symbol_to_strike:
                 return abs(symbol_to_strike[symbol] - spot)
-            # Fallback: LongPort-specific format symbol[10:].split(".")[0] / 1000.0
-            # (fragile if symbol format changes — TODO: remove once dict is always available)
             try:
                 strike_part = symbol[10:].split(".")[0]
                 strike_val = float(strike_part) / 1000.0
@@ -383,4 +290,3 @@ class IVBaselineSync:
                 return 999.0
 
         return sorted(symbols, key=get_dist)
-

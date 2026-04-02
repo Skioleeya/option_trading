@@ -58,12 +58,12 @@ flowchart LR
    - Rust `windows_signal.rs` 与 Python `shared/system/ipc_signal.py` 必须按 create-or-open 语义对齐同一个 Windows named event；
  - Python `shared/system/ipc_reader.py` 在 Windows 上必须附着已有 named mapping 并读取长度前缀 Arrow payload，禁止再把 live attach 建立在 legacy ring buffer 或历史事件轮询之上；
 - `shared/system/ipc_reader.py` 与 `shared/system/ipc_signal.py` 现为 Rust-backed wrappers；Windows named-event wait 与 shared-memory attach 的 owner 位于 `l0_ingest/l0_rust/src/ipc_runtime.rs`、`ipc_legacy.rs`、`windows_signal.rs`；
-- `shared/services/l0_runtime/facade.py` 必须通过 `ArrowIpcReader` 消费 Arrow batch；Python event-queue fallback 已退出正式运行链；
+- `shared/services/l0_runtime/services/runtime/builder.py`（`OptionChainBuilder` owner）必须通过 `ArrowIpcReader` 消费 Arrow batch；Python event-queue fallback 已退出正式运行链；
 - `shared/services/l0_runtime/normalize/bridges/__init__.py` 是 bridge 合同统一入口；market event parse、depth side shaping、trade payload direction 语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_market_bridge.rs`；
 - `shared/services/l0_runtime/normalize/pipeline/__init__.py` 是清洗合同统一入口；QUOTE/DEPTH 基础清洗、IV/OI 归一化、crossed quote 防御与 top-of-book depth 提取语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_sanitization.rs`；
 - `shared/services/l0_runtime/normalize/events/__init__.py` 是 event processor 合同统一入口；SPY spot quote 提取与 trade payload 归一化语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_event_support.rs`；
-- `shared/services/l0_runtime/state/runtime/chain_state_store.py` 现为 Rust-backed wrapper；entry 初始化、WS/REST flow owner merge、depth merge 语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_state_support.rs`；
-- `shared/services/l0_runtime/projection/snapshot/components.py` 现为 Rust-backed wrapper；fallback snapshot、runtime-status、governor telemetry 与 fetch payload compose 语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_projection.rs`；
+- `shared/services/l0_runtime/state/runtime/__init__.py` 是 state owner 合同统一入口；entry 初始化、WS/REST flow owner merge、depth merge 语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_state_support.rs`；
+- `shared/services/l0_runtime/projection/snapshot/__init__.py` 是 snapshot owner 合同统一入口；fallback snapshot、runtime-status、governor telemetry 与 fetch payload compose 语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_projection.rs`；
    - `fetch_snapshot().shm_stats.head/tail` 在 Arrow 路径下保持原键名，但语义切换为“最近消费到的 Arrow `batch_id`”，用于维持 L0→L4 诊断链连续；
    - `shared/system/rust_shm_bridge.py` 与 `shared/services/l0_runtime/normalize/bridges/rust_event_bridge.py` 现仅保留 deprecated compatibility wrapper；`rust_only` live path 不得再依赖它们；
    - `tests/l0_runtime/test_arrow_roundtrip.py` 必须覆盖 Rust producer -> Python `ArrowIpcReader` 的 batch roundtrip，验证 `batch_id`/`arrival_mono_ns`/schema 合同；
@@ -72,9 +72,8 @@ flowchart LR
 
 ### 3.3 IVBaselineSync 模块边界（P1 去混乱）
 
-- `iv_baseline_sync.py` 只负责生命周期与流程编排（warm_up / staggered loop）。
-- `iv_baseline_sync_support.py` 负责批次切片、IV/OI 解析、cooldown 判定等纯 helper 逻辑。
-- `shared/services/l0_runtime/services/sync/support.py` 与 `shared/services/l0_runtime/services/repair/price_repair.py` 的 helper owner 现已迁入 Rust native exports：
+- `shared/services/l0_runtime/services/sync/__init__.py` 是 sync 合同统一入口；`shared/services/l0_runtime/services/sync/core.py` 仅保留 `IVBaselineSync` 生命周期/循环 owner。
+- sync/repair helper owner 现已迁入 Rust native exports，由 `services/sync/__init__.py` 统一暴露：
   - subscription cap clamp
   - safe batch size
   - sync chunk split
@@ -83,7 +82,7 @@ flowchart LR
   - price-repair candidate selection
   - price-repair row apply summary
 - Python 侧在该 cluster 中只允许保留 async runtime call、rate limiter acquire、logging 与 facade API，不得重新复制上述 helper 语义。
-- `shared/services/l0_runtime/services/subscription/manager.py` 的稳定 helper owner 现部分迁入 Rust native exports：
+- `shared/services/l0_runtime/services/subscription/__init__.py` 是 subscription 合同统一入口；其稳定 helper owner 现部分迁入 Rust native exports：
   - official subscription cap clamp
   - option-chain row -> target symbol / strike-map collect
   - subscription pool cap trim / mandatory keep / strike-map filter
@@ -92,7 +91,8 @@ flowchart LR
   - async `option_chain_info_by_date()` 拉取
   - runtime `subscribe()` 调用
   - diagnostics/logging/public manager API
-- `shared/services/l0_runtime/services/orchestration/support.py` 与 `header_volatility_support.py` 的纯 helper owner 现已迁入 Rust native exports：
+- `shared/services/l0_runtime/services/orchestration/__init__.py` 是 orchestration helper 合同统一入口；`shared/services/l0_runtime/services/orchestration/feed_orchestrator.py` 仅保留 `FeedOrchestrator` owner。
+- orchestration helper owner 现已迁入 Rust native exports：
   - option symbol -> strike fallback parse
   - SHM u64 read helper
   - next-trading-day helper
@@ -105,11 +105,11 @@ flowchart LR
   - async `.VIX` / `1DTE` quote fetch
   - limiter acquire
   - logging and public helper API
-- `shared/services/l0_runtime/services/pollers/tier2_poller.py` 与 `tier3_poller.py` 的共享 helper owner 现已迁入 Rust native exports：
+- `shared/services/l0_runtime/services/pollers/__init__.py` 是 poller 合同统一入口；共享 helper owner 现已迁入 Rust native exports：
   - option-chain metadata -> `symbol/strike/standard` map shaping
   - `calc_indexes()` row normalize
   - Top-N OI anchor retention
-- `shared/services/l0_runtime/services/native_support.py` 现为 services 层统一 native facade：
+- `shared/services/l0_runtime/services/_native_helpers.py` 现为 services 层统一 native helper owner：
   - subscription helper exports
   - orchestration helper exports
   - poller helper exports
@@ -124,6 +124,10 @@ flowchart LR
   - limiter acquire
   - cache / diagnostics / logging / public poller API
 - 行为契约保持不变：dedupe window、`301607` cooldown、ATM-first chunk 顺序、`spot_at_sync` 写入语义不变。
+- `shared/services/l0_runtime/services/__init__.py` 是 services 根稳定 API 面；consumer 应通过 package entrypoints 导入 `RuntimeServices`、`FeedOrchestrator`、`apply_preloaded_oi_events`、`apply_rest_update`，不得再指向已删除的叶子模块路径。
+- `shared/services/l0_runtime/source/runtime/__init__.py` 是 source/runtime 根稳定 API 面；consumer 应通过该入口导入 `APIRateLimiter`、`RuntimeBundle`、`build_runtime_bundle`、`L0QuoteRuntime`、`RustQuoteRuntime` 与 `_startup_connectivity_probe`，不得再导入已删除的 `rate_limiter.py` / `runtime_bundle.py` / `sdk_bootstrap.py`。
+- `shared/services/l0_runtime/source/runtime/_native_helpers.py` 是 quote profile + quote REST contract native helper 统一 owner，替代 `_native_quote_api_support.py` / `_native_quote_profile_support.py`。
+- `shared/services/l0_runtime/source/runtime/quote_runtime/{__init__.py,helpers.py}` 是 quote runtime owner surface；`contracts.py` / `shared.py` / `rust_runtime.py` 已退出正式运行树，禁止恢复分散 owner。
 
 ### 3.4 Metadata / Normalization Single Source
 
@@ -154,7 +158,7 @@ flowchart LR
 - `QuoteContext` 生命周期、订阅以及 callback fan-in 必须全部由 Rust owner 负责；Python 不得再持有 `QuoteContext` 或 callback queue owner。
 - Python 对生成扩展的消费必须直连 `shared.services.l0_runtime._native_generated.l0_rust`；`shared/services/l0_runtime/l0_rust.py` shim 已退出主路径。
 - `shared.contracts.*` Python contract wrappers 已退出仓库；中立 contract import 面现统一为 `shared_rust.contracts`，contract source-of-truth 位于 `shared_rust/src/*`。
-- `shared/services/l0_runtime/contracts/models.py` (`CallbackHooks` / `SnapshotRequest`) 已退出 Python owner 路径；`shared/services/l0_runtime/facade.py` 必须直接消费 `shared_rust.contracts.CallbackHooks` 与 `shared_rust.contracts.SnapshotRequest`。
+- `shared/services/l0_runtime/contracts/models.py` (`CallbackHooks` / `SnapshotRequest`) 已退出 Python owner 路径；`shared/services/l0_runtime/services/runtime/builder.py` 必须直接消费 `shared_rust.contracts.CallbackHooks` 与 `shared_rust.contracts.SnapshotRequest`。
 - LongPort Quote REST contract normalize 与 endpoint/profile 构建现为 Rust-backed owner：
   - `quote_api_build_option_quote_contract` / `quote_api_build_option_chain_strike_contract` / `quote_api_build_calc_index_contract`
   - `quote_api_build_endpoint_profiles` / `quote_api_build_gateway_config`

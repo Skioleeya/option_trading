@@ -1,12 +1,68 @@
 # Handoff
 
 ## Session Summary
-- DateTime (ET): 2026-04-02 10:16:09 -04:00
+- DateTime (ET): 2026-04-02 12:44:36 -04:00
 - Goal: load `impl-20260402-l0-runtime-rust-cutover` and execute apply phase against `tasks.md`
-- Outcome: continued on the existing child proposal and completed Sub-wave C (`normalize/bridges + events`) owner consolidation by retiring legacy bridge/event files, converging owner to package-level entrypoints, syncing OpenSpec/SOP/session records, and passing strict validation
+- Outcome: continued on the existing child proposal and completed Sub-wave E (`services`), Sub-wave F code-side source/runtime consolidation, and the native-loader migration subset of Sub-wave G by retiring legacy runtime loader files, converging owners to package-level entrypoints, syncing OpenSpec/SOP/session records, and passing strict validation
 
 ## What Changed
 - Code / Docs Files:
+  - `shared/services/l0_runtime/services/__init__.py`
+  - `shared/services/l0_runtime/services/_native_helpers.py`
+  - `shared/services/l0_runtime/services/orchestration/__init__.py`
+  - `shared/services/l0_runtime/services/orchestration/feed_orchestrator.py`
+  - `shared/services/l0_runtime/services/pollers/__init__.py`
+  - `shared/services/l0_runtime/services/repair/__init__.py`
+  - `shared/services/l0_runtime/services/subscription/__init__.py`
+  - `shared/services/l0_runtime/services/sync/__init__.py`
+  - `shared/services/l0_runtime/services/sync/core.py`
+  - `shared/services/l0_runtime/services/runtime/__init__.py`
+  - `shared/services/l0_runtime/facade.py` (deleted)
+  - `shared/services/l0_runtime/source/__init__.py`
+  - `shared/services/l0_runtime/source/runtime/__init__.py`
+  - `shared/services/l0_runtime/source/runtime/bootstrap.py`
+  - `shared/services/l0_runtime/source/runtime/_native_helpers.py`
+  - `shared/services/l0_runtime/source/runtime/quote_runtime/__init__.py`
+  - `shared/services/l0_runtime/source/runtime/quote_runtime/helpers.py`
+  - `scripts/test/spy_us_rust_stream_mvp.py`
+  - `shared/services/l0_runtime/native_loader.py`
+  - `shared/services/l0_runtime/_native_extension_loader.py` (deleted)
+  - `shared/services/l0_runtime/_native_generated/__init__.py` (deleted)
+  - `l1_compute/analysis/greeks_engine.py`
+  - `shared/services/l0_runtime/services/orchestration/orchestrator.py` (deleted)
+  - `shared/services/l0_runtime/services/orchestration/support.py` (deleted)
+  - `shared/services/l0_runtime/services/orchestration/header_volatility_support.py` (deleted)
+  - `shared/services/l0_runtime/services/pollers/tier2_poller.py` (deleted)
+  - `shared/services/l0_runtime/services/pollers/tier3_poller.py` (deleted)
+  - `shared/services/l0_runtime/services/repair/price_repair.py` (deleted)
+  - `shared/services/l0_runtime/services/subscription/manager.py` (deleted)
+  - `shared/services/l0_runtime/services/sync/iv_baseline_sync.py` (deleted)
+  - `shared/services/l0_runtime/services/sync/support.py` (deleted)
+  - `shared/services/l0_runtime/services/sync/_native_sync_support.py` (deleted)
+  - `shared/services/l0_runtime/services/runtime/services.py` (deleted)
+  - `shared/services/l0_runtime/services/native_support.py` (deleted)
+  - `shared/services/l0_runtime/source/runtime/base_feed.py` (deleted)
+  - `shared/services/l0_runtime/source/runtime/longport_adapter.py` (deleted)
+  - `shared/services/l0_runtime/source/runtime/longport_option_contracts.py` (deleted)
+  - `shared/services/l0_runtime/source/runtime/rate_limiter.py` (deleted)
+  - `shared/services/l0_runtime/source/runtime/runtime_bundle.py` (deleted)
+  - `shared/services/l0_runtime/source/runtime/sdk_bootstrap.py` (deleted)
+  - `shared/services/l0_runtime/source/runtime/_native_quote_api_support.py` (deleted)
+  - `shared/services/l0_runtime/source/runtime/_native_quote_profile_support.py` (deleted)
+  - `shared/services/l0_runtime/source/runtime/quote_runtime/contracts.py` (deleted)
+  - `shared/services/l0_runtime/source/runtime/quote_runtime/shared.py` (deleted)
+  - `shared/services/l0_runtime/source/runtime/quote_runtime/rust_runtime.py` (deleted)
+  - `shared/services/l0_runtime/state/runtime/__init__.py`
+  - `shared/services/l0_runtime/projection/snapshot/__init__.py`
+  - `shared/services/l0_runtime/state/__init__.py`
+  - `shared/services/l0_runtime/projection/__init__.py`
+  - `shared/services/l0_runtime/services/orchestration/orchestrator.py`
+  - `shared/services/l0_runtime/state/runtime/chain_state_store.py` (deleted)
+  - `shared/services/l0_runtime/state/runtime/live_state.py` (deleted)
+  - `shared/services/l0_runtime/state/runtime/_native_state_support.py` (deleted)
+  - `shared/services/l0_runtime/projection/snapshot/components.py` (deleted)
+  - `shared/services/l0_runtime/projection/snapshot/payload.py` (deleted)
+  - `shared/services/l0_runtime/projection/snapshot/_native_projection_support.py` (deleted)
   - `shared/services/l0_runtime/normalize/bridges/__init__.py`
   - `shared/services/l0_runtime/normalize/events/__init__.py`
   - `shared/services/l0_runtime/normalize/bridges/market_event_bridge.py` (deleted)
@@ -27,46 +83,95 @@
   - `notes/sessions/2026-04-02/impl-20260402-l0-runtime-rust-cutover/handoff.md`
   - `notes/sessions/2026-04-02/impl-20260402-l0-runtime-rust-cutover/meta.yaml`
 - Runtime / Infra Changes:
+  - added minimal live-connectivity MVP script for `SPY.US` Rust dataflow (`scripts/test/spy_us_rust_stream_mvp.py`) covering REST quote + Arrow stream batch
+  - unified native loading into `shared.services.l0_runtime.native_loader`
+  - fixed native loader singleton semantics (`sys.modules['l0_rust']` reuse) to prevent `RustIngestGateway` same-name/different-class conversion failure
+  - retired `_native_extension_loader.py` and `_native_generated/__init__.py`
+  - retired Sub-wave F Python owners under `source/runtime` (11 files)
+  - converged source/runtime import surfaces onto package entrypoints `source/runtime`, `source/runtime/bootstrap.py`, and `source/runtime/quote_runtime`
+  - introduced minimal non-shim helper `source/runtime/_native_helpers.py` as unified owner for quote profile + quote REST contract native bindings
+  - retired Sub-wave E Python owners under `services/*` (12 files)
+  - converged service import surfaces onto `services`, `services/orchestration`, `services/pollers`, `services/repair`, `services/subscription`, `services/sync`, and `services/runtime`
+  - introduced minimal non-shim helpers `services/_native_helpers.py` and `services/sync/core.py` to keep files under 400 lines while removing circular import pressure
+  - retired Sub-wave D Python owners under `state/runtime` + `projection/snapshot` (6 files)
+  - consolidated state/projection contracts + helper calls in `state/runtime/__init__.py` and `projection/snapshot/__init__.py`
+  - retained package-level consumer imports (`from ...state import ...`, `from ...projection import ...`) without introducing new shim files
   - retired Sub-wave C Python owners under `normalize/bridges` + `normalize/events` (7 files)
   - consolidated bridge/event contracts + helper calls in `normalize/bridges/__init__.py` and `normalize/events/__init__.py`
   - retained package-level consumer imports (`from ...normalize.bridges import ...`, `from ...normalize.events import ...`) without introducing new shim files
 - Commands Run:
+  - `python -c "from shared.services.l0_runtime.services import RuntimeServices, apply_preloaded_oi_events, apply_rest_update; print('services-root-ok')"`
+  - `python -c "from shared.services.l0_runtime.services.subscription import OptionSubscriptionManager; from shared.services.l0_runtime.services.sync import IVBaselineSync; from shared.services.l0_runtime.services.pollers import Tier2Poller, Tier3Poller; from shared.services.l0_runtime.services.orchestration import FeedOrchestrator; print('services-subpkg-ok')"`
+  - `python -c "from shared.services.l0_runtime.services.runtime.builder import OptionChainBuilder; print('builder-ok')"`
+  - `python -c "from shared.services.l0_runtime.state import ChainStateStore, LiveState; print('state-ok')"`
+  - `python -c "from shared.services.l0_runtime.projection import build_snapshot_payload, build_error_snapshot_payload, build_uninitialized_snapshot_payload; print('projection-ok')"`
+  - `python -c "from shared.services.l0_runtime.services.runtime.builder import OptionChainBuilder; print('builder-import-ok')"`
   - `python -c "from shared.services.l0_runtime.normalize.bridges import parse_market_event, dispatch_depth_event, dispatch_trade_event, batch_id_from_batch, iter_arrow_batch_rows; print('bridges-ok')"`
   - `python -c "from shared.services.l0_runtime.normalize.events import StateEventProcessor, ChainEventProcessor; print('events-ok')"`
-  - `python -c "from shared.services.l0_runtime.facade import OptionChainBuilder; print('facade-ok')"`
+  - `python -c "from shared.services.l0_runtime.services.runtime.builder import OptionChainBuilder; print('builder-ok')"`
+  - `python -c "from shared.services.l0_runtime.source.runtime import RuntimeBundle, build_runtime_bundle, APIRateLimiter, L0QuoteRuntime, RustQuoteRuntime, _startup_connectivity_probe; print('runtime-root-ok')"`
+  - `python -c "from app.container import build_container; from shared.services.l0_runtime.services.runtime.builder import OptionChainBuilder; print('builder-container-ok')"`
+  - `python -c "from shared.services.l0_runtime.source.runtime.quote_runtime import L0QuoteRuntime, RustQuoteRuntime; from shared.services.l0_runtime.source.runtime.quote_runtime.helpers import normalize_endpoint_profiles; print('quote-runtime-ok')"`
+  - `python -c "from shared.services.l0_runtime.services import RuntimeServices; from shared.services.l0_runtime.services.sync import IVBaselineSync; from shared.services.l0_runtime.services.subscription import OptionSubscriptionManager; print('services-ok')"`
+  - `python -c "from shared.services.l0_runtime.native_loader import l0_rust, load_l0_rust; print('native-loader-ok')"`
+  - `python -c "import shared.system.ipc_reader, shared.system.ipc_signal, shared.system.tactical_triad_logic; print('shared-system-imports-ok')"`
+  - `python -c "import shared.services.l0_runtime.native_loader, shared.services.l0_runtime.normalize.pipeline, shared.services.l0_runtime.normalize.events, shared.services.l0_runtime.normalize.bridges, shared.services.l0_runtime.projection.snapshot, shared.services.l0_runtime.state.runtime, shared.services.l0_runtime.services.sync, shared.services.l0_runtime.source.runtime.quote_runtime; print('l0-runtime-imports-ok')"`
+  - `python -c "import shared.services.l0_runtime.services._native_helpers, shared.services.l0_runtime.source.runtime._native_helpers; print('native-helper-imports-ok')"`
   - `openspec validate refactor-dependency-20260402-l0-runtime-owner-api-prereq`
   - `openspec validate impl-20260402-l0-runtime-rust-cutover`
   - `python scripts/policy/check_openspec_chain.py --repo-root . --meta-file notes/sessions/2026-04-02/impl-20260402-l0-runtime-rust-cutover/meta.yaml --handoff-file notes/sessions/2026-04-02/impl-20260402-l0-runtime-rust-cutover/handoff.md --output notes/sessions/2026-04-02/impl-20260402-l0-runtime-rust-cutover/openspec_gate.json`
   - `powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict`
+  - `powershell -ExecutionPolicy Bypass -File scripts/ops/start_backend.ps1`
+  - `python scripts/test/test_l0_l4_pipeline.py`
+  - `python scripts/test/spy_us_rust_stream_mvp.py --symbol SPY.US --timeout-sec 30`
+  - `powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 tests/l0_runtime/`
 
 ## Verification
 - Passed:
+  - `python -c "from shared.services.l0_runtime.services import ..."` -> passed (`services-root-ok`)
+  - `python -c "from shared.services.l0_runtime.services.subscription import ..."` -> passed (`services-subpkg-ok`)
+  - `python -c "from shared.services.l0_runtime.services.runtime.builder import OptionChainBuilder; print('builder-ok')"` -> passed
+  - `python -c "from shared.services.l0_runtime.state import ..."` -> passed (`state-ok`)
+  - `python -c "from shared.services.l0_runtime.projection import ..."` -> passed (`projection-ok`)
+  - `python -c "from shared.services.l0_runtime.services.runtime.builder import OptionChainBuilder; ..."` -> passed (`builder-import-ok`)
   - `python -c "from shared.services.l0_runtime.normalize.bridges import ..."` -> passed (`bridges-ok`)
   - `python -c "from shared.services.l0_runtime.normalize.events import ..."` -> passed (`events-ok`)
-  - `python -c "from shared.services.l0_runtime.facade import OptionChainBuilder; ..."` -> passed (`facade-ok`)
+  - `python -c "from shared.services.l0_runtime.services.runtime.builder import OptionChainBuilder; ..."` -> passed (`builder-ok`)
+  - `python -c "from shared.services.l0_runtime.source.runtime import ..."` -> passed (`runtime-root-ok`)
+  - `python -c "from app.container import build_container; from shared.services.l0_runtime.services.runtime.builder import OptionChainBuilder; ..."` -> passed (`builder-container-ok`)
+  - `python -c "from shared.services.l0_runtime.source.runtime.quote_runtime import ..."` -> passed (`quote-runtime-ok`)
+  - `python -c "from shared.services.l0_runtime.services import RuntimeServices; ..."` -> passed (`services-ok`)
+  - `python -c "from shared.services.l0_runtime.native_loader import ..."` -> passed (`native-loader-ok`)
+  - `python -c "import shared.system.ipc_reader, shared.system.ipc_signal, shared.system.tactical_triad_logic; ..."` -> passed (`shared-system-imports-ok`)
+  - `python -c "import shared.services.l0_runtime.native_loader, shared.services.l0_runtime.normalize.pipeline, shared.services.l0_runtime.normalize.events, shared.services.l0_runtime.normalize.bridges, shared.services.l0_runtime.projection.snapshot, shared.services.l0_runtime.state.runtime, shared.services.l0_runtime.services.sync, shared.services.l0_runtime.source.runtime.quote_runtime; ..."` -> passed (`l0-runtime-imports-ok`)
+  - `python -c "import shared.services.l0_runtime.services._native_helpers, shared.services.l0_runtime.source.runtime._native_helpers; ..."` -> passed (`native-helper-imports-ok`)
   - `openspec validate refactor-dependency-20260402-l0-runtime-owner-api-prereq` -> passed
   - `openspec validate impl-20260402-l0-runtime-rust-cutover` -> passed
   - OpenSpec chain gate (`check_openspec_chain.py`) -> passed (`status: PASS`, `violations: []`)
   - `powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict` -> passed
+  - `python scripts/test/spy_us_rust_stream_mvp.py --symbol SPY.US --timeout-sec 30` -> passed on real host (`ok=true`, REST rows=1, stream rows=21)
 - Failed / Not Run:
+  - `python -m compileall shared/services/l0_runtime/state shared/services/l0_runtime/projection` failed in sandbox due `__pycache__` ACL `PermissionError` (non-runtime semantics failure)
   - `tests/l0_runtime/test_bridges_events.py` not run because legacy `tests/l0_runtime/` path is not present in current repository
+  - `python scripts/test/test_l0_l4_pipeline.py` first failed with websocket connection refused; after backend restart websocket connected but probe timed out waiting fully enriched payload
+  - `powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 tests/l0_runtime/` blocked: `tmp/pytest_cache` not writable (`owner: LAPTOP-VKE502RT\\CodexSandboxOffline`)
 
 ## Pending
 - Must Do Next:
-  - continue Sub-wave D owner replacement and deletion with parity gates
-  - keep Sub-wave F dual-run window as a dedicated market-session checkpoint
+  - execute one full market-session dual-run for Sub-wave F and record compare evidence
+  - close Sub-wave G regression gates with a live enriched payload window and pytest-cache ACL recovery for wrapper execution
 - Nice to Have:
   - converge remaining runtime/service owners to Rust surfaces with minimal transitional wrappers
 
 ## Debt Record (Mandatory)
 - DEBT-EXEMPT: Sub-wave checkpoint; remaining B-G owner migrations intentionally deferred to subsequent waves
-- DEBT-EXEMPT: Sub-wave checkpoint; remaining D-G owner migrations intentionally deferred to subsequent waves
+- DEBT-EXEMPT: Sub-wave checkpoint; remaining F-G owner migrations intentionally deferred to subsequent waves
 - DEBT-OWNER: Codex
 - DEBT-DUE: 2026-04-04
-- DEBT-RISK: Remaining Sub-wave D-G still depend on missing Rust owner classes and dual-run evidence
+- DEBT-RISK: Sub-wave F still needs dual-run evidence; Sub-wave G regression gates still depend on live enriched payload window and pytest-cache ACL ownership.
 - DEBT-NEW: 0
-- DEBT-CLOSED: 3
-- DEBT-DELTA: -3
+- DEBT-CLOSED: 7
+- DEBT-DELTA: -7
 - RUNTIME-ARTIFACT-EXEMPT: none
 - OPENSPEC-EXEMPT:
 - SOP-EXEMPT: none (updated `docs/SOP/L0_DATA_FEED.md`)

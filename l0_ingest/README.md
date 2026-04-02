@@ -28,7 +28,7 @@ l0_ingest/
 ## 快速使用
 
 ```python
-from shared.services.l0_runtime import OptionChainBuilder
+from shared.services.l0_runtime.services.runtime.builder import OptionChainBuilder
 
 builder = OptionChainBuilder()
 await builder.initialize()           # 建立 WS 连接，启动限流器
@@ -38,7 +38,7 @@ await builder.shutdown()
 
 ## 限流规格
 
-`v2/source/runtime/rate_limiter.py` 使用统一 `APIRateLimiter`，全局唯一配置保证：
+`shared/services/l0_runtime/source/runtime/__init__.py` 使用统一 `APIRateLimiter`，全局唯一配置保证：
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|

@@ -56,9 +56,14 @@ def _publish_active_options_input(
     l0_snapshot: dict[str, Any],
     l1_snapshot: Any,
 ) -> None:
+    l1_payload = (
+        l1_snapshot.to_legacy_dict()
+        if hasattr(l1_snapshot, "to_legacy_dict") and callable(getattr(l1_snapshot, "to_legacy_dict"))
+        else l1_snapshot
+    )
     adapted = build_active_options_input_snapshot(
         l0_snapshot=l0_snapshot,
-        l1_snapshot=l1_snapshot,
+        l1_snapshot=l1_payload,
     )
     state.update_active_options_input(_to_shared_active_options_input(adapted))
 

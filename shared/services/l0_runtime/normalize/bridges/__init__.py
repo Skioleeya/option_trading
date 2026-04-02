@@ -7,7 +7,7 @@ from typing import Any, Callable, Iterator, Mapping
 
 import pyarrow as pa
 
-from shared.services.l0_runtime._native_generated import l0_rust
+from shared.services.l0_runtime.native_loader import l0_rust
 from shared.services.l0_runtime.normalize.pipeline import CleanQuoteEvent, EventType
 
 logger = logging.getLogger(__name__)

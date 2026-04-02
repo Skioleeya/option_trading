@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from shared.services.l0_runtime._native_generated import l0_rust
+from shared.services.l0_runtime.native_loader import l0_rust
 
 _SPEC = dict(l0_rust.tactical_triad_spec())
 DEFAULT_VRP_BASELINE_HV_PCT = float(_SPEC["DEFAULT_VRP_BASELINE_HV_PCT"])

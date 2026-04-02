@@ -17,7 +17,6 @@ from shared_rust.contracts import (
     build_shm_stats,
 )
 from shared.config import settings
-from shared.system.ipc_reader import ArrowIpcReader
 from shared.services.l0_runtime.normalize.bridges import (
     batch_id_from_batch,
     dispatch_depth_event,
@@ -32,13 +31,9 @@ from shared.services.l0_runtime.projection import (
     build_snapshot_payload,
     build_uninitialized_snapshot_payload,
 )
-from shared.services.l0_runtime.services.orchestration.support import (
-    apply_preloaded_oi_events,
-    apply_rest_update,
-)
-from shared.services.l0_runtime.services.runtime.services import RuntimeServices
+from shared.services.l0_runtime.services import RuntimeServices, apply_preloaded_oi_events, apply_rest_update
 from shared.services.l0_runtime.source import build_runtime_bundle
-from shared.services.l0_runtime.source.runtime.sdk_bootstrap import _startup_connectivity_probe
+from shared.services.l0_runtime.source.runtime import ArrowIpcReader, _startup_connectivity_probe
 from shared.services.l0_runtime.state import LiveState
 
 logger = logging.getLogger(__name__)

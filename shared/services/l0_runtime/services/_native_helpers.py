@@ -1,10 +1,12 @@
+"""Rust-backed native helpers for service-layer packages."""
+
 from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
 from typing import Any
 
-from shared.services.l0_runtime._native_extension_loader import load_l0_rust
+from shared.services.l0_runtime.native_loader import load_l0_rust
 
 _PACKAGE_DIR = Path(__file__).resolve().parents[1] / "_native_generated"
 _L0_RUST = load_l0_rust(

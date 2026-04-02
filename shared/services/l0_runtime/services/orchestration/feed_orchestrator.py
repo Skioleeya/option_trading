@@ -1,4 +1,4 @@
-"""P5 — FeedOrchestrator: Multi-Tier REST Polling Scheduler."""
+"""Feed orchestrator owner for L0 service orchestration."""
 
 from __future__ import annotations
 
@@ -11,17 +11,15 @@ from typing import TYPE_CHECKING, Any, Callable
 from zoneinfo import ZoneInfo
 
 from shared.config import settings
-from shared.services.l0_runtime.services.orchestration.header_volatility_support import (
-    build_header_volatility_aux,
-)
-from shared.services.l0_runtime.services.repair.price_repair import repair_symbol_prices
+from shared.services.l0_runtime.services.orchestration import build_header_volatility_aux
+from shared.services.l0_runtime.services.repair import repair_symbol_prices
 
 if TYPE_CHECKING:
-    from shared.services.l0_runtime.services.subscription.manager import OptionSubscriptionManager
-    from shared.services.l0_runtime.services.sync.iv_baseline_sync import IVBaselineSync
+    from shared.services.l0_runtime.services.subscription import OptionSubscriptionManager
+    from shared.services.l0_runtime.services.sync import IVBaselineSync
+    from shared.services.l0_runtime.source.runtime import APIRateLimiter
     from shared.services.l0_runtime.source.runtime.quote_runtime import L0QuoteRuntime
-    from shared.services.l0_runtime.source.runtime.rate_limiter import APIRateLimiter
-    from shared.services.l0_runtime.state.runtime.chain_state_store import ChainStateStore
+    from shared.services.l0_runtime.state import ChainStateStore
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +46,6 @@ class FeedOrchestrator:
         self._on_price_repair_update = on_price_repair_update
         self._needs_price_repair = needs_price_repair_fn
         self._price_repair_last_ts: dict[str, float] = {}
-
         self._start_time = datetime.now(ZoneInfo("US/Eastern"))
         self._last_research: datetime | None = None
         self._running = False
@@ -81,7 +78,6 @@ class FeedOrchestrator:
                 await self._tick()
             except Exception as exc:
                 logger.error("[FeedOrchestrator] Management loop error: %s", exc)
-
             elapsed = (datetime.now(ZoneInfo("US/Eastern")) - self._start_time).total_seconds()
             cadence = 5.0 if elapsed < 300.0 else 60.0
             await asyncio.sleep(cadence)
@@ -133,13 +129,9 @@ class FeedOrchestrator:
         if pending_since is None:
             self._pending_warmup_since_mono = now_mono
             return
-        
-        # Bypass delay for the very first batch on startup to get initial REST snapshot fast
         is_first_startup_flush = not getattr(self, "_first_flush_done", False)
-
         if not is_first_startup_flush and (now_mono - pending_since) < self._warmup_merge_window_sec:
             return
-
         self._first_flush_done = True
         batch = sorted(self._pending_warmup_symbols)
         self._pending_warmup_symbols.clear()
@@ -157,20 +149,17 @@ class FeedOrchestrator:
         today = now.strftime("%Y%m%d")
         now_mono = self._monotonic()
         spot = self._store.spot
-
         self._limiter.maybe_promote_to_steady(
             warmup_done=self._iv_sync.bootstrap_warmup_done,
             warming_up=self._iv_sync.warming_up,
             stable_for_sec=self._research_startup_stable_sec,
         )
-
         spot = await self._refresh_spot_if_needed(spot, now)
         await self._refresh_header_volatility_aux(
             spot=spot,
             now_mono=now_mono,
             trade_day=now.date(),
         )
-
         if spot and self._subscription_refresh_due(now_mono):
             prev_symbols = set(self._sub_mgr.subscribed_symbols)
             target_set = await self._sub_mgr.refresh(spot, mandatory_symbols=self._mandatory_symbols)
@@ -182,15 +171,12 @@ class FeedOrchestrator:
                     len(new_symbols),
                 )
                 self._queue_warmup_symbols(new_symbols, now_mono)
-
         await self._repair_mandatory_prices(now_mono)
         await self._flush_warmup_if_due(now_mono)
-
         can_run_research = self._iv_sync.bootstrap_warmup_done and not self._iv_sync.warming_up
         startup_stable = self._limiter.cooldown_stable_for(self._research_startup_stable_sec)
         if spot and can_run_research and (
-            not self._last_research
-            or (now - self._last_research).total_seconds() > 900
+            not self._last_research or (now - self._last_research).total_seconds() > 900
         ) and startup_stable:
             await self._run_volume_research(today, spot)
             self._last_research = now
@@ -232,19 +218,13 @@ class FeedOrchestrator:
             log_prefix=log_prefix,
         )
 
-    async def _refresh_spot_if_needed(
-        self,
-        spot: float | None,
-        now: datetime,
-    ) -> float | None:
+    async def _refresh_spot_if_needed(self, spot: float | None, now: datetime) -> float | None:
         last_spot_update = self._store.last_spot_update
-        needs_refresh = (
-            spot is None
-            or (last_spot_update and (now - last_spot_update).total_seconds() > 10.0)
+        needs_refresh = spot is None or (
+            last_spot_update and (now - last_spot_update).total_seconds() > 10.0
         )
         if not needs_refresh:
             return spot
-
         async with self._limiter.acquire(weight=1):
             try:
                 quotes = await self._quote_runtime.quote(["SPY.US"])
@@ -263,10 +243,8 @@ class FeedOrchestrator:
             diagnostics = self._quote_runtime.diagnostics() or {}
         except Exception as diag_exc:
             logger.debug("[FeedOrchestrator] diagnostics() read failed: %s", diag_exc)
-            diagnostics = {}
         logger.warning(
-            "[FeedOrchestrator] Spot REST fallback failed: %s | "
-            "endpoint_profile=%s endpoint=%s failover_count=%s last_failover_at_utc=%s",
+            "[FeedOrchestrator] Spot REST fallback failed: %s | endpoint_profile=%s endpoint=%s failover_count=%s last_failover_at_utc=%s",
             exc,
             diagnostics.get("endpoint_profile"),
             diagnostics.get("endpoint_http_url"),
@@ -274,11 +252,7 @@ class FeedOrchestrator:
             diagnostics.get("last_failover_at_utc"),
         )
 
-    async def _run_volume_research(
-        self,
-        today_str: str,
-        spot: float,
-    ) -> None:
+    async def _run_volume_research(self, today_str: str, spot: float) -> None:
         del today_str
         try:
             async with self._limiter.acquire():
@@ -292,14 +266,11 @@ class FeedOrchestrator:
                         self._limiter.trigger_cooldown()
                     logger.warning("[FeedOrchestrator] Volume research metadata failed: %s", exc)
                     return
-
             if not chain_info:
                 return
-
             window = settings.research_window_size
             research_symbols: list[str] = []
             strike_lookup: dict[str, float] = {}
-
             for item in chain_info:
                 strike = float(getattr(item, "price", 0.0) or 0.0)
                 if abs(strike - spot) > window:
@@ -312,7 +283,6 @@ class FeedOrchestrator:
                 if put_symbol:
                     research_symbols.append(put_symbol)
                     strike_lookup[put_symbol] = strike
-
             new_map: dict[float, int] = {}
             hv_samples: list[float] = []
             batch_size = max(1, min(50, self._limiter.max_symbol_weight))
@@ -333,11 +303,9 @@ class FeedOrchestrator:
                                     hv_samples.append(hv_decimal)
                     except Exception as exc:
                         logger.error("[FeedOrchestrator] Research batch failed: %s", exc)
-
             self._store.update_volume_map(new_map)
             self._update_official_hv_diagnostics(hv_samples)
             logger.info("[FeedOrchestrator] Volume map updated: %d strikes", len(new_map))
-
         except Exception as exc:
             logger.error("[FeedOrchestrator] Volume research failed: %s", exc)
 
@@ -352,7 +320,6 @@ class FeedOrchestrator:
                 value = float(raw_fallback)
             except (TypeError, ValueError):
                 return None
-
         if not math.isfinite(value) or value <= 0.0:
             return None
         if value > 1.0:
@@ -367,7 +334,6 @@ class FeedOrchestrator:
                 self._official_hv_sample_count = 0
                 self._official_hv_synced_at_utc = None
             return
-
         self._official_hv_decimal = sum(hv_samples) / len(hv_samples)
         self._official_hv_sample_count = len(hv_samples)
         self._official_hv_synced_at_utc = datetime.now(timezone.utc).isoformat()
@@ -383,7 +349,6 @@ class FeedOrchestrator:
             return
         if (now_mono - self._header_volatility_aux_last_mono) < self._header_volatility_aux_ttl_sec:
             return
-
         self._header_volatility_aux = await build_header_volatility_aux(
             quote_runtime=self._quote_runtime,
             limiter=self._limiter,
@@ -394,12 +359,10 @@ class FeedOrchestrator:
         self._header_volatility_aux_synced_at_utc = datetime.now(timezone.utc).isoformat()
         self._header_volatility_aux_last_mono = now_mono
         logger.info(
-            "[FeedOrchestrator] header volatility aux refreshed: spot=%.2f next_expiry=%s "
-            "atm_iv_1dte=%s atm_iv_1dte_strike=%s vix_iv_decimal=%s",
+            "[FeedOrchestrator] header volatility aux refreshed: spot=%.2f next_expiry=%s atm_iv_1dte=%s atm_iv_1dte_strike=%s vix_iv_decimal=%s",
             spot,
             self._header_volatility_aux.get("next_expiry"),
             self._header_volatility_aux.get("atm_iv_1dte"),
             self._header_volatility_aux.get("atm_iv_1dte_strike"),
             self._header_volatility_aux.get("vix_iv_decimal"),
         )
-

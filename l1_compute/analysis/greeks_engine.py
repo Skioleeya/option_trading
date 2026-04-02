@@ -28,7 +28,7 @@ from l1_compute.analysis.bsm_fast import compute_greeks_batch
 
 if TYPE_CHECKING:
     from shared_rust.services_l0_support import MVCCChainStateStore as ChainStateStore
-    from shared.services.l0_runtime.services.sync.iv_baseline_sync import IVBaselineSync
+    from shared.services.l0_runtime.services.sync import IVBaselineSync
 
 logger = logging.getLogger(__name__)
 
