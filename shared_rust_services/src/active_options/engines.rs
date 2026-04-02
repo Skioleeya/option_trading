@@ -141,8 +141,15 @@ impl FlowEngineG {
                 continue;
             }
 
+            let delta_kwargs = PyDict::new(py);
+            if let Some(ref value) = date_str {
+                delta_kwargs.set_item("date_str", value)?;
+            }
             let mut delta_oi = get_oi_delta
-                .call1((redis, symbol.clone(), get_attr_f64(&input, "open_interest"), date_str.clone()))?
+                .call(
+                    (redis, symbol.clone(), get_attr_f64(&input, "open_interest")),
+                    Some(&delta_kwargs),
+                )?
                 .extract::<f64>()
                 .unwrap_or(0.0);
             if delta_oi == 0.0 {

@@ -1,16 +1,17 @@
-﻿# Project State (Index)
+# Project State (Index)
 
 ## Active Session
-- Path: notes/sessions/2026-04-02/impl-20260402-shared-system-rust-cutover/project_state.md
-- Meta: notes/sessions/2026-04-02/impl-20260402-shared-system-rust-cutover/meta.yaml
+- Path: notes/sessions/2026-04-02/impl-20260402-subwave-f-dual-run-evidence/project_state.md
+- Meta: notes/sessions/2026-04-02/impl-20260402-subwave-f-dual-run-evidence/meta.yaml
 - Status: ACTIVE
 
 ## Recent Sessions
+- notes/sessions/2026-04-02/impl-20260402-subwave-f-dual-run-evidence/
+- notes/sessions/2026-04-02/impl-20260402-subwave-d-storage-utility-assessment/
+- notes/sessions/2026-04-02/impl-20260402-subwave-c-snapshot-oi-cutover/
+- notes/sessions/2026-04-02/impl-20260402-subwave-b-shm-bridge-cutover/
 - notes/sessions/2026-04-02/impl-20260402-shared-system-rust-cutover/
 - notes/sessions/2026-04-02/impl-20260402-l0-runtime-rust-cutover/
-- notes/sessions/2026-04-02/fix-pytest-cache-acl/
-- notes/sessions/2026-04-02/cargo-target-dir-local-config/
-- notes/sessions/2026-04-02/wave18-active-options-rust-owner-closeout/
 
 ## Global Rules
 - Session folders are immutable records; do not overwrite prior sessions.

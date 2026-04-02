@@ -13,17 +13,84 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
 
 _OI_KEY_PREFIX = "oi:spy"
 _OI_TTL_SECONDS = 86_400  # 24 hours — one trading session
+DATA_DIR = Path("backend/data/oi")
 
 
 def _make_key(symbol: str, date_str: str) -> str:
     """Build the Redis key for the OI snapshot."""
     return f"{_OI_KEY_PREFIX}:{date_str}:{symbol}"
+
+
+class PersistentOIStore:
+    """File-backed OI baseline store used by warm-up and flow engines."""
+
+    def __init__(self, data_dir: str | Path = DATA_DIR) -> None:
+        self.data_dir = Path(data_dir)
+        self._ensure_dir()
+
+    def _ensure_dir(self) -> None:
+        try:
+            self.data_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as exc:
+            logger.error("[OIStore] Failed to create %s: %s", self.data_dir, exc)
+
+    def _get_path(self, date_str: str) -> Path:
+        return self.data_dir / f"oi_{date_str}.json"
+
+    def has_baseline(self, date_str: str) -> bool:
+        return self._get_path(date_str).exists()
+
+    def save_baseline(self, date_str: str, chain: list[dict[str, Any]]) -> bool:
+        try:
+            baseline: dict[str, int] = {}
+            for opt in chain:
+                symbol = opt.get("symbol")
+                oi = opt.get("open_interest")
+                if symbol and oi is not None:
+                    baseline[str(symbol)] = int(oi)
+
+            if not baseline:
+                return False
+
+            self._ensure_dir()
+            path = self._get_path(date_str)
+            with path.open("w", encoding="utf-8") as handle:
+                json.dump(baseline, handle, indent=2)
+
+            logger.info("[OIStore] Saved baseline for %s (%d symbols)", date_str, len(baseline))
+            return True
+        except Exception as exc:
+            logger.error("[OIStore] Save failed for %s: %s", date_str, exc)
+            return False
+
+    def get_baseline(self, date_str: str) -> dict[str, int]:
+        path = self._get_path(date_str)
+        if not path.exists():
+            return {}
+
+        try:
+            with path.open("r", encoding="utf-8") as handle:
+                raw = json.load(handle)
+            if not isinstance(raw, dict):
+                return {}
+            baseline: dict[str, int] = {}
+            for symbol, oi in raw.items():
+                try:
+                    baseline[str(symbol)] = int(oi)
+                except (TypeError, ValueError):
+                    continue
+            return baseline
+        except Exception as exc:
+            logger.warning("[OIStore] Load failed for %s: %s", date_str, exc)
+            return {}
 
 
 async def save_oi_snapshot(

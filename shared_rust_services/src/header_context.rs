@@ -108,7 +108,7 @@ impl HeaderVolatilityContextService {
         self.record_relation_point(now_mono, spot, atm_iv);
         let closes = self.load_completed_day_closes(py, &current_trade_date, now_mono)?;
         let aux = self.extract_aux(snapshot)?;
-        let l0_rust = py.import("shared.services.l0_runtime._native_generated")?.getattr("l0_rust")?;
+        let l0_rust = py.import("shared.services.l0_runtime.native_loader")?.getattr("l0_rust")?;
 
         let out = PyDict::new(py);
         out.set_item("lookback_days", self.lookback_days)?;

@@ -51,13 +51,15 @@ flowchart LR
  - 若盘中冷启动刚完成 same-day bootstrap lock，`lifespan` 也必须在后台 loops 启动前把新锁定的 anchor 两腿同步进 `mandatory_symbols`，并执行一次有界 `option_quote()` repair；若修复命中正价格，应立即触发一次 ATM decay 重算，避免首个有效样本必须等待后续管理 tick。
  - 上述 startup anchor legs 同步进 `mandatory_symbols` 后，还必须立刻执行一次订阅刷新；禁止仅登记 mandatory 集合却等待后续 `FeedOrchestrator` cadence 才把 anchor 两腿纳入 `target_symbols`，否则盘中首个 ATM 样本可能长期看不到锁定腿。
  - WS `volume/current_volume` 必须通过可信上限校验（当前 hard cap: `1_000_000_000`）；超限值视为脏数据并丢弃，且不得置位 `ws_volume_seen/ws_current_volume_seen`（保留 REST fallback 接管能力）。
- - HOT-START OI 预加载优先使用 `SubscriptionManager.symbol_to_strike`，但若启动早期映射尚未建立，允许按 option symbol 直接解析 strike 作为兜底，确保 disk OI 可在首批 live tick 前写入 `ChainStateStore`。
- - `RustIngestGateway` 的实时推送主路径现已收敛到 Arrow IPC：
+- HOT-START OI 预加载优先使用 `SubscriptionManager.symbol_to_strike`，但若启动早期映射尚未建立，允许按 option symbol 直接解析 strike 作为兜底，确保 disk OI 可在首批 live tick 前写入 `ChainStateStore`。
+- `shared/cache/oi_snapshot.py` 是 OI baseline 持久化的中立 surface；`shared/system/persistent_oi_store.py` 已退役并删除，`IVBaselineSync` 与 `ActiveOptionsRuntimeService` 必须通过该 neutral surface 读写 disk OI baseline。
+- `RustIngestGateway` 的实时推送主路径现已收敛到 Arrow IPC：
    - Rust hot path 只写 `${shm_path}_arrow` 共享段，批次合同由 Rust `ARROW_IPC_SCHEMA` 定义；legacy ring buffer 双写已退出热路径；
    - Arrow IPC signal 合同固定为 `L0_IPC_SIGNAL_NAME`；默认值跟随 Arrow 段名，即 `${shm_path}_arrow_signal`；
    - Rust `windows_signal.rs` 与 Python `shared/system/ipc_signal.py` 必须按 create-or-open 语义对齐同一个 Windows named event；
  - Python `shared/system/ipc_reader.py` 在 Windows 上必须附着已有 named mapping 并读取长度前缀 Arrow payload，禁止再把 live attach 建立在 legacy ring buffer 或历史事件轮询之上；
-- `shared/system/ipc_reader.py` 与 `shared/system/ipc_signal.py` 现为 Rust-backed wrappers；Windows named-event wait 与 shared-memory attach 的 owner 位于 `l0_ingest/l0_rust/src/ipc_runtime.rs`、`ipc_legacy.rs`、`windows_signal.rs`；
+- `shared/services/l0_runtime/source/runtime/ipc.py` 的 `ArrowIpcReader` 现为 live neutral surface；其 Rust owner 位于 `l0_ingest/l0_rust/src/ipc_runtime.rs`，并直接消费 `NativeArrowIpcReader`；
+- `shared/system/rust_shm_bridge.py` 与 `l1_compute/rust_bridge.py` 已退役并删除；旧 ring-buffer SHM 读取路径不再作为正式运行面，禁止恢复；
 - `shared/services/l0_runtime/services/runtime/builder.py`（`OptionChainBuilder` owner）必须通过 `ArrowIpcReader` 消费 Arrow batch；Python event-queue fallback 已退出正式运行链；
 - `shared/services/l0_runtime/normalize/bridges/__init__.py` 是 bridge 合同统一入口；market event parse、depth side shaping、trade payload direction 语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_market_bridge.rs`；
 - `shared/services/l0_runtime/normalize/pipeline/__init__.py` 是清洗合同统一入口；QUOTE/DEPTH 基础清洗、IV/OI 归一化、crossed quote 防御与 top-of-book depth 提取语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_sanitization.rs`；

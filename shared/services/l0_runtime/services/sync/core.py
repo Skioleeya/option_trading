@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 from longport.openapi import CalcIndex
 
 from shared.config import settings
-from shared.system.persistent_oi_store import PersistentOIStore
+from shared.cache.oi_snapshot import PersistentOIStore
 from shared.services.l0_runtime.services.sync import (
     SYNC_CHUNK_COUNT,
     SYNC_COOLDOWN_SLEEP_SECONDS,

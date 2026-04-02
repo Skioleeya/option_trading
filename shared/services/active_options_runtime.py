@@ -8,9 +8,8 @@ from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from shared.cache.oi_snapshot import save_oi_snapshot
+from shared.cache.oi_snapshot import PersistentOIStore, save_oi_snapshot
 from shared.config import settings
-from shared.system.persistent_oi_store import PersistentOIStore
 from shared_rust.models import FlowEngineInput, FlowEngineOutput
 from shared_rust.services import (
     DEGComposer,

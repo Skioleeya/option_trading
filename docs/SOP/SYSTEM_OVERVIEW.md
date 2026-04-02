@@ -242,3 +242,40 @@ Stop-Process -Id $pid8001 -Force
 # strict session gate
 powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict
 ```
+
+## 10. Deliberately Retained shared/system Utilities (Sub-wave D)
+
+### 10.1 `shared/system/redis_service.py`
+
+- Current consumers:
+  - `app/container.py`
+  - `app/lifespan.py`
+  - `app/routes/health.py` (via container diagnostics)
+  - `shared/system/historical_store.py`
+- Retention reason:
+  - This is app-process orchestration (local subprocess lifecycle + host diagnostics), not a cross-layer compute hot path.
+- Migration trigger:
+  - Move Redis process ownership to external supervisor/service manager and define infra parity contract for startup/diagnostics.
+
+### 10.2 `shared/system/historical_store.py`
+
+- Current consumers:
+  - `app/container.py`
+  - `app/routes/history.py` fallback path
+- Retention reason:
+  - Module is currently compatibility fallback plumbing while L3 store/research path is primary.
+- Migration trigger:
+  - Remove `/history` fallback to `container.historical_store` and validate L3 store-only route parity.
+
+### 10.3 `shared/system/tactical_triad_logic.py`
+
+- Current consumers:
+  - `l2_decision/agents/agent_g.py`
+  - `l2_decision/feature_store/extractors_registry.py`
+  - `l2_decision/feature_store/extractors_volatility.py`
+  - `l2_decision/guards/rail_engine.py`
+  - `l3_assembly/assembly/ui_state_tracker.py`
+- Retention reason:
+  - File is already Rust-backed neutral wrapper; it centralizes tactical normalization semantics for L2/L3 without duplicating rust-call glue.
+- Migration trigger:
+  - After `shared_rust.services` namespace collapse provides direct tactical exports, retarget all consumers in one bounded session and delete wrapper atomically.

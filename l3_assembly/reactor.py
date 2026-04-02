@@ -14,7 +14,7 @@ Design:
 Usage:
     reactor = L3AssemblyReactor()
 
-    # In compute loop (replaces SnapshotBuilder.build())
+    # In compute loop
     frozen = await reactor.tick(decision, snapshot, atm_decay, active_options)
 
     # Broadcast (replaces _broadcast_loop body)
@@ -28,7 +28,7 @@ Usage:
     # Historical query (replaces historical_store.get_latest())
     history = await reactor.store.get_warm_latest(50)
 
-    # Backward-compat (replaces SnapshotBuilder.build() return value)
+    # Backward-compat
     legacy_dict = frozen.to_dict()
 """
 
@@ -58,7 +58,6 @@ class L3AssemblyReactor:
         redis:                  Async Redis client (None = Warm tier disabled).
         full_snapshot_interval: Seconds between forced full WS snapshots (default 30s).
         max_hot:                Hot ring buffer capacity (default 7200 = 2h at 1Hz).
-        shadow_mode:            If True, log numeric diffs vs legacy SnapshotBuilder.
     """
 
     def __init__(
@@ -66,7 +65,6 @@ class L3AssemblyReactor:
         redis: Any = None,
         full_snapshot_interval: float = 30.0,
         max_hot: int = 7200,
-        shadow_mode: bool = False,
     ) -> None:
         self.assembler = PayloadAssemblerV2()
         self.encoder = FieldDeltaEncoder(full_snapshot_interval)
@@ -79,7 +77,6 @@ class L3AssemblyReactor:
                 research_store=self.research_store,
             )
         )
-        self.shadow_mode = shadow_mode
 
         self._total_ticks = 0
         self._failed_ticks = 0
@@ -93,7 +90,7 @@ class L3AssemblyReactor:
     ) -> FrozenPayload:
         """Single compute tick: assemble + store FrozenPayload.
 
-        This is a DROP-IN replacement for SnapshotBuilder.build().
+        This is the L3 payload assembly entrypoint.
 
         Args:
             decision:       L2 DecisionOutput or None (returns zero-state).
@@ -131,9 +128,6 @@ class L3AssemblyReactor:
             assemble_ms = (time.monotonic() - start) * 1000
             self.instrumentation.record_assembly_latency(assemble_ms)
             self.instrumentation.set_hot_size(self.store.hot_size())
-
-            if self.shadow_mode and decision is not None:
-                self._shadow_compare(payload, decision, snapshot)
 
             return payload
 
@@ -192,21 +186,3 @@ class L3AssemblyReactor:
             atm=None,
         )
 
-    def _shadow_compare(
-        self,
-        l3_payload: FrozenPayload,
-        decision: Any,
-        snapshot: Any,
-    ) -> None:
-        """Compare L3 output with legacy SnapshotBuilder (shadow mode)."""
-        try:
-            from shared.system.snapshot_builder import SnapshotBuilder
-            legacy = SnapshotBuilder.build(snapshot, decision, None)
-            l3_spot = l3_payload.spot
-            legacy_spot = legacy.get("spot", 0.0)
-            if abs((l3_spot or 0) - (legacy_spot or 0)) > 0.01:
-                logger.warning(
-                    f"[L3 Shadow] spot mismatch: L3={l3_spot}, legacy={legacy_spot}"
-                )
-        except Exception as exc:
-            logger.debug(f"[L3 Shadow] compare failed: {exc}")

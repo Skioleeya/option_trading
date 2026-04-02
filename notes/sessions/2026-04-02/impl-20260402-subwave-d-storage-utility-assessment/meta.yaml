@@ -1,0 +1,39 @@
+﻿session_id: "2026-04-02/impl-20260402-subwave-d-storage-utility-assessment"
+title: "Sub-wave D storage utility assessment"
+scope: "feature"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-02 14:01:54 -04:00"
+updated_at_et: "2026-04-02 14:06:39 -04:00"
+parent_session: "2026-04-02/impl-20260402-subwave-c-snapshot-oi-cutover"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "c7caea9"
+head_commit: "c7caea9"
+
+files_changed:
+  - "docs/SOP/SYSTEM_OVERVIEW.md"
+  - "openspec/changes/impl-20260402-shared-system-rust-cutover/tasks.md"
+  - "openspec/changes/impl-20260402-shared-system-rust-cutover/assessment-2026-04-02-subwave-bcd.md"
+  - "notes/sessions/2026-04-02/impl-20260402-subwave-d-storage-utility-assessment/project_state.md"
+  - "notes/sessions/2026-04-02/impl-20260402-subwave-d-storage-utility-assessment/open_tasks.md"
+  - "notes/sessions/2026-04-02/impl-20260402-subwave-d-storage-utility-assessment/handoff.md"
+  - "notes/sessions/2026-04-02/impl-20260402-subwave-d-storage-utility-assessment/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+commands:
+  - "rg -n \"shared\\.system\\.(redis_service|historical_store|tactical_triad_logic)\" app l0_ingest l1_compute l2_decision l3_assembly shared -g '!*.md'"
+  - "git log --since=\"2026-03-01\" --oneline -- shared/system/redis_service.py"
+  - "git log --since=\"2026-03-01\" --oneline -- shared/system/historical_store.py"
+  - "git log --since=\"2026-03-01\" --oneline -- shared/system/tactical_triad_logic.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/tests/test_lifespan_startup.py -q"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "scripts/test/run_pytest.ps1 app/tests/test_lifespan_startup.py -q (1 passed)"
+  - "scripts/validate_session.ps1 -Strict (Session validation passed)"
+tests_failed: []
+blockers: []
+notes: []
+
+

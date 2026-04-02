@@ -41,13 +41,13 @@
 | C | DONE | `normalize/bridges/__init__.py` 与 `normalize/events/__init__.py` 已承接 owner；`market_event_bridge.py`/`_native_bridge_support.py`/`arrow_batch_bridge.py`/`rust_event_bridge.py` 与 `chain_event_processor.py`/`state_event_processor.py`/`_native_event_support.py` 已删除。 |
 | D | DONE | `state/runtime/__init__.py` 与 `projection/snapshot/__init__.py` 已承接 owner；`chain_state_store.py`/`live_state.py`/`_native_state_support.py` 与 `components.py`/`payload.py`/`_native_projection_support.py` 已删除；消费者保持 package-entry import。 |
 | E | DONE | `services/__init__.py` / `orchestration/__init__.py` / `pollers/__init__.py` / `repair/__init__.py` / `subscription/__init__.py` / `sync/__init__.py` / `runtime/__init__.py` 已承接 owner；`services/_native_helpers.py` 与 `services/sync/core.py` 作为最小非 shim 辅助模块保留；12 个 Sub-wave E legacy 文件已删除；消费者已切到 package entrypoints。 |
-| F | IN_PROGRESS | `source/runtime` 旧 owner 文件已收敛到 package entrypoints 并删除（含 `quote_runtime/{contracts,shared,rust_runtime}.py`、`rate_limiter.py`、`runtime_bundle.py`、`sdk_bootstrap.py`、`longport_*` 与 `_native_quote_*`）；剩余阻塞是整场 dual-run 证据与 Rust owner-class 直出。 |
+| F | IN_PROGRESS | `source/runtime` 旧 owner 文件已收敛到 package entrypoints 并删除（含 `quote_runtime/{contracts,shared,rust_runtime}.py`、`rate_limiter.py`、`runtime_bundle.py`、`sdk_bootstrap.py`、`longport_*` 与 `_native_quote_*`）；`get_oi_delta` 参数错配与 `_native_generated.l0_rust` 旧引用阻塞已通过 `shared_rust_services` 根修 + `services.pyd` 重编译替换关闭；剩余阻塞仅为“整场交易时段”dual-run compare 证据。 |
 | G | IN_PROGRESS | `facade.py`、`l0_runtime/__init__.py`、`_native_extension_loader.py`、`_native_generated/__init__.py` 已退役；`OptionChainBuilder` 已迁至 `services/runtime/builder.py` 且 `app/container.py` 已切换；`native_loader.py` 已修复单例加载避免 `RustIngestGateway` 同名异类；剩余阻塞为 F dual-run 证据与 G 回归门禁。 |
 
 ## Verification
 
 - [ ] All per-sub-wave test gates pass (see design.md table)
-- [ ] E2E smoke test: `python scripts/test/test_l0_l4_pipeline.py` (attempted 2026-04-02 ET; websocket connected after backend restart but timed out waiting enriched payload)
+- [x] E2E smoke test: `python scripts/test/test_l0_l4_pipeline.py` (PASS 2026-04-02 14:42 ET; `dashboard_init` payload with L0/L1/L2/L3 checks all green, `rust_active=True`, `wall_migration` + `depth_profile` present)
 - [ ] Full l0 test suite: `pwsh scripts/test/run_pytest.ps1 tests/l0_runtime/` (attempted 2026-04-02 ET; blocked by `tmp/pytest_cache` ACL owner mismatch)
 - [x] SOP updated: `docs/SOP/L0_DATA_FEED.md` or `SOP-EXEMPT: <reason>`
 - [x] OpenSpec chain gate: `python scripts/policy/check_openspec_chain.py` (PASS 2026-04-02 ET)
@@ -58,7 +58,7 @@
 - [x] Zero runtime references to retired facade/legacy loader paths
 - [x] All pure-shim `_native_*.py` files deleted
 - [x] `facade.py` deleted
-- [ ] No behaviour regression verified by E2E smoke test
+- [x] No behaviour regression verified by E2E smoke test
 - [ ] Sub-wave F: dual-run compare evidence recorded in handoff
 
 ## Sub-wave A — Contracts / Models
@@ -115,6 +115,10 @@
 - [ ] Dual-run window: run both Python and Rust gateway for one full market session
 - [ ] Record compare evidence in session handoff
 - [x] SPY.US Rust dataflow MVP connectivity passed on real host (`python scripts/test/spy_us_rust_stream_mvp.py --symbol SPY.US --timeout-sec 30`, 2026-04-02 12:44 ET): REST rows=1, stream rows=21, transport=`arrow_ipc_named_event`
+- [x] SPY.US Rust dataflow MVP connectivity re-validated on real host (`python scripts/test/spy_us_rust_stream_mvp.py --symbol SPY.US --timeout-sec 30`, 2026-04-02 14:18 ET): REST rows=1, stream rows=4, transport=`arrow_ipc_named_event`, diagnostics=`connected=true/rust_started=true/endpoint_profile=primary/failover_count=0`
+- [x] Runtime diagnostics snapshot captured (`GET /debug/persistence_status`, 2026-04-02 14:18 ET): `stores.gateway.connected=true`, `stores.gateway.rust_started=true`, `stores.transport.transport=arrow_ipc_named_event`, `stores.transport.status=OK`
+- [x] Divergence/blocker evidence captured from runtime log (`logs/backend_runtime.current.log`): `TypeError(get_oi_delta...)` in housekeeping flow and `AttributeError(_native_generated.l0_rust missing)` in L3 reactor path
+- [x] Runtime blocker root-fix completed in Rust owners (`shared_rust_services`): `FlowEngineG` now uses keyword `date_str` call for `get_oi_delta`; `HeaderVolatilityContextService`/`ResearchFeatureStore` native loader path switched to `shared.services.l0_runtime.native_loader.l0_rust`; rebuilt and replaced `shared_rust/services.pyd` (2026-04-02 14:35 ET)
 - [x] Retire `source/runtime/longport_adapter.py`
 - [x] Retire `source/runtime/quote_runtime/rust_runtime.py`, `contracts.py`, `shared.py`
 - [x] Retire `source/runtime/sdk_bootstrap.py`
@@ -131,7 +135,7 @@
 - [x] Delete `facade.py`
 - [x] Delete `__init__.py`, `_native_extension_loader.py`, `_native_generated/__init__.py`
 - [x] Native-loader migration subset complete: `shared/services/l0_runtime/native_loader.py` added; `_native_extension_loader.py` and `_native_generated/__init__.py` retired; local import smoke passed
-- [ ] Run E2E smoke test: `python scripts/test/test_l0_l4_pipeline.py`
+- [x] Run E2E smoke test: `python scripts/test/test_l0_l4_pipeline.py` (PASS 2026-04-02 14:42 ET)
 - [ ] Run full l0 test suite
 
 ## Phase N — Verification Gate

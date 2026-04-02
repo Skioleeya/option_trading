@@ -1,0 +1,45 @@
+session_id: "2026-04-02/impl-20260402-subwave-c-snapshot-oi-cutover"
+title: "Sub-wave C snapshot builder and OI store cutover"
+scope: "feature"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-02 13:39:59 -04:00"
+updated_at_et: "2026-04-02 13:59:48 -04:00"
+parent_session: "2026-04-02/impl-20260402-subwave-b-shm-bridge-cutover"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "c7caea9"
+head_commit: "c7caea9"
+
+files_changed:
+  - "shared/cache/oi_snapshot.py"
+  - "shared/services/active_options_runtime.py"
+  - "shared/services/l0_runtime/services/sync/core.py"
+  - "l3_assembly/reactor.py"
+  - "docs/SOP/L0_DATA_FEED.md"
+  - "docs/SOP/L3_OUTPUT_ASSEMBLY.md"
+  - "shared/system/snapshot_builder.py"
+  - "shared/system/persistent_oi_store.py"
+  - "openspec/changes/impl-20260402-shared-system-rust-cutover/tasks.md"
+  - "openspec/changes/impl-20260402-shared-system-rust-cutover/assessment-2026-04-02-subwave-bcd.md"
+  - "notes/sessions/2026-04-02/impl-20260402-subwave-c-snapshot-oi-cutover/open_tasks.md"
+  - "notes/sessions/2026-04-02/impl-20260402-subwave-c-snapshot-oi-cutover/project_state.md"
+  - "notes/sessions/2026-04-02/impl-20260402-subwave-c-snapshot-oi-cutover/handoff.md"
+commands:
+  - "git status --short"
+  - "Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz'"
+  - "git rev-parse --short HEAD"
+  - "git branch --show-current"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/tests/test_lifespan_startup.py -q"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/loops/tests/test_payload_debug.py -q"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "app/tests/test_lifespan_startup.py"
+  - "scripts/validate_session.ps1 -Strict"
+tests_failed:
+  - "scripts/test/run_pytest.ps1 app/loops/tests/test_payload_debug.py -q (blocked by tmp/pytest_cache ACL ownership mismatch)"
+blockers: []
+notes:
+  - "OI persistence now flows through shared/cache/oi_snapshot.py."
+  - "L3 snapshot builder shadow compare path was removed; legacy owner deleted."
+  - "Strict validation passed on the synced active session."

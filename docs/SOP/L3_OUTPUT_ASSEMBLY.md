@@ -32,6 +32,7 @@ flowchart LR
 - `agent_g.data.header_volatility`（标题栏动态波动上下文；固定包含 `lookback_days/lookback_effective_days/ivr/ivp/term_structure/iv_price_relation`）
 - `rust_active`
 - `shm_stats`
+- `shared/system/snapshot_builder.py` 已退役；`L3AssemblyReactor` 直接由 `PayloadAssemblerV2` 组装 payload，不再保留 legacy SnapshotBuilder shadow compare。
 
 ### 3.1 UI State Contract (Right Panel)
 
@@ -80,6 +81,7 @@ flowchart LR
   - `label/outcome`（长期）
 - 存储格式必须优先 Parquet + ZSTD，支持 `jsonl` 调试导出
 - `ResearchFeatureStore` 与 `HeaderVolatilityContextService` 的 live owner 已切到 `shared_rust.services`
+- `shared_rust.services` 内部访问 `l0_rust` 必须经 `shared.services.l0_runtime.native_loader.l0_rust`；禁止回退到 `_native_generated.l0_rust` 旧路径。
 - `shared/services/research_feature_store.py`、`shared/services/research_feature_store_io.py`、`shared/services/header_volatility_context.py` 已退役，不得再恢复 Python compat owner
 - `/api/research/features`、`/api/research/exports/*` 现直接调用 `shared_rust.services.ResearchFeatureStore` 的同步接口；路由层不再保留这组 root owner 的 async Python 壳
 - 研究表主键必须包含 `data_timestamp + l0_version`，用于跨层 join 对齐

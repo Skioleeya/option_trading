@@ -67,7 +67,7 @@ where
 }
 
 pub fn l0_rust<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-    Ok(py.import("shared.services.l0_runtime._native_generated")?.getattr("l0_rust")?)
+    Ok(py.import("shared.services.l0_runtime.native_loader")?.getattr("l0_rust")?)
 }
 
 pub fn shared_services<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyModule>> {
