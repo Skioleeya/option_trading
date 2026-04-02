@@ -9,6 +9,7 @@ mod research_store;
 mod research_store_support;
 mod research_utils;
 mod active_options;
+mod tactical;
 
 #[pymodule]
 fn services(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -19,5 +20,6 @@ fn services(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     research_utils::register(py, m)?;
     research_schema::register(py, m)?;
     research_store::register(py, m)?;
+    tactical::register(py, m)?;
     Ok(())
 }

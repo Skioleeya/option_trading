@@ -1,5 +1,5 @@
 PARENT_CHANGE_ID: refactor-governance-20260401-rust-runtime-migration-chain
-DEPENDENCY_ORDER: 21-A
+DEPENDENCY_ORDER: 22
 BLOCKED_BY: none
 
 ## Why

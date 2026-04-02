@@ -1,8 +1,6 @@
 from __future__ import annotations
-
 import logging
 from typing import Any
-
 from l2_decision.agents.agent_a import AgentA
 from l2_decision.agents.agent_b import AgentB1, DivergenceState
 from l2_decision.agents.base import AgentResult
@@ -16,41 +14,38 @@ from l2_decision.agents.services.agent_g_decision_support import (
     extract_per_strike,
     safe_get_value,
 )
+from l2_decision.agents.services.agent_g_policy_support import (
+    append_sync_gap_diagnostic,
+    apply_mtf_alignment_policy,
+    apply_vrp_veto,
+    build_jump_gate_result,
+    clamp01,
+    derive_mtf_geometry,
+    gex_accel_boost,
+    map_iv_to_direction,
+    map_vanna_to_direction,
+    map_wall_to_direction,
+    resolve_signal,
+    resolve_idle_trend_signal,
+    resolve_vrp,
+)
 from l2_decision.signals.fusion.dynamic_weight_engine import DynamicWeightEngine
 from shared.config import settings
 from shared_rust.models import AgentB1Output
-from shared.system.tactical_triad_logic import classify_vrp_state, compute_vrp
-
-
+from shared_rust.services import (
+    tactical_classify_vrp_state as classify_vrp_state,
+    tactical_compute_vrp as compute_vrp,
+)
 logger = logging.getLogger(__name__)
-
-
 class AgentG:
-    """Decision framework agent.
-
-    Combines Agent A (spot micro-signal) and Agent B1 (options structure/trap).
-
-    Logic Hierarchy:
-    1. Trap Preemption (Agent B1):
-       - IF ACTIVE_BULL_TRAP (Price Up + Call Dying) -> FADE IT -> LONG_PUT.
-       - IF ACTIVE_BEAR_TRAP (Price Down + Put Dying) -> FADE IT -> LONG_CALL.
-
-    2. Trend Confirmation (Agent B1 Idle + Agent A):
-       - IF IDLE AND (Agent A Bullish) AND (Net GEX > 0) -> LONG_CALL.
-       - IF IDLE AND (Agent A Bearish) AND (Net GEX < 0) -> LONG_PUT.
-    """
-
     AGENT_ID = "agent_g"
-
     def __init__(self, agent_a: AgentA | None = None, agent_b: AgentB1 | None = None):
         self._agent_a = agent_a or AgentA()
         self._agent_b = agent_b or AgentB1()
         self._weight_engine = DynamicWeightEngine()
-
         # Hysteresis States (Fixing Boundary Flicker)
         self._vrp_active = False
         self._mtf_damped = False
-
         # PP-L3C FIX: Persist last valid UI state to bridge transient calculation gaps
         self._last_ui_state: dict[str, Any] = {}
 
@@ -58,103 +53,6 @@ class AgentG:
         """Inject shared Redis client into sub-agents and self (for DEG-FLOW)."""
         self._redis = client
         await self._agent_b.set_redis_client(client)
-
-    def _map_iv_to_direction(self, iv_state: str | None) -> str:
-        """Map IV velocity state to direction.
-
-        v3.0 FIX: Asian Style Color Alignment (红涨绿跌)
-        """
-        if iv_state in (
-            "PAID_MOVE",
-            "ORGANIC_GRIND",
-            "HOLLOW_RISE",
-            "HOLLOW_DROP",
-            "VOL_EXPANSION",
-            "EXHAUSTION",
-        ):
-            return "BULLISH"
-        if iv_state == "PAID_DROP":
-            return "BEARISH"
-        return "NEUTRAL"
-
-    def _map_wall_to_direction(self, call_state: str | None, put_state: str | None) -> str:
-        """Map wall migration states to direction."""
-        if call_state == "BREACHED":
-            return "BULLISH"
-        if put_state == "BREACHED":
-            return "BEARISH"
-        if call_state == "RETREATING_RESISTANCE":
-            return "BULLISH"
-        if call_state == "REINFORCED_WALL":
-            return "BEARISH"
-        if put_state == "RETREATING_SUPPORT":
-            return "BEARISH"
-        if put_state == "REINFORCED_SUPPORT":
-            return "BULLISH"
-        return "NEUTRAL"
-
-    def _map_vanna_to_direction(self, vanna_state: str | None) -> str:
-        """Map vanna flow state to direction."""
-        if vanna_state == "DANGER_ZONE":
-            return "BULLISH"
-        if vanna_state == "GRIND_STABLE":
-            return "NEUTRAL"
-        return "NEUTRAL"
-
-    @staticmethod
-    def _normalize_direction(raw: Any) -> str:
-        text = str(raw or "NEUTRAL").upper()
-        if text in ("BULLISH", "BEARISH", "NEUTRAL"):
-            return text
-        return "NEUTRAL"
-
-    @staticmethod
-    def _clamp01(raw: Any, default: float = 0.0) -> float:
-        try:
-            value = float(raw)
-        except (TypeError, ValueError):
-            return default
-        if value < 0.0:
-            return 0.0
-        if value > 1.0:
-            return 1.0
-        return value
-
-    def _derive_mtf_geometry(self, mtf_consensus: Any) -> tuple[int, float, float]:
-        """Derive direction/confidence/alignment from geometric MTF payload."""
-        if not isinstance(mtf_consensus, dict):
-            return 0, 0.0, 0.0
-
-        timeframes = mtf_consensus.get("timeframes")
-        if not isinstance(timeframes, dict):
-            return 0, 0.0, 0.0
-
-        states: list[int] = []
-        kinetics: list[float] = []
-        for tf in ("1m", "5m", "15m"):
-            tf_data = timeframes.get(tf, {})
-            if not isinstance(tf_data, dict):
-                continue
-
-            raw_state = tf_data.get("state")
-            if raw_state in (1, -1, 0):
-                state = int(raw_state)
-            elif raw_state in ("1", "-1", "0"):
-                state = int(raw_state)
-            else:
-                state = 0
-            states.append(state)
-            kinetics.append(self._clamp01(tf_data.get("kinetic_level", 0.0), 0.0))
-
-        if not states:
-            return 0, 0.0, 0.0
-
-        balance = sum(states)
-        consensus_state = 1 if balance > 0 else (-1 if balance < 0 else 0)
-        confidence = sum(kinetics) / len(kinetics) if kinetics else 0.0
-        dominant_count = max(states.count(-1), states.count(0), states.count(1))
-        alignment = dominant_count / len(states)
-        return consensus_state, self._clamp01(confidence, 0.0), self._clamp01(alignment, 0.0)
 
     async def run(self, snapshot: dict[str, Any] | Any) -> AgentResult:
         # PP-L2 Robust: snapshot can be EnrichedSnapshot or legacy dict
@@ -228,14 +126,14 @@ class AgentG:
         wall_confidence = b_output.wall_confidence or (wall_data.confidence if wall_data else 0.0)
         vanna_confidence = b_output.vanna_confidence or (vanna_data.confidence if vanna_data else 0.0)
 
-        iv_direction = self._map_iv_to_direction(iv_data.state if iv_data else None)
-        wall_direction = self._map_wall_to_direction(
+        iv_direction = map_iv_to_direction(iv_data.state if iv_data else None)
+        wall_direction = map_wall_to_direction(
             wall_data.call_wall_state if wall_data else None,
             wall_data.put_wall_state if wall_data else None,
         )
-        vanna_direction = self._map_vanna_to_direction(vanna_data.state if vanna_data else None)
+        vanna_direction = map_vanna_to_direction(vanna_data.state if vanna_data else None)
 
-        mtf_state, mtf_confidence, raw_mtf_alignment = self._derive_mtf_geometry(mtf_consensus)
+        mtf_state, mtf_confidence, raw_mtf_alignment = derive_mtf_geometry(mtf_consensus, clamp01)
         mtf_direction = "BULLISH" if mtf_state > 0 else ("BEARISH" if mtf_state < 0 else "NEUTRAL")
         vib_direction = vib_data.consensus if vib_data else "NEUTRAL"
 
@@ -336,27 +234,19 @@ class AgentG:
         return result
 
     def _append_sync_gap_diagnostic(self, summary: list[str], agent_b_data: dict[str, Any]) -> None:
-        sync_gap = agent_b_data.get("trap_micro_sync_gap", 0.0) or 0.0
-        if sync_gap <= settings.agent_b_gamma_tick_interval * 3:
-            return
-        summary.append(
-            f"[PP-5 DIAG] Trap state stale: trap_micro_sync_gap={sync_gap:.2f}s "
-            f"(>{settings.agent_b_gamma_tick_interval * 3:.1f}s). "
-            "Consider reducing agent_b_gamma_tick_interval."
-        )
-        logger.debug("[AgentG] PP-5: trap/micro sync gap=%.2fs", sync_gap)
+        append_sync_gap_diagnostic(summary, agent_b_data, settings.agent_b_gamma_tick_interval, logger)
 
     def _resolve_vrp(self, *, spy_atm_iv: float | None, hv_analysis: dict[str, Any]) -> tuple[float | None, str]:
-        vrp = hv_analysis.get("vrp")
-        if vrp is None and spy_atm_iv is not None:
-            vrp = compute_vrp(spy_atm_iv, settings.vrp_baseline_hv)
-        premium_state = classify_vrp_state(
-            vrp,
-            settings.vrp_cheap_threshold,
-            settings.vrp_expensive_threshold,
-            settings.vrp_trap_threshold,
+        return resolve_vrp(
+            spy_atm_iv=spy_atm_iv,
+            hv_analysis=hv_analysis,
+            vrp_baseline_hv=settings.vrp_baseline_hv,
+            vrp_cheap_threshold=settings.vrp_cheap_threshold,
+            vrp_expensive_threshold=settings.vrp_expensive_threshold,
+            vrp_trap_threshold=settings.vrp_trap_threshold,
+            compute_vrp=compute_vrp,
+            classify_vrp_state=classify_vrp_state,
         )
-        return vrp, premium_state
 
     def _build_jump_gate_result(
         self,
@@ -366,19 +256,12 @@ class AgentG:
         fused_signal: Any,
         summary: list[str],
     ) -> AgentResult | None:
-        if not jump_data or not jump_data.is_jump:
-            return None
-        signal = f"HOLD (JUMP_DETECTED: |Z|={abs(jump_data.z_score):.1f})"
-        summary.append(
-            f"SAFETY VALVE (P0.1): Price shock detected ({jump_data.magnitude_pct:+.2f}%). "
-            "Halting trade entry per Paper 5 safety protocol."
-        )
-        return AgentResult(
-            agent=self.AGENT_ID,
-            signal=signal,
-            as_of=agent_b.as_of,
-            data={**agent_b.data, "fused_signal": fused_signal.model_dump()},
-            summary="; ".join(summary),
+        return build_jump_gate_result(
+            agent_id=self.AGENT_ID,
+            jump_data=jump_data,
+            agent_b=agent_b,
+            fused_signal=fused_signal,
+            summary=summary,
         )
 
     def _apply_vrp_veto(
@@ -389,25 +272,17 @@ class AgentG:
         vrp: float,
         spy_atm_iv: float | None,
     ) -> tuple[bool, str]:
-        entry_th = settings.vrp_veto_threshold
-        exit_th = entry_th * VRP_VETO_EXIT_RATIO
-
-        if not self._vrp_active and vrp > entry_th:
-            self._vrp_active = True
-            logger.warning("[AgentG] VRP Veto ACTIVATED: %.1f > %.1f", vrp, entry_th)
-        elif self._vrp_active and vrp < exit_th:
-            self._vrp_active = False
-            logger.warning("[AgentG] VRP Veto DEACTIVATED: %.1f < %.1f", vrp, exit_th)
-
-        if not self._vrp_active:
-            return False, signal
-
-        safe_iv = float(spy_atm_iv or 0.0)
-        summary.append(
-            f"VRP VETO (P0.5): IV={safe_iv:.1f}% far too expensive (VRP={vrp:.1f}). "
-            "Entry EV<0 per Muravyev et al. (SSRN #4019647)."
+        self._vrp_active, vetoed, next_signal = apply_vrp_veto(
+            vrp_active=self._vrp_active,
+            signal=signal,
+            summary=summary,
+            vrp=vrp,
+            spy_atm_iv=spy_atm_iv,
+            entry_threshold=settings.vrp_veto_threshold,
+            exit_ratio=VRP_VETO_EXIT_RATIO,
+            logger=logger,
         )
-        return True, f"NO_TRADE (VRP_VETO: VRP={vrp:.1f})"
+        return vetoed, next_signal
 
     def _compute_adjusted_confidence(
         self,
@@ -455,23 +330,20 @@ class AgentG:
         premium_state: str,
         vrp: float | None,
     ) -> float:
-        mtf_entry_th = settings.mtf_alignment_damp_entry
-        mtf_exit_th = settings.mtf_alignment_damp_exit
-
-        if not self._mtf_damped and mtf_alignment < mtf_entry_th:
-            self._mtf_damped = True
-            logger.info("[AgentG] MTF Damping ACTIVATED: alignment=%.2f < %.2f", mtf_alignment, mtf_entry_th)
-        elif self._mtf_damped and mtf_alignment > mtf_exit_th:
-            self._mtf_damped = False
-            logger.info("[AgentG] MTF Damping DEACTIVATED: alignment=%.2f > %.2f", mtf_alignment, mtf_exit_th)
-
-        if self._mtf_damped:
-            summary.append(f"MTF ALIGN DAMP: alignment={mtf_alignment:.2f} -> conf halved.")
-            return fused_signal.confidence * 0.5
-        if mtf_alignment >= 0.67 and premium_state == "BARGAIN":
-            summary.append(f"VRP BARGAIN BOOST: alignment={mtf_alignment:.2f}, VRP={vrp:.1f}")
-            return min(fused_signal.confidence * settings.vrp_bargain_boost, MAX_SIGNAL_CONFIDENCE)
-        return fused_signal.confidence
+        self._mtf_damped, confidence = apply_mtf_alignment_policy(
+            mtf_damped=self._mtf_damped,
+            summary=summary,
+            fused_signal=fused_signal,
+            mtf_alignment=mtf_alignment,
+            premium_state=premium_state,
+            vrp=vrp,
+            mtf_entry_threshold=settings.mtf_alignment_damp_entry,
+            mtf_exit_threshold=settings.mtf_alignment_damp_exit,
+            vrp_bargain_boost=settings.vrp_bargain_boost,
+            max_signal_confidence=MAX_SIGNAL_CONFIDENCE,
+            logger=logger,
+        )
+        return confidence
 
     def _gex_accel_boost(
         self,
@@ -480,20 +352,14 @@ class AgentG:
         fused_signal: Any,
         net_gex: float | None,
     ) -> float:
-        if net_gex is None:
-            return 1.0
-        if net_gex > 800 and fused_signal.direction == "NEUTRAL":
-            summary.append("GEX PINNING: Strong Pos Gamma limiting volatility (Paper 2).")
-            return 1.0
-        if net_gex >= settings.gex_accel_threshold:
-            return 1.0
-        if fused_signal.direction == "BEARISH":
-            summary.append("GEX ACCEL: Neg Gamma reinforcing Bearish move (Paper 4).")
-            return settings.gex_accel_boost_bearish
-        if fused_signal.direction == "BULLISH":
-            summary.append("GEX ACCEL: Neg Gamma reinforcing Bullish bounce (Short Squeeze).")
-            return settings.gex_accel_boost_bullish
-        return 1.0
+        return gex_accel_boost(
+            summary=summary,
+            fused_signal=fused_signal,
+            net_gex=net_gex,
+            gex_accel_threshold=settings.gex_accel_threshold,
+            gex_accel_boost_bearish=settings.gex_accel_boost_bearish,
+            gex_accel_boost_bullish=settings.gex_accel_boost_bullish,
+        )
 
     def _resolve_signal(
         self,
@@ -505,26 +371,17 @@ class AgentG:
         net_gex: float | None,
         agent_a_signal: str,
     ) -> str:
-        if b_signal == DivergenceState.ACTIVE_BULL_TRAP:
-            summary.append("TRAP DETECTED: Bull Trap active (fading price rise).")
-            return "Option Structure: LONG_PUT (Check Breadth!)"
-        if b_signal == DivergenceState.ACTIVE_BEAR_TRAP:
-            summary.append("TRAP DETECTED: Bear Trap active (fading price drop).")
-            return "Option Structure: LONG_CALL (Check Breadth!)"
-        if fused_signal.confidence > settings.fusion_confidence_threshold:
-            confidence_pct = fused_signal.confidence * 100
-            summary.append(f"FUSION OVERRIDE: {fused_signal.explanation}")
-            top_component = max(fused_signal.weights.items(), key=lambda item: item[1])
-            summary.append(f"Primary driver: {top_component[0]} ({top_component[1]*100:.0f}%)")
-            return f"Fusion Engine: {fused_signal.direction} (Conf {confidence_pct:.0f}%)"
-        if b_signal != DivergenceState.IDLE and b_signal != "IDLE":
-            return current_signal
-
-        return self._resolve_idle_trend_signal(
+        return resolve_signal(
+            current_signal=current_signal,
             summary=summary,
+            b_signal=b_signal,
+            fused_signal=fused_signal,
             net_gex=net_gex,
             agent_a_signal=agent_a_signal,
-            current_signal=current_signal,
+            active_bull_trap=DivergenceState.ACTIVE_BULL_TRAP,
+            active_bear_trap=DivergenceState.ACTIVE_BEAR_TRAP,
+            idle_state=DivergenceState.IDLE,
+            fusion_confidence_threshold=settings.fusion_confidence_threshold,
         )
 
     def _resolve_idle_trend_signal(
@@ -535,23 +392,9 @@ class AgentG:
         agent_a_signal: str,
         current_signal: str,
     ) -> str:
-        if net_gex is not None and net_gex < 0:
-            if agent_a_signal == "BULLISH":
-                summary.append("Trend Confirmed: Negative Gamma aligns with Bullish spot.")
-                return "Option Structure: LONG_CALL (Neg Gamma Accel)"
-            if agent_a_signal == "BEARISH":
-                summary.append("Trend Confirmed: Negative Gamma aligns with Bearish spot.")
-                return "Option Structure: LONG_PUT (Neg Gamma Accel)"
-            summary.append(f"Negative Gamma but Spot Neutral. A={agent_a_signal}")
-            return "NEUTRAL"
-        if net_gex is not None and net_gex > 0:
-            if agent_a_signal == "BULLISH":
-                summary.append("Trend Muted: Positive Gamma suggests resistance/damping on upside.")
-                return "NEUTRAL (Pos Gamma Damping)"
-            if agent_a_signal == "BEARISH":
-                summary.append("Trend Muted: Positive Gamma suggests support/damping on downside.")
-                return "NEUTRAL (Pos Gamma Damping)"
-            summary.append("Positive Gamma & Neutral Spot. Expect low vol.")
-            return "NEUTRAL"
-        summary.append(f"No signal. A={agent_a_signal}, GEX={net_gex}")
-        return current_signal
+        return resolve_idle_trend_signal(
+            summary=summary,
+            net_gex=net_gex,
+            agent_a_signal=agent_a_signal,
+            current_signal=current_signal,
+        )

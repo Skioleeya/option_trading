@@ -1,0 +1,63 @@
+session_id: "2026-04-02/wave-b-20260402-p3-tactical-wrapper-retirement"
+title: "WAVE B P3 tactical-triad wrapper retirement"
+scope: "feature"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-02 15:31:40 -04:00"
+updated_at_et: "2026-04-02 15:44:26 -04:00"
+parent_session: "2026-04-02/wave-a-20260402-p1-p2-p4-parallel"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "ba9ac77"
+head_commit: "ba9ac77"
+
+files_changed:
+  - "l2_decision/agents/agent_g.py"
+  - "l2_decision/agents/services/agent_g_policy_support.py"
+  - "l2_decision/feature_store/extractors_registry.py"
+  - "l2_decision/feature_store/extractors_volatility.py"
+  - "l2_decision/guards/rail_engine.py"
+  - "l3_assembly/assembly/ui_state_tracker.py"
+  - "shared/system/tactical_triad_logic.py"
+  - "openspec/changes/impl-20260402-tactical-triad-wrapper-retirement/tasks.md"
+  - "notes/sessions/2026-04-02/wave-b-20260402-p3-tactical-wrapper-retirement/project_state.md"
+  - "notes/sessions/2026-04-02/wave-b-20260402-p3-tactical-wrapper-retirement/open_tasks.md"
+  - "notes/sessions/2026-04-02/wave-b-20260402-p3-tactical-wrapper-retirement/handoff.md"
+  - "notes/sessions/2026-04-02/wave-b-20260402-p3-tactical-wrapper-retirement/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+
+commands:
+  - "python -c \"from shared_rust.services import tactical_compute_vrp, tactical_classify_vrp_state, tactical_normalize_svol_state, tactical_resolve_svol_fields; print('prereq-ok')\""
+  - "python -c \"from l2_decision.agents.agent_g import AgentG; print('agent_g-ok')\""
+  - "python -c \"from l2_decision.feature_store.extractors_registry import build_default_extractors; print('registry-ok', len(build_default_extractors()) > 0)\""
+  - "python -c \"from l2_decision.feature_store.extractors_volatility import _RealizedVolatilityMetricsExtractor; print('volatility-ok')\""
+  - "python -c \"from l2_decision.guards.rail_engine import GuardRailEngine; print('rail-ok')\""
+  - "python -c \"from l3_assembly.assembly.ui_state_tracker import UIStateTracker; print('ui-state-ok')\""
+  - "python -c \"import shared.system.tactical_triad_logic\""
+  - "rg \"shared\\.system\\.tactical_triad_logic\" app l0_ingest l1_compute l2_decision l3_assembly l4_ui shared scripts --glob \"*.py\""
+  - "python -c \"from l2_decision.agents.agent_g import AgentG; from l2_decision.feature_store.extractors_volatility import _RealizedVolatilityMetricsExtractor; from l2_decision.guards.rail_engine import GuardRailEngine; from l3_assembly.assembly.ui_state_tracker import UIStateTracker; print('all-consumers-ok')\""
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l2_decision/tests/ l3_assembly/tests/"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+
+tests_passed:
+  - "prereq-ok"
+  - "agent_g-ok"
+  - "registry-ok True"
+  - "volatility-ok"
+  - "rail-ok"
+  - "ui-state-ok"
+  - "all-consumers-ok"
+  - "shared.system.tactical_triad_logic import raises ModuleNotFoundError"
+  - "residual reference scan returns no matches"
+  - "all changed runtime files satisfy <=400 line gate"
+
+tests_failed:
+  - "scripts/test/run_pytest.ps1 l2_decision/tests/ l3_assembly/tests/ blocked by tmp/pytest_cache ACL mismatch"
+
+blockers:
+  - "tmp/pytest_cache ACL ownership mismatch blocks targeted pytest execution"
+
+notes:
+  - "P3 performs import cutover + wrapper retirement and bounded modular split for line-cap compliance."

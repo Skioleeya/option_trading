@@ -1,5 +1,5 @@
 """Compatibility shim: re-export shared neutral FlowEngineE."""
 
-from shared.services.active_options_engines import FlowEngineE
+from shared_rust.services import FlowEngineE
 
 __all__ = ["FlowEngineE"]

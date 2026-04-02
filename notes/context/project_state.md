@@ -1,17 +1,16 @@
-# Project State (Index)
+﻿# Project State (Index)
 
 ## Active Session
-- Path: notes/sessions/2026-04-02/impl-20260402-subwave-f-dual-run-evidence/project_state.md
-- Meta: notes/sessions/2026-04-02/impl-20260402-subwave-f-dual-run-evidence/meta.yaml
+- Path: notes/sessions/2026-04-02/wave-b-20260402-p3-tactical-wrapper-retirement/project_state.md
+- Meta: notes/sessions/2026-04-02/wave-b-20260402-p3-tactical-wrapper-retirement/meta.yaml
 - Status: ACTIVE
 
 ## Recent Sessions
+- notes/sessions/2026-04-02/wave-b-20260402-p3-tactical-wrapper-retirement/
+- notes/sessions/2026-04-02/wave-a-20260402-p1-p2-p4-parallel/
 - notes/sessions/2026-04-02/impl-20260402-subwave-f-dual-run-evidence/
 - notes/sessions/2026-04-02/impl-20260402-subwave-d-storage-utility-assessment/
 - notes/sessions/2026-04-02/impl-20260402-subwave-c-snapshot-oi-cutover/
-- notes/sessions/2026-04-02/impl-20260402-subwave-b-shm-bridge-cutover/
-- notes/sessions/2026-04-02/impl-20260402-shared-system-rust-cutover/
-- notes/sessions/2026-04-02/impl-20260402-l0-runtime-rust-cutover/
 
 ## Global Rules
 - Session folders are immutable records; do not overwrite prior sessions.

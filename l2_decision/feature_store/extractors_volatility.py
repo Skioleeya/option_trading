@@ -8,7 +8,7 @@ from typing import Any
 
 from l2_decision.feature_store.extractors_common import _get_agg, _get_val, _safe
 from shared_rust.services import RollingRealizedVolatility
-from shared.system.tactical_triad_logic import compute_vrp
+from shared_rust.services import tactical_compute_vrp as compute_vrp
 
 DEFAULT_REALIZED_WINDOW_SECONDS = 900.0
 DEFAULT_REALIZED_MIN_SAMPLES = 5

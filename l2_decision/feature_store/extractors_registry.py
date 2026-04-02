@@ -33,7 +33,7 @@ from l2_decision.feature_store.extractors_volatility import (
 )
 from l2_decision.feature_store.store import FeatureSpec
 from shared.config import settings
-from shared.system.tactical_triad_logic import compute_vrp
+from shared_rust.services import tactical_compute_vrp as compute_vrp
 
 WINDOW_1M_SECONDS = 60.0
 WINDOW_30S_SECONDS = 30.0

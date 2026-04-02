@@ -13,11 +13,11 @@ from typing import Any
 
 from shared.config import settings
 from shared_rust.services import HeaderVolatilityContextService
-from shared.system.tactical_triad_logic import (
-    classify_vrp_state,
-    compute_vrp,
-    normalize_svol_state,
-    resolve_svol_fields,
+from shared_rust.services import (
+    tactical_classify_vrp_state as classify_vrp_state,
+    tactical_compute_vrp as compute_vrp,
+    tactical_normalize_svol_state as normalize_svol_state,
+    tactical_resolve_svol_fields as resolve_svol_fields,
 )
 
 
@@ -31,9 +31,8 @@ class UIStateTracker:
         self._header_volatility_service = header_volatility_service
 
     async def set_redis_client(self, client: Any) -> None:
-        """Compatibility no-op. UI tracker is contract-only and stateless."""
         _ = client
-        return None
+        return None  # Compatibility no-op: UI tracker is contract-only and stateless.
 
     def tick(self, snapshot: Any, decision: Any) -> dict[str, Any]:
         """Build UI metrics from contract fields only."""

@@ -1,12 +1,13 @@
 # Handoff (Index)
 
 ## Active Handoff
-- Path: notes/sessions/2026-04-02/impl-20260402-subwave-f-dual-run-evidence/handoff.md
-- Meta: notes/sessions/2026-04-02/impl-20260402-subwave-f-dual-run-evidence/meta.yaml
+- Path: notes/sessions/2026-04-02/wave-b-20260402-p3-tactical-wrapper-retirement/handoff.md
+- Meta: notes/sessions/2026-04-02/wave-b-20260402-p3-tactical-wrapper-retirement/meta.yaml
 
 ## Latest Outcome
-- Session: 2026-04-02/impl-20260402-subwave-f-dual-run-evidence
-- Summary: Sub-wave F runtime blockers were root-fixed in `shared_rust_services` (`get_oi_delta` keyword call + native loader path migration), `shared_rust/services.pyd` was rebuilt/replaced, and `python scripts/test/test_l0_l4_pipeline.py` now passes with enriched payload; remaining closure item is full-session dual-run evidence.
+- Session: 2026-04-02/wave-b-20260402-p3-tactical-wrapper-retirement
+- Summary: Wave B P3 completed. Tactical-triad wrapper was retired, consumers were cut over to `shared_rust.services`, runtime changed-file line caps were normalized to `<=400`, and strict validation passed.
+- Strict Evidence: `powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict` -> PASS
 
 ## Next Session Bootstrap
 1. Read this file.

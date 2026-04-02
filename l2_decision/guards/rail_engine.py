@@ -1,20 +1,4 @@
-"""l2_decision.guards.rail_engine — Independent P0.0–P0.9 Risk Guard Rails.
-
-Extracts guard gate logic from backend/app/agents/agent_g.py (AgentG._decide_impl)
-into an independent, testable priority chain.
-
-Priority order (lower number = higher priority, evaluated first):
-    P0.0  KillSwitchGuard     — manual halt
-    P0.1  JumpGateGuard       — price jump suppression
-    P0.3  CorrelationGuard    — cross-asset correlation break  (new)
-    P0.5  VRPVetoGuard        — volatility risk premium veto
-    P0.7  DrawdownGuard       — daily loss circuit breaker     (new)
-    P0.9  SessionGuard        — open/close window dampening   (new)
-
-Each GuardRule is independently testable and hot-swappable.
-The chain is processed in priority order; a HALT from any rule
-short-circuits the remaining guards.
-"""
+"""Independent risk-guard priority chain for L2 decision gating."""
 
 from __future__ import annotations
 
@@ -26,9 +10,9 @@ from zoneinfo import ZoneInfo
 
 from l2_decision.events.decision_events import FusedDecision, GuardedDecision
 from shared.config import settings
-from shared.system.tactical_triad_logic import (
-    compute_guard_vrp_proxy_pct,
-    normalize_guard_vrp_threshold_pct,
+from shared_rust.services import (
+    tactical_compute_guard_vrp_proxy_pct as compute_guard_vrp_proxy_pct,
+    tactical_normalize_guard_vrp_threshold_pct as normalize_guard_vrp_threshold_pct,
 )
 
 logger = logging.getLogger(__name__)
