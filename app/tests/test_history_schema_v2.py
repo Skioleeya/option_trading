@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from app.routes.history import _parse_schema, _project_fields
 from shared.config import settings
-from shared.services.history_columnar import build_columnar_payload, pack_rows_columnar
+from shared_rust.services import build_columnar_payload, pack_rows_columnar
 
 
 def _decode_columnar(payload: dict[str, object]) -> list[dict[str, object]]:

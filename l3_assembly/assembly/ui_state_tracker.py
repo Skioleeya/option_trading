@@ -12,7 +12,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from shared.config import settings
-from shared.services.header_volatility_context import HeaderVolatilityContextService
+from shared_rust.services import HeaderVolatilityContextService
 from shared.system.tactical_triad_logic import (
     classify_vrp_state,
     compute_vrp,

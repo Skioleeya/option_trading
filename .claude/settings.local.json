@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(wc -l E:/US.market/Option_v3/shared/services/active_options/*.py)",
+      "Bash(ls E:/US.market/Option_v3/shared/services/active_options/*.py)",
+      "Bash(node \"C:/Users/Lenovo/.claude/plugins/marketplaces/openai-codex/plugins/codex/scripts/codex-companion.mjs\" status)",
+      "Bash(powershell -Command \"whoami /groups\")",
+      "Bash(cmd.exe /c \"whoami /groups\")",
+      "Bash(cmd.exe:*)",
+      "Read(//mnt/c/Temp/**)",
+      "Read(//c/Temp/**)",
+      "Bash(python3:*)",
+      "Bash(python:*)"
+    ]
+  }
+}

@@ -6,7 +6,7 @@ import time
 from typing import Any
 
 from shared.config import settings
-from shared.services.active_options.constants import ACTIVE_OPTIONS_DEFAULT_LIMIT
+from shared.services.active_options_constants import ACTIVE_OPTIONS_DEFAULT_LIMIT
 from app.loops.shared_state import ActiveOptionsInputSnapshot, SharedLoopState
 
 # Only for type hints

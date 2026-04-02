@@ -1,15 +1,14 @@
 use crate::ipc_legacy::{ArrowIpcSegment, DEFAULT_ARROW_IPC_BYTES};
 use crate::schema::{ArrowMarketEvent, ARROW_IPC_SCHEMA};
+use crate::transport_contract::{
+    resolve_arrow_signal_name, DEFAULT_L0_IPC_SHM_BYTES,
+};
 use crate::windows_signal::WindowsSignal;
 use arrow::array::{ArrayRef, BooleanArray, Float64Array, StringArray, UInt64Array, UInt8Array};
 use arrow::ipc::writer::StreamWriter;
 use arrow::record_batch::RecordBatch;
-use std::env;
 use std::io::Cursor;
 use std::sync::Arc;
-
-const DEFAULT_BATCH_INTERVAL_MS: u64 = 50;
-const DEFAULT_BATCH_MAX_ROWS: usize = 256;
 
 #[derive(Debug, Clone)]
 pub struct ArrowWriterConfig {
@@ -20,12 +19,18 @@ pub struct ArrowWriterConfig {
 }
 
 impl ArrowWriterConfig {
-    pub fn from_env(shm_name: &str) -> Self {
+    pub fn new(
+        shm_name: &str,
+        batch_interval_ms: u64,
+        batch_max_rows: usize,
+        shm_capacity_bytes: usize,
+        signal_name: Option<String>,
+    ) -> Self {
         Self {
-            batch_interval_ms: env_u64("L0_BATCH_INTERVAL_MS", DEFAULT_BATCH_INTERVAL_MS),
-            batch_max_rows: env_usize("L0_BATCH_MAX_ROWS", DEFAULT_BATCH_MAX_ROWS),
-            shm_capacity_bytes: env_usize("L0_IPC_SHM_BYTES", DEFAULT_ARROW_IPC_BYTES),
-            signal_name: env::var("L0_IPC_SIGNAL_NAME").unwrap_or_else(|_| format!("{shm_name}_signal")),
+            batch_interval_ms: batch_interval_ms.max(1),
+            batch_max_rows: batch_max_rows.max(1),
+            shm_capacity_bytes: normalize_shm_capacity_bytes(shm_capacity_bytes),
+            signal_name: resolve_arrow_signal_name(shm_name, signal_name.as_deref()),
         }
     }
 }
@@ -39,8 +44,7 @@ pub struct ArrowBatchWriter {
 }
 
 impl ArrowBatchWriter {
-    pub fn create_or_open(shm_name: &str) -> Result<Self, String> {
-        let config = ArrowWriterConfig::from_env(shm_name);
+    pub fn create_or_open(shm_name: &str, config: ArrowWriterConfig) -> Result<Self, String> {
         let segment = ArrowIpcSegment::create_or_open(shm_name, config.shm_capacity_bytes)
             .map_err(|err| format!("arrow ipc create_or_open failed: {err:?}"))?;
         let signal = WindowsSignal::create_or_open(&config.signal_name)?;
@@ -123,6 +127,14 @@ impl ArrowBatchWriter {
     }
 }
 
+fn normalize_shm_capacity_bytes(value: usize) -> usize {
+    if value <= DEFAULT_L0_IPC_SHM_BYTES {
+        DEFAULT_ARROW_IPC_BYTES
+    } else {
+        value
+    }
+}
+
 fn serialize_batch(batch: &RecordBatch) -> Result<Vec<u8>, String> {
     let mut cursor = Cursor::new(Vec::new());
     {
@@ -136,20 +148,4 @@ fn serialize_batch(batch: &RecordBatch) -> Result<Vec<u8>, String> {
             .map_err(|err| format!("arrow stream writer finish failed: {err}"))?;
     }
     Ok(cursor.into_inner())
-}
-
-fn env_u64(name: &str, default_value: u64) -> u64 {
-    env::var(name)
-        .ok()
-        .and_then(|value| value.parse::<u64>().ok())
-        .filter(|value| *value > 0)
-        .unwrap_or(default_value)
-}
-
-fn env_usize(name: &str, default_value: usize) -> usize {
-    env::var(name)
-        .ok()
-        .and_then(|value| value.parse::<usize>().ok())
-        .filter(|value| *value > 0)
-        .unwrap_or(default_value)
 }

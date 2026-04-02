@@ -5,11 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
-
-DEFAULT_SHM_HEAD = 0
-DEFAULT_SHM_TAIL = 0
-FALLBACK_STATUS_UNINITIALIZED = "UNINITIALIZED"
-FALLBACK_STATUS_ERROR = "ERROR"
+from ._native_projection_support import (
+    build_error_snapshot_native,
+    build_governor_telemetry_native,
+    build_runtime_status_native,
+    build_uninitialized_snapshot_native,
+    compose_fetch_chain_payload_native,
+)
 
 
 @dataclass
@@ -32,27 +34,8 @@ class LegacyGreeksAudit:
             "by_version": dict(self.by_version),
             "by_caller": dict(self.by_caller),
         }
-
-
-def _build_fallback_shm_stats(status: str) -> dict[str, Any]:
-    return {
-        "head": DEFAULT_SHM_HEAD,
-        "tail": DEFAULT_SHM_TAIL,
-        "status": status,
-    }
-
-
 def build_uninitialized_snapshot(version: int) -> dict[str, Any]:
-    return {
-        "spot": None,
-        "chain": [],
-        "as_of": None,
-        "as_of_utc": None,
-        "version": version,
-        "rust_active": False,
-        "rust_shm_path": None,
-        "shm_stats": _build_fallback_shm_stats(FALLBACK_STATUS_UNINITIALIZED),
-    }
+    return build_uninitialized_snapshot_native(version)
 
 
 def build_error_snapshot(
@@ -62,16 +45,12 @@ def build_error_snapshot(
     now: datetime,
     now_utc_iso: str,
 ) -> dict[str, Any]:
-    return {
-        "spot": spot,
-        "chain": [],
-        "as_of": now,
-        "as_of_utc": now_utc_iso,
-        "version": version,
-        "rust_active": False,
-        "rust_shm_path": None,
-        "shm_stats": _build_fallback_shm_stats(FALLBACK_STATUS_ERROR),
-    }
+    return build_error_snapshot_native(
+        spot=spot,
+        version=version,
+        now=now,
+        now_utc_iso=now_utc_iso,
+    )
 
 
 def aggregate_store_snapshot(
@@ -92,15 +71,11 @@ def build_runtime_status(
     rust_shm_path: str | None,
     shm_stats: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    stats = dict(shm_stats or {})
-    stats.setdefault("head", DEFAULT_SHM_HEAD)
-    stats.setdefault("tail", DEFAULT_SHM_TAIL)
-    stats.setdefault("status", "DISCONNECTED")
-    return {
-        "rust_active": rust_active,
-        "rust_shm_path": rust_shm_path if rust_active else None,
-        "shm_stats": stats,
-    }
+    return build_runtime_status_native(
+        rust_active=rust_active,
+        rust_shm_path=rust_shm_path,
+        shm_stats=shm_stats,
+    )
 
 
 def build_governor_telemetry(
@@ -109,14 +84,14 @@ def build_governor_telemetry(
     orchestrator: Any,
     sub_mgr: Any,
 ) -> dict[str, Any]:
-    return {
-        "symbols_per_min": rate_limiter.symbol_tokens,
-        "cooldown_active": rate_limiter.cooldown_active,
-        "limiter_profile": rate_limiter.symbol_profile,
-        "cooldown_hits_5m": rate_limiter.cooldown_hits_5m,
-        "warmup_pending_symbols": orchestrator.pending_warmup_count,
-        "metadata_cache_hit_rate": sub_mgr.metadata_cache_hit_rate,
-    }
+    return build_governor_telemetry_native(
+        symbols_per_min=rate_limiter.symbol_tokens,
+        cooldown_active=rate_limiter.cooldown_active,
+        limiter_profile=rate_limiter.symbol_profile,
+        cooldown_hits_5m=rate_limiter.cooldown_hits_5m,
+        warmup_pending_symbols=orchestrator.pending_warmup_count,
+        metadata_cache_hit_rate=sub_mgr.metadata_cache_hit_rate,
+    )
 
 
 def compose_fetch_chain_payload(
@@ -137,24 +112,20 @@ def compose_fetch_chain_payload(
     official_hv_diagnostics: dict[str, Any],
     header_volatility_aux_diagnostics: dict[str, Any],
 ) -> dict[str, Any]:
-    payload = {
-        "spot": spot,
-        "chain": chain,
-        "version": version,
-        "tier2_chain": tier2_chain,
-        "tier3_chain": tier3_chain,
-        "volume_map": volume_map,
-        "aggregate_greeks": aggregate_greeks,
-        "ttm_seconds": ttm_seconds,
-        "as_of": now,
-        "as_of_utc": now_utc_iso,
-        "rust_active": runtime_status.get("rust_active", False),
-        "rust_shm_path": runtime_status.get("rust_shm_path"),
-        "shm_stats": runtime_status.get("shm_stats"),
-        "governor_telemetry": governor_telemetry,
-        "official_hv_diagnostics": official_hv_diagnostics,
-        "header_volatility_aux_diagnostics": header_volatility_aux_diagnostics,
-    }
-    if chain_arrow is not None:
-        payload["chain_arrow"] = chain_arrow
-    return payload
+    return compose_fetch_chain_payload_native(
+        spot=spot,
+        chain=chain,
+        chain_arrow=chain_arrow,
+        version=version,
+        tier2_chain=tier2_chain,
+        tier3_chain=tier3_chain,
+        volume_map=volume_map,
+        aggregate_greeks=aggregate_greeks,
+        ttm_seconds=ttm_seconds,
+        now=now,
+        now_utc_iso=now_utc_iso,
+        runtime_status=runtime_status,
+        governor_telemetry=governor_telemetry,
+        official_hv_diagnostics=official_hv_diagnostics,
+        header_volatility_aux_diagnostics=header_volatility_aux_diagnostics,
+    )

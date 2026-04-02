@@ -53,6 +53,7 @@ flowchart LR
 - `active_options.flow_signal_state` 必须输出 `LIVE|DEGRADED`；当信号降级时必须同时输出 `flow_signal_reason`（如 `missing_gamma/missing_vanna/missing_turnover/all_engines_inactive`）
 - `active_options` 必须固定输出 5 行槽位；真实数据不足时由后端补齐中性占位行，禁止沿用旧帧残留
 - `active_options.is_placeholder`（bool）与 `active_options.slot_index`（1..5）为固定槽位契约字段，必须稳定透传
+- `shared/services/active_options_runtime.py`、`shared/services/active_options_input.py`、`shared/services/active_options_engines.py` 现为 root-neutral Python surface；实际 owner 位于 `shared_rust.services`，禁止恢复 `_active_options_*` Python helper owner
 - `mtf_flow` 必须是纯状态合同：`m1/m5/m15.{state,relative_displacement,pressure_gradient,distance_to_vacuum,kinetic_level}`
 - `mtf_flow` 严禁携带视觉字段（如 `dot_color/text_color/border/animate/align_color`）与统计语义字段（如 `zscore/z/strength`）
 - 保留 `impact_index` 与 `is_sweep`
@@ -63,6 +64,7 @@ flowchart LR
 - 历史查询接口支持版本协商：`schema=v1|v2`（默认 `v2`，`v1` 仅兼容保留）
 - `schema=v2` 统一返回列式 JSON 包络：`{schema:"v2", encoding:"columnar-json", columns, rows, count, ...meta}`
 - `format=parquet` 路径优先级高于 schema（保持现有二进制下载语义不变）
+- history v2 的列式 payload helper 已切到 `shared_rust.services`；`shared/services/history_columnar.py` 不再保留 compat owner
 - `wall_migration_data.wall_context` 为可选透传字段；缺失时必须安全回退，不得抛错
 - `micro_stats.wall_dyn` 语义规则：
   - 主语义 `RETREAT` 表示墙体后撤（含 `RETREATING_RESISTANCE` 与 `RETREATING_SUPPORT`）
@@ -77,6 +79,9 @@ flowchart LR
   - `feature`（中期）
   - `label/outcome`（长期）
 - 存储格式必须优先 Parquet + ZSTD，支持 `jsonl` 调试导出
+- `ResearchFeatureStore` 与 `HeaderVolatilityContextService` 的 live owner 已切到 `shared_rust.services`
+- `shared/services/research_feature_store.py`、`shared/services/research_feature_store_io.py`、`shared/services/header_volatility_context.py` 已退役，不得再恢复 Python compat owner
+- `/api/research/features`、`/api/research/exports/*` 现直接调用 `shared_rust.services.ResearchFeatureStore` 的同步接口；路由层不再保留这组 root owner 的 async Python 壳
 - 研究表主键必须包含 `data_timestamp + l0_version`，用于跨层 join 对齐
 
 ## 4. Boundary Rules (Hard)
@@ -107,6 +112,15 @@ flowchart LR
 - payload size / delta ratio
 - broadcast backlog and client lag
 - `/debug/persistence_status` 必须可同时观察 `header_volatility.payload` 与 `l1_runtime.header_volatility_aux`，用于确认 L0 辅助取数、L3 payload 合同和 L4 标题栏消费链路连续一致
+- `shared/system/tactical_triad_logic.py` 现为 Rust-backed wrapper；`UIStateTracker` 使用的 VRP/S-VOL 归一化语义必须继续通过该中立边界消费，禁止在 L3 本地复制规则。
+- `shared/services/header_volatility_context.py` 与 `shared/services/history_columnar.py` 现为 Rust-backed wrapper；L3 标题栏波动率上下文和 `/history` v2 columnar 封装必须继续通过这些中立边界消费，禁止在 L3 或路由层本地复制 IVR/IVP、term-state、columnar schema 常量。
+- `shared/services/research_feature_store_schema.py` 的 `valid_views/intervals/formats` 与 compact/feature/label field contracts 现由 Rust native spec 持有；research store 与 UI hydration 只能消费该单一 owner，不得重新定义字段 allowlist。
+- 该 schema/util owner 现已切到 `shared_rust.services`；`shared/services/research_feature_store_schema.py` 与 `shared/services/research_feature_store_utils.py` 已删除
+- `shared/services/research_feature_store_io.py` 的 compact projection、field projection、interval downsample 现由 Rust native helper 持有；`ResearchFeatureStore.query()`、`latest_feature_view()` 与 `/history` 路由不得在 Python 侧重建同一套查询整形语义。
+- `shared/services/research_feature_store_io.py` 的 JSONL export bytes 生成与 retention 删除候选判定现由 Rust native helper 持有；Python 侧仅保留 parquet 编码、文件 I/O 与 job orchestration，不得在路由或调用层重新复制导出/清理规则。
+- `shared/services/research_feature_store.py` 的发样判定、LongPort 诊断列归一化、label row 序列化现由 Rust native helper 持有；Python 侧仅保留 pyarrow 存储写入与高层 orchestration，不得重新复制这些状态转移与字段归一化语义。
+- `shared/services/research_feature_store_io.py` 的 range-file 与 latest-file 选择现由 Rust native helper 持有；Python 侧只负责实际 parquet 读取与过滤，不得在 I/O 层重新复制日期/文件选择规则。
+- `shared/services/research_feature_store_io.py` 与 `shared/services/research_feature_store.py` 的 parquet bytes 编码、parquet 读取、parquet append/write、export readback 现由 Rust native helper 持有；Python 侧保留 job scheduling 和错误日志，但不再持有底层 storage execution 语义。
 
 ## 7. Verification
 

@@ -42,7 +42,7 @@ const INVALID_HANDLE_VALUE: Handle = -1isize as Handle;
 const PAGE_READWRITE: u32 = 0x04;
 #[cfg(windows)]
 const FILE_MAP_ALL_ACCESS: u32 = 0xF001F;
-#[cfg(all(test, windows))]
+#[cfg(windows)]
 const FILE_MAP_READ: u32 = 0x0004;
 
 #[cfg(windows)]
@@ -63,7 +63,6 @@ unsafe extern "system" {
         file_offset_low: u32,
         num_bytes_to_map: usize,
     ) -> *mut c_void;
-    #[cfg(test)]
     fn OpenFileMappingW(desired_access: u32, inherit_handle: i32, name: *const u16) -> Handle;
     fn UnmapViewOfFile(base_address: *const c_void) -> i32;
     fn CloseHandle(handle: Handle) -> i32;
@@ -198,6 +197,41 @@ impl ArrowIpcSegment {
         Err(ShmemError::UnknownOsError(0))
     }
 
+    #[cfg(windows)]
+    pub fn open_readonly(path: &str, capacity: usize) -> Result<Self, String> {
+        let total_size = capacity + 4;
+        let wide_name = to_wide(path);
+        let handle = unsafe { OpenFileMappingW(FILE_MAP_READ, 0, wide_name.as_ptr()) };
+        if handle.is_null() {
+            let err = std::io::Error::last_os_error().raw_os_error().unwrap_or_default();
+            return Err(format!(
+                "Arrow IPC shared memory mapping is not available: {} (winerr={})",
+                path, err
+            ));
+        }
+        let view_ptr = unsafe { MapViewOfFile(handle, FILE_MAP_READ, 0, 0, total_size) };
+        if view_ptr.is_null() {
+            let err = std::io::Error::last_os_error().raw_os_error().unwrap_or_default();
+            unsafe {
+                let _ = CloseHandle(handle);
+            }
+            return Err(format!(
+                "Arrow IPC shared memory map-view failed: {} (winerr={})",
+                path, err
+            ));
+        }
+        Ok(Self {
+            handle,
+            view_ptr: view_ptr as *mut u8,
+            capacity,
+        })
+    }
+
+    #[cfg(not(windows))]
+    pub fn open_readonly(_path: &str, _capacity: usize) -> Result<Self, String> {
+        Err("ArrowIpcSegment readonly attach is unavailable on this platform".to_string())
+    }
+
     pub fn write_message(&mut self, payload: &[u8]) -> Result<(), String> {
         if payload.len() > self.capacity {
             return Err(format!(
@@ -222,6 +256,34 @@ impl ArrowIpcSegment {
             }
         }
         Ok(())
+    }
+
+    pub fn read_message(&self) -> Result<Vec<u8>, String> {
+        #[cfg(windows)]
+        unsafe {
+            if self.view_ptr.is_null() {
+                return Err("arrow ipc shared memory base pointer is null".to_string());
+            }
+            let length_bytes = std::slice::from_raw_parts(self.view_ptr.add(ARROW_IPC_LENGTH_OFFSET), 4);
+            let payload_length =
+                u32::from_le_bytes([length_bytes[0], length_bytes[1], length_bytes[2], length_bytes[3]]) as usize;
+            if payload_length == 0 {
+                return Err("invalid Arrow IPC payload length: 0".to_string());
+            }
+            if payload_length > self.capacity {
+                return Err(format!(
+                    "Arrow IPC payload exceeds mapped capacity: payload={} capacity={}",
+                    payload_length, self.capacity
+                ));
+            }
+            let payload_ptr = self.view_ptr.add(4);
+            let payload = std::slice::from_raw_parts(payload_ptr, payload_length).to_vec();
+            Ok(payload)
+        }
+        #[cfg(not(windows))]
+        {
+            Err("ArrowIpcSegment read_message is unavailable on this platform".to_string())
+        }
     }
 }
 

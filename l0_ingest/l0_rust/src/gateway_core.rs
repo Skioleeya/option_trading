@@ -1,5 +1,6 @@
 use crate::helpers::{non_negative_volume_to_u64, now_unix_nanos};
-use crate::ipc_writer::ArrowBatchWriter;
+use crate::ipc_writer::{ArrowBatchWriter, ArrowWriterConfig};
+use crate::sdk_config::build_sdk_config;
 use crate::schema::ArrowMarketEvent;
 use crate::threat::ThreatEngine;
 use longport::{
@@ -15,20 +16,27 @@ use tokio::time::{self, Duration};
 
 #[pyclass]
 pub struct RustIngestGateway {
-    pub config: Arc<Config>,
+    pub config: Option<Arc<Config>>,
     pub runtime: tokio::runtime::Runtime,
     pub shutdown_tx: Option<broadcast::Sender<()>>,
     pub quote_ctx: Option<QuoteContext>,
 }
 
 impl RustIngestGateway {
+    fn configured_arc(&self) -> PyResult<Arc<Config>> {
+        self.config
+            .clone()
+            .ok_or_else(|| PyRuntimeError::new_err("RustIngestGateway not configured"))
+    }
+
     pub fn ensure_quote_ctx(&mut self) -> PyResult<()> {
         if self.quote_ctx.is_some() {
             return Ok(());
         }
+        let config = self.configured_arc()?;
         let (ctx, _receiver) = self
             .runtime
-            .block_on(QuoteContext::try_new(self.config.clone()))
+            .block_on(QuoteContext::try_new(config))
             .map_err(|e| PyRuntimeError::new_err(format!("QuoteContext init failed: {e}")))?;
         self.quote_ctx = Some(ctx);
         Ok(())
@@ -41,19 +49,15 @@ impl RustIngestGateway {
     }
 }
 
-fn l0_subscription_flags() -> SubFlags {
-    SubFlags::QUOTE | SubFlags::DEPTH | SubFlags::TRADE
-}
+fn l0_subscription_flags() -> SubFlags { SubFlags::QUOTE | SubFlags::DEPTH | SubFlags::TRADE }
 
 fn positive_or_none(value: f64) -> Option<f64> {
-    if value > 0.0 {
-        Some(value)
-    } else {
-        None
-    }
+    if value > 0.0 { Some(value) } else { None }
 }
 
-fn quote_event(symbol: String, mono_ns: u64, seq_no: u64, detail: longport::quote::PushQuote) -> ArrowMarketEvent {
+fn quote_event(
+    symbol: String, mono_ns: u64, seq_no: u64, detail: longport::quote::PushQuote,
+) -> ArrowMarketEvent {
     ArrowMarketEvent {
         symbol,
         seq_no,
@@ -141,8 +145,22 @@ fn depth_event(
     }
 }
 
-fn run_stress_test(symbol: String, count: u64, shm_path: String) -> Result<(), String> {
-    let mut batch_writer = ArrowBatchWriter::create_or_open(&shm_path)
+fn run_stress_test(
+    symbol: String,
+    count: u64,
+    shm_path: String,
+    batch_max_rows: usize,
+    shm_capacity_bytes: usize,
+    signal_name: String,
+) -> Result<(), String> {
+    let config = ArrowWriterConfig::new(
+        &shm_path,
+        1,
+        batch_max_rows,
+        shm_capacity_bytes,
+        Some(signal_name),
+    );
+    let mut batch_writer = ArrowBatchWriter::create_or_open(&shm_path, config)
         .map_err(|err| format!("stress test writer init failed: {err}"))?;
 
     println!(
@@ -188,36 +206,80 @@ fn run_stress_test(symbol: String, count: u64, shm_path: String) -> Result<(), S
 impl RustIngestGateway {
     #[new]
     fn new() -> PyResult<Self> {
-        let config = Arc::new(
-            Config::from_env().map_err(|e| PyRuntimeError::new_err(format!("SDK config error: {e}")))?,
-        );
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
             .map_err(|e| PyRuntimeError::new_err(format!("Tokio runtime error: {e}")))?;
 
         Ok(Self {
-            config,
+            config: None,
             runtime,
             shutdown_tx: None,
             quote_ctx: None,
         })
     }
 
-    #[pyo3(signature = (symbols, shm_path, cpu_id=None))]
-    fn start(&mut self, symbols: Vec<String>, shm_path: String, cpu_id: Option<usize>) -> PyResult<()> {
+    #[pyo3(signature = (app_key, app_secret, access_token, http_url=None, quote_ws_url=None, trade_ws_url=None, language=None, enable_overnight=false))]
+    fn configure(
+        &mut self,
+        app_key: String,
+        app_secret: String,
+        access_token: String,
+        http_url: Option<String>,
+        quote_ws_url: Option<String>,
+        trade_ws_url: Option<String>,
+        language: Option<String>,
+        enable_overnight: bool,
+    ) -> PyResult<()> {
+        let config = Arc::new(build_sdk_config(
+            app_key,
+            app_secret,
+            access_token,
+            http_url,
+            quote_ws_url,
+            trade_ws_url,
+            language,
+            enable_overnight,
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("SDK config error: {e}")))?);
+        self.config = Some(config);
+        self.quote_ctx = None;
+        Ok(())
+    }
+
+    #[pyo3(signature = (symbols, shm_path, cpu_id, batch_interval_ms, batch_max_rows, shm_capacity_bytes, signal_name))]
+    fn start(
+        &mut self,
+        symbols: Vec<String>,
+        shm_path: String,
+        cpu_id: Option<usize>,
+        batch_interval_ms: u64,
+        batch_max_rows: usize,
+        shm_capacity_bytes: usize,
+        signal_name: String,
+    ) -> PyResult<()> {
         if self.shutdown_tx.is_some() {
             self.stop()?;
         }
 
         let arrow_shm_path = format!("{shm_path}_arrow");
-        let batch_writer = ArrowBatchWriter::create_or_open(&arrow_shm_path)
+        let batch_writer = ArrowBatchWriter::create_or_open(
+            &arrow_shm_path,
+            ArrowWriterConfig::new(
+                &arrow_shm_path,
+                batch_interval_ms,
+                batch_max_rows,
+                shm_capacity_bytes,
+                Some(signal_name),
+            ),
+        )
             .map_err(|err| PyRuntimeError::new_err(format!("arrow writer init failed: {err}")))?;
         let batch_interval_ms = batch_writer.batch_interval_ms();
 
+        let config = self.configured_arc()?;
         let (ctx, mut receiver) = self
             .runtime
-            .block_on(QuoteContext::try_new(self.config.clone()))
+            .block_on(QuoteContext::try_new(config))
             .map_err(|e| PyRuntimeError::new_err(format!("QuoteContext init failed: {e}")))?;
         self.runtime
             .block_on(ctx.subscribe(symbols, l0_subscription_flags(), true))
@@ -317,8 +379,27 @@ impl RustIngestGateway {
         Ok(())
     }
 
-    fn stress_test(&self, py: Python<'_>, symbol: String, count: u64, shm_path: String) -> PyResult<()> {
-        py.allow_threads(move || run_stress_test(symbol, count, shm_path))
+    #[pyo3(signature = (symbol, count, shm_path, batch_max_rows, signal_name, shm_capacity_bytes=0))]
+    fn stress_test(
+        &self,
+        py: Python<'_>,
+        symbol: String,
+        count: u64,
+        shm_path: String,
+        batch_max_rows: usize,
+        signal_name: String,
+        shm_capacity_bytes: usize,
+    ) -> PyResult<()> {
+        py.allow_threads(move || {
+            run_stress_test(
+                symbol,
+                count,
+                shm_path,
+                batch_max_rows,
+                shm_capacity_bytes,
+                signal_name,
+            )
+        })
             .map_err(PyRuntimeError::new_err)
     }
 

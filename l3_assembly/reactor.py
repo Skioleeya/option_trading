@@ -46,8 +46,7 @@ from l3_assembly.broadcast.broadcast_governor import BroadcastGovernor
 from l3_assembly.storage.timeseries_store import TimeSeriesStoreV2
 from l3_assembly.observability.l3_instrumentation import L3Instrumentation
 from l3_assembly.assembly.ui_state_tracker import UIStateTracker
-from shared.services.header_volatility_context import HeaderVolatilityContextService
-from shared.services.research_feature_store import ResearchFeatureStore
+from shared_rust.services import HeaderVolatilityContextService, ResearchFeatureStore
 
 logger = logging.getLogger(__name__)
 

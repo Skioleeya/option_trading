@@ -7,6 +7,13 @@ use crate::rest_rows::{CalcIndexRow, OptionChainInfoRow, OptionExtendRow, Option
 use num_traits::ToPrimitive;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
+use pyo3::types::PyModule;
+
+fn json_payload_to_python(py: Python<'_>, payload: String) -> PyResult<PyObject> {
+    let json = PyModule::import(py, "json")?;
+    let rows = json.call_method1("loads", (payload,))?;
+    Ok(rows.into_pyobject(py)?.unbind().into())
+}
 
 impl RustIngestGateway {
     pub(crate) fn rest_quote_impl(&mut self, symbols: Vec<String>) -> PyResult<String> {
@@ -146,4 +153,50 @@ impl RustIngestGateway {
             .collect::<Vec<_>>();
         serde_json::to_string(&payload).map_err(|e| PyRuntimeError::new_err(format!("json encode failed: {e}")))
     }
+}
+
+#[pyfunction]
+fn quote_api_rest_quote_rows(
+    py: Python<'_>,
+    gateway: &mut RustIngestGateway,
+    symbols: Vec<String>,
+) -> PyResult<PyObject> {
+    json_payload_to_python(py, gateway.rest_quote_impl(symbols)?)
+}
+
+#[pyfunction]
+fn quote_api_rest_option_quote_contracts(
+    py: Python<'_>,
+    gateway: &mut RustIngestGateway,
+    symbols: Vec<String>,
+) -> PyResult<PyObject> {
+    json_payload_to_python(py, gateway.rest_option_quote_impl(symbols)?)
+}
+
+#[pyfunction]
+fn quote_api_rest_option_chain_info_by_date_contracts(
+    py: Python<'_>,
+    gateway: &mut RustIngestGateway,
+    symbol: String,
+    expiry_iso: String,
+) -> PyResult<PyObject> {
+    json_payload_to_python(py, gateway.rest_option_chain_info_by_date_impl(symbol, expiry_iso)?)
+}
+
+#[pyfunction]
+fn quote_api_rest_calc_indexes_contracts(
+    py: Python<'_>,
+    gateway: &mut RustIngestGateway,
+    symbols: Vec<String>,
+    indexes: Vec<String>,
+) -> PyResult<PyObject> {
+    json_payload_to_python(py, gateway.rest_calc_indexes_impl(symbols, indexes)?)
+}
+
+pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(quote_api_rest_quote_rows, module)?)?;
+    module.add_function(wrap_pyfunction!(quote_api_rest_option_quote_contracts, module)?)?;
+    module.add_function(wrap_pyfunction!(quote_api_rest_option_chain_info_by_date_contracts, module)?)?;
+    module.add_function(wrap_pyfunction!(quote_api_rest_calc_indexes_contracts, module)?)?;
+    Ok(())
 }

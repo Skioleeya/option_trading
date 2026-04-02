@@ -92,6 +92,7 @@ flowchart LR
 - `shared/system/tactical_triad_logic.py` 现为 Rust-backed wrapper；VRP、guard-VRP、S-VOL 归一化的 source-of-truth 位于 `l0_ingest/l0_rust/src/tactical_triad_logic.rs`，L2 不得再本地复制这些归一化规则。
 - `vrp_realized_based` 仅允许进入 research / diagnostics / optional feature path；现网默认决策继续使用 proxy `vol_risk_premium`
 - `realized_volatility_15m` 必须由本地 rolling spot log-return 计算得到，按 decimal annualized vol 输出；`vrp_realized_based` 必须先将该 RV 显式换算到 `%` 后再进入 `compute_vrp()`
+- `RollingRealizedVolatility` 的 live Python import surface 已切到 `shared_rust.services`；`shared/services/realized_volatility.py` 不再保留 compat owner。
 
 ## 7. Observability
 

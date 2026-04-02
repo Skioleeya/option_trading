@@ -1,0 +1,46 @@
+﻿session_id: "2026-04-02/wave18-active-options-rust-cutover"
+title: "active options rust cutover"
+scope: "feature"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-02 06:09:06 -04:00"
+updated_at_et: "2026-04-02 06:47:51 -04:00"
+parent_session: "2026-04-02/wave17-shared-services-root-owners-cutover"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "7fb0f53"
+head_commit: "7fb0f53"
+
+files_changed:
+  - "AGENTS.md"
+  - "shared/services/active_options_constants.py"
+  - "shared/services/active_options_engines.py"
+  - "shared/services/active_options_input.py"
+  - "shared/services/active_options_runtime.py"
+  - "app/container.py"
+  - "app/loops/compute_loop.py"
+  - "app/loops/housekeeping_loop.py"
+  - "l2_decision/signals/flow/__init__.py"
+  - "l2_decision/signals/flow/deg_composer.py"
+  - "l2_decision/signals/flow/flow_engine_d.py"
+  - "l2_decision/signals/flow/flow_engine_e.py"
+  - "l2_decision/signals/flow/flow_engine_g.py"
+  - "l3_assembly/presenters/ui/active_options/presenter.py"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/tests/test_lifespan_startup.py app/loops/tests/test_compute_loop_helpers.py app/loops/tests/test_housekeeping_gpu_dedup.py"
+  - "python - <<import-smoke>>"
+  - "python scripts/policy/check_openspec_chain.py --repo-root . --meta-file notes/sessions/2026-04-02/wave18-active-options-rust-cutover/meta.yaml --handoff-file notes/sessions/2026-04-02/wave18-active-options-rust-cutover/handoff.md"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "app/tests/test_lifespan_startup.py"
+  - "app/loops/tests/test_compute_loop_helpers.py"
+  - "app/loops/tests/test_housekeeping_gpu_dedup.py"
+tests_failed: []
+blockers:
+  - "Rust-backed ActiveOptions owner replacement is still pending after the import-surface tranche"
+notes:
+  - "This session intentionally established root-neutral shared.services wrappers before deleting shared/services/active_options/*."
+  - "OpenSpec draft directories were normalized from refactor-impl-20260402-* to impl-20260402-* so the governance gate could pass."
+  - "AGENTS.md now hard-requires minimum-file migration strategy and forbids wrapper fan-out when an existing neutral surface can absorb the cutover."
+
+

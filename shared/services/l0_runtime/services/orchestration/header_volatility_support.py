@@ -3,21 +3,21 @@
 from __future__ import annotations
 
 import logging
-import math
-from datetime import date, timedelta
+from datetime import date
 from typing import Any
+
+from shared.services.l0_runtime.services.native_support import (
+    average_valid_native,
+    extract_option_iv_decimal_native,
+    next_trading_day_native,
+    normalize_decimal_ratio_native,
+    select_nearest_chain_item_native,
+    to_positive_float_native,
+)
 
 
 def next_trading_day(base_day: date) -> date:
-    """Return the next weekday trading day.
-
-    The runtime currently does not have a holiday calendar at this layer.
-    Weekend skipping is still better than binding 1DTE to today's expiry.
-    """
-    probe = base_day + timedelta(days=1)
-    while probe.weekday() >= 5:
-        probe += timedelta(days=1)
-    return probe
+    return next_trading_day_native(base_day)
 
 
 def extract_chain_strike(item: Any) -> float | None:
@@ -26,31 +26,15 @@ def extract_chain_strike(item: Any) -> float | None:
 
 
 def to_positive_float(raw: Any) -> float | None:
-    try:
-        value = float(raw)
-    except (TypeError, ValueError):
-        return None
-    if not math.isfinite(value) or value <= 0.0:
-        return None
-    return value
+    return to_positive_float_native(raw)
 
 
 def normalize_decimal_ratio(raw: Any) -> float | None:
-    value = to_positive_float(raw)
-    if value is None:
-        return None
-    if value > 1.0:
-        value = value / 100.0
-    if value <= 0.0 or value > 5.0:
-        return None
-    return value
+    return normalize_decimal_ratio_native(raw)
 
 
 def average_valid(values: list[float | None]) -> float | None:
-    valid = [value for value in values if value is not None and value > 0.0]
-    if not valid:
-        return None
-    return sum(valid) / len(valid)
+    return average_valid_native(values)
 
 
 async def build_header_volatility_aux(
@@ -153,23 +137,10 @@ async def _fetch_1dte_aux(
 
 
 def _select_nearest_chain_item(chain_info: list[Any], spot: float) -> Any | None:
-    best_item = None
-    best_distance = float("inf")
-    for item in chain_info or []:
-        strike = extract_chain_strike(item)
-        if strike is None:
-            continue
-        distance = abs(strike - spot)
-        if distance < best_distance:
-            best_distance = distance
-            best_item = item
-    return best_item
+    return select_nearest_chain_item_native(chain_info, spot)
 
 
 def _extract_option_iv_decimal(quote: Any) -> float | None:
     if quote is None:
         return None
-    primary = getattr(quote, "implied_volatility_decimal", None)
-    if primary is not None:
-        return normalize_decimal_ratio(primary)
-    return normalize_decimal_ratio(getattr(quote, "implied_volatility", None))
+    return extract_option_iv_decimal_native(quote)

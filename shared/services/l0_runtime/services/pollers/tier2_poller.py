@@ -11,13 +11,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import math
 from datetime import datetime, date, timedelta
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
 from longport.openapi import CalcIndex
 
+from shared.services.l0_runtime.services.native_support import (
+    build_symbol_metadata_native,
+    normalize_calc_rows_native,
+)
 from shared.services.l0_runtime.source.runtime.quote_runtime import L0QuoteRuntime
 from shared.services.l0_runtime.source.runtime.rate_limiter import APIRateLimiter
 
@@ -112,19 +115,11 @@ class Tier2Poller:
         dte2_date, chain_info = valid_dates[2]
         spot = self._get_spot() or 0.0
 
-        sym_to_strike: dict[str, float] = {}
-        standard_by_symbol: dict[str, bool] = {}
-        for s in chain_info:
-            strike = float(s.price) if hasattr(s, "price") else 0.0
-            if abs(strike - spot) > TIER2_WINDOW:
-                continue
-            standard = bool(getattr(s, "standard", False))
-            if hasattr(s, "call_symbol") and s.call_symbol:
-                sym_to_strike[s.call_symbol] = strike
-                standard_by_symbol[s.call_symbol] = standard
-            if hasattr(s, "put_symbol") and s.put_symbol:
-                sym_to_strike[s.put_symbol] = strike
-                standard_by_symbol[s.put_symbol] = standard
+        sym_to_strike, standard_by_symbol, kept = build_symbol_metadata_native(
+            list(chain_info),
+            spot=spot,
+            window=TIER2_WINDOW,
+        )
 
         self._meta_expiry = dte2_date
         self._meta_sym_to_strike = sym_to_strike
@@ -132,7 +127,7 @@ class Tier2Poller:
         self.expiry = dte2_date
         logger.info(
             f"[Tier2Poller] Metadata refreshed: 2DTE={dte2_date}, "
-            f"{len(sym_to_strike)} symbols within ±{TIER2_WINDOW}pt"
+            f"{kept} symbols within ±{TIER2_WINDOW}pt"
         )
         return True
 
@@ -173,38 +168,15 @@ class Tier2Poller:
                             batch,
                             [CalcIndex.Volume, CalcIndex.OpenInterest, CalcIndex.ImpliedVolatility, CalcIndex.Premium],
                         )
-                        for r in results:
-                            strike = self._meta_sym_to_strike.get(r.symbol, 0.0)
-                            opt_type = "CALL" if "C" in r.symbol else "PUT"
-                            iv_val = 0.0
-                            iv_normalized = getattr(r, "implied_volatility_decimal", None)
-                            if iv_normalized is not None:
-                                try:
-                                    f_iv = float(iv_normalized)
-                                    if math.isfinite(f_iv):
-                                        iv_val = f_iv
-                                except (ValueError, TypeError):
-                                    pass
-                            elif r.implied_volatility:
-                                try:
-                                    f_iv = float(r.implied_volatility)
-                                    if math.isfinite(f_iv):
-                                        iv_val = f_iv / 100.0 if f_iv > 1.0 else f_iv
-                                except (ValueError, TypeError):
-                                    pass
-
-                            results_data.append({
-                                "symbol": r.symbol,
-                                "strike": strike,
-                                "type": opt_type,
-                                "expiry": str(dte2_date),
-                                "tier": "T2",
-                                "volume": int(r.volume) if r.volume else 0,
-                                "open_interest": int(r.open_interest) if r.open_interest else 0,
-                                "implied_volatility": iv_val,
-                                "premium": float(r.premium) if getattr(r, "premium", None) is not None else 0.0,
-                                "standard": self._meta_standard_by_symbol.get(r.symbol, False),
-                            })
+                        results_data.extend(
+                            normalize_calc_rows_native(
+                                list(results),
+                                expiry=str(dte2_date),
+                                tier="T2",
+                                sym_to_strike=self._meta_sym_to_strike,
+                                standard_by_symbol=self._meta_standard_by_symbol,
+                            )
+                        )
                     except Exception as e:
                         if "301607" in str(e):
                             self._limiter.trigger_cooldown()

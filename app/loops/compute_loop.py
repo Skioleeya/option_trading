@@ -19,7 +19,7 @@ from app.loops.compute_probe import (
 )
 from app.loops.shared_state import ActiveOptionsInputSnapshot, SharedLoopState
 from shared.config import settings
-from shared.services.active_options.input_adapter import (
+from shared.services.active_options_input import (
     ActiveOptionsInputSnapshotData,
     build_active_options_input_snapshot,
 )

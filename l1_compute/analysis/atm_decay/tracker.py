@@ -323,6 +323,23 @@ class AtmDecayTracker:
                 should_store = False
 
         if should_store:
+            if (
+                not self._opening_tick_pending
+                and abs(c_pct) < 1e-9
+                and abs(p_pct) < 1e-9
+                and abs(s_pct) < 1e-9
+            ):
+                diagnostic = build_anchor_leg_diagnostics(self.anchor, chain)
+                if diagnostic is not None:
+                    diagnostic["reason"] = "flat_post_lock_row"
+                    diagnostic["tracker_today"] = self._today
+                    diagnostic["timestamp"] = ts.isoformat()
+                    diagnostic["call_pct"] = c_pct
+                    diagnostic["put_pct"] = p_pct
+                    diagnostic["straddle_pct"] = s_pct
+                    diagnostic["previous_pcts"] = list(self._prev_pcts) if self._prev_pcts is not None else None
+                    logger.warning("[AtmDecay] post-lock flat row stored; anchor-leg diagnostics=%s", diagnostic)
+                    asyncio.ensure_future(self._storage.append_anchor_diagnostic(self._today, diagnostic))
             self._opening_tick_pending = False
             self._prev_pcts = (c_pct, p_pct, s_pct)
             asyncio.ensure_future(self._storage.append_series(ts.strftime("%Y%m%d"), item))

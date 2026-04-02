@@ -17,10 +17,9 @@ TBD - created by archiving change formula-semantic-followup-phase-f-guard-unit-a
 - **WHEN** 工程师检查 operator-facing metrics map
 - **THEN** 文档 MUST 明确区分 live feature proxy 与 guard-only proxy
 
-### Requirement: Cloud Reference Config Must Match Live Threshold Scale
-`shared/config_cloud_ref/agent_g.py` SHALL 与 live config 使用同一 GEX / guard 阈值量级。
+### Requirement: Agent G Config Source Of Truth Must Match Live Threshold Scale
+`shared/config/agent_g.py` SHALL 作为 Agent G live 阈值的唯一 source of truth，并保持 GEX / guard 阈值量级一致。
 
 #### Scenario: Config Drift Audit
-- **WHEN** 检查 cloud ref 与 live config
-- **THEN** 参考配置 MUST 不再保留旧 `200M/1000M` 量级描述
-
+- **WHEN** 检查 Agent G live config
+- **THEN** live source of truth MUST 不再保留旧 `200M/1000M` 量级描述

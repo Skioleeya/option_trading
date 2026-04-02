@@ -5,6 +5,7 @@ from typing import Any, Callable
 
 from shared.services.l0_runtime.services.sync.support import (
     PRICE_REPAIR_BATCH_LIMIT,
+    apply_repair_rows,
     pick_price_repair_candidates,
 )
 from shared.services.l0_runtime.source.runtime.quote_runtime import L0QuoteRuntime
@@ -38,14 +39,15 @@ async def repair_symbol_prices(
     async with limiter.acquire(weight=len(candidates)):
         rows = await runtime.option_quote(candidates)
 
-    updated = 0
-    for item in rows or []:
-        symbol = getattr(item, "symbol", "")
-        if not symbol:
+    applied = apply_repair_rows(list(rows or []), now_mono=now_mono)
+    for item in applied.get("updates", []):
+        symbol = str(item.get("symbol", "") or "")
+        update = item.get("item")
+        if not symbol or update is None:
             continue
         last_repair_at[symbol] = now_mono
-        on_update(symbol, item)
-        updated += 1
+        on_update(symbol, update)
+    updated = int(applied.get("updated", 0) or 0)
 
     logger.info(
         "%s option_quote price repair attempted: symbols=%d limit=%d",

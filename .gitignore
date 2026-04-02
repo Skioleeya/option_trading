@@ -82,3 +82,6 @@ l2_decision/.audit_logs/l2_audit_*.parquet
 # Session validation diagnostics (ephemeral)
 tmp/session_validation_diag/*.json
 tmp/session_validation_diag/*.yaml
+
+# Local Cargo target-dir override (machine-specific)
+.cargo/config.toml

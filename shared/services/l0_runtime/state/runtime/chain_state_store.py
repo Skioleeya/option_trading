@@ -8,7 +8,8 @@ from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from shared.services.l0_runtime.normalize.pipeline.sanitization import CleanDepthEvent, CleanQuoteEvent, EventType
+from shared.services.l0_runtime.normalize.pipeline import CleanDepthEvent, CleanQuoteEvent, EventType
+from ._native_state_support import apply_depth_patch, apply_quote_patch, default_entry
 
 logger = logging.getLogger(__name__)
 MAX_WS_FLOW_VOLUME = 1_000_000_000.0
@@ -92,24 +93,7 @@ class ChainStateStore:
         event: CleanQuoteEvent,
     ) -> tuple[dict[str, Any], bool]:
         if symbol not in self._chain:
-            self._chain[symbol] = {
-                "symbol": symbol,
-                "strike": event.strike,
-                "type": event.opt_type,
-                "bid": 0.0,
-                "ask": 0.0,
-                "last_price": 0.0,
-                "volume": 0,
-                "open_interest": 0,
-                "implied_volatility": 0.0,
-                "iv_timestamp": 0.0,
-                "delta": 0.0,
-                "gamma": 0.0,
-                "theta": 0.0,
-                "vega": 0.0,
-                "current_volume": 0.0,
-                "turnover": 0.0,
-            }
+            self._chain[symbol] = default_entry(symbol=symbol, strike=event.strike, opt_type=event.opt_type)
             return self._chain[symbol], True
         return self._chain[symbol], False
 
@@ -121,24 +105,44 @@ class ChainStateStore:
         is_rest: bool,
         setter: Any,
     ) -> None:
-        if not is_rest:
-            self._apply_ws_price_fields(event, setter)
-            self._mark_ws_price_seen(symbol, event)
-            if self._event_allows_flow_fields(event):
-                self._apply_ws_flow_fields(symbol, event, setter)
-            return
-
-        self._apply_rest_flow_fallback(symbol, event, setter)
-
-    def _apply_ws_price_fields(self, event: CleanQuoteEvent, setter: Any) -> None:
-        for field in ("bid", "ask", "last_price"):
-            value = getattr(event, field)
-            if self._is_positive_numeric(value):
-                setter(field, value)
-
-    @staticmethod
-    def _event_allows_flow_fields(event: CleanQuoteEvent) -> bool:
-        return event.event_type in (EventType.QUOTE, EventType.TRADE)
+        current = dict(self._chain[symbol])
+        patch = apply_quote_patch(
+            entry=current,
+            event=event,
+            is_rest=is_rest,
+            ws_price_seen=symbol in self._ws_price_seen,
+            ws_volume_seen=symbol in self._ws_volume_seen,
+            ws_current_volume_seen=symbol in self._ws_current_volume_seen,
+            ws_turnover_seen=symbol in self._ws_turnover_seen,
+            max_ws_flow_volume=MAX_WS_FLOW_VOLUME,
+        )
+        next_entry = patch["entry"]
+        for key, value in next_entry.items():
+            setter(key, value)
+        if patch.get("ws_price_seen"):
+            self._ws_price_seen.add(symbol)
+        if patch.get("ws_volume_seen"):
+            self._ws_volume_seen.add(symbol)
+        if patch.get("ws_current_volume_seen"):
+            self._ws_current_volume_seen.add(symbol)
+        if patch.get("ws_turnover_seen"):
+            self._ws_turnover_seen.add(symbol)
+        if patch.get("ws_volume_dropped_inc"):
+            self._track_implausible_ws_volume(
+                symbol=symbol,
+                field_name="volume",
+                raw_positive=True,
+                sanitized_value=None,
+                raw_value=patch.get("ws_volume_drop_value"),
+            )
+        if patch.get("ws_current_volume_dropped_inc"):
+            self._track_implausible_ws_volume(
+                symbol=symbol,
+                field_name="current_volume",
+                raw_positive=True,
+                sanitized_value=None,
+                raw_value=patch.get("ws_current_volume_drop_value"),
+            )
 
     @staticmethod
     def _is_positive_numeric(value: Any) -> bool:
@@ -148,57 +152,6 @@ class ChainStateStore:
             return float(value) > 0.0
         except (TypeError, ValueError):
             return False
-
-    def _mark_ws_price_seen(self, symbol: str, event: CleanQuoteEvent) -> None:
-        if any(self._is_positive_numeric(v) for v in (event.bid, event.ask, event.last_price)):
-            self._ws_price_seen.add(symbol)
-
-    @classmethod
-    def _sanitize_ws_volume_candidate(cls, value: Any) -> float | None:
-        if not cls._is_positive_numeric(value):
-            return None
-        parsed = float(value)
-        if parsed > MAX_WS_FLOW_VOLUME:
-            return None
-        return parsed
-
-    def _apply_ws_flow_fields(self, symbol: str, event: CleanQuoteEvent, setter: Any) -> None:
-        raw_volume_positive = self._is_positive_numeric(event.volume)
-        raw_current_positive = self._is_positive_numeric(event.current_volume)
-        sanitized_volume = self._sanitize_ws_volume_candidate(event.volume)
-        sanitized_current_volume = self._sanitize_ws_volume_candidate(event.current_volume)
-        self._track_implausible_ws_volume(
-            symbol=symbol,
-            field_name="volume",
-            raw_positive=raw_volume_positive,
-            sanitized_value=sanitized_volume,
-            raw_value=event.volume,
-        )
-        self._track_implausible_ws_volume(
-            symbol=symbol,
-            field_name="current_volume",
-            raw_positive=raw_current_positive,
-            sanitized_value=sanitized_current_volume,
-            raw_value=event.current_volume,
-        )
-
-        ws_volume = self._resolve_ws_volume(sanitized_volume, sanitized_current_volume)
-        volume_owned_by_ws = (
-            event.event_type == EventType.TRADE
-            or self._is_positive_numeric(event.turnover)
-        )
-        if volume_owned_by_ws and self._is_positive_numeric(ws_volume):
-            setter("volume", ws_volume)
-        if sanitized_current_volume is not None:
-            setter("current_volume", sanitized_current_volume)
-        setter("turnover", event.turnover)
-        self._mark_ws_flow_owner_seen(
-            symbol=symbol,
-            volume_owned_by_ws=volume_owned_by_ws,
-            ws_volume=ws_volume,
-            current_volume=sanitized_current_volume,
-            turnover=event.turnover,
-        )
 
     def _track_implausible_ws_volume(
         self,
@@ -223,47 +176,6 @@ class ChainStateStore:
             int(MAX_WS_FLOW_VOLUME),
         )
 
-    def _mark_ws_flow_owner_seen(
-        self,
-        *,
-        symbol: str,
-        volume_owned_by_ws: bool,
-        ws_volume: float,
-        current_volume: float | None,
-        turnover: float | None,
-    ) -> None:
-        if volume_owned_by_ws and self._is_positive_numeric(ws_volume):
-            self._ws_volume_seen.add(symbol)
-        if self._is_positive_numeric(current_volume):
-            self._ws_current_volume_seen.add(symbol)
-        if self._is_positive_numeric(turnover):
-            self._ws_turnover_seen.add(symbol)
-
-    @classmethod
-    def _resolve_ws_volume(cls, volume: Any, current_volume: Any) -> float:
-        """Resolve WS volume from dual fields while guarding against single-field corruption."""
-        vol_ok = cls._is_positive_numeric(volume)
-        cur_ok = cls._is_positive_numeric(current_volume)
-        if vol_ok and cur_ok:
-            return min(float(volume), float(current_volume))
-        if vol_ok:
-            return float(volume)
-        if cur_ok:
-            return float(current_volume)
-        return 0.0
-
-    def _apply_rest_flow_fallback(self, symbol: str, event: CleanQuoteEvent, setter: Any) -> None:
-        if symbol not in self._ws_price_seen:
-            setter("bid", event.bid)
-            setter("ask", event.ask)
-            setter("last_price", event.last_price)
-        if symbol not in self._ws_volume_seen:
-            setter("volume", event.volume)
-        if symbol not in self._ws_current_volume_seen:
-            setter("current_volume", event.current_volume)
-        if symbol not in self._ws_turnover_seen:
-            setter("turnover", event.turnover)
-
     @staticmethod
     def _apply_iv_and_greeks(event: CleanQuoteEvent, *, setter: Any) -> None:
         # IV 字段：REST 是唯一来源（长桥 WS 不提供 IV）
@@ -278,17 +190,10 @@ class ChainStateStore:
         """Update top-of-book bid/ask from a depth event."""
         if event.symbol not in self._chain:
             return
-        entry = self._chain[event.symbol]
-        changed = False
-        if event.bid is not None and event.bid > 0:
-            if entry.get("bid") != event.bid:
-                entry["bid"] = event.bid
-                changed = True
-        if event.ask is not None and event.ask > 0:
-            if entry.get("ask") != event.ask:
-                entry["ask"] = event.ask
-                changed = True
+        patch = apply_depth_patch(entry=dict(self._chain[event.symbol]), event=event)
+        changed = bool(patch.get("changed"))
         if changed:
+            self._chain[event.symbol] = dict(patch["entry"])
             self._bump_version()
 
     # ── Greeks patch (from GreeksEngine) ─────────────────────────────────────

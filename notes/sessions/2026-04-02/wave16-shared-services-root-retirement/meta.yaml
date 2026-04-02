@@ -1,0 +1,46 @@
+session_id: "2026-04-02/wave16-shared-services-root-retirement"
+title: "shared services root retirement"
+scope: "feature"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-02 04:00:00 -04:00"
+updated_at_et: "2026-04-02 04:05:00 -04:00"
+parent_session: "2026-04-02/wave15-l0-support-governor-observability-cutover"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "7fb0f53"
+head_commit: "7fb0f53"
+
+files_changed:
+  - "shared_rust_services/Cargo.toml"
+  - "shared_rust_services/src/lib.rs"
+  - "shared_rust_services/src/realized.rs"
+  - "app/routes/history.py"
+  - "app/tests/test_history_schema_v2.py"
+  - "l2_decision/feature_store/extractors_volatility.py"
+  - "shared/services/research_feature_store.py"
+  - "shared/services/research_feature_store_io.py"
+  - "docs/SOP/L2_DECISION_ANALYSIS.md"
+  - "docs/SOP/L3_OUTPUT_ASSEMBLY.md"
+  - "openspec/changes/refactor-bloat-20260401-rust-shared-l0-migration-boundary/artifacts/shared-l0-boundary-evidence.md"
+  - "shared/services/__init__.py"
+  - "shared/services/_native_service_support.py"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId wave16-shared-services-root-retirement -Title \"shared services root retirement\" -Scope feature -Owner Codex -ParentSession 2026-04-02/wave15-l0-support-governor-observability-cutover -UpdatePointer"
+  - "cargo build --release --target-dir C:\\Users\\Lenovo\\.codex\\memories\\cargo_target\\shared_rust_services"
+  - "Copy-Item C:\\Users\\Lenovo\\.codex\\memories\\cargo_target\\shared_rust_services\\release\\services.dll E:\\US.market\\Option_v3\\shared_rust\\services.pyd -Force"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/tests/test_history_schema_v2.py l2_decision/tests/test_feature_store.py l3_assembly/tests/test_header_volatility_context.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/tests/test_history_schema_v2.py l3_assembly/tests/test_research_feature_store.py l2_decision/tests/test_feature_store.py l3_assembly/tests/test_header_volatility_context.py"
+  - "python scripts/policy/check_openspec_chain.py --repo-root . --meta-file notes/sessions/2026-04-02/wave16-shared-services-root-retirement/meta.yaml --handoff-file notes/sessions/2026-04-02/wave16-shared-services-root-retirement/handoff.md"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "cargo build --release --target-dir C:\\Users\\Lenovo\\.codex\\memories\\cargo_target\\shared_rust_services"
+  - "scripts/test/run_pytest.ps1 app/tests/test_history_schema_v2.py l2_decision/tests/test_feature_store.py l3_assembly/tests/test_header_volatility_context.py"
+  - "scripts/policy/check_openspec_chain.py"
+tests_failed:
+  - "scripts/test/run_pytest.ps1 app/tests/test_history_schema_v2.py l3_assembly/tests/test_research_feature_store.py l2_decision/tests/test_feature_store.py l3_assembly/tests/test_header_volatility_context.py -> research_store_tests cache ACL WinError 5"
+blockers:
+  - "tmp/pytest_cache/research_store_tests denies child directory creation (WinError 5)"
+notes:
+  - "Finalized the root helper namespace under shared_rust.services."
+  - "Deleted shared/services/__init__.py and shared/services/_native_service_support.py."

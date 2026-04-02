@@ -1,0 +1,43 @@
+session_id: "2026-04-01/shared-zero-hit-wave0"
+title: "shared-zero-hit-wave0"
+scope: "shared wave0 zero-hit delete sweep"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-01 13:18:00 -04:00"
+updated_at_et: "2026-04-01 13:22:53 -04:00"
+parent_session: "2026-04-01/shared-rust-cutover-audit"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "790471c"
+head_commit: "790471c"
+
+files_changed:
+  - "shared/config_cloud_ref/_base.py"
+  - "shared/config_cloud_ref/agent_a.py"
+  - "shared/config_cloud_ref/agent_b.py"
+  - "shared/config_cloud_ref/api_credentials.py"
+  - "shared/config_cloud_ref/flow_engine.py"
+  - "shared/config_cloud_ref/market_structure.py"
+  - "shared/config_cloud_ref/persistence.py"
+  - "shared/config_cloud_ref/server.py"
+  - "shared/config_cloud_ref/websocket.py"
+  - "10_SHARED_RUST_CUTOVER_AUDIT.md"
+  - "11_SHARED_ZERO_HIT_DELETE_ALLOWLIST.md"
+  - "12_SHARED_ZERO_HIT_DELETE_BLOCKLIST.md"
+  - "openspec/changes/refactor-bloat-20260401-rust-shared-l0-migration-boundary/artifacts/shared-l0-boundary-evidence.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 shared-zero-hit-wave0"
+  - "rg -n \"config_cloud_ref|shared\\.config_cloud_ref\" . -g \"*.py\" -g \"*.md\" -g \"*.yaml\" -g \"*.json\""
+  - "Remove-Item on Wave 0 allowlist for shared/config_cloud_ref dead leaves"
+  - "python import smoke for shared.config_cloud_ref"
+  - "python scripts/policy/check_openspec_chain.py --repo-root . --meta-file notes/sessions/2026-04-01/shared-zero-hit-wave0/meta.yaml --handoff-file notes/sessions/2026-04-01/shared-zero-hit-wave0/handoff.md"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "filesystem verification: shared/config_cloud_ref only keeps __init__.py and agent_g.py"
+  - "import smoke: shared.config_cloud_ref exposes settings and AgentGConfig"
+tests_failed: []
+blockers:
+  - "active OpenSpec requirement still references shared/config_cloud_ref/agent_g.py"
+notes:
+  - "shared Python file count reduced from 137 to 128"
+  - "Wave 0 delete sweep stayed within strict zero-hit criteria"

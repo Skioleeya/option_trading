@@ -1,0 +1,61 @@
+﻿session_id: "2026-04-01/l0-transport-hard-cut-config-owner"
+title: "l0-transport-hard-cut-config-owner"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-01 11:55:58 -04:00"
+updated_at_et: "2026-04-01 12:24:25 -04:00"
+parent_session: null
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "790471c"
+head_commit: "790471c"
+
+files_changed:
+  - "shared/config/api_credentials.py"
+  - "shared/contracts/l0_transport.py"
+  - "shared/contracts/__init__.py"
+  - "shared/services/l0_runtime/source/runtime/openapi_bootstrap.py"
+  - "shared/services/l0_runtime/source/runtime/factory.py"
+  - "shared/services/l0_runtime/source/runtime/quote_runtime.py"
+  - "shared/services/l0_runtime/source/runtime/rust_gateway_config.py"
+  - "shared/services/l0_runtime/source/runtime/rust_runtime_support.py"
+  - "shared/services/l0_runtime/l0_rust.py"
+  - "l0_ingest/l0_rust/src/gateway_core.rs"
+  - "l0_ingest/l0_rust/src/ipc_writer.rs"
+  - "l0_ingest/l0_rust/src/sdk_config.rs"
+  - "l0_ingest/l0_rust/src/transport_contract.rs"
+  - "tests/l0_runtime/test_openapi_config_alignment.py"
+  - "tests/l0_runtime/test_quote_runtime.py"
+  - "tests/l0_runtime/test_market_data_gateway.py"
+  - "tests/l0_runtime/test_arrow_roundtrip.py"
+  - "07_PY_DELETE_TASK_LIST.md"
+  - "08_RUST_REPLACEMENT_BOUNDARIES.md"
+  - "09_PY_SHELL_REMOVAL_SEQUENCE.md"
+  - "openspec/changes/refactor-bloat-20260401-rust-shared-l0-migration-boundary/artifacts/shared-l0-boundary-evidence.md"
+  - "notes/sessions/2026-04-01/l0-transport-hard-cut-config-owner/project_state.md"
+  - "notes/sessions/2026-04-01/l0-transport-hard-cut-config-owner/open_tasks.md"
+  - "notes/sessions/2026-04-01/l0-transport-hard-cut-config-owner/handoff.md"
+  - "notes/sessions/2026-04-01/l0-transport-hard-cut-config-owner/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId l0-transport-hard-cut-config-owner"
+  - "cargo test"
+  - "maturin develop --release"
+  - "maturin build --release -o dist"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 tests/l0_runtime/test_openapi_config_alignment.py tests/l0_runtime/test_quote_runtime.py tests/l0_runtime/test_market_data_gateway.py tests/l0_runtime/test_arrow_roundtrip.py"
+  - "python scripts/policy/check_openspec_chain.py --repo-root . --meta-file notes/sessions/2026-04-01/l0-transport-hard-cut-config-owner/meta.yaml --handoff-file notes/sessions/2026-04-01/l0-transport-hard-cut-config-owner/handoff.md"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "cargo test (l0_ingest/l0_rust)"
+  - "tests/l0_runtime/test_openapi_config_alignment.py"
+  - "tests/l0_runtime/test_quote_runtime.py"
+  - "tests/l0_runtime/test_market_data_gateway.py"
+  - "tests/l0_runtime/test_arrow_roundtrip.py"
+tests_failed: []
+blockers: []
+notes:
+  - "Hard cut completed: no `Config::from_env()` in Rust gateway, no LongPort env-write bridge in Python bootstrap/runtime."
+  - "Deleted helper modules: rust_gateway_config.py and rust_runtime_support.py."
+  - "Generated extension binary refreshed locally in `_native_generated/l0_rust.pyd` and intentionally excluded from files_changed."
+
+

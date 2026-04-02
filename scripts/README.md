@@ -48,7 +48,8 @@
 - `test_assembler.py`: L3 消息组装器单元测试。
 - `test_ui_tracker.py`: 前端状态追踪器逻辑验证。
 - `test_presenter.py`: 简单 Presenter 数据转换测试。
-- `run_pytest.ps1`: 统一 `pytest` 入口，强制使用独立缓存目录 `tmp/pytest_cache`，并拒绝管理员上下文执行（防权限混用残留临时目录）。
+- `run_pytest.ps1`: 统一 `pytest` 入口，强制使用独立缓存目录 `tmp/pytest_cache`，拒绝管理员上下文执行，并在启动前做缓存目录写权限预检。
+- `repair_pytest_cache_acl.ps1`: 一次性归一化 `tmp/pytest_cache` 的 owner/ACL，修复本地 `PermissionError` / cache write warning。
 - `live_market_test.py`: Rust ingest gateway 实盘连通性验证。
 - `test_rust_bridge.py`: Rust IPC bridge 冒烟测试与压力测试入口。
 - `verify_institutional_live.py`: 机构流（OFII/Sweep）实时观测验证。

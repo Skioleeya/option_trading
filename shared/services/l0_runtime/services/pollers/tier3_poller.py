@@ -11,13 +11,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import math
 from datetime import datetime, date, timedelta
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
 from longport.openapi import CalcIndex
 
+from shared.services.l0_runtime.services.native_support import (
+    build_symbol_metadata_native,
+    normalize_calc_rows_native,
+    top_open_interest_native,
+)
 from shared.services.l0_runtime.source.runtime.quote_runtime import L0QuoteRuntime
 from shared.services.l0_runtime.source.runtime.rate_limiter import APIRateLimiter
 
@@ -119,19 +123,11 @@ class Tier3Poller:
             return False
 
         spot = self._get_spot() or 0.0
-        sym_to_strike: dict[str, float] = {}
-        standard_by_symbol: dict[str, bool] = {}
-        for s in weekly_chain:
-            strike = float(s.price) if hasattr(s, "price") else 0.0
-            if abs(strike - spot) > TIER3_WINDOW:
-                continue
-            standard = bool(getattr(s, "standard", False))
-            if hasattr(s, "call_symbol") and s.call_symbol:
-                sym_to_strike[s.call_symbol] = strike
-                standard_by_symbol[s.call_symbol] = standard
-            if hasattr(s, "put_symbol") and s.put_symbol:
-                sym_to_strike[s.put_symbol] = strike
-                standard_by_symbol[s.put_symbol] = standard
+        sym_to_strike, standard_by_symbol, kept = build_symbol_metadata_native(
+            list(weekly_chain),
+            spot=spot,
+            window=TIER3_WINDOW,
+        )
 
         self._meta_expiry = weekly_date
         self._meta_sym_to_strike = sym_to_strike
@@ -139,7 +135,7 @@ class Tier3Poller:
         self.expiry = weekly_date
         logger.info(
             f"[Tier3Poller] Metadata refreshed: Weekly={weekly_date}, "
-            f"{len(sym_to_strike)} symbols within ±{TIER3_WINDOW}pt"
+            f"{kept} symbols within ±{TIER3_WINDOW}pt"
         )
         return True
 
@@ -180,47 +176,21 @@ class Tier3Poller:
                             batch,
                             [CalcIndex.Volume, CalcIndex.OpenInterest, CalcIndex.ImpliedVolatility, CalcIndex.Premium],
                         )
-                        for r in results:
-                            strike = self._meta_sym_to_strike.get(r.symbol, 0.0)
-                            opt_type = "CALL" if "C" in r.symbol else "PUT"
-                            oi = int(r.open_interest) if r.open_interest else 0
-                            iv_val = 0.0
-                            iv_normalized = getattr(r, "implied_volatility_decimal", None)
-                            if iv_normalized is not None:
-                                try:
-                                    f_iv = float(iv_normalized)
-                                    if math.isfinite(f_iv):
-                                        iv_val = f_iv
-                                except (ValueError, TypeError):
-                                    pass
-                            elif r.implied_volatility:
-                                try:
-                                    f_iv = float(r.implied_volatility)
-                                    if math.isfinite(f_iv):
-                                        iv_val = f_iv / 100.0 if f_iv > 1.0 else f_iv
-                                except (ValueError, TypeError):
-                                    pass
-
-                            all_data.append({
-                                "symbol": r.symbol,
-                                "strike": strike,
-                                "type": opt_type,
-                                "expiry": str(weekly_date),
-                                "tier": "T3",
-                                "volume": int(r.volume) if r.volume else 0,
-                                "open_interest": oi,
-                                "implied_volatility": iv_val,
-                                "premium": float(r.premium) if getattr(r, "premium", None) is not None else 0.0,
-                                "standard": self._meta_standard_by_symbol.get(r.symbol, False),
-                            })
+                        all_data.extend(
+                            normalize_calc_rows_native(
+                                list(results),
+                                expiry=str(weekly_date),
+                                tier="T3",
+                                sym_to_strike=self._meta_sym_to_strike,
+                                standard_by_symbol=self._meta_standard_by_symbol,
+                            )
+                        )
                     except Exception as e:
                         if "301607" in str(e):
                             self._limiter.trigger_cooldown()
                         logger.info(f"[Tier3Poller] Batch recovery active: {e}")
 
-            # Retain only Top N OI nodes (structural anchors)
-            all_data.sort(key=lambda x: x["open_interest"], reverse=True)
-            self.cache = all_data[:TOP_N]
+            self.cache = top_open_interest_native(all_data, limit=TOP_N)
             logger.info(
                 f"[Tier3Poller] Synced Top {TOP_N} OI anchors "
                 f"(Weekly={weekly_date}, ±{TIER3_WINDOW}pt)"

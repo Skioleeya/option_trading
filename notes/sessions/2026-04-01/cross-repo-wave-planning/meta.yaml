@@ -1,0 +1,37 @@
+session_id: "2026-04-01/cross-repo-wave-planning"
+title: "cross-repo-wave-planning"
+scope: "planning-only cross-repo wave definition for shared Rust cutover"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-01 13:38:51 -04:00"
+updated_at_et: "2026-04-01 14:50:00 -04:00"
+parent_session: "2026-04-01/shared-rust-owner-group-cutover"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "790471c"
+head_commit: "790471c"
+
+files_changed:
+  - "14_CROSS_REPO_SHARED_RUST_WAVES.md"
+  - "15_WAVE1_SHARED_CONTRACTS_CONSUMERS.md"
+  - "16_WAVE2_SHARED_MODELS_CONSUMERS.md"
+  - "17_WAVE3_SHARED_SYSTEM_SERVICES_CONSUMERS.md"
+  - "notes/sessions/2026-04-01/cross-repo-wave-planning/project_state.md"
+  - "notes/sessions/2026-04-01/cross-repo-wave-planning/open_tasks.md"
+  - "notes/sessions/2026-04-01/cross-repo-wave-planning/handoff.md"
+  - "notes/sessions/2026-04-01/cross-repo-wave-planning/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId cross-repo-wave-planning"
+  - "rg consumer scans for shared/contracts, shared/models, shared/system, and shared/services"
+  - "python scripts/policy/check_openspec_chain.py --repo-root . --meta-file notes/sessions/2026-04-01/cross-repo-wave-planning/meta.yaml --handoff-file notes/sessions/2026-04-01/cross-repo-wave-planning/handoff.md"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "cross-repo wave documents are internally consistent with the measured consumer sets"
+  - "OpenSpec chain gate: PASS"
+  - "strict validation: Session validation passed."
+tests_failed: []
+blockers:
+  - "implementation is deferred by rule because this slice is planning-only"
+notes:
+  - "execution order fixed to contracts -> models -> system/services"
+  - "planning and runtime code changes were intentionally separated"

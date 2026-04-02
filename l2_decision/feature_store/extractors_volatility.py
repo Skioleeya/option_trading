@@ -7,7 +7,7 @@ import time
 from typing import Any
 
 from l2_decision.feature_store.extractors_common import _get_agg, _get_val, _safe
-from shared.services.realized_volatility import RollingRealizedVolatility
+from shared_rust.services import RollingRealizedVolatility
 from shared.system.tactical_triad_logic import compute_vrp
 
 DEFAULT_REALIZED_WINDOW_SECONDS = 900.0

@@ -1,0 +1,40 @@
+﻿session_id: "2026-04-01/ipc-contract-owner-implementation"
+title: "ipc-contract-owner-implementation"
+scope: "first-wave implementation slice for L0 IPC contract owner convergence"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-01 11:32:21 -04:00"
+updated_at_et: "2026-04-01 11:34:57 -04:00"
+parent_session: null
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "790471c"
+head_commit: "790471c"
+
+files_changed:
+  - "shared/contracts/l0_transport.py"
+  - "shared/contracts/__init__.py"
+  - "shared/services/l0_runtime/source/runtime/quote_runtime.py"
+  - "shared/services/l0_runtime/projection/snapshot/components.py"
+  - "shared/services/l0_runtime/facade.py"
+  - "tests/l0_runtime/test_quote_runtime.py"
+  - "tests/l0_runtime/test_fetch_chain_components.py"
+  - "openspec/changes/refactor-bloat-20260401-rust-shared-l0-migration-boundary/artifacts/shared-l0-boundary-evidence.md"
+  - "notes/sessions/2026-04-01/ipc-contract-owner-implementation/project_state.md"
+  - "notes/sessions/2026-04-01/ipc-contract-owner-implementation/open_tasks.md"
+  - "notes/sessions/2026-04-01/ipc-contract-owner-implementation/handoff.md"
+  - "notes/sessions/2026-04-01/ipc-contract-owner-implementation/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId ipc-contract-owner-implementation"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 tests/l0_runtime/test_quote_runtime.py tests/l0_runtime/test_fetch_chain_components.py tests/l0_runtime/test_option_chain_builder_rust_events.py"
+  - "python scripts/policy/check_openspec_chain.py --repo-root . --meta-file notes/sessions/2026-04-01/ipc-contract-owner-implementation/meta.yaml --handoff-file notes/sessions/2026-04-01/ipc-contract-owner-implementation/handoff.md"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 tests/l0_runtime/test_quote_runtime.py tests/l0_runtime/test_fetch_chain_components.py tests/l0_runtime/test_option_chain_builder_rust_events.py"
+  - "python scripts/policy/check_openspec_chain.py --repo-root . --meta-file notes/sessions/2026-04-01/ipc-contract-owner-implementation/meta.yaml --handoff-file notes/sessions/2026-04-01/ipc-contract-owner-implementation/handoff.md"
+tests_failed: []
+blockers: []
+notes:
+  - "Implementation slice completed under dependency/magic-number/bloat prerequisites."
+
+

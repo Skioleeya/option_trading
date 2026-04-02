@@ -8,10 +8,16 @@ from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from shared_rust.contracts import SHM_STATUS_DISCONNECTED, SHM_STATUS_ERROR, SHM_STATUS_OK, build_shm_stats
+from shared_rust.contracts import (
+    SHM_STATUS_DISCONNECTED,
+    SHM_STATUS_ERROR,
+    SHM_STATUS_OK,
+    CallbackHooks,
+    SnapshotRequest,
+    build_shm_stats,
+)
 from shared.config import settings
 from shared.system.ipc_reader import ArrowIpcReader
-from shared.services.l0_runtime.contracts import CallbackHooks, SnapshotRequest
 from shared.services.l0_runtime.normalize.bridges import (
     batch_id_from_batch,
     dispatch_depth_event,

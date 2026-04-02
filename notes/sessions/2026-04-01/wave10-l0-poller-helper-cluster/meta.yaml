@@ -1,0 +1,43 @@
+session_id: "2026-04-01/wave10-l0-poller-helper-cluster"
+title: "Wave 10 l0 poller helper cluster"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-01 16:48:15 -04:00"
+updated_at_et: "2026-04-01 16:54:03 -04:00"
+parent_session: "2026-04-01/wave9-l0-orchestration-helper-cluster"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "790471c"
+head_commit: "790471c"
+
+files_changed:
+  - "l0_ingest/l0_rust/src/l0_poller_support.rs"
+  - "l0_ingest/l0_rust/src/lib.rs"
+  - "shared/services/l0_runtime/_native_generated/__init__.py"
+  - "shared/services/l0_runtime/services/pollers/_native_poller_support.py"
+  - "shared/services/l0_runtime/services/pollers/shared.py"
+  - "shared/services/l0_runtime/services/pollers/factory.py"
+  - "shared/services/l0_runtime/services/pollers/__init__.py"
+  - "shared/services/l0_runtime/services/pollers/tier2_poller.py"
+  - "shared/services/l0_runtime/services/pollers/tier3_poller.py"
+  - "shared/services/l0_runtime/services/runtime/services.py"
+  - "tests/l0_runtime/test_poller_support.py"
+  - "docs/SOP/L0_DATA_FEED.md"
+  - "openspec/changes/refactor-bloat-20260401-rust-shared-l0-migration-boundary/artifacts/shared-l0-boundary-evidence.md"
+commands:
+  - "cargo test"
+  - "maturin build --release -o dist"
+  - "extract built l0_rust.pyd from wheel into shared/services/l0_runtime/_native_generated/wave10/l0_rust.pyd"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 tests/l0_runtime/test_poller_support.py tests/l0_runtime/test_feed_orchestrator_startup_stagger.py tests/l0_runtime/test_iv_baseline_sync.py tests/l0_runtime/test_subscription_pool_guard.py"
+  - "python scripts/policy/check_openspec_chain.py --repo-root . --meta-file notes/sessions/2026-04-01/wave10-l0-poller-helper-cluster/meta.yaml --handoff-file notes/sessions/2026-04-01/wave10-l0-poller-helper-cluster/handoff.md"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "cargo test -> 3 passed"
+  - "targeted pytest -> 12 passed"
+tests_failed: []
+blockers:
+  - "default shared/services/l0_runtime/_native_generated/l0_rust.pyd remains lock-prone; wave-specific artifact path still required"
+notes:
+  - "Wave 10 moved poller metadata shaping, calc-index row normalization, and top-OI retention into Rust native exports."
+  - "Python pollers continue to own async REST scheduling, limiter acquire, cache, diagnostics, and public APIs."

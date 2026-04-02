@@ -59,9 +59,9 @@ flowchart LR
  - Python `shared/system/ipc_reader.py` 在 Windows 上必须附着已有 named mapping 并读取长度前缀 Arrow payload，禁止再把 live attach 建立在 legacy ring buffer 或历史事件轮询之上；
 - `shared/system/ipc_reader.py` 与 `shared/system/ipc_signal.py` 现为 Rust-backed wrappers；Windows named-event wait 与 shared-memory attach 的 owner 位于 `l0_ingest/l0_rust/src/ipc_runtime.rs`、`ipc_legacy.rs`、`windows_signal.rs`；
 - `shared/services/l0_runtime/facade.py` 必须通过 `ArrowIpcReader` 消费 Arrow batch；Python event-queue fallback 已退出正式运行链；
-- `shared/services/l0_runtime/normalize/bridges/market_event_bridge.py` 现为 Rust-backed wrapper；market event parse、depth side shaping、trade payload direction 语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_market_bridge.rs`；
-- `shared/services/l0_runtime/normalize/pipeline/sanitization.py` 现为 Rust-backed wrapper；QUOTE/DEPTH 基础清洗、IV/OI 归一化、crossed quote 防御与 top-of-book depth 提取语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_sanitization.rs`；
-- `shared/services/l0_runtime/normalize/events/chain_event_processor.py` 与 `state_event_processor.py` 现为 Rust-backed wrappers；SPY spot quote 提取与 trade payload 归一化语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_event_support.rs`；
+- `shared/services/l0_runtime/normalize/bridges/__init__.py` 是 bridge 合同统一入口；market event parse、depth side shaping、trade payload direction 语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_market_bridge.rs`；
+- `shared/services/l0_runtime/normalize/pipeline/__init__.py` 是清洗合同统一入口；QUOTE/DEPTH 基础清洗、IV/OI 归一化、crossed quote 防御与 top-of-book depth 提取语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_sanitization.rs`；
+- `shared/services/l0_runtime/normalize/events/__init__.py` 是 event processor 合同统一入口；SPY spot quote 提取与 trade payload 归一化语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_event_support.rs`；
 - `shared/services/l0_runtime/state/runtime/chain_state_store.py` 现为 Rust-backed wrapper；entry 初始化、WS/REST flow owner merge、depth merge 语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_state_support.rs`；
 - `shared/services/l0_runtime/projection/snapshot/components.py` 现为 Rust-backed wrapper；fallback snapshot、runtime-status、governor telemetry 与 fetch payload compose 语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_projection.rs`；
    - `fetch_snapshot().shm_stats.head/tail` 在 Arrow 路径下保持原键名，但语义切换为“最近消费到的 Arrow `batch_id`”，用于维持 L0→L4 诊断链连续；
@@ -113,6 +113,10 @@ flowchart LR
   - subscription helper exports
   - orchestration helper exports
   - poller helper exports
+- `shared/services/l0_support/events/*`、`quality/*`、`sanitize/*`、`store/*` 已退出 Python owner 路径；live import surface 统一为 `shared_rust.services_l0_support`。
+- `LongportFeedAdapter` 与 `tests/l0_support/*` 不得再导入 `shared.services.l0_support.events|quality|sanitize|store`；事件类型、清洗管道、质量报告和 MVCC store 的 source-of-truth 现位于 `shared_rust_l0_support/src/*`。
+- `shared/services/l0_support/rate_governor/*` 与 `observability/*` 已退出 Python owner 路径；`AdaptiveRateGovernor`、`PriorityRequestQueue`、`RequestPriority`、`L0Instrumentation` 与 trace decorators 的 live import surface 统一为 `shared_rust.services_l0_support`。
+- `tests/l0_support/test_adaptive_governor.py` 及任何后续 L0 support 消费者不得再导入 `shared.services.l0_support.rate_governor|observability`；governor/breaker/window 语义与 no-op instrumentation source-of-truth 现位于 `shared_rust_l0_support/src/governor.rs` 与 `observability.rs`。
 - 小体量 Python thin wrappers `_native_subscription_support.py`、`_native_orchestration_support.py`、`pollers/_native_poller_support.py`、`pollers/shared.py`、`pollers/factory.py` 已退出正式运行树，禁止恢复分散 wrapper owner。
 - Python 侧在 poller helper cluster 中仍保留：
   - expiry date scan / weekly selection
@@ -150,6 +154,7 @@ flowchart LR
 - `QuoteContext` 生命周期、订阅以及 callback fan-in 必须全部由 Rust owner 负责；Python 不得再持有 `QuoteContext` 或 callback queue owner。
 - Python 对生成扩展的消费必须直连 `shared.services.l0_runtime._native_generated.l0_rust`；`shared/services/l0_runtime/l0_rust.py` shim 已退出主路径。
 - `shared.contracts.*` Python contract wrappers 已退出仓库；中立 contract import 面现统一为 `shared_rust.contracts`，contract source-of-truth 位于 `shared_rust/src/*`。
+- `shared/services/l0_runtime/contracts/models.py` (`CallbackHooks` / `SnapshotRequest`) 已退出 Python owner 路径；`shared/services/l0_runtime/facade.py` 必须直接消费 `shared_rust.contracts.CallbackHooks` 与 `shared_rust.contracts.SnapshotRequest`。
 - LongPort Quote REST contract normalize 与 endpoint/profile 构建现为 Rust-backed owner：
   - `quote_api_build_option_quote_contract` / `quote_api_build_option_chain_strike_contract` / `quote_api_build_calc_index_contract`
   - `quote_api_build_endpoint_profiles` / `quote_api_build_gateway_config`

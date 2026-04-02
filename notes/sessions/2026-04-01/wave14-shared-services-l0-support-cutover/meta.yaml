@@ -1,0 +1,63 @@
+session_id: "2026-04-01/wave14-shared-services-l0-support-cutover"
+title: "shared/services/l0_support to shared_rust"
+scope: "feature"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-01 18:28:09 -04:00"
+updated_at_et: "2026-04-01 18:56:35 -04:00"
+parent_session: "2026-04-01/wave13-shared-services-root-cutover"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "7fb0f53"
+head_commit: "7fb0f53"
+
+files_changed:
+  - docs/SOP/L0_DATA_FEED.md
+  - docs/SOP/L1_LOCAL_COMPUTATION.md
+  - l1_compute/analysis/greeks_engine.py
+  - openspec/changes/refactor-bloat-20260401-rust-shared-l0-migration-boundary/artifacts/shared-l0-boundary-evidence.md
+  - shared/services/l0_runtime/source/runtime/longport_adapter.py
+  - shared/services/l0_support/events/__init__.py
+  - shared/services/l0_support/events/base.py
+  - shared/services/l0_support/events/market_events.py
+  - shared/services/l0_support/events/quality_events.py
+  - shared/services/l0_support/quality/__init__.py
+  - shared/services/l0_support/quality/data_quality.py
+  - shared/services/l0_support/sanitize/__init__.py
+  - shared/services/l0_support/sanitize/pipeline.py
+  - shared/services/l0_support/sanitize/statistical_breaker.py
+  - shared/services/l0_support/sanitize/validators.py
+  - shared/services/l0_support/store/__init__.py
+  - shared/services/l0_support/store/mvcc_store.py
+  - shared/services/l0_support/store/snapshot.py
+  - shared_rust/services_l0_support.pyd
+  - shared_rust_l0_support/Cargo.toml
+  - shared_rust_l0_support/src/events.rs
+  - shared_rust_l0_support/src/lib.rs
+  - shared_rust_l0_support/src/quality.rs
+  - shared_rust_l0_support/src/sanitize.rs
+  - shared_rust_l0_support/src/store.rs
+  - shared_rust_l0_support/src/validators.rs
+  - tests/l0_support/test_data_quality.py
+  - tests/l0_support/test_mvcc_store.py
+  - tests/l0_support/test_sanitize_pipeline.py
+  - tests/l0_support/test_statistical_breaker.py
+commands:
+  - cargo build --release --target-dir C:\Users\Lenovo\.codex\memories\cargo_target\shared_rust_l0_support
+  - cargo test --target-dir C:\Users\Lenovo\.codex\memories\cargo_target\shared_rust_l0_support
+  - powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 tests/l0_support/test_sanitize_pipeline.py tests/l0_support/test_statistical_breaker.py tests/l0_support/test_data_quality.py tests/l0_support/test_mvcc_store.py tests/l0_support/test_adaptive_governor.py tests/l0_runtime/test_quote_runtime.py
+  - python scripts/policy/check_openspec_chain.py --repo-root . --meta-file notes/sessions/2026-04-01/wave14-shared-services-l0-support-cutover/meta.yaml --handoff-file notes/sessions/2026-04-01/wave14-shared-services-l0-support-cutover/handoff.md
+  - powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict
+tests_passed:
+  - tests/l0_support/test_sanitize_pipeline.py
+  - tests/l0_support/test_statistical_breaker.py
+  - tests/l0_support/test_data_quality.py
+  - tests/l0_support/test_mvcc_store.py
+  - tests/l0_support/test_adaptive_governor.py
+  - tests/l0_runtime/test_quote_runtime.py
+tests_failed: []
+blockers:
+  - shared_rust/services.pyd remains externally locked; this slice uses shared_rust/services_l0_support.pyd.
+notes:
+  - Deterministic l0_support owners now import from shared_rust.services_l0_support.
+  - Async governor and observability remain for the next slice.

@@ -119,6 +119,28 @@ The first-wave migration set is limited to:
 - diagnostics-bearing parts of `shared/system/snapshot_builder.py`
 - `l0_ingest/l0_rust/*`
 
+## Implemented Root Service Cutover
+
+Wave 17 completed the remaining root service owners under `shared/services/*` by moving them to `shared_rust.services`:
+
+- `ResearchFeatureStore`
+- `cleanup_tier`
+- `HeaderVolatilityContextService`
+
+Consumer cutover completed in:
+
+- `l3_assembly/reactor.py`
+- `l3_assembly/assembly/ui_state_tracker.py`
+- `app/routes/history.py`
+- `l3_assembly/tests/test_research_feature_store.py`
+- `l3_assembly/tests/test_header_volatility_context.py`
+
+Retired Python owners:
+
+- `shared/services/research_feature_store.py`
+- `shared/services/research_feature_store_io.py`
+- `shared/services/header_volatility_context.py`
+
 ## Implementation Consumption Record
 
 ### 2026-04-01: `shared/models/* -> shared_rust.models`
@@ -1036,3 +1058,95 @@ What this slice explicitly does not claim:
 - Upstream contract and constants/config governance are consumed without contradiction.
 - The first-wave slice remains bounded to `shared + L0`.
 - This child remains open until a later closure session proves the boundary has been accepted as sufficient implementation input.
+
+### 2026-04-01 Wave 13 Root Services Slice
+
+- Added Rust-only module `shared_rust.services` from crate `shared_rust_services`.
+- Migrated root helper owners:
+  - history columnar payload helpers
+  - research schema constants/schema builders
+  - research utility coercion helpers
+  - rolling realized volatility helpers
+- Deleted Python files:
+  - `shared/services/history_columnar.py`
+  - `shared/services/research_feature_store_schema.py`
+  - `shared/services/research_feature_store_utils.py`
+  - `shared/services/realized_volatility.py`
+- Repointed live consumers:
+  - `app/routes/history.py`
+  - `app/tests/test_history_schema_v2.py`
+  - `l2_decision/feature_store/extractors_volatility.py`
+  - `shared/services/research_feature_store.py`
+  - `shared/services/research_feature_store_io.py`
+
+### 2026-04-02 Wave 16 Root Services Namespace Consolidation
+
+- Finalized the root helper namespace under `shared_rust.services`.
+- Repointed former `shared_rust.services_root` consumers:
+  - `app/routes/history.py`
+  - `app/tests/test_history_schema_v2.py`
+  - `l2_decision/feature_store/extractors_volatility.py`
+  - `shared/services/research_feature_store.py`
+  - `shared/services/research_feature_store_io.py`
+- Deleted dead root Python shells:
+  - `shared/services/__init__.py`
+  - `shared/services/_native_service_support.py`
+- Result:
+  - live `shared_rust.services_root` imports reduced to zero
+  - root helper owners now align with the final `shared_rust.services` namespace
+
+### 2026-04-01 Wave 14 L0 Support Deterministic Slice
+
+- Added Rust-only module `shared_rust.services_l0_support` from crate `shared_rust_l0_support`.
+- Migrated deterministic `l0_support` owner groups:
+  - `events/*`
+  - `quality/*`
+  - `sanitize/*`
+  - `store/*`
+- Deleted retired Python files:
+  - `shared/services/l0_support/events/__init__.py`
+  - `shared/services/l0_support/events/base.py`
+  - `shared/services/l0_support/events/market_events.py`
+  - `shared/services/l0_support/events/quality_events.py`
+  - `shared/services/l0_support/quality/__init__.py`
+  - `shared/services/l0_support/quality/data_quality.py`
+  - `shared/services/l0_support/sanitize/__init__.py`
+  - `shared/services/l0_support/sanitize/pipeline.py`
+  - `shared/services/l0_support/sanitize/statistical_breaker.py`
+  - `shared/services/l0_support/sanitize/validators.py`
+  - `shared/services/l0_support/store/__init__.py`
+  - `shared/services/l0_support/store/mvcc_store.py`
+  - `shared/services/l0_support/store/snapshot.py`
+- Repointed live consumers:
+  - `shared/services/l0_runtime/source/runtime/longport_adapter.py`
+  - `l1_compute/analysis/greeks_engine.py`
+  - `tests/l0_support/test_sanitize_pipeline.py`
+  - `tests/l0_support/test_statistical_breaker.py`
+  - `tests/l0_support/test_data_quality.py`
+  - `tests/l0_support/test_mvcc_store.py`
+
+### 2026-04-02 Wave 15 L0 Support Governor + Observability Slice
+
+- Extended Rust-only module `shared_rust.services_l0_support` with:
+  - `AdaptiveRateGovernor`
+  - `PriorityRequestQueue`
+  - `RequestPriority`
+  - `L0Instrumentation`
+  - `trace_ingest`
+  - `trace_sanitize`
+  - `trace_store`
+- Source-of-truth moved to:
+  - `shared_rust_l0_support/src/governor.rs`
+  - `shared_rust_l0_support/src/observability.rs`
+- Repointed direct consumer:
+  - `tests/l0_support/test_adaptive_governor.py`
+- Deleted retired Python files:
+  - `shared/services/l0_support/rate_governor/__init__.py`
+  - `shared/services/l0_support/rate_governor/adaptive_governor.py`
+  - `shared/services/l0_support/rate_governor/priority_queue.py`
+  - `shared/services/l0_support/observability/__init__.py`
+  - `shared/services/l0_support/observability/l0_instrumentation.py`
+  - `shared/services/l0_support/__init__.py`
+- Result:
+  - `shared.services.l0_support.rate_governor|observability` live imports reduced to zero.
+  - The remaining `l0_support` Python surface no longer owns governor or observability behavior.

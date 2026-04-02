@@ -3,39 +3,20 @@
 from __future__ import annotations
 
 import logging
-import re
-import struct
 import time
 from typing import Any, Callable, Mapping
 
-from shared.services.l0_runtime.normalize.pipeline.sanitization import CleanQuoteEvent, EventType, _infer_opt_type
+from shared.services.l0_runtime.normalize.pipeline import CleanQuoteEvent, EventType, _infer_opt_type
+from shared.services.l0_runtime.services.native_support import (
+    infer_strike_from_symbol_native,
+    read_u64_native,
+)
 
 logger = logging.getLogger(__name__)
 
-U64_BYTE_WIDTH = 8
-_OPTION_SYMBOL_RE = re.compile(r"^([A-Z]+)(\d{6})([CP])(\d+)(?:\.[A-Z]+)?$")
-
 
 def _infer_strike_from_symbol(symbol: str) -> float | None:
-    """Best-effort strike inference for LongPort option symbols.
-
-    This is used as a startup-safe fallback when subscription metadata has not
-    populated `symbol_to_strike` yet. The encoding differs across symbol forms,
-    so we infer the price scale from the strike digit width.
-    """
-    normalized = (symbol or "").strip().upper()
-    match = _OPTION_SYMBOL_RE.match(normalized)
-    if not match:
-        return None
-
-    strike_digits = match.group(4)
-    try:
-        raw = int(strike_digits)
-    except ValueError:
-        return None
-
-    strike = raw / 1000.0
-    return strike if strike > 0.0 else None
+    return infer_strike_from_symbol_native(symbol)
 
 
 def _resolve_strike_for_symbol(symbol: str, resolve_strike: Callable[[str], float | None]) -> float | None:
@@ -115,5 +96,5 @@ def read_shm_u64(mm: Any | None, ptr: int) -> int:
     """Read uint64 value from SHM pointer; returns 0 when SHM is unavailable."""
     if mm is None:
         return 0
-    return struct.unpack("Q", mm[ptr : ptr + U64_BYTE_WIDTH])[0]
+    return read_u64_native(bytes(mm), ptr)
 

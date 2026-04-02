@@ -4,6 +4,11 @@ from dataclasses import dataclass
 from datetime import datetime
 import math
 from typing import Any
+from ._native_quote_api_support import (
+    build_calc_index_contract_native,
+    build_option_chain_strike_contract_native,
+    build_option_quote_contract_native,
+)
 
 
 def _get(obj: Any, name: str) -> Any:
@@ -164,135 +169,17 @@ class CalcIndexContract:
 
 
 def build_option_quote_contract(row: Any) -> OptionQuoteContract:
-    option_extend_src = _get(row, "option_extend")
-    implied_raw = (
-        _to_text(_get(option_extend_src, "implied_volatility"))
-        or _to_text(_get(row, "implied_volatility_raw"))
-        or _to_text(_get(row, "implied_volatility"))
-    )
-    hist_raw = (
-        _to_text(_get(option_extend_src, "historical_volatility"))
-        or _to_text(_get(row, "historical_volatility_raw"))
-        or _to_text(_get(row, "historical_volatility"))
-    )
-    expiry_raw = (
-        _to_text(_get(option_extend_src, "expiry_date"))
-        or _to_text(_get(row, "expiry_date_raw"))
-        or _to_text(_get(row, "expiry_date"))
-    )
-    strike_raw = (
-        _to_text(_get(option_extend_src, "strike_price"))
-        or _to_text(_get(row, "strike_price_raw"))
-        or _to_text(_get(row, "strike_price"))
-    )
-    multiplier_raw = _to_text(_get(option_extend_src, "contract_multiplier")) or _to_text(
-        _get(row, "contract_multiplier")
-    )
-    size_raw = _to_text(_get(option_extend_src, "contract_size")) or _to_text(
-        _get(row, "contract_size")
-    )
-    open_interest = _to_int(_get(row, "open_interest"))
-    if open_interest is None:
-        open_interest = _to_int(_get(option_extend_src, "open_interest"))
-
+    data = build_option_quote_contract_native(row)
+    option_extend_data = data.get("option_extend")
     option_extend = None
-    if any(
-        value is not None
-        for value in (
-            implied_raw,
-            open_interest,
-            expiry_raw,
-            strike_raw,
-            multiplier_raw,
-            _get(option_extend_src, "contract_type"),
-            size_raw,
-            _get(option_extend_src, "direction"),
-            hist_raw,
-            _get(option_extend_src, "underlying_symbol"),
-        )
-    ):
-        option_extend = OptionExtendContract(
-            implied_volatility=implied_raw,
-            open_interest=open_interest,
-            expiry_date=expiry_raw,
-            strike_price=strike_raw,
-            contract_multiplier=multiplier_raw,
-            contract_type=_to_text(_get(option_extend_src, "contract_type")) or _to_text(_get(row, "contract_type")),
-            contract_size=size_raw,
-            direction=_to_text(_get(option_extend_src, "direction")) or _to_text(_get(row, "direction")),
-            historical_volatility=hist_raw,
-            underlying_symbol=_to_text(_get(option_extend_src, "underlying_symbol")) or _to_text(_get(row, "underlying_symbol")),
-        )
-
-    return OptionQuoteContract(
-        symbol=_to_text(_get(row, "symbol")) or "",
-        last_done=_to_float(_get(row, "last_done")),
-        prev_close=_to_float(_get(row, "prev_close")),
-        open=_to_float(_get(row, "open")),
-        high=_to_float(_get(row, "high")),
-        low=_to_float(_get(row, "low")),
-        timestamp=_to_int(_get(row, "timestamp")),
-        volume=_to_int(_get(row, "volume")),
-        turnover=_to_float(_get(row, "turnover")),
-        trade_status=_to_trade_status(_get(row, "trade_status")),
-        option_extend=option_extend,
-        open_interest=open_interest,
-        implied_volatility=_to_float(_get(row, "implied_volatility")),
-        implied_volatility_raw=implied_raw,
-        implied_volatility_decimal=_to_decimal_ratio(implied_raw or _get(row, "implied_volatility")),
-        expiry_date=_to_iso_date(expiry_raw),
-        expiry_date_raw=expiry_raw,
-        expiry_date_iso=_to_iso_date(expiry_raw),
-        strike_price=_to_float(strike_raw or _get(row, "strike_price")),
-        strike_price_raw=strike_raw,
-        contract_multiplier=_to_float(multiplier_raw or _get(row, "contract_multiplier")),
-        contract_type=_to_text(_get(option_extend_src, "contract_type")) or _to_text(_get(row, "contract_type")),
-        contract_size=_to_float(size_raw or _get(row, "contract_size")),
-        direction=_to_text(_get(option_extend_src, "direction")) or _to_text(_get(row, "direction")),
-        historical_volatility=_to_float(hist_raw or _get(row, "historical_volatility")),
-        historical_volatility_raw=hist_raw,
-        historical_volatility_decimal=_to_decimal_ratio(hist_raw or _get(row, "historical_volatility")),
-        underlying_symbol=_to_text(_get(option_extend_src, "underlying_symbol")) or _to_text(_get(row, "underlying_symbol")),
-    )
+    if isinstance(option_extend_data, dict):
+        option_extend = OptionExtendContract(**option_extend_data)
+    return OptionQuoteContract(**{**data, "option_extend": option_extend})
 
 
 def build_option_chain_strike_contract(row: Any) -> OptionChainStrikeContract:
-    price_raw = _to_text(_get(row, "price_raw")) or _to_text(_get(row, "price"))
-    price = _to_float(_get(row, "price"))
-    return OptionChainStrikeContract(
-        price=price,
-        price_raw=price_raw,
-        strike_price=price,
-        call_symbol=_to_text(_get(row, "call_symbol")),
-        put_symbol=_to_text(_get(row, "put_symbol")),
-        standard=_get(row, "standard"),
-    )
+    return OptionChainStrikeContract(**build_option_chain_strike_contract_native(row))
 
 
 def build_calc_index_contract(row: Any) -> CalcIndexContract:
-    implied_raw = _to_text(_get(row, "implied_volatility_raw")) or _to_text(_get(row, "implied_volatility"))
-    expiry_raw = _to_text(_get(row, "expiry_date_raw")) or _to_text(_get(row, "expiry_date"))
-    strike_raw = _to_text(_get(row, "strike_price_raw")) or _to_text(_get(row, "strike_price"))
-    return CalcIndexContract(
-        symbol=_to_text(_get(row, "symbol")) or "",
-        last_done=_to_float(_get(row, "last_done")),
-        change_val=_to_float(_get(row, "change_val")),
-        change_rate=_to_float(_get(row, "change_rate")),
-        volume=_to_int(_get(row, "volume")),
-        turnover=_to_float(_get(row, "turnover")),
-        expiry_date=_to_iso_date(expiry_raw),
-        expiry_date_raw=expiry_raw,
-        expiry_date_iso=_to_iso_date(expiry_raw),
-        strike_price=_to_float(strike_raw or _get(row, "strike_price")),
-        strike_price_raw=strike_raw,
-        premium=_to_float(_get(row, "premium")),
-        implied_volatility=_to_float(_get(row, "implied_volatility")),
-        implied_volatility_raw=implied_raw,
-        implied_volatility_decimal=_to_decimal_ratio(implied_raw or _get(row, "implied_volatility")),
-        open_interest=_to_int(_get(row, "open_interest")),
-        delta=_to_float(_get(row, "delta")),
-        gamma=_to_float(_get(row, "gamma")),
-        theta=_to_float(_get(row, "theta")),
-        vega=_to_float(_get(row, "vega")),
-        rho=_to_float(_get(row, "rho")),
-    )
+    return CalcIndexContract(**build_calc_index_contract_native(row))

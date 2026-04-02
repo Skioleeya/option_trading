@@ -1,0 +1,14 @@
+[package]
+name = "shared_rust_services"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "services"
+crate-type = ["cdylib"]
+
+[dependencies]
+chrono = { version = "0.4", features = ["clock"] }
+chrono-tz = "0.10"
+pyo3 = { version = "0.23", features = ["extension-module", "abi3-py310"] }
+uuid = { version = "1", features = ["v4"] }

@@ -37,6 +37,17 @@ This file is not advisory prose. It is a hard execution directive for all AI age
   <rule>If a file approaches the 400-line ceiling, logic MUST be split into focused modules before further feature growth.</rule>
 </MANDATORY_ARCH>
 
+<MANDATORY_ARCH id="migration-stability-core">
+  <rule>Refactor/cutover work MUST prefer the smallest viable number of transitional modules and temporary surfaces.</rule>
+  <rule>Agent MUST NOT mirror a legacy package tree into a new namespace file-for-file when an existing neutral service surface can absorb the migration.</rule>
+  <rule>New wrapper/bridge files are allowed only when they eliminate a hard boundary violation or enable an atomic owner replacement; otherwise agent MUST extend or replace the existing neutral surface in place.</rule>
+  <rule>Preferred migration order MUST be: stabilize one neutral entrypoint -> retarget consumers -> replace owner behind the same entrypoint -> delete legacy tree -> collapse temporary bridges.</rule>
+  <rule>Efficiency means lower migration surface area, lower file-count churn, and faster retirement of transitional code; "wrapper proliferation" is not an acceptable refactor strategy.</rule>
+  <rule>A Python file whose entire body consists of `from X import Y` re-export statements and an `__all__` declaration with no logic of its own is a PURE SHIM and MUST NOT be created as a migration artifact.</rule>
+  <rule>If consumer import sites are already cut over to a neutral surface in a given session, the underlying Python owner MUST be replaced (Rust or inline) in the same session unless a concrete blocking dependency is declared in handoff with owner and due date.</rule>
+  <rule>Each cutover session MUST target DEBT-DELTA ≤ 0; if a session adds transitional files without deleting legacy owners, it MUST declare DEBT-JUSTIFICATION with a named successor session that will close the debt.</rule>
+</MANDATORY_ARCH>
+
 <MANDATORY_ARCH id="resilience-core">
   <rule>Shared resource handshake MUST follow create-or-open semantics.</rule>
   <rule>No silent failure: Rust runtime path MUST NOT use `unwrap()`; Python MUST NOT swallow errors with bare/silent `try-except`.</rule>
@@ -60,6 +71,7 @@ This file is not advisory prose. It is a hard execution directive for all AI age
   <pattern>Python silent catch that hides runtime failure without log/escalation</pattern>
   <pattern>Any Python (`*.py`) or Rust (`*.rs`) source file exceeds 400 lines</pattern>
   <pattern>God-module structure that violates modularity (low cohesion / high coupling)</pattern>
+  <pattern>Wrapper fan-out or file-for-file namespace mirroring during migration when a smaller transitional surface is feasible</pattern>
   <required_reaction>
     1) STOP current implementation immediately.
     2) REVERT current local plan (not unrelated user changes).
@@ -281,6 +293,96 @@ SLA:
 - Remote repo rule (ACTIVE): `refs/heads/master` MUST go through Pull Request; direct push is blocked; required status check `validate-session` MUST pass before merge.
 
 If any scripted gate fails, delivery is not complete.
+
+---
+## 12. Rust/Python Cutover Protocol (Binding Execution Contract)
+
+This section defines the **only permitted pattern** for retiring Python module groups in favor of
+Rust-backed `.pyd` owners. Any deviation is a P0 process failure.
+
+### 13.1 The Three-Step Pattern (Only Valid Pattern)
+
+```
+Step 1 — IMPLEMENT Rust owner
+  • Write Rust implementation in the appropriate crate (shared_rust_*/src/ or l0_ingest/l0_rust/src/).
+  • Expose the symbol through the crate's lib.rs and rebuild the .pyd.
+  • Do NOT create any new Python wrapper file at this step.
+  • If an existing neutral Python surface (e.g., facade.py, shared/services/active_options_*.py)
+    already re-exports the symbol, update it to point to the Rust .pyd import instead.
+
+Step 2 — RETARGET consumers (if not already done in Step 1)
+  • Switch all consumer import sites to the Rust .pyd or the updated neutral surface.
+  • Run the full test suite for each affected layer.
+  • All parity gates MUST pass before proceeding.
+
+Step 3 — DELETE legacy Python owner (same session as Steps 1+2)
+  • Delete every Python runtime file whose logic has been moved to Rust.
+  • Delete co-located _native_*.py shim files in the same step.
+  • Run the full test suite again.
+  • DEBT-DELTA for this session MUST be ≤ 0.
+```
+
+Steps 1, 2, and 3 MUST be completed in a **single session** unless a concrete blocking dependency
+(named external system, unbuilt dependency crate, dual-run compare requirement) prevents it.
+The blocking dependency MUST be declared in `handoff.md` with owner and due date.
+
+### 13.2 Pure Shim Prohibition
+
+A Python file is a **pure shim** if its body contains only:
+- `from X import Y` / `from X import (Y, Z, ...)` statements, AND
+- `__all__ = [...]` declarations,
+- with no function definitions, class definitions, or logic of any kind.
+
+Pure shims MUST NOT be created as migration artifacts.
+
+**Permitted exception**: a neutral surface file that is being *updated in the same session* to
+replace re-export statements with direct Rust `.pyd` imports is not a pure shim — it is a live
+migration step. It must be updated, not left pointing to the legacy Python owner.
+
+### 13.3 Existing Neutral Surface Rule
+
+Before creating any new Python file during a migration:
+
+1. Check if an existing module in `shared/services/`, `shared/`, or a layer-local module
+   already re-exports the target symbol.
+2. If yes: update that module to point to the new Rust `.pyd` owner. Do not create a parallel file.
+3. If no: create at most **one** neutral surface file per logical group (runtime service,
+   engine set, input adapter, etc.) — not one file per class.
+
+### 13.4 Session Atomicity Rules
+
+<MANDATORY_ARCH id="cutover-session-atomicity">
+  <rule>Steps 1 (Rust impl), 2 (consumer retarget), and 3 (Python deletion) of the Three-Step Pattern MUST execute in the same session unless a named blocking dependency is declared.</rule>
+  <rule>A session that adds new Python wrapper files WITHOUT deleting the legacy Python owner in the same session MUST declare DEBT-DELTA > 0 with a named successor session ID and a due date no later than P1 SLA (2 calendar days).</rule>
+  <rule>If a session's P0 task is "cut consumer imports to a neutral surface", then P1 (Rust owner replacement) MUST be scoped to the same session or the immediately following session — not deferred to a vague future wave.</rule>
+  <rule>A session MUST NOT end with DEBT-DELTA > 0 caused purely by temporary wrapper files if those files have no logic and could have been avoided by updating an existing surface instead.</rule>
+</MANDATORY_ARCH>
+
+### 13.5 Sub-Wave Atomicity (for large module groups like l0_runtime)
+
+When a module group is too large for one session:
+
+- Each sub-wave targets a named responsibility cluster (e.g., `normalize/pipeline`, `state/`).
+- Each sub-wave MUST delete the Python files it migrates **in the same sub-wave session**.
+- `facade.py` (or equivalent top-level entry) acts as the blast-radius limiter and is deleted last.
+- Sub-waves MUST NOT add new Python wrapper files at the `shared/services/` root level.
+- The existing `facade.py` IS the neutral surface — route through it, do not duplicate it.
+
+### 13.6 Anti-Patterns (Hard Stop)
+
+<ANTI_PATTERN id="cutover-anti-patterns" action="ABORT_AND_ROLLBACK_PLAN">
+  <pattern>New Python file created during migration whose body is entirely re-export statements (pure shim)</pattern>
+  <pattern>Consumer import sites switched to a neutral surface in session N, Rust owner not implemented until session N+2 or later</pattern>
+  <pattern>Sub-wave that migrates logic to Rust but does not delete the Python source file in the same session (without a declared dual-run or blocking dependency)</pattern>
+  <pattern>Multiple root-level wrapper files created (e.g., active_options_runtime.py, active_options_engines.py, active_options_input.py) when a single updated neutral surface could serve all consumers</pattern>
+  <pattern>DEBT-DELTA > 0 in a migration session caused by temporary wrapper files that own no logic</pattern>
+  <required_reaction>
+    1) STOP current migration plan immediately.
+    2) REVERT any pure-shim files added this session.
+    3) REDESIGN: identify the single existing neutral surface that can absorb the migration.
+    4) Re-execute the Three-Step Pattern (§13.1) in one session.
+  </required_reaction>
+</ANTI_PATTERN>
 
 ---
 ## 12. Final Operating Principle

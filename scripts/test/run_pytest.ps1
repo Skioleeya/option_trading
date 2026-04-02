@@ -11,6 +11,43 @@ function Test-IsAdmin {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+function Test-DirectoryWriteAccess {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $probePath = Join-Path $Path (".pytest-acl-probe-" + [guid]::NewGuid().ToString("N"))
+    try {
+        Set-Content -LiteralPath $probePath -Value "probe" -NoNewline
+        Remove-Item -LiteralPath $probePath -Force
+        return $true
+    } catch {
+        return $false
+    }
+}
+
+function Assert-CacheDirWritable {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    New-Item -ItemType Directory -Path $Path -Force | Out-Null
+    if (Test-DirectoryWriteAccess -Path $Path) {
+        return
+    }
+
+    $currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+    $owner = "<unavailable>"
+    try {
+        $owner = (Get-Acl $Path).Owner
+    } catch {
+    }
+
+    throw "Pytest cache directory '$Path' is not writable by '$currentIdentity' (owner: '$owner'). Repair it with scripts/test/repair_pytest_cache_acl.ps1, then retry."
+}
+
 if (Test-IsAdmin) {
     throw "Refusing to run pytest in Administrator context. Use a normal user shell to avoid mixed-permission cache artifacts."
 }
@@ -19,7 +56,7 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
 Set-Location $repoRoot
 
 $cacheDir = "tmp/pytest_cache"
-New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
+Assert-CacheDirWritable -Path $cacheDir
 
 # Ensure Windows expanduser() can resolve a home directory in constrained shells.
 if (-not $env:USERPROFILE -and $env:HOME) {

@@ -53,6 +53,7 @@ flowchart LR
 - `shared/contracts/metric_semantics.py` 现为 Rust-backed wrapper；registry source-of-truth 位于 `l0_ingest/l0_rust/src/contract_metrics.rs`。
 - `shared/models/*.py` 已删除；L1/L2 对微结构与 flow 模型的 live import surface 统一为 `shared_rust.models`。
 - `shared_rust.models` 为 Rust-only namespace extension；枚举状态、默认模型语义与 `model_validate/model_dump/model_copy` 行为由 Rust native owner 持有，consumer 不得再本地复制这些状态表或回退到 Python wrapper。
+- `shared/services/l0_support/store/*` 已退出 Python owner 路径；L1 对 `MVCCChainStateStore` 的引用面统一为 `shared_rust.services_l0_support`，禁止恢复 `shared.services.l0_support.store.*` 导入。
 - GEX 统一口径（主链路与 legacy 一致，当前为基于 `open_interest` 的代理语义而非 dealer inventory 真值）：
   - `gex_per_contract = gamma * open_interest * contract_multiplier * spot^2 * 0.01 / 1_000_000`
   - `total_call_gex` 与 `total_put_gex` 必须是非负幅度值（单位：`Million USD`）

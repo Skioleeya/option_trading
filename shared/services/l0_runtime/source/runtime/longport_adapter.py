@@ -1,11 +1,8 @@
 """
 LongportFeedAdapter — 将 MarketDataGateway 适配为 MarketFeed Protocol
 
-包装现有的 backend/app/services/feeds/market_data_gateway.py，
-使其符合 MarketFeed Protocol 接口，同时添加：
-  - 心跳监控
-  - 指数退避重连
-  - SanitizePipelineV2 集成
+该适配器已不再拥有正式 L0 运行态；Rust runtime 现为唯一 owner。
+保留此模块仅用于兼容旧调用面，默认运行在 stub 模式。
 """
 from __future__ import annotations
 
@@ -18,14 +15,14 @@ log = logger = logging.getLogger(__name__)
 
 # 延迟导入，避免在没有 Longport SDK 时崩溃
 _GATEWAY_AVAILABLE = False
-try:
-    from .market_data_gateway import MarketDataGateway
-    _GATEWAY_AVAILABLE = True
-except ImportError:
-    MarketDataGateway = None  # type: ignore[assignment]
+MarketDataGateway = None  # type: ignore[assignment]
 
-from shared.services.l0_support.events.market_events import CleanDepthEvent, CleanQuoteEvent, CleanTradeEvent
-from shared.services.l0_support.sanitize.pipeline import SanitizePipelineV2
+from shared_rust.services_l0_support import (
+    CleanDepthEvent,
+    CleanQuoteEvent,
+    CleanTradeEvent,
+    SanitizePipelineV2,
+)
 
 
 class LongportFeedAdapter:
@@ -74,24 +71,8 @@ class LongportFeedAdapter:
             self._connected = True
             return
 
-        logger.info("LongportFeedAdapter: connecting…")
-        try:
-            self._gateway = MarketDataGateway(
-                app_key=self._config.get("app_key", ""),
-                app_secret=self._config.get("app_secret", ""),
-                access_token=self._config.get("access_token", ""),
-                on_quote=self._on_quote_callback,
-                on_depth=self._on_depth_callback,
-                on_trade=self._on_trade_callback,
-            )
-            await self._gateway.connect()  # type: ignore[attr-defined]
-            self._connected = True
-            self._reconnect_delay = 1.0
-            logger.info("LongportFeedAdapter: connected ✓")
-        except Exception as exc:
-            logger.error(f"LongportFeedAdapter: connection failed: {exc}")
-            self._connected = False
-            raise
+        logger.warning("LongportFeedAdapter is retired from the live L0 path; running in stub mode")
+        self._connected = True
 
     async def disconnect(self) -> None:
         self._connected = False
@@ -104,8 +85,6 @@ class LongportFeedAdapter:
 
     async def subscribe(self, symbols: List[str]) -> None:
         self._subscribed_symbols = list(symbols)
-        if self._gateway and hasattr(self._gateway, "subscribe"):
-            await self._gateway.subscribe(symbols)  # type: ignore[attr-defined]
 
     async def health_check(self) -> bool:
         """

@@ -11,6 +11,11 @@ from longport.openapi import Config, SubType
 from shared.config import settings
 from shared.services.l0_runtime.source.runtime.quote_runtime import L0QuoteRuntime
 from shared.services.l0_runtime.source.runtime.rate_limiter import APIRateLimiter
+from shared.services.l0_runtime.services.native_support import (
+    clamp_subscription_cap_native,
+    collect_targets_native,
+    enforce_cap_native,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +55,7 @@ class OptionSubscriptionManager:
             steady_symbol_burst=settings.longport_steady_symbol_burst,
         )
         configured_cap = int(getattr(settings, "subscription_max", LONGPORT_MAX_SUBSCRIPTIONS))
-        self._subscription_cap = max(1, min(configured_cap, LONGPORT_MAX_SUBSCRIPTIONS))
+        self._subscription_cap = clamp_subscription_cap_native(configured_cap)
         if self._subscription_cap != configured_cap:
             logger.warning(
                 "[SubscriptionManager] subscription_max=%d clamped to official cap=%d",
@@ -179,19 +184,9 @@ class OptionSubscriptionManager:
         target_symbols = set()
         new_symbol_to_strike: dict[str, float] = {}
         for _, chain_info in valid_dates:
-            for item in chain_info:
-                strike = float(getattr(item, "price", 0.0) or 0.0)
-                dist = strike - spot
-                if dist > CALL_WINDOW or dist < -PUT_WINDOW:
-                    continue
-                call_symbol = getattr(item, "call_symbol", "")
-                put_symbol = getattr(item, "put_symbol", "")
-                if call_symbol:
-                    target_symbols.add(call_symbol)
-                    new_symbol_to_strike[call_symbol] = strike
-                if put_symbol:
-                    target_symbols.add(put_symbol)
-                    new_symbol_to_strike[put_symbol] = strike
+            native = collect_targets_native(list(chain_info), float(spot))
+            target_symbols.update(native["targets"])
+            new_symbol_to_strike.update(native["symbol_to_strike"])
 
         self._symbol_to_strike = new_symbol_to_strike
         return target_symbols
@@ -228,32 +223,21 @@ class OptionSubscriptionManager:
 
         mandatory = set(mandatory_symbols or set())
         if len(mandatory) > self._subscription_cap:
-            ranked_mandatory = sorted(
-                mandatory,
-                key=lambda sym: self._symbol_priority_key(sym, spot),
-            )
-            mandatory = set(ranked_mandatory[: self._subscription_cap])
             logger.warning(
                 "[SubscriptionManager] Mandatory symbols exceed cap: kept %d of %d",
-                len(mandatory),
+                self._subscription_cap,
                 len(mandatory_symbols or set()),
             )
-
-        kept = set(mandatory)
-        remaining = self._subscription_cap - len(kept)
-        if remaining > 0:
-            ranked_candidates = sorted(
-                (sym for sym in target_set if sym not in kept),
-                key=lambda sym: self._symbol_priority_key(sym, spot),
-            )
-            kept.update(ranked_candidates[:remaining])
-
+        native = enforce_cap_native(
+            target_symbols=target_set,
+            mandatory_symbols=mandatory,
+            spot=spot,
+            subscription_cap=self._subscription_cap,
+            symbol_to_strike=self._symbol_to_strike,
+        )
+        kept = native["kept"]
         dropped = len(target_set) - len(kept)
-        self._symbol_to_strike = {
-            sym: strike
-            for sym, strike in self._symbol_to_strike.items()
-            if sym in kept
-        }
+        self._symbol_to_strike = native["symbol_to_strike"]
         logger.warning(
             "[SubscriptionManager] Subscription pool trimmed to %d/%d (dropped=%d, mandatory=%d)",
             len(kept),

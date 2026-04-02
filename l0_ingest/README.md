@@ -48,7 +48,7 @@ await builder.shutdown()
 
 OI 与 IV REST 源均受同一实例约束，防止并发爆发。
 
-## L0 清洗规则（`v2/normalize/pipeline/sanitization.py`）
+## L0 清洗规则（`v2/normalize/pipeline/__init__.py`）
 
 | 规则 | 参数 | 说明 |
 |------|------|------|
@@ -75,7 +75,7 @@ SABR 外推（L1 层接管）
 |------|------|
 | `v2/state/runtime/chain_state_store.py` | WS 价格字段保护：REST 仅补充，不覆盖 WS 实时价格 |
 | `v2/services/sync/iv_baseline_sync.py` | `spot_at_sync` 双 TTL 检验（有效 IV 时才更新基线 spot） |
-| `v2/normalize/pipeline/sanitization.py` | 无套利条件过滤 + 报价时效 TTL |
+| `v2/normalize/pipeline/__init__.py` | 无套利条件过滤 + 报价时效 TTL |
 | `v2/source/runtime/rate_limiter.py` | Token Bucket + 并发 + cooldown 一体限流 |
 | `v2/services/pollers/*.py` | Tier2/Tier3 档位轮询 |
 

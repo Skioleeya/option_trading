@@ -1,0 +1,102 @@
+{
+  "version": "v3",
+  "classification_mode": "primary_plus_context_v1",
+  "date": "20260401",
+  "primary_day_type": "balance_day",
+  "context_modifiers": [],
+  "close_profile": "weak_close",
+  "source_files": [
+    {
+      "role": "research_raw",
+      "path": "data/research/raw/raw_20260401.parquet",
+      "size_bytes": 1554696,
+      "sha256": "8be3de57f507039054e3a2fbea6e2eb884aeaca3f24ae744efbd418d6190a3f6"
+    },
+    {
+      "role": "research_feature",
+      "path": "data/research/feature/feature_20260401.parquet",
+      "size_bytes": 3681783,
+      "sha256": "7bd721e0441491a5b6098531138aeb64e6a4a1cf2328548d1fd9765b829af040"
+    },
+    {
+      "role": "research_label",
+      "path": "data/research/label/label_20260401.parquet",
+      "size_bytes": 566317,
+      "sha256": "7ebeb7712f7d417778c2cbe33118ac63181116d60e01383dfe1700f1f049bdcc"
+    },
+    {
+      "role": "atm_series",
+      "path": "data/atm_decay/atm_series_20260401.jsonl",
+      "size_bytes": 3804442,
+      "sha256": "9df8cb701e36c1b32cae63c5d33663b3637b11828b74f925cc41922f2cc5ce61"
+    },
+    {
+      "role": "mtf_iv_series",
+      "path": "data/mtf_iv/mtf_iv_series_20260401.jsonl",
+      "size_bytes": 1596671,
+      "sha256": "370b08a703257b8312162b4e6059c6ef274c61746d758035b206ba93cfe52381"
+    },
+    {
+      "role": "wall_series",
+      "path": "data/wall_migration/wall_series_20260401.jsonl",
+      "size_bytes": 10837,
+      "sha256": "99f346e4bf2af33a85457d656c318c0024706d422d3fc51129b89bf1a76c2ebc"
+    }
+  ],
+  "metrics": {
+    "rows": {
+      "research_raw": 15043,
+      "research_feature": 15043,
+      "research_label": 18365
+    },
+    "raw_day": {
+      "rows": 15043,
+      "session_rows_used": 15029,
+      "spot_outlier_rows_dropped": 0,
+      "net_return": 0.007457637543438851,
+      "intraday_followthrough": 0.007457637543438851,
+      "overnight_gap": 0.0001845529205499747,
+      "overnight_gap_available": true,
+      "realized_range": 0.012462711812282833,
+      "open_rv_1m": 0.00016110134895425143,
+      "ofi_persistence": 0.0,
+      "ofi_nonzero_coverage": 0.0,
+      "directional_efficiency": 0.5983960518198658,
+      "open_side_persistence": 1.0,
+      "close_to_extreme": 0.40160394818013423,
+      "max_abs_jump": 0.005412553433588556,
+      "state_switch_rate": 0.0,
+      "atm_iv_change_pct": -0.7858420333981928,
+      "atm_iv_available": true,
+      "pin_band_ratio": 0.07259298689200878,
+      "close_to_key_level": 1.0,
+      "key_level_coverage": 1.0,
+      "start_timestamp": "2026-04-01T13:30:00.542Z",
+      "end_timestamp": "2026-04-01T20:00:08.575Z",
+      "ofi_source": "bbo_imbalance_raw",
+      "midday_return": 0.011624688624411761,
+      "afternoon_return": -0.004119167046663509,
+      "prev_trade_day": "20260331"
+    },
+    "source_count": 6
+  },
+  "quality": {
+    "status": "PASS",
+    "reasons": [],
+    "min_rows": {
+      "raw": 5000,
+      "feature": 5000,
+      "label": 5000
+    },
+    "key_null_pct": {
+      "data_timestamp": 0.0,
+      "spot": 0.0,
+      "atm_iv": 0.0,
+      "net_gex": 0.0
+    }
+  },
+  "rule_hits": [
+    "balance_day: default fallback"
+  ],
+  "generated_at_utc": "2026-04-01T20:04:03Z"
+}
