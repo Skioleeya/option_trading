@@ -72,6 +72,9 @@ flowchart LR
 - 同一 `snapshot_version` 在计算环不得重复提交 GPU 任务；重复 tick 必须跳过并输出审计字段（`tick_id/snapshot_version/compute_id/gpu_task_id`）
 - 同一 `snapshot_version` 的 dedup tick 虽然不得重跑 L1/L2，但若 `AtmDecayTracker.update()` 能产出新 ATM sample，compute loop 仍必须沿既有 L3 payload 合同续推该 `atm` live tick，禁止因 dedup 把三条 ATM 曲线整段冻结
 - 禁止在微结构分支对 `RecordBatch` 做无效 `to_pylist()` 拷贝（仅在确有行级字段消费时允许）
+- BSM Tier-3 现为 Rust-only owner：`shared_rust.services.bsm_batch_numpy_tier`；Rust owner 不可用或执行失败必须显式抛错，禁止回退 Python NumPy
+- `StreamingAggregator.full_recompute()` 聚合与 wall 选择现为 Rust-only owner：`shared_rust.services.aggregate_greeks_full/select_walls`；Rust owner 不可用或执行失败必须显式抛错，禁止回退 Python fallback
+- BSM 聚合与 zero-gamma 结构重算现为 Rust-only owner：`shared_rust.services.aggregate_from_greeks/estimate_zero_gamma_level`；`bsm_fast` 与 `streaming_aggregator` 主路径必须 fail-fast，禁止恢复 Python fallback
 
 ## 5. Boundary Rules
 

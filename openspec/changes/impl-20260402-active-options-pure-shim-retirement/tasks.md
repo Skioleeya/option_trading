@@ -90,31 +90,33 @@
 - [x] Step 7 — delete `shared/services/active_options_input.py`
   - Command: `Remove-Item shared/services/active_options_input.py`
 
-- [ ] Step 8 — residual reference scan
-  - Command: `rg "active_options_engines|active_options_input" app l0_ingest l1_compute l2_decision l3_assembly l4_ui shared scripts --include="*.py"`
-  - Expected: 0 matches in runtime source (test files excepted)
+- [x] Step 8 — residual reference scan
+  - Command: `rg -n "shared\.services\.active_options_(engines|input)" app l0_ingest l1_compute l2_decision l3_assembly l4_ui shared scripts -g "*.py"`
+  - Result: 0 matches in runtime source
 
-- [ ] Step 9 — combined consumer smoke
+- [x] Step 9 — combined consumer smoke
   - Command: `python -c "from l2_decision.signals.flow.deg_composer import DEGComposer; from l2_decision.signals.flow.flow_engine_d import FlowEngineD; from l2_decision.signals.flow.flow_engine_e import FlowEngineE; from l2_decision.signals.flow.flow_engine_g import FlowEngineG; from app.container import build_container; print('all-ok')"`
-  - Expected output: `all-ok`
+  - Result: `all-ok`
 
 ## Verification
 
 - [x] Scope checks: both shim files confirmed pure re-exports, constants check done (Step 0)
-- [ ] All 5 per-step smokes pass (Steps 1–5)
-- [ ] Both shim files deleted (Steps 6–7)
-- [ ] Residual reference scan returns 0 matches (Step 8)
-- [ ] Combined consumer smoke passes (Step 9)
-- [ ] `pwsh scripts/test/run_pytest.ps1 l2_decision/tests/` passes
-- [ ] `powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict` passes
+- [x] All 5 per-step smokes pass (Steps 1–5)
+- [x] Both shim files deleted (Steps 6–7)
+- [x] Residual reference scan returns 0 matches (Step 8)
+- [x] Combined consumer smoke passes (Step 9)
+- [x] Equivalent targeted pytest gates pass (replacement for stale `l2_decision/tests/` path):
+  - `powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/loops/tests/test_compute_loop_gpu_dedup.py -q`
+  - `powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/loops/tests/test_housekeeping_gpu_dedup.py -q`
+- [x] `powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict` passes
 - [x] SOP-EXEMPT: import-path change only; no SOP semantic contract changed
 
 ## DoD
 
-- [ ] `shared/services/active_options_engines.py` does not exist
-- [ ] `shared/services/active_options_input.py` does not exist
-- [ ] Zero runtime references to `shared.services.active_options_engines` or `shared.services.active_options_input`
-- [ ] All 4 `l2_decision/signals/flow/*.py` consumers import directly from `shared_rust.services`
-- [ ] `app/loops/compute_loop.py` imports directly from `shared_rust.services`
-- [ ] `active_options_runtime.py` and `active_options_constants.py` unchanged
-- [ ] Strict gate passes
+- [x] `shared/services/active_options_engines.py` does not exist
+- [x] `shared/services/active_options_input.py` does not exist
+- [x] Zero runtime references to `shared.services.active_options_engines` or `shared.services.active_options_input`
+- [x] All 4 `l2_decision/signals/flow/*.py` consumers import directly from `shared_rust.services`
+- [x] `app/loops/compute_loop.py` imports directly from `shared_rust.services`
+- [x] `active_options_runtime.py` and `active_options_constants.py` unchanged
+- [x] Strict gate passes

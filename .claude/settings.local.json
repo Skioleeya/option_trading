@@ -13,7 +13,10 @@
       "Bash(python3:*)",
       "Bash(python:*)",
       "Bash(powershell -Command ':*)",
-      "Bash(powershell -ExecutionPolicy Bypass -Command ':*)"
+      "Bash(powershell -ExecutionPolicy Bypass -Command ':*)",
+      "Bash(pwsh scripts/policy/check_layer_boundaries.ps1)",
+      "Bash(ls openspec/changes/impl-20260402-*/)",
+      "Bash(icacls \"E:/US.market/Option_v3/tmp\")"
     ]
   }
 }

@@ -1,0 +1,53 @@
+﻿session_id: "2026-04-02/impl-20260402-active-options-pure-shim-retirement-closeout"
+title: "impl-20260402-active-options-pure-shim-retirement-closeout"
+scope: "openspec closeout + verification"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-02 18:44:57 -04:00"
+updated_at_et: "2026-04-02 18:51:35 -04:00"
+parent_session: "2026-04-02/impl-20260402-claude-audit-fixes-closeout"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "65dbc0f"
+head_commit: "65dbc0f"
+
+files_changed:
+  - "openspec/changes/impl-20260402-active-options-pure-shim-retirement/tasks.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-04-02/impl-20260402-active-options-pure-shim-retirement-closeout/project_state.md"
+  - "notes/sessions/2026-04-02/impl-20260402-active-options-pure-shim-retirement-closeout/open_tasks.md"
+  - "notes/sessions/2026-04-02/impl-20260402-active-options-pure-shim-retirement-closeout/handoff.md"
+  - "notes/sessions/2026-04-02/impl-20260402-active-options-pure-shim-retirement-closeout/meta.yaml"
+
+commands:
+  - "rg -n \"shared\\.services\\.active_options_(engines|input)\" app l0_ingest l1_compute l2_decision l3_assembly l4_ui shared scripts -g \"*.py\""
+  - "python -c \"from l2_decision.signals.flow.deg_composer import DEGComposer, InstitutionalSweepDetector; print('deg-ok')\""
+  - "python -c \"from l2_decision.signals.flow.flow_engine_d import FlowEngineD; print('fed-ok')\""
+  - "python -c \"from l2_decision.signals.flow.flow_engine_e import FlowEngineE; print('fee-ok')\""
+  - "python -c \"from l2_decision.signals.flow.flow_engine_g import FlowEngineG; print('feg-ok')\""
+  - "python -c \"from app.loops.compute_loop import _publish_active_options_input; print('compute-ok')\""
+  - "python -c \"from l2_decision.signals.flow.deg_composer import DEGComposer; from l2_decision.signals.flow.flow_engine_d import FlowEngineD; from l2_decision.signals.flow.flow_engine_e import FlowEngineE; from l2_decision.signals.flow.flow_engine_g import FlowEngineG; from app.container import build_container; print('all-ok')\""
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/repair_pytest_cache_acl.ps1 (escalated)"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/loops/tests/test_compute_loop_gpu_dedup.py -q (escalated)"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/loops/tests/test_housekeeping_gpu_dedup.py -q (escalated)"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict (escalated)"
+
+tests_passed:
+  - "Step 8 residual module scan -> 0 matches"
+  - "Step 1-5 smoke -> deg-ok/fed-ok/fee-ok/feg-ok/compute-ok"
+  - "Step 9 combined smoke -> all-ok"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/loops/tests/test_compute_loop_gpu_dedup.py -q -> 2 passed, 1 warning"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/loops/tests/test_housekeeping_gpu_dedup.py -q -> 4 passed, 1 warning"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict -> PASS"
+
+tests_failed:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l2_decision/tests/ -> path not found"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict -> failed before template fields/debt placeholders were fixed"
+blockers: []
+notes:
+  - "No runtime code changes in this session; OpenSpec closeout + verification only."
+  - "Strict gate passed after session metadata + debt placeholder cleanup and context sync."
+
+

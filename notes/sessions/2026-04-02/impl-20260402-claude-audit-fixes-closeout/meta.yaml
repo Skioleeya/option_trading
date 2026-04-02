@@ -1,0 +1,48 @@
+session_id: "2026-04-02/impl-20260402-claude-audit-fixes-closeout"
+title: "impl-20260402-claude-audit-fixes-closeout"
+scope: "L1 Rust owner cutover debt closeout"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-02 18:16:33 -04:00"
+updated_at_et: "2026-04-02 18:41:56 -04:00"
+parent_session: "2026-04-02/impl-20260402-l1-sabr-rust-solver-exec"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "65dbc0f"
+head_commit: "65dbc0f"
+
+files_changed:
+  - "l1_compute/analysis/bsm_fast.py"
+  - "l1_compute/aggregation/streaming_aggregator.py"
+  - "l1_compute/aggregation/rust_bridge.py"
+  - "l1_compute/analysis/bsm_rust_bridge.py"
+  - "shared_rust_services/src/aggregation.rs"
+  - "shared_rust_services/src/aggregation_rust_bridge.rs"
+  - "openspec/changes/impl-20260402-l1-bsm-numpy-rust-fallback/tasks.md"
+  - "openspec/changes/impl-20260402-l1-streaming-aggregator-rust/tasks.md"
+  - "notes/sessions/2026-04-02/impl-20260402-claude-audit-fixes-closeout/project_state.md"
+  - "notes/sessions/2026-04-02/impl-20260402-claude-audit-fixes-closeout/open_tasks.md"
+  - "notes/sessions/2026-04-02/impl-20260402-claude-audit-fixes-closeout/handoff.md"
+  - "notes/sessions/2026-04-02/impl-20260402-claude-audit-fixes-closeout/meta.yaml"
+
+commands:
+  - "Remove-Item l1_compute/analysis/bsm_aggregation.py l1_compute/aggregation/zero_gamma.py (escalated)"
+  - "cargo build --release --target-dir C:\\Users\\Lenovo\\.codex\\memories\\cargo_target\\shared_rust_services"
+  - "Copy-Item C:\\Users\\Lenovo\\.codex\\memories\\cargo_target\\shared_rust_services\\release\\services.dll E:\\US.market\\Option_v3\\shared_rust\\services.pyd -Force"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/repair_pytest_cache_acl.ps1 (escalated)"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/ (escalated)"
+  - "powershell -ExecutionPolicy Bypass -File scripts/policy/check_layer_boundaries.ps1"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+
+tests_passed:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/ -> 132 passed, 1 warning"
+  - "powershell -ExecutionPolicy Bypass -File scripts/policy/check_layer_boundaries.ps1 -> passed"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict -> passed"
+
+tests_failed:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/ -> cache ACL not writable (fixed by repair_pytest_cache_acl.ps1)"
+
+blockers: []
+notes:
+  - "Closed DEBT-L1-1 and DEBT-L1-2 in-session."
+  - "Strict validation passed on 2026-04-02 18:41:56 -04:00."

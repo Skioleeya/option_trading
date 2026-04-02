@@ -27,8 +27,14 @@ This file is not advisory prose. It is a hard execution directive for all AI age
 
 <MANDATORY_ARCH id="performance-core">
   <rule>L0->L1 transfer MUST prioritize zero-copy semantics (Arrow RecordBatch over SHM where applicable).</rule>
-  <rule>Chain-wide Greeks/GEX logic MUST be vectorized (Rust/CuPy/Numba route), no full-chain Python scalar loops in hot path.</rule>
-  <rule>Heavy Python compute MUST be offloaded (`asyncio.to_thread`) to protect event-loop latency.</rule>
+  <rule>All L1 numerical compute MUST be in Rust (see `l1-rust-only-compute`). For L0/L2/L3 hot paths not yet migrated to Rust, compute MUST be vectorized and offloaded via `asyncio.to_thread` to protect event-loop latency.</rule>
+</MANDATORY_ARCH>
+
+<MANDATORY_ARCH id="l1-rust-only-compute">
+  <rule>ALL numerical compute in `l1_compute/` MUST be implemented in Rust (`shared_rust_services/src/`). Python files in `l1_compute/` are permitted ONLY for: (a) thin PyO3 call delegation with no arithmetic, (b) dataclass/enum definitions, (c) async orchestration wiring. Any Python file in `l1_compute/` whose body contains numerical loops, array math, statistical formulas, or calibration logic is in violation and MUST be refactored to Rust in the same session it is touched.</rule>
+  <rule>`import numpy`, `from scipy`, `import numba`, and `import cupy` are forbidden in `l1_compute/` runtime source files. These imports are permitted only inside `l1_compute/tests/` for parity verification.</rule>
+  <rule>Each `l1_compute/` Python file that still contains compute logic is legacy debt and MUST have a corresponding `openspec/changes/impl-*` proposal (per §7 openspec-chain-gate). No new compute logic may be added to such a file while its proposal is open.</rule>
+  <rule>A thin delegation file that only calls `shared_rust.services.*` is the sole permitted non-test Python pattern after migration, and MUST itself be eliminated once all callers can import from `shared_rust.services` directly.</rule>
 </MANDATORY_ARCH>
 
 <MANDATORY_ARCH id="modularity-core">
@@ -41,17 +47,20 @@ This file is not advisory prose. It is a hard execution directive for all AI age
   <rule>Refactor/cutover work MUST prefer the smallest viable number of transitional modules and temporary surfaces.</rule>
   <rule>Agent MUST NOT mirror a legacy package tree into a new namespace file-for-file when an existing neutral service surface can absorb the migration.</rule>
   <rule>New wrapper/bridge files are allowed only when they eliminate a hard boundary violation or enable an atomic owner replacement; otherwise agent MUST extend or replace the existing neutral surface in place.</rule>
-  <rule>Preferred migration order MUST be: stabilize one neutral entrypoint -> retarget consumers -> replace owner behind the same entrypoint -> delete legacy tree -> collapse temporary bridges.</rule>
-  <rule>Efficiency means lower migration surface area, lower file-count churn, and faster retirement of transitional code; "wrapper proliferation" is not an acceptable refactor strategy.</rule>
   <rule>A Python file whose entire body consists of `from X import Y` re-export statements and an `__all__` declaration with no logic of its own is a PURE SHIM and MUST NOT be created as a migration artifact.</rule>
-  <rule>If consumer import sites are already cut over to a neutral surface in a given session, the underlying Python owner MUST be replaced (Rust or inline) in the same session unless a concrete blocking dependency is declared in handoff with owner and due date.</rule>
-  <rule>Each cutover session MUST target DEBT-DELTA ≤ 0; if a session adds transitional files without deleting legacy owners, it MUST declare DEBT-JUSTIFICATION with a named successor session that will close the debt.</rule>
+  <rule>Efficiency means lower migration surface area, lower file-count churn, and faster retirement of transitional code; "wrapper proliferation" is not an acceptable refactor strategy.</rule>
+</MANDATORY_ARCH>
+
+<MANDATORY_ARCH id="rust-dual-run-window">
+  <rule>A `_RUST_AVAILABLE` guard or `USE_RUST_*` env-var feature flag is permitted ONLY during the first live dual-run validation window (≤ 1 market session). After dual-run evidence is recorded in `handoff.md`, the Python fallback branch and the guard MUST be deleted in the same session.</rule>
+  <rule>Feature flags introduced for safe rollout MUST declare a removal date in `handoff.md`. Maximum permitted lifespan is one post-validation session; leaving a flag beyond that is a DEBT item subject to §9 SLA enforcement.</rule>
+  <rule>Once `shared_rust_services` is rebuilt and a `#[pyfunction]` is importable, the corresponding Python compute branch MUST be deleted; the importable symbol is sufficient evidence — no separate approval step is required.</rule>
 </MANDATORY_ARCH>
 
 <MANDATORY_ARCH id="resilience-core">
   <rule>Shared resource handshake MUST follow create-or-open semantics.</rule>
   <rule>No silent failure: Rust runtime path MUST NOT use `unwrap()`; Python MUST NOT swallow errors with bare/silent `try-except`.</rule>
-  <rule>When high-perf path fails, system MUST degrade explicitly without dropping L4 broadcast continuity.</rule>
+  <rule>When a high-perf path fails, the system MUST degrade explicitly without dropping L4 broadcast continuity.</rule>
 </MANDATORY_ARCH>
 
 <MANDATORY_ARCH id="contract-integrity">
@@ -72,6 +81,9 @@ This file is not advisory prose. It is a hard execution directive for all AI age
   <pattern>Any Python (`*.py`) or Rust (`*.rs`) source file exceeds 400 lines</pattern>
   <pattern>God-module structure that violates modularity (low cohesion / high coupling)</pattern>
   <pattern>Wrapper fan-out or file-for-file namespace mirroring during migration when a smaller transitional surface is feasible</pattern>
+  <pattern>Any numerical loop, array arithmetic, statistical formula, or calibration logic written in Python inside `l1_compute/` (outside tests) — L1 compute MUST be Rust</pattern>
+  <pattern>`import numpy`, `from scipy`, `import numba`, or `import cupy` in a `l1_compute/` runtime source file (non-test)</pattern>
+  <pattern>Python fallback path or `_RUST_AVAILABLE` / `USE_RUST_*` guard retained beyond the declared dual-run window without a DEBT entry and removal date in handoff</pattern>
   <required_reaction>
     1) STOP current implementation immediately.
     2) REVERT current local plan (not unrelated user changes).
@@ -300,7 +312,7 @@ If any scripted gate fails, delivery is not complete.
 This section defines the **only permitted pattern** for retiring Python module groups in favor of
 Rust-backed `.pyd` owners. Any deviation is a P0 process failure.
 
-### 13.1 The Three-Step Pattern (Only Valid Pattern)
+### 12.1 The Three-Step Pattern (Only Valid Pattern)
 
 ```
 Step 1 — IMPLEMENT Rust owner
@@ -326,7 +338,7 @@ Steps 1, 2, and 3 MUST be completed in a **single session** unless a concrete bl
 (named external system, unbuilt dependency crate, dual-run compare requirement) prevents it.
 The blocking dependency MUST be declared in `handoff.md` with owner and due date.
 
-### 13.2 Pure Shim Prohibition
+### 12.2 Pure Shim Prohibition
 
 A Python file is a **pure shim** if its body contains only:
 - `from X import Y` / `from X import (Y, Z, ...)` statements, AND
@@ -339,7 +351,7 @@ Pure shims MUST NOT be created as migration artifacts.
 replace re-export statements with direct Rust `.pyd` imports is not a pure shim — it is a live
 migration step. It must be updated, not left pointing to the legacy Python owner.
 
-### 13.3 Existing Neutral Surface Rule
+### 12.3 Existing Neutral Surface Rule
 
 Before creating any new Python file during a migration:
 
@@ -349,16 +361,16 @@ Before creating any new Python file during a migration:
 3. If no: create at most **one** neutral surface file per logical group (runtime service,
    engine set, input adapter, etc.) — not one file per class.
 
-### 13.4 Session Atomicity Rules
+### 12.4 Session Atomicity Rules
 
 <MANDATORY_ARCH id="cutover-session-atomicity">
   <rule>Steps 1 (Rust impl), 2 (consumer retarget), and 3 (Python deletion) of the Three-Step Pattern MUST execute in the same session unless a named blocking dependency is declared.</rule>
   <rule>A session that adds new Python wrapper files WITHOUT deleting the legacy Python owner in the same session MUST declare DEBT-DELTA > 0 with a named successor session ID and a due date no later than P1 SLA (2 calendar days).</rule>
-  <rule>If a session's P0 task is "cut consumer imports to a neutral surface", then P1 (Rust owner replacement) MUST be scoped to the same session or the immediately following session — not deferred to a vague future wave.</rule>
+  <rule>If a session's P0 task is "cut consumer imports to a neutral surface", then the Rust owner replacement MUST be scoped to the same session or the immediately following session — not deferred to a vague future wave.</rule>
   <rule>A session MUST NOT end with DEBT-DELTA > 0 caused purely by temporary wrapper files if those files have no logic and could have been avoided by updating an existing surface instead.</rule>
 </MANDATORY_ARCH>
 
-### 13.5 Sub-Wave Atomicity (for large module groups like l0_runtime)
+### 12.5 Sub-Wave Atomicity (for large module groups like l0_runtime)
 
 When a module group is too large for one session:
 
@@ -368,7 +380,7 @@ When a module group is too large for one session:
 - Sub-waves MUST NOT add new Python wrapper files at the `shared/services/` root level.
 - The existing `facade.py` IS the neutral surface — route through it, do not duplicate it.
 
-### 13.6 Anti-Patterns (Hard Stop)
+### 12.6 Anti-Patterns (Hard Stop)
 
 <ANTI_PATTERN id="cutover-anti-patterns" action="ABORT_AND_ROLLBACK_PLAN">
   <pattern>New Python file created during migration whose body is entirely re-export statements (pure shim)</pattern>
@@ -380,12 +392,12 @@ When a module group is too large for one session:
     1) STOP current migration plan immediately.
     2) REVERT any pure-shim files added this session.
     3) REDESIGN: identify the single existing neutral surface that can absorb the migration.
-    4) Re-execute the Three-Step Pattern (§13.1) in one session.
+    4) Re-execute the Three-Step Pattern (§12.1) in one session.
   </required_reaction>
 </ANTI_PATTERN>
 
 ---
-## 12. Final Operating Principle
+## 13. Final Operating Principle
 
 Agent behavior standard:
 

@@ -1,84 +1,18 @@
-"""BSM Fast Engine — 3-Tier GPU/JIT/NumPy Batch Greeks (0DTE Production Grade)
-
-Technology tier (priority order):
-  1. CuPy GPU kernel  — GPU CUDA accelerated, 10-60x speedup over CPU for large chains.
-                         Auto-selected when `cupy` is importable and a CUDA device exists.
-  2. Numba JIT+prange — Multi-core CPU, pre-compiled, near-zero per-call overhead.
-                         Auto-selected when `numba` is importable (current baseline).
-  3. NumPy vectorized — Pure CPU, no JIT. Fallback when neither CuPy nor Numba available.
-
-Install GPU path: `pip install cupy-cuda12x` (match your CUDA version).
-
-Algorithm research basis (2024-2026):
-  - GPU-accelerated CRR/MC option pricing: Aalto University (2025)
-    achieves 10x (CRR) to 59x (MC) speedup vs single-threaded CPU.
-  - Versal AI Engine / CUDA kernel fusion concepts: EmergentMind (2025)
-
-Key design decisions for GPU path:
-  1. All tensors transferred to GPU once per batch (zero-copy NumPy pinned memory).
-  2. `cp.erf` and `cp.log` operate element-wise without Python loops.
-  3. Result arrays moved back to CPU as NumPy arrays; downstream code unchanged.
-  4. Graceful degradation: if CuPy import fails or GPU not found, falls through to Numba.
-
-All tiers return the same dict schema:
-  {'delta', 'gamma', 'vega', 'vanna', 'charm', 'theta'} — each a float64 ndarray.
-
-Usage (unchanged from previous version):
-    from l1_compute.analysis.bsm_fast import compute_greeks_batch, warmup
-    warmup()  # at startup
-    batch = compute_greeks_batch(spots, strikes, ivs, t_years, is_call_arr, r=..., q=...)
-"""
+"""BSM fast path with 3-tier compute routing (CuPy -> Numba -> NumPy/Rust)."""
 
 from __future__ import annotations
 
 import logging
 import math
 import time
-from typing import TYPE_CHECKING
 
 import numpy as np
+from l1_compute.aggregation.rust_bridge import rust_aggregate_from_greeks, rust_select_walls
+from l1_compute.analysis.bsm_rust_bridge import rust_bsm_batch_numpy_tier
 
 logger = logging.getLogger(__name__)
 _GEX_SCALE_MILLION = 1_000_000.0
 
-def _select_walls_by_spot(
-    strikes: np.ndarray,
-    call_gex: np.ndarray,
-    put_gex: np.ndarray,
-    spot_ref: float,
-) -> tuple[float | None, float | None, float, float]:
-    """Select call/put walls with spot-side preference and global fallback."""
-    call_mask = call_gex > 0.0
-    put_mask = put_gex > 0.0
-
-    call_side = np.flatnonzero(call_mask & (strikes >= spot_ref))
-    put_side = np.flatnonzero(put_mask & (strikes <= spot_ref))
-    if call_side.size == 0:
-        call_side = np.flatnonzero(call_mask)
-    if put_side.size == 0:
-        put_side = np.flatnonzero(put_mask)
-
-    call_wall = None
-    put_wall = None
-    max_call_gex = 0.0
-    max_put_gex = 0.0
-
-    if call_side.size > 0:
-        call_idx = int(call_side[np.argmax(call_gex[call_side])])
-        max_call_gex = float(call_gex[call_idx])
-        call_wall = float(strikes[call_idx]) if max_call_gex > 0 else None
-
-    if put_side.size > 0:
-        put_idx = int(put_side[np.argmax(put_gex[put_side])])
-        max_put_gex = float(put_gex[put_idx])
-        put_wall = float(strikes[put_idx]) if max_put_gex > 0 else None
-
-    return call_wall, put_wall, max_call_gex, max_put_gex
-
-
-# --------------------------------------------------------------------------- #
-# Tier 1: CuPy GPU availability probe
-# --------------------------------------------------------------------------- #
 try:
     import cupy as cp  # type: ignore
     _gpu_arr = cp.array([1.0], dtype=cp.float64)  # force device init
@@ -90,10 +24,6 @@ except (ImportError, AttributeError, OSError, RuntimeError, ValueError):
     logger.info(
         "[bsm_fast] CuPy not available — install `cupy-cuda12x` for GPU acceleration."
     )
-
-# --------------------------------------------------------------------------- #
-# Tier 2: Numba availability probe
-# --------------------------------------------------------------------------- #
 try:
     from numba import njit, prange  # type: ignore
     _NUMBA_AVAILABLE = True
@@ -104,11 +34,6 @@ except ImportError:
         "[bsm_fast] Numba not installed — falling back to NumPy vectorization (Tier 3). "
         "Run `pip install numba` for CPU-parallel performance."
     )
-
-
-# =========================================================================== #
-# Numba JIT kernel (compiled path)
-# =========================================================================== #
 
 if _NUMBA_AVAILABLE:
     @njit(parallel=True, fastmath=True, cache=True)
@@ -199,11 +124,6 @@ if _NUMBA_AVAILABLE:
 
         return delta_arr, gamma_arr, vega_arr, vanna_arr, charm_arr, theta_arr
 
-
-# =========================================================================== #
-# NumPy vectorized fallback (no Numba)
-# =========================================================================== #
-
 def _bsm_batch_numpy(
     spots:   np.ndarray,
     strikes: np.ndarray,
@@ -213,72 +133,16 @@ def _bsm_batch_numpy(
     r: float,
     q: float,
 ) -> dict[str, np.ndarray]:
-    """Pure-NumPy vectorized BSM — no Python loops over the chain."""
-    sqrt_t = math.sqrt(t_years)
-    eq_t   = math.exp(-q * t_years)
-    er_t   = math.exp(-r * t_years)
-
-    # Guard: zero-division for bad inputs
-    safe_iv = np.where(ivs > 0, ivs, 1e-8)
-    safe_S  = np.where(spots > 0, spots, 1e-8)
-    safe_K  = np.where(strikes > 0, strikes, 1e-8)
-
-    d1 = (np.log(safe_S / safe_K) + (r - q + 0.5 * safe_iv**2) * t_years) / (safe_iv * sqrt_t)
-    d2 = d1 - safe_iv * sqrt_t
-
-    # Use scipy.special.ndtr when available (fastest path); fallback to erf
-    try:
-        from scipy.special import ndtr  # type: ignore
-        cdf_d1  = ndtr(d1)
-        cdf_nd1 = ndtr(-d1)
-        cdf_d2  = ndtr(d2)
-        cdf_nd2 = ndtr(-d2)
-    except ImportError:
-        _sqrt2 = math.sqrt(2.0)
-        cdf_d1  = 0.5 * (1.0 + np.frompyfunc(math.erf, 1, 1)( d1 / _sqrt2).astype(float))
-        cdf_nd1 = 0.5 * (1.0 + np.frompyfunc(math.erf, 1, 1)(-d1 / _sqrt2).astype(float))
-        cdf_d2  = 0.5 * (1.0 + np.frompyfunc(math.erf, 1, 1)( d2 / _sqrt2).astype(float))
-        cdf_nd2 = 0.5 * (1.0 + np.frompyfunc(math.erf, 1, 1)(-d2 / _sqrt2).astype(float))
-
-    nd1 = np.exp(-0.5 * d1**2) / math.sqrt(2.0 * math.pi)
-
-    delta = np.where(is_call,  eq_t * cdf_d1, -eq_t * cdf_nd1)
-    gamma = eq_t * nd1 / (safe_S * safe_iv * sqrt_t)
-    vega  = safe_S * eq_t * nd1 * sqrt_t * 0.01
-    vanna = -eq_t * nd1 * d2 / safe_iv * 0.01
-
-    charm_num = 2.0 * (r - q) * t_years - d2 * safe_iv * sqrt_t
-    charm_den = 2.0 * t_years * safe_iv * sqrt_t
-    charm_call = ( q*eq_t*cdf_d1  - eq_t*nd1*charm_num/charm_den) / 365.0
-    charm_put  = (-q*eq_t*cdf_nd1 - eq_t*nd1*charm_num/charm_den) / 365.0
-    charm = np.where(is_call, charm_call, charm_put)
-
-    theta_call = (
-        -(safe_S * safe_iv * eq_t * nd1) / (2.0 * sqrt_t)
-        - r * safe_K * er_t * cdf_d2
-        + q * safe_S * eq_t * cdf_d1
-    ) / 365.0
-    theta_put = (
-        -(safe_S * safe_iv * eq_t * nd1) / (2.0 * sqrt_t)
-        + r * safe_K * er_t * cdf_nd2
-        - q * safe_S * eq_t * cdf_nd1
-    ) / 365.0
-    theta = np.where(is_call, theta_call, theta_put)
-
-    # Mask out bad inputs
-    valid = (ivs > 0) & (spots > 0) & (strikes > 0) & (t_years > 0)
-    for arr in (delta, gamma, vega, vanna, charm, theta):
-        arr[~valid] = 0.0
-
-    return {
-        "delta": delta, "gamma": gamma, "vega": vega,
-        "vanna": vanna, "charm": charm, "theta": theta,
-    }
-
-
-# =========================================================================== #
-# Tier 1: CuPy GPU kernel
-# =========================================================================== #
+    """Rust-only Tier-3 path (legacy NumPy tier entrypoint)."""
+    return rust_bsm_batch_numpy_tier(
+        spots=spots,
+        strikes=strikes,
+        ivs=ivs,
+        t_years=t_years,
+        is_call=is_call,
+        r=r,
+        q=q,
+    )
 
 def _bsm_batch_cupy(
     spots:   np.ndarray,
@@ -395,12 +259,14 @@ def _bsm_batch_cupy(
         else:
             spot_ref = 0.0
 
-        call_wall, put_wall, max_call_gex, max_put_gex = _select_walls_by_spot(
+        call_wall, put_wall, max_call_gex, max_put_gex = rust_select_walls(
             strikes=strikes_np,
             call_gex=call_gex_np,
             put_gex=put_gex_np,
             spot_ref=spot_ref,
         )
+        call_wall = call_wall if max_call_gex > 0 else None
+        put_wall = put_wall if max_put_gex > 0 else None
         
         agg = {
             "net_gex": (total_call_gex - total_put_gex) / _GEX_SCALE_MILLION,
@@ -426,57 +292,6 @@ def _bsm_batch_cupy(
     return greeks, agg
 
 
-# =========================================================================== #
-# Public API
-# =========================================================================== #
-
-def _aggregate_greeks_cpu(
-    greeks: dict[str, np.ndarray],
-    spots: np.ndarray, strikes: np.ndarray, is_call: np.ndarray,
-    ivs: np.ndarray, t_years: float,
-    ois: np.ndarray, mults: np.ndarray
-) -> dict[str, float]:
-    valid = (ivs > 0) & (spots > 0) & (strikes > 0) & (t_years > 0)
-    
-    # Keep GEX convention aligned with L1 mainline (1% spot-move MMUSD):
-    # gamma * OI * multiplier * S^2 * 0.01, then normalize to USD millions.
-    gex = greeks["gamma"] * ois * (spots ** 2) * mults * 0.01
-    gex = np.where(valid, gex, 0.0)
-    vanna_exp = np.where(valid, greeks["vanna"] * ois * mults, 0.0)
-    charm_exp = np.where(valid, greeks["charm"] * ois * mults, 0.0)
-    
-    call_gex = np.where(is_call, gex, 0.0)
-    put_gex  = np.where(~is_call, gex, 0.0)
-    
-    total_call_gex = float(np.sum(call_gex))
-    total_put_gex  = float(np.sum(put_gex))
-    
-    if valid.any():
-        spot_ref = float(np.median(spots[valid]))
-    elif spots.size > 0:
-        spot_ref = float(spots[0])
-    else:
-        spot_ref = 0.0
-
-    call_wall, put_wall, max_call_gex, max_put_gex = _select_walls_by_spot(
-        strikes=strikes,
-        call_gex=call_gex,
-        put_gex=put_gex,
-        spot_ref=spot_ref,
-    )
-    
-    return {
-        "net_gex": (total_call_gex - total_put_gex) / _GEX_SCALE_MILLION,
-        "total_call_gex": total_call_gex / _GEX_SCALE_MILLION,
-        "total_put_gex": total_put_gex / _GEX_SCALE_MILLION,
-        "max_call_gex": max_call_gex,
-        "max_put_gex": max_put_gex,
-        "call_wall": call_wall,
-        "put_wall": put_wall,
-        "net_vanna": float(np.sum(vanna_exp)) / _GEX_SCALE_MILLION,
-        "net_charm": float(np.sum(charm_exp)) / _GEX_SCALE_MILLION,
-    }
-
 def compute_greeks_batch(
     spots:   np.ndarray,
     strikes: np.ndarray,
@@ -494,7 +309,7 @@ def compute_greeks_batch(
     3-tier execution priority:
       1. CuPy GPU kernel  (if cupy installed + CUDA device present)
       2. Numba JIT+prange (if numba installed)
-      3. NumPy vectorized (fallback)
+      3. Rust BSM owner (via legacy NumPy-tier entrypoint)
 
     Args:
         spots    : float64 array, spot price for each contract
@@ -529,27 +344,29 @@ def compute_greeks_batch(
         )
         greeks = {"delta": d, "gamma": g, "vega": ve, "vanna": va, "charm": ch, "theta": th}
     else:
-        # Tier 3: NumPy vectorized fallback
+        # Tier 3: Rust-owned BSM path
         greeks = _bsm_batch_numpy(spots, strikes, ivs, t_years, is_call, r, q)
         
     agg = None
     if ois is not None and mults is not None:
-        agg = _aggregate_greeks_cpu(greeks, spots, strikes, is_call, ivs, t_years, ois, mults)
+        agg = rust_aggregate_from_greeks(
+            gamma=greeks["gamma"],
+            vanna=greeks["vanna"],
+            charm=greeks["charm"],
+            spots=spots,
+            strikes=strikes,
+            is_call=is_call,
+            ivs=ivs,
+            t_years=t_years,
+            ois=ois,
+            mults=mults,
+        )
         
     return greeks, agg
 
 
 def warmup() -> None:
-    """
-    Trigger JIT / GPU pre-compilation at startup.
-
-    Runs a small dummy chain (20 contracts) through the top-priority tier
-    so that first live compute loop incurs near-zero latency:
-      - CuPy: triggers CUDA context init + kernel JIT (~300ms first call).
-      - Numba: triggers LLVM compilation (~200ms first call, then cached).
-
-    If neither CuPy nor Numba is installed this is a no-op.
-    """
+    """Pre-compile CuPy/Numba path with a tiny synthetic batch."""
     if not _CUPY_AVAILABLE and not _NUMBA_AVAILABLE:
         logger.info("[bsm_fast.warmup] Neither CuPy nor Numba present — no-op.")
         return

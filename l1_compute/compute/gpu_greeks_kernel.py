@@ -5,7 +5,7 @@ the entire option chain (N contracts) with zero Python loops.
 
 Technology hierarchy:
     Tier 1: CuPy GPU (CUDA)     — chain_size ≥ 100, GPU available
-    Tier 2: NumPy vectorized     — fallback when GPU unavailable (used by ComputeRouter)
+    Tier 2: Rust BSM owner      — CPU path when GPU unavailable (used by ComputeRouter)
 
 This module only concerns itself with the computation math. The routing
 decision (GPU vs CPU) lives in ComputeRouter.
@@ -25,6 +25,8 @@ from dataclasses import dataclass
 from typing import Optional
 
 import numpy as np
+
+from l1_compute.analysis.bsm_rust_bridge import rust_bsm_batch_numpy_tier
 
 logger = logging.getLogger(__name__)
 
@@ -75,19 +77,6 @@ class GreeksMatrix:
         return len(self.delta)
 
 
-def _norm_cdf_numpy(x: np.ndarray) -> np.ndarray:
-    """Vectorized standard normal CDF using scipy.special.ndtr if available."""
-    try:
-        from scipy.special import ndtr  # type: ignore
-        return ndtr(x)
-    except ImportError:
-        return 0.5 * (1.0 + np.sign(x) * np.sqrt(1.0 - np.exp(-2.0 / np.pi * x ** 2)))
-
-
-def _norm_pdf_numpy(x: np.ndarray) -> np.ndarray:
-    return np.exp(-0.5 * x ** 2) / _SQRT_2PI
-
-
 def _compute_numpy(
     spots: np.ndarray,
     strikes: np.ndarray,
@@ -99,51 +88,27 @@ def _compute_numpy(
     ois: np.ndarray,
     mults: np.ndarray,
 ) -> GreeksMatrix:
-    """Pure-NumPy vectorized BSM fallback. Matches CuPy results exactly."""
+    """CPU path uses Rust BSM owner; no Python math fallback."""
     n = len(spots)
-    sqrt_t = math.sqrt(max(t_years, 1e-9))
 
     # Clamp IV to suppress singularity
     iv_safe = np.clip(ivs, _IV_CLAMP_LOW, _IV_CLAMP_HIGH)
 
-    # d1, d2
-    log_sk = np.log(np.maximum(spots / np.maximum(strikes, 1e-9), 1e-12))
-    d1 = (log_sk + (r - q + 0.5 * iv_safe ** 2) * t_years) / (iv_safe * sqrt_t)
-    d2 = d1 - iv_safe * sqrt_t
-
-    nd1 = _norm_pdf_numpy(d1)
-    eq_t = math.exp(-q * t_years)
-    er_t = math.exp(-r * t_years)
-
-    Nd1_call = _norm_cdf_numpy(d1)
-    Nd1_put = _norm_cdf_numpy(-d1)
-
-    delta = np.where(is_call,
-                     eq_t * Nd1_call,
-                     -eq_t * Nd1_put)
-
-    gamma = eq_t * nd1 / np.maximum(spots * iv_safe * sqrt_t, 1e-12)
-
-    vega = spots * eq_t * nd1 * sqrt_t * 0.01  # per 1pp IV
-
-    vanna = -eq_t * nd1 * d2 / np.maximum(iv_safe, 1e-12) * 0.01
-
-    dterm = (2.0 * (r - q) * t_years - d2 * iv_safe * sqrt_t)
-    denom = np.maximum(2.0 * t_years * iv_safe * sqrt_t, 1e-12)
-
-    charm_call = (q * eq_t * Nd1_call
-                  - eq_t * nd1 * dterm / denom)
-    charm_put = (-q * eq_t * Nd1_put
-                 - eq_t * nd1 * dterm / denom)
-    charm = np.where(is_call, charm_call, charm_put) / 365.0
-
-    theta_call = (-(spots * iv_safe * eq_t * nd1) / (2.0 * sqrt_t)
-                  - r * strikes * er_t * _norm_cdf_numpy(d2)
-                  + q * spots * eq_t * Nd1_call) / 365.0
-    theta_put = (-(spots * iv_safe * eq_t * nd1) / (2.0 * sqrt_t)
-                 + r * strikes * er_t * _norm_cdf_numpy(-d2)
-                 - q * spots * eq_t * Nd1_put) / 365.0
-    theta = np.where(is_call, theta_call, theta_put)
+    rust_greeks = rust_bsm_batch_numpy_tier(
+        spots=np.asarray(spots, dtype=np.float64),
+        strikes=np.asarray(strikes, dtype=np.float64),
+        ivs=np.asarray(iv_safe, dtype=np.float64),
+        t_years=float(t_years),
+        is_call=np.asarray(is_call, dtype=np.bool_),
+        r=float(r),
+        q=float(q),
+    )
+    delta = rust_greeks["delta"]
+    gamma = rust_greeks["gamma"]
+    vega = rust_greeks["vega"]
+    vanna = rust_greeks["vanna"]
+    charm = rust_greeks["charm"]
+    theta = rust_greeks["theta"]
 
     # GEX exposure per contract: 1% spot-move hedging notional (MMUSD)
     gex_raw = gamma * ois * mults * spots ** 2 * 0.01 / _GEX_SCALE

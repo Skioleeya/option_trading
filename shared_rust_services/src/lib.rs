@@ -10,6 +10,11 @@ mod research_store_support;
 mod research_utils;
 mod active_options;
 mod tactical;
+mod bsm;
+mod aggregation;
+mod aggregation_rust_bridge;
+mod microstructure;
+mod sabr;
 
 #[pymodule]
 fn services(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -21,5 +26,9 @@ fn services(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     research_schema::register(py, m)?;
     research_store::register(py, m)?;
     tactical::register(py, m)?;
+    bsm::register(py, m)?;
+    aggregation::register(py, m)?;
+    microstructure::register(py, m)?;
+    sabr::register(py, m)?;
     Ok(())
 }

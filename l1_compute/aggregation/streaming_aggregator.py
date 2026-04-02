@@ -22,6 +22,11 @@ from typing import Optional
 
 import numpy as np
 
+from l1_compute.aggregation.rust_bridge import (
+    rust_aggregate_greeks_full,
+    rust_estimate_zero_gamma_level,
+    rust_select_walls,
+)
 from l1_compute.compute.gpu_greeks_kernel import GreeksMatrix
 
 logger = logging.getLogger(__name__)
@@ -135,12 +140,18 @@ class StreamingAggregator:
             except (TypeError, ValueError):
                 self._spot = 0.0
 
-        # Net GEX in MMUSD: call gross minus put gross.
-        self._net_gex       = float(np.sum(matrix.call_gex) - np.sum(matrix.put_gex))
-        self._total_call_gex = float(np.sum(matrix.call_gex))
-        self._total_put_gex  = float(np.sum(matrix.put_gex))
-        self._net_vanna     = float(np.sum(matrix.vanna))
-        self._net_charm     = float(np.sum(matrix.charm))
+        rust_payload = rust_aggregate_greeks_full(
+            strikes=np.asarray(strikes, dtype=np.float64),
+            call_gex=np.asarray(matrix.call_gex, dtype=np.float64),
+            put_gex=np.asarray(matrix.put_gex, dtype=np.float64),
+            vanna=np.asarray(matrix.vanna, dtype=np.float64),
+            charm=np.asarray(matrix.charm, dtype=np.float64),
+        )
+        self._net_gex = float(rust_payload.get("net_gex", 0.0))
+        self._total_call_gex = float(rust_payload.get("total_call_gex", 0.0))
+        self._total_put_gex = float(rust_payload.get("total_put_gex", 0.0))
+        self._net_vanna = float(rust_payload.get("net_vanna", 0.0))
+        self._net_charm = float(rust_payload.get("net_charm", 0.0))
 
         # Rebuild per-strike map
         self._per_strike.clear()
@@ -165,7 +176,7 @@ class StreamingAggregator:
                 }
 
         self._recompute_walls()
-        self._zero_gamma_level = self._estimate_zero_gamma_level(
+        self._zero_gamma_level = rust_estimate_zero_gamma_level(
             strikes=strikes,
             is_call=is_call,
             ivs=ivs,
@@ -308,33 +319,30 @@ class StreamingAggregator:
             self._flip_level_cumulative = 0.0
             return
 
-        best_call_global = (0.0, -math.inf)   # (strike, gex)
-        best_put_global  = (0.0, -math.inf)
-        best_call_side = (0.0, -math.inf)
-        best_put_side = (0.0, -math.inf)
-
         sorted_strikes = sorted(self._per_strike.keys())
-        net_gex_by_strike: list[tuple[float, float]] = []  # for flip detection
+        strikes_arr = np.asarray(sorted_strikes, dtype=np.float64)
+        call_gex_arr = np.asarray(
+            [self._per_strike[strike].call_gex for strike in sorted_strikes],
+            dtype=np.float64,
+        )
+        put_gex_arr = np.asarray(
+            [self._per_strike[strike].put_gex for strike in sorted_strikes],
+            dtype=np.float64,
+        )
 
-        for k in sorted_strikes:
-            sc = self._per_strike[k]
-            if sc.call_gex > best_call_global[1]:
-                best_call_global = (k, sc.call_gex)
-            if sc.put_gex > best_put_global[1]:
-                best_put_global = (k, sc.put_gex)
-            if self._spot > 0.0:
-                if k >= self._spot and sc.call_gex > best_call_side[1]:
-                    best_call_side = (k, sc.call_gex)
-                if k <= self._spot and sc.put_gex > best_put_side[1]:
-                    best_put_side = (k, sc.put_gex)
-            net_gex_by_strike.append((k, sc.net_gex))
+        call_wall, put_wall, max_call_gex, max_put_gex = rust_select_walls(
+            strikes=strikes_arr,
+            call_gex=call_gex_arr,
+            put_gex=put_gex_arr,
+            spot_ref=self._spot,
+        )
 
-        call_choice = best_call_side if best_call_side[1] > -math.inf else best_call_global
-        put_choice = best_put_side if best_put_side[1] > -math.inf else best_put_global
-        self._call_wall = call_choice[0], max(0.0, call_choice[1])
-        self._put_wall  = put_choice[0],  max(0.0, put_choice[1])
+        self._call_wall = call_wall, max(0.0, max_call_gex)
+        self._put_wall = put_wall, max(0.0, max_put_gex)
 
-        # Flip level: first cumulative net_gex zero-crossing along sorted strikes.
+        net_gex_by_strike = list(
+            zip(strikes_arr.tolist(), (call_gex_arr - put_gex_arr).tolist())
+        )
         self._flip_level_cumulative = self._find_flip_level(net_gex_by_strike)
 
     def _find_flip_level(self, net_by_strike: list[tuple[float, float]]) -> float:
@@ -368,116 +376,4 @@ class StreamingAggregator:
 
         return 0.0
 
-    def _estimate_zero_gamma_level(
-        self,
-        *,
-        strikes: np.ndarray,
-        is_call: np.ndarray,
-        ivs: np.ndarray | None,
-        ois: np.ndarray | None,
-        mults: np.ndarray | None,
-        t_years: float | None,
-        spot: float,
-        r: float,
-        q: float,
-    ) -> float:
-        """Estimate zero-gamma by recomputing net GEX across a spot grid."""
-        if (
-            ivs is None
-            or ois is None
-            or mults is None
-            or t_years is None
-            or t_years <= 0.0
-            or len(strikes) == 0
-        ):
-            return 0.0
-
-        strikes_arr = np.asarray(strikes, dtype=np.float64)
-        is_call_arr = np.asarray(is_call, dtype=np.bool_)
-        ivs_arr = np.asarray(ivs, dtype=np.float64)
-        ois_arr = np.asarray(ois, dtype=np.float64)
-        mults_arr = np.asarray(mults, dtype=np.float64)
-
-        valid = (
-            np.isfinite(strikes_arr)
-            & np.isfinite(ivs_arr)
-            & np.isfinite(ois_arr)
-            & np.isfinite(mults_arr)
-            & (strikes_arr > 0.0)
-            & (ivs_arr > 0.0)
-            & (ois_arr >= 0.0)
-            & (mults_arr > 0.0)
-        )
-        if not np.any(valid):
-            return 0.0
-
-        strikes_v = strikes_arr[valid]
-        is_call_v = is_call_arr[valid]
-        ivs_v = ivs_arr[valid]
-        ois_v = ois_arr[valid]
-        mults_v = mults_arr[valid]
-
-        spot_ref = float(spot) if spot > 0.0 and math.isfinite(spot) else float(np.median(strikes_v))
-        low = max(1e-6, min(float(np.min(strikes_v)), spot_ref) * 0.90)
-        high = max(low + 1e-6, max(float(np.max(strikes_v)), spot_ref) * 1.10)
-        if not math.isfinite(low) or not math.isfinite(high) or high <= low:
-            return 0.0
-
-        grid = np.linspace(low, high, 161, dtype=np.float64)
-        sqrt_t = math.sqrt(float(t_years))
-        eq_t = math.exp(-q * float(t_years))
-        sqrt_2pi = math.sqrt(2.0 * math.pi)
-
-        S = grid[:, None]
-        K = strikes_v[None, :]
-        IV = ivs_v[None, :]
-        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
-            d1 = (np.log(np.maximum(S, 1e-12) / K) + (r - q + 0.5 * IV**2) * float(t_years)) / (IV * sqrt_t)
-            nd1 = np.exp(-0.5 * d1**2) / sqrt_2pi
-            gamma = eq_t * nd1 / np.maximum(S * IV * sqrt_t, 1e-12)
-            gex = gamma * ois_v[None, :] * mults_v[None, :] * (S**2) * 0.01 / 1_000_000.0
-            signed = np.where(is_call_v[None, :], gex, -gex)
-            net_curve = np.sum(signed, axis=1)
-
-        net_curve = np.where(np.isfinite(net_curve), net_curve, 0.0)
-        return self._interpolate_zero_crossing(grid, net_curve, spot_ref)
-
-    @staticmethod
-    def _interpolate_zero_crossing(
-        grid: np.ndarray,
-        curve: np.ndarray,
-        spot_ref: float,
-    ) -> float:
-        """Interpolate zero crossing on a 1D grid; pick crossing nearest spot."""
-        if grid.size == 0 or curve.size == 0 or grid.size != curve.size:
-            return 0.0
-
-        eps = 1e-12
-        candidates: list[float] = []
-        for i in range(grid.size - 1):
-            y0 = float(curve[i])
-            y1 = float(curve[i + 1])
-            x0 = float(grid[i])
-            x1 = float(grid[i + 1])
-            if abs(y0) <= eps:
-                candidates.append(x0)
-                continue
-            if abs(y1) <= eps:
-                candidates.append(x1)
-                continue
-            if y0 * y1 < 0.0:
-                denom = y1 - y0
-                if abs(denom) <= eps:
-                    candidates.append(x1)
-                else:
-                    w = -y0 / denom
-                    w = min(1.0, max(0.0, w))
-                    candidates.append(x0 + (x1 - x0) * w)
-
-        if not candidates:
-            return 0.0
-
-        if math.isfinite(spot_ref) and spot_ref > 0.0:
-            return float(min(candidates, key=lambda x: abs(x - spot_ref)))
-        return float(candidates[0])
 
