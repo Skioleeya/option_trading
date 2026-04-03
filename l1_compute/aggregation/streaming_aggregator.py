@@ -16,11 +16,8 @@ Features:
 from __future__ import annotations
 
 import logging
-import math
 from dataclasses import dataclass, field
-from typing import Optional
-
-import numpy as np
+from typing import Optional, Sequence
 
 from l1_compute.aggregation.rust_bridge import (
     rust_aggregate_greeks_full,
@@ -105,14 +102,14 @@ class StreamingAggregator:
     def full_recompute(
         self,
         matrix: GreeksMatrix,
-        strikes: np.ndarray,
-        is_call: np.ndarray,
+        strikes: Sequence[float],
+        is_call: Sequence[bool],
         symbols: Optional[list[str]] = None,
         *,
         spot: float | None = None,
-        ivs: np.ndarray | None = None,
-        ois: np.ndarray | None = None,
-        mults: np.ndarray | None = None,
+        ivs: Sequence[float] | None = None,
+        ois: Sequence[float] | None = None,
+        mults: Sequence[float] | None = None,
         t_years: float | None = None,
         r: float = 0.05,
         q: float = 0.0,
@@ -140,18 +137,20 @@ class StreamingAggregator:
             except (TypeError, ValueError):
                 self._spot = 0.0
 
+        # Pass native Rust-ready sequences directly into the owner boundary.
         rust_payload = rust_aggregate_greeks_full(
-            strikes=np.asarray(strikes, dtype=np.float64),
-            call_gex=np.asarray(matrix.call_gex, dtype=np.float64),
-            put_gex=np.asarray(matrix.put_gex, dtype=np.float64),
-            vanna=np.asarray(matrix.vanna, dtype=np.float64),
-            charm=np.asarray(matrix.charm, dtype=np.float64),
+            strikes=strikes,
+            call_gex=matrix.call_gex,
+            put_gex=matrix.put_gex,
+            vanna=matrix.vanna,
+            charm=matrix.charm,
         )
         self._net_gex = float(rust_payload.get("net_gex", 0.0))
         self._total_call_gex = float(rust_payload.get("total_call_gex", 0.0))
         self._total_put_gex = float(rust_payload.get("total_put_gex", 0.0))
         self._net_vanna = float(rust_payload.get("net_vanna", 0.0))
         self._net_charm = float(rust_payload.get("net_charm", 0.0))
+        self._flip_level_cumulative = float(rust_payload.get("flip_level_cumulative", 0.0))
 
         # Rebuild per-strike map
         self._per_strike.clear()
@@ -320,60 +319,17 @@ class StreamingAggregator:
             return
 
         sorted_strikes = sorted(self._per_strike.keys())
-        strikes_arr = np.asarray(sorted_strikes, dtype=np.float64)
-        call_gex_arr = np.asarray(
-            [self._per_strike[strike].call_gex for strike in sorted_strikes],
-            dtype=np.float64,
-        )
-        put_gex_arr = np.asarray(
-            [self._per_strike[strike].put_gex for strike in sorted_strikes],
-            dtype=np.float64,
-        )
+        call_gex_seq = [self._per_strike[strike].call_gex for strike in sorted_strikes]
+        put_gex_seq = [self._per_strike[strike].put_gex for strike in sorted_strikes]
 
         call_wall, put_wall, max_call_gex, max_put_gex = rust_select_walls(
-            strikes=strikes_arr,
-            call_gex=call_gex_arr,
-            put_gex=put_gex_arr,
+            strikes=sorted_strikes,
+            call_gex=call_gex_seq,
+            put_gex=put_gex_seq,
             spot_ref=self._spot,
         )
 
         self._call_wall = call_wall, max(0.0, max_call_gex)
         self._put_wall = put_wall, max(0.0, max_put_gex)
-
-        net_gex_by_strike = list(
-            zip(strikes_arr.tolist(), (call_gex_arr - put_gex_arr).tolist())
-        )
-        self._flip_level_cumulative = self._find_flip_level(net_gex_by_strike)
-
-    def _find_flip_level(self, net_by_strike: list[tuple[float, float]]) -> float:
-        """Locate first cumulative net-GEX zero crossing along sorted strikes."""
-        if not net_by_strike:
-            return 0.0
-
-        eps = 1e-12
-        cumulative = 0.0
-        prev_strike: float | None = None
-        prev_cumulative: float | None = None
-
-        for strike, net in net_by_strike:
-            cumulative += float(net)
-            if abs(cumulative) <= eps:
-                return float(strike)
-
-            if prev_strike is not None and prev_cumulative is not None:
-                cross_up = prev_cumulative < -eps and cumulative > eps
-                cross_down = prev_cumulative > eps and cumulative < -eps
-                if cross_up or cross_down:
-                    denom = cumulative - prev_cumulative
-                    if abs(denom) <= eps:
-                        return float(strike)
-                    weight = -prev_cumulative / denom
-                    weight = min(1.0, max(0.0, weight))
-                    return float(prev_strike + (float(strike) - prev_strike) * weight)
-
-            prev_strike = float(strike)
-            prev_cumulative = float(cumulative)
-
-        return 0.0
 
 

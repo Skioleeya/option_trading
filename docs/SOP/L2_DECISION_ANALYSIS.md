@@ -93,6 +93,7 @@ flowchart LR
 - `vrp_realized_based` 仅允许进入 research / diagnostics / optional feature path；现网默认决策继续使用 proxy `vol_risk_premium`
 - `realized_volatility_15m` 必须由本地 rolling spot log-return 计算得到，按 decimal annualized vol 输出；`vrp_realized_based` 必须先将该 RV 显式换算到 `%` 后再进入 `compute_vrp()`
 - `RollingRealizedVolatility` 的 live Python import surface 已切到 `shared_rust.services`；`shared/services/realized_volatility.py` 不再保留 compat owner。
+- `AttentionFusionEngine` 的 softmax + weighted sum + confidence 数值 owner 现为 Rust `shared_rust.services.compute_attention_fused`；`l2_decision/fusion/attention_fusion.py` 不得保留 NumPy softmax/dot 运行时计算，且 `fusion_weights` 必须继续贯通 `FusedDecision/DecisionOutput/DecisionAuditEntry`
 
 ## 7. Observability
 

@@ -66,6 +66,49 @@ pub(crate) fn pick_walls(
     (call_wall, put_wall, call_pick.1, put_pick.1)
 }
 
+pub(crate) fn cumulative_flip_level(
+    strikes: &[f64],
+    call_gex: &[f64],
+    put_gex: &[f64],
+) -> f64 {
+    if strikes.is_empty() || call_gex.len() != strikes.len() || put_gex.len() != strikes.len() {
+        return 0.0;
+    }
+
+    let eps = 1e-12;
+    let mut cumulative = 0.0;
+    let mut prev_strike: Option<f64> = None;
+    let mut prev_cumulative: Option<f64> = None;
+
+    for i in 0..strikes.len() {
+        let strike = strikes[i];
+        let net = sanitize(call_gex[i]) - sanitize(put_gex[i]);
+        cumulative += net;
+
+        if cumulative.abs() <= eps {
+            return strike;
+        }
+
+        if let (Some(prev_strike), Some(prev_cumulative)) = (prev_strike, prev_cumulative) {
+            let cross_up = prev_cumulative < -eps && cumulative > eps;
+            let cross_down = prev_cumulative > eps && cumulative < -eps;
+            if cross_up || cross_down {
+                let denom = cumulative - prev_cumulative;
+                if denom.abs() <= eps {
+                    return strike;
+                }
+                let weight = (-prev_cumulative / denom).clamp(0.0, 1.0);
+                return prev_strike + (strike - prev_strike) * weight;
+            }
+        }
+
+        prev_strike = Some(strike);
+        prev_cumulative = Some(cumulative);
+    }
+
+    0.0
+}
+
 #[pyfunction]
 fn aggregate_greeks_full<'py>(
     py: Python<'py>,
@@ -136,12 +179,16 @@ fn aggregate_greeks_full<'py>(
         per_strike_put.push(put);
     }
 
+    let flip_level = cumulative_flip_level(&unique_strikes, &per_strike_call, &per_strike_put);
+
     let out = PyDict::new(py);
     out.set_item("net_gex", total_call - total_put)?;
     out.set_item("total_call_gex", total_call)?;
     out.set_item("total_put_gex", total_put)?;
     out.set_item("net_vanna", total_vanna)?;
     out.set_item("net_charm", total_charm)?;
+    out.set_item("flip_level_cumulative", flip_level)?;
+    out.set_item("flip_level", flip_level)?;
     out.set_item("strikes", unique_strikes.into_pyarray(py))?;
     out.set_item("per_strike_call_gex", per_strike_call.into_pyarray(py))?;
     out.set_item("per_strike_put_gex", per_strike_put.into_pyarray(py))?;
@@ -151,16 +198,13 @@ fn aggregate_greeks_full<'py>(
 #[pyfunction]
 #[pyo3(signature = (strikes, call_gex, put_gex, spot_ref))]
 fn select_walls(
-    strikes: PyReadonlyArray1<'_, f64>,
-    call_gex: PyReadonlyArray1<'_, f64>,
-    put_gex: PyReadonlyArray1<'_, f64>,
+    strikes: Vec<f64>,
+    call_gex: Vec<f64>,
+    put_gex: Vec<f64>,
     spot_ref: f64,
 ) -> PyResult<(f64, f64, f64, f64)> {
-    let strikes_v = strikes.as_array();
-    let call_v = call_gex.as_array();
-    let put_v = put_gex.as_array();
-    let n = strikes_v.len();
-    if call_v.len() != n || put_v.len() != n {
+    let n = strikes.len();
+    if call_gex.len() != n || put_gex.len() != n {
         return Err(PyValueError::new_err(
             "select_walls requires equal-length input arrays",
         ));
@@ -176,12 +220,12 @@ fn select_walls(
     let use_side = spot_ref.is_finite() && spot_ref > 0.0;
 
     for i in 0..n {
-        let strike = strikes_v[i];
+        let strike = strikes[i];
         if !strike.is_finite() {
             continue;
         }
-        let call = sanitize(call_v[i]);
-        let put = sanitize(put_v[i]);
+        let call = sanitize(call_gex[i]);
+        let put = sanitize(put_gex[i]);
 
         if best_call_global.map(|(_, g)| call > g).unwrap_or(true) {
             best_call_global = Some((strike, call));

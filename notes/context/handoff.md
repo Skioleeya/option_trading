@@ -1,13 +1,12 @@
-# Handoff (Index)
+﻿# Handoff (Index)
 
 ## Active Handoff
-- Path: notes/sessions/2026-04-03/impl-20260403-openspec-completed-proposals-archive/handoff.md
-- Meta: notes/sessions/2026-04-03/impl-20260403-openspec-completed-proposals-archive/meta.yaml
+- Path: notes/sessions/2026-04-03/impl-20260403-wave1-5-successor-migration-exec/handoff.md
+- Meta: notes/sessions/2026-04-03/impl-20260403-wave1-5-successor-migration-exec/meta.yaml
 
 ## Latest Outcome
-- Session: 2026-04-03/impl-20260403-openspec-completed-proposals-archive
-- Summary: 已完成 OpenSpec 已完成提案归档：`openspec/changes/archive/2026-04-03-*` 新增 8 个归档目录；`openspec.cmd list` 已无 `✓ Complete` 条目。当前可恢复上一执行会话继续 Sub-wave F 实盘采证。
-- Strict Evidence: PASS (`powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict`, 2026-04-03 04:41:47 -04:00).
+- Session: 2026-04-03/impl-20260403-wave1-5-successor-migration-exec
+- Summary: Wave 1.5 已执行完成：`l1-wall-context-rust` 与 `l2-attention-fusion-rust` successor proposal 落地；子代理复核发现已在同会话闭环（L1 薄桥接再收敛、L2 `fused_signal` 下游契约断言补齐），strict validation 通过。
 
 ## Next Session Bootstrap
 1. Read this file.

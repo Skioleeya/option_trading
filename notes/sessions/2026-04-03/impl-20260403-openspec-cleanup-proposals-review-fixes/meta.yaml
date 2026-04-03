@@ -1,0 +1,54 @@
+﻿session_id: "2026-04-03/impl-20260403-openspec-cleanup-proposals-review-fixes"
+title: "impl-20260403-openspec-cleanup-proposals-review-fixes"
+scope: "openspec proposal review fixes"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-03 08:47:04 -04:00"
+updated_at_et: "2026-04-03 08:53:06 -04:00"
+parent_session: "2026-04-03/impl-20260403-openspec-cleanup-proposals"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "aa3efd7"
+head_commit: "aa3efd7"
+
+files_changed:
+  - "openspec/changes/impl-20260403-l1-streaming-aggregator-bridge-marshalling-audit/proposal.md"
+  - "openspec/changes/impl-20260403-l1-streaming-aggregator-bridge-marshalling-audit/design.md"
+  - "openspec/changes/impl-20260403-l1-streaming-aggregator-bridge-marshalling-audit/tasks.md"
+  - "openspec/changes/impl-20260403-l1-streaming-aggregator-bridge-marshalling-audit/specs/l1-streaming-aggregator-bridge-marshalling/spec.md"
+  - "openspec/changes/impl-20260403-l1-greeks-engine-bridge-marshalling-audit/proposal.md"
+  - "openspec/changes/impl-20260403-l1-greeks-engine-bridge-marshalling-audit/design.md"
+  - "openspec/changes/impl-20260403-l1-greeks-engine-bridge-marshalling-audit/tasks.md"
+  - "openspec/changes/impl-20260403-l1-greeks-engine-bridge-marshalling-audit/specs/l1-greeks-engine-bridge-marshalling/spec.md"
+  - "openspec/changes/impl-20260403-l2-attention-fusion-rust/proposal.md"
+  - "openspec/changes/impl-20260403-l2-attention-fusion-rust/design.md"
+  - "openspec/changes/impl-20260403-l2-attention-fusion-rust/tasks.md"
+  - "openspec/changes/impl-20260403-l2-attention-fusion-rust/specs/l2-attention-fusion-rust/spec.md"
+  - "openspec/changes/impl-20260403-l1-wall-context-rust/proposal.md"
+  - "openspec/changes/impl-20260403-l1-wall-context-rust/design.md"
+  - "openspec/changes/impl-20260403-l1-wall-context-rust/tasks.md"
+  - "openspec/changes/impl-20260403-l1-wall-context-rust/specs/l1-wall-context-rust/spec.md"
+  - "notes/sessions/2026-04-03/impl-20260403-openspec-cleanup-proposals-review-fixes/project_state.md"
+  - "notes/sessions/2026-04-03/impl-20260403-openspec-cleanup-proposals-review-fixes/open_tasks.md"
+  - "notes/sessions/2026-04-03/impl-20260403-openspec-cleanup-proposals-review-fixes/handoff.md"
+  - "notes/sessions/2026-04-03/impl-20260403-openspec-cleanup-proposals-review-fixes/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId impl-20260403-openspec-cleanup-proposals-review-fixes -Title \"impl-20260403-openspec-cleanup-proposals-review-fixes\" -Scope \"openspec proposal review fixes\" -Owner Codex -ParentSession \"2026-04-03/impl-20260403-openspec-cleanup-proposals\" -Timezone America/New_York -UpdatePointer"
+  - "rg -n \"_recompute_walls|_find_flip_level|Python runtime compute owner|bsm_fast|fusion_weights|RecordBatch|Arrow-first|zero-copy\" openspec/changes/impl-20260403-l1-streaming-aggregator-bridge-marshalling-audit openspec/changes/impl-20260403-l1-greeks-engine-bridge-marshalling-audit openspec/changes/impl-20260403-l2-attention-fusion-rust openspec/changes/impl-20260403-l1-wall-context-rust"
+  - "rg -n \"^## Purpose|^## Requirements|^#### Scenario:\" openspec/changes/impl-20260403-l1-streaming-aggregator-bridge-marshalling-audit/specs openspec/changes/impl-20260403-l1-greeks-engine-bridge-marshalling-audit/specs openspec/changes/impl-20260403-l2-attention-fusion-rust/specs openspec/changes/impl-20260403-l1-wall-context-rust/specs -g \"spec.md\""
+  - "openspec.cmd list"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "All four review findings are now encoded in proposal/spec/tasks/design text"
+  - "All four edited spec delta files still include Purpose/Requirements/Scenario sections"
+  - "openspec.cmd list executed successfully after the review fixes"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict -> PASS"
+tests_failed: []
+blockers: []
+notes:
+  - "This session changes proposal completion semantics only; no runtime source files were modified."
+
+
