@@ -1,0 +1,56 @@
+session_id: "2026-04-03/impl-20260403-l0-runtime-neutral-surface-closeout-exec"
+title: "impl-20260403-l0-runtime-neutral-surface-closeout-exec"
+scope: "openspec closeout + verification"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-03 03:56:45 -04:00"
+updated_at_et: "2026-04-03 04:27:35 -04:00"
+parent_session: "2026-04-02/impl-20260402-active-options-pure-shim-retirement-closeout"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "fd23e87"
+head_commit: "fd23e87"
+
+files_changed:
+  - "openspec/changes/impl-20260402-l0-runtime-neutral-surface-closeout/tasks.md"
+  - "openspec/changes/impl-20260402-l0-runtime-rust-cutover/tasks.md"
+  - "openspec/changes/refactor-dependency-20260402-shared-rust-services-namespace-closeout/proposal.md"
+  - "openspec/changes/refactor-dependency-20260402-shared-rust-services-namespace-closeout/design.md"
+  - "openspec/changes/refactor-dependency-20260402-shared-rust-services-namespace-closeout/tasks.md"
+  - "openspec/changes/refactor-dependency-20260402-shared-rust-services-namespace-closeout/specs/dependency/spec.md"
+  - "清理清单.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-04-03/impl-20260403-l0-runtime-neutral-surface-closeout-exec/project_state.md"
+  - "notes/sessions/2026-04-03/impl-20260403-l0-runtime-neutral-surface-closeout-exec/open_tasks.md"
+  - "notes/sessions/2026-04-03/impl-20260403-l0-runtime-neutral-surface-closeout-exec/handoff.md"
+  - "notes/sessions/2026-04-03/impl-20260403-l0-runtime-neutral-surface-closeout-exec/meta.yaml"
+
+commands:
+  - "pwsh --version"
+  - "Test-Path tests/l0_runtime"
+  - "Test-Path l0_ingest/tests"
+  - "Test-Path scripts/test/test_l0_l4_pipeline.py"
+  - "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 scripts/test/test_l0_l4_pipeline.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+  - "python3 scripts/policy/check_openspec_chain.py --meta-file notes/sessions/2026-04-03/impl-20260403-l0-runtime-neutral-surface-closeout-exec/meta.yaml --handoff-file notes/sessions/2026-04-03/impl-20260403-l0-runtime-neutral-surface-closeout-exec/handoff.md"
+
+tests_passed:
+  - "Session bootstrap + context pointer switch completed"
+  - "OpenSpec child/parent task state synchronized to factual blockers"
+  - "python3 scripts/policy/check_openspec_chain.py --meta-file ... --handoff-file ... -> PASS after refactor change-id normalization"
+  - "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 scripts/test/test_l0_l4_pipeline.py -> PASS (1 passed)"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict -> PASS"
+
+tests_failed:
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict -> FAIL (missing strict command evidence + debt SLA/dedup gate)"
+
+blockers:
+  - "BLOCKED_BY_LIVE: Sub-wave F requires live US market session with >=60m Python/Rust overlap"
+
+notes:
+  - "No runtime source code changed in this session."
+  - "PowerShell is now available in current Windows runtime."
+  - "OpenSpec invalid refactor change id fixed by renaming to `refactor-dependency-20260402-shared-rust-services-namespace-closeout` and adding `specs/dependency/spec.md`."
+  - "Strict validation failed once on session-metadata/debt formatting and passed after record repair."

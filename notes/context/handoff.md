@@ -1,13 +1,13 @@
-﻿# Handoff (Index)
+# Handoff (Index)
 
 ## Active Handoff
-- Path: notes/sessions/2026-04-02/impl-20260402-active-options-pure-shim-retirement-closeout/handoff.md
-- Meta: notes/sessions/2026-04-02/impl-20260402-active-options-pure-shim-retirement-closeout/meta.yaml
+- Path: notes/sessions/2026-04-03/impl-20260403-openspec-completed-proposals-archive/handoff.md
+- Meta: notes/sessions/2026-04-03/impl-20260403-openspec-completed-proposals-archive/meta.yaml
 
 ## Latest Outcome
-- Session: 2026-04-02/impl-20260402-active-options-pure-shim-retirement-closeout
-- Summary: OpenSpec `impl-20260402-active-options-pure-shim-retirement` 收口完成：Step 8 残留模块路径扫描 0 命中、Step 9 联合 smoke `all-ok`、定向 pytest 通过，strict 门禁 PASS。
-- Strict Evidence: PASS (`powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict`, 2026-04-02 18:51:35 -04:00).
+- Session: 2026-04-03/impl-20260403-openspec-completed-proposals-archive
+- Summary: 已完成 OpenSpec 已完成提案归档：`openspec/changes/archive/2026-04-03-*` 新增 8 个归档目录；`openspec.cmd list` 已无 `✓ Complete` 条目。当前可恢复上一执行会话继续 Sub-wave F 实盘采证。
+- Strict Evidence: PASS (`powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict`, 2026-04-03 04:41:47 -04:00).
 
 ## Next Session Bootstrap
 1. Read this file.

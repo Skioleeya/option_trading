@@ -1,7 +1,7 @@
-﻿# Open Tasks (Index)
+# Open Tasks (Index)
 
 ## Active Session Tasks
-- Path: notes/sessions/2026-04-02/impl-20260402-active-options-pure-shim-retirement-closeout/open_tasks.md
+- Path: notes/sessions/2026-04-03/impl-20260403-openspec-completed-proposals-archive/open_tasks.md
 
 ## Global Backlog (Cross-Session)
 - [ ] Capture one full market-session Sub-wave F dual-run compare and append no-divergence evidence in handoff.

@@ -1,0 +1,71 @@
+session_id: "2026-04-03/impl-20260403-openspec-completed-proposals-archive"
+title: "impl-20260403-openspec-completed-proposals-archive"
+scope: "openspec archive + session docs sync"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-03 04:31:52 -04:00"
+updated_at_et: "2026-04-03 04:41:47 -04:00"
+parent_session: "2026-04-03/impl-20260403-l0-runtime-neutral-surface-closeout-exec"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "fd23e87"
+head_commit: "fd23e87"
+
+files_changed:
+  - "openspec/changes/archive/2026-04-03-impl-20260402-active-options-pure-shim-retirement/proposal.md"
+  - "openspec/changes/archive/2026-04-03-impl-20260402-active-options-pure-shim-retirement/tasks.md"
+  - "openspec/changes/archive/2026-04-03-impl-20260402-l1-bsm-numpy-rust-fallback/design.md"
+  - "openspec/changes/archive/2026-04-03-impl-20260402-l1-bsm-numpy-rust-fallback/proposal.md"
+  - "openspec/changes/archive/2026-04-03-impl-20260402-l1-bsm-numpy-rust-fallback/tasks.md"
+  - "openspec/changes/archive/2026-04-03-impl-20260402-l1-microstructure-rust-bridge/design.md"
+  - "openspec/changes/archive/2026-04-03-impl-20260402-l1-microstructure-rust-bridge/proposal.md"
+  - "openspec/changes/archive/2026-04-03-impl-20260402-l1-microstructure-rust-bridge/tasks.md"
+  - "openspec/changes/archive/2026-04-03-impl-20260402-l1-sabr-rust-solver/design.md"
+  - "openspec/changes/archive/2026-04-03-impl-20260402-l1-sabr-rust-solver/proposal.md"
+  - "openspec/changes/archive/2026-04-03-impl-20260402-l1-sabr-rust-solver/tasks.md"
+  - "openspec/changes/archive/2026-04-03-impl-20260402-l1-streaming-aggregator-rust/design.md"
+  - "openspec/changes/archive/2026-04-03-impl-20260402-l1-streaming-aggregator-rust/proposal.md"
+  - "openspec/changes/archive/2026-04-03-impl-20260402-l1-streaming-aggregator-rust/tasks.md"
+  - "openspec/changes/archive/2026-04-03-refactor-dependency-20260402-services-root-retirement/design.md"
+  - "openspec/changes/archive/2026-04-03-refactor-dependency-20260402-services-root-retirement/proposal.md"
+  - "openspec/changes/archive/2026-04-03-refactor-dependency-20260402-services-root-retirement/specs/dependency/spec.md"
+  - "openspec/changes/archive/2026-04-03-refactor-dependency-20260402-services-root-retirement/tasks.md"
+  - "openspec/changes/archive/2026-04-03-refactor-dependency-20260402-shared-rust-services-namespace-closeout/design.md"
+  - "openspec/changes/archive/2026-04-03-refactor-dependency-20260402-shared-rust-services-namespace-closeout/proposal.md"
+  - "openspec/changes/archive/2026-04-03-refactor-dependency-20260402-shared-rust-services-namespace-closeout/specs/dependency/spec.md"
+  - "openspec/changes/archive/2026-04-03-refactor-dependency-20260402-shared-rust-services-namespace-closeout/tasks.md"
+  - "openspec/changes/archive/2026-04-03-refactor-dependency-20260402-tactical-triad-shared-rust-export/design.md"
+  - "openspec/changes/archive/2026-04-03-refactor-dependency-20260402-tactical-triad-shared-rust-export/proposal.md"
+  - "openspec/changes/archive/2026-04-03-refactor-dependency-20260402-tactical-triad-shared-rust-export/specs/dependency/spec.md"
+  - "openspec/changes/archive/2026-04-03-refactor-dependency-20260402-tactical-triad-shared-rust-export/tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-04-03/impl-20260403-openspec-completed-proposals-archive/project_state.md"
+  - "notes/sessions/2026-04-03/impl-20260403-openspec-completed-proposals-archive/open_tasks.md"
+  - "notes/sessions/2026-04-03/impl-20260403-openspec-completed-proposals-archive/handoff.md"
+  - "notes/sessions/2026-04-03/impl-20260403-openspec-completed-proposals-archive/meta.yaml"
+
+commands:
+  - "openspec.cmd list"
+  - "openspec.cmd archive refactor-dependency-20260402-shared-rust-services-namespace-closeout -y --skip-specs"
+  - "openspec.cmd archive impl-20260402-active-options-pure-shim-retirement -y --skip-specs"
+  - "openspec.cmd archive impl-20260402-l1-streaming-aggregator-rust -y --skip-specs"
+  - "openspec.cmd archive impl-20260402-l1-bsm-numpy-rust-fallback -y --skip-specs"
+  - "openspec.cmd archive impl-20260402-l1-sabr-rust-solver -y --skip-specs"
+  - "openspec.cmd archive impl-20260402-l1-microstructure-rust-bridge -y --skip-specs"
+  - "openspec.cmd archive refactor-dependency-20260402-services-root-retirement -y --skip-specs"
+  - "openspec.cmd archive refactor-dependency-20260402-tactical-triad-shared-rust-export -y --skip-specs"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+
+tests_passed:
+  - "openspec.cmd list no longer shows any complete changes pending archive"
+  - "8 completed proposals archived to openspec/changes/archive/2026-04-03-*"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict -> PASS"
+
+tests_failed:
+  - "Initial archive attempt hit EPERM unlink inside sandbox; completed after elevated run"
+
+blockers: []
+notes:
+  - "User-confirmed manual deletion outside this archive scope was kept as-is."
+
+

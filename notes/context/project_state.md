@@ -1,16 +1,16 @@
-﻿# Project State (Index)
+# Project State (Index)
 
 ## Active Session
-- Path: notes/sessions/2026-04-02/impl-20260402-active-options-pure-shim-retirement-closeout/project_state.md
-- Meta: notes/sessions/2026-04-02/impl-20260402-active-options-pure-shim-retirement-closeout/meta.yaml
+- Path: notes/sessions/2026-04-03/impl-20260403-openspec-completed-proposals-archive/project_state.md
+- Meta: notes/sessions/2026-04-03/impl-20260403-openspec-completed-proposals-archive/meta.yaml
 - Status: ACTIVE
 
 ## Recent Sessions
+- notes/sessions/2026-04-03/impl-20260403-openspec-completed-proposals-archive/
+- notes/sessions/2026-04-03/impl-20260403-l0-runtime-neutral-surface-closeout-exec/
 - notes/sessions/2026-04-02/impl-20260402-active-options-pure-shim-retirement-closeout/
 - notes/sessions/2026-04-02/impl-20260402-claude-audit-fixes-closeout/
 - notes/sessions/2026-04-02/impl-20260402-l1-sabr-rust-solver-exec/
-- notes/sessions/2026-04-02/impl-20260402-l1-microstructure-rust-bridge-exec/
-- notes/sessions/2026-04-02/impl-20260402-l1-rust-only-no-fallback/
 
 ## Global Rules
 - Session folders are immutable records; do not overwrite prior sessions.

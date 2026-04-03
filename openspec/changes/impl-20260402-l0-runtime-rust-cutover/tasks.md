@@ -48,7 +48,7 @@
 
 - [ ] All per-sub-wave test gates pass (see design.md table)
 - [x] E2E smoke test: `python scripts/test/test_l0_l4_pipeline.py` (PASS 2026-04-02 14:42 ET; `dashboard_init` payload with L0/L1/L2/L3 checks all green, `rust_active=True`, `wall_migration` + `depth_profile` present)
-- [ ] Full l0 test suite: `pwsh scripts/test/run_pytest.ps1 tests/l0_runtime/` (attempted 2026-04-02 ET; blocked by `tmp/pytest_cache` ACL owner mismatch)
+- [ ] Full l0 test suite: `pwsh scripts/test/run_pytest.ps1 tests/l0_runtime/` (2026-04-03 retry blocked: `pwsh` unavailable in current WSL shell; fallback target dirs `tests/l0_runtime/` and `l0_ingest/tests/` absent; equivalent fallback `python3 scripts/test/test_l0_l4_pipeline.py` failed with `ModuleNotFoundError: websockets`)
 - [x] SOP updated: `docs/SOP/L0_DATA_FEED.md` or `SOP-EXEMPT: <reason>`
 - [x] OpenSpec chain gate: `python scripts/policy/check_openspec_chain.py` (PASS 2026-04-02 ET)
 - [x] Strict gate: `pwsh scripts/validate_session.ps1 -Strict` (PASS 2026-04-02 ET)
@@ -136,10 +136,10 @@
 - [x] Delete `__init__.py`, `_native_extension_loader.py`, `_native_generated/__init__.py`
 - [x] Native-loader migration subset complete: `shared/services/l0_runtime/native_loader.py` added; `_native_extension_loader.py` and `_native_generated/__init__.py` retired; local import smoke passed
 - [x] Run E2E smoke test: `python scripts/test/test_l0_l4_pipeline.py` (PASS 2026-04-02 14:42 ET)
-- [ ] Run full l0 test suite
+- [ ] Run full l0 test suite (blocked by missing PowerShell runner + missing target test dirs in this shell)
 
 ## Phase N — Verification Gate
 
 - [x] Run strict validation and openspec chain gate
-- [ ] Record DEBT-NEW, DEBT-CLOSED, DEBT-DELTA in session handoff
+- [x] Record DEBT-NEW, DEBT-CLOSED, DEBT-DELTA in session handoff (`notes/sessions/2026-04-03/impl-20260403-l0-runtime-neutral-surface-closeout-exec/handoff.md`)
 - [x] Confirm no runtime references to retired `facade.py` / `_native_extension_loader.py` / `_native_generated.l0_rust`
