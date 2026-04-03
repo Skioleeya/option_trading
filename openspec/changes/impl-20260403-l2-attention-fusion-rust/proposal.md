@@ -77,3 +77,7 @@ numerical-stability drift and an overly broad Python fallback window; both are e
 `shared_rust.services.compute_attention_fused` and no longer performs NumPy softmax/dot
 compute on the runtime path. `fusion_weights` remain populated and continue flowing through
 `FusedDecision`, `DecisionOutput`, and `DecisionAuditEntry`.
+
+Wave 2 quality hardening added delegation-layer contract checks: non-finite `raw_score` /
+`confidence` and invalid `fusion_weights` (non-finite, negative, or non-normalized) now fail
+explicitly with runtime errors. Targeted bridge tests were extended to lock this behavior.

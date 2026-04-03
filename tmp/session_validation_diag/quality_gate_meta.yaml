@@ -1,3 +1,2 @@
 ﻿files_changed:
-  - "l2_decision/fusion/attention_fusion.py"
   - "l1_compute/microstructure/wall_context_builder.py"

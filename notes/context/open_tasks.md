@@ -1,7 +1,7 @@
 ﻿# Open Tasks (Index)
 
 ## Active Session Tasks
-- Path: notes/sessions/2026-04-03/impl-20260403-wave1-5-successor-migration-exec/open_tasks.md
+- Path: notes/sessions/2026-04-03/impl-20260403-l1-wall-context-rust-wave3-lock/open_tasks.md
 
 ## Global Backlog (Cross-Session)
 - [ ] Capture one full market-session Sub-wave F dual-run compare and append no-divergence evidence in handoff.

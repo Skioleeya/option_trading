@@ -13,6 +13,7 @@
 - [x] Retarget `attention_fusion.py` to a thin Rust delegation surface
 - [x] Remove runtime NumPy compute from `attention_fusion.py`
 - [x] Enforce the repo-standard PyO3 marshalling pattern chosen by the bridge-audit proposals
+- [x] Add delegation-layer contract checks for Rust return finiteness and normalized non-negative weights
 
 ## Verification
 
@@ -20,6 +21,7 @@
 - [x] Rust and prior Python outputs match for `raw_score`, `confidence`, and `fusion_weights`
 - [x] Targeted L2 tests pass via `scripts/test/run_pytest.ps1`
 - [x] `DecisionOutput.fusion_weights` and `DecisionAuditEntry.fusion_weights` remain populated in attention mode
+- [x] Bridge tests cover invalid Rust return handling and extreme-logit stability
 - [x] `pwsh scripts/validate_session.ps1 -Strict` passes
 
 ## DoD

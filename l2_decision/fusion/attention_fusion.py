@@ -131,16 +131,26 @@ class AttentionFusionEngine:
             logger.error("AttentionFusion: Rust owner execution failed: %s", exc)
             raise RuntimeError("Rust compute_attention_fused execution failed") from exc
 
-        raw_score = max(-1.0, min(1.0, float(raw_score)))
-        confidence = max(0.0, min(1.0, float(confidence)))
+        raw_score = float(raw_score)
+        confidence = float(confidence)
+        if not math.isfinite(raw_score) or not math.isfinite(confidence):
+            raise RuntimeError("Rust compute_attention_fused returned non-finite raw score or confidence")
+        raw_score = max(-1.0, min(1.0, raw_score))
+        confidence = max(0.0, min(1.0, confidence))
         if len(weight_values) != len(active_names):
             raise RuntimeError("Rust compute_attention_fused returned mismatched weight length")
+        weights = [float(value) for value in weight_values]
+        if any((not math.isfinite(value)) or value < 0.0 for value in weights):
+            raise RuntimeError("Rust compute_attention_fused returned invalid attention weights")
+        weight_sum = sum(weights)
+        if weight_sum <= 0.0 or abs(weight_sum - 1.0) > 1e-6:
+            raise RuntimeError("Rust compute_attention_fused returned invalid attention weights")
 
         direction = SignalNormalizer.float_to_direction(raw_score, threshold=0.05)
         latency_ms = (time.perf_counter() - t0) * 1000.0
 
         fusion_weights = {
-            name: float(weight_values[idx]) for idx, name in enumerate(active_names)
+            name: weights[idx] for idx, name in enumerate(active_names)
         }
 
         return FusedDecision(

@@ -12,6 +12,7 @@
 - [x] Remove runtime NumPy compute from `wall_context_builder.py`
 - [x] Keep the Rust ownership cluster within the 400-line file rule
 - [x] Reuse the repo-standard PyO3 marshalling pattern chosen by the bridge-audit proposals
+- [x] Add delegation-layer contract checks for gamma-regime validity and finite wall-context metrics
 
 ## Verification
 
@@ -20,6 +21,7 @@
 - [x] Targeted L1 microstructure parity or smoke tests pass via `scripts/test/run_pytest.ps1`
 - [x] Both `list[dict]` and `RecordBatch` inputs are covered by verification
 - [x] `wall_context_builder.py` contains no runtime NumPy arithmetic
+- [x] Bridge tests cover invalid Rust return handling for regime and wall-context metrics
 - [x] `pwsh scripts/validate_session.ps1 -Strict` passes
 
 ## DoD

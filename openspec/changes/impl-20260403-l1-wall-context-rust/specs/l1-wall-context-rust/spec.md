@@ -47,3 +47,26 @@ WHEN adding the wall-context helper would make `microstructure.rs` exceed the re
 limit
 THEN the Rust ownership MAY be split by responsibility inside the same cluster
 AND the session MUST NOT create a new pure Python shim to carry the migration.
+
+### Requirement: Delegation Layer Must Reject Invalid Rust Return Values
+
+The Python delegation layer MUST fail explicitly when the Rust wall-context owner returns invalid
+runtime values.
+
+#### Scenario: Invalid Gamma Regime
+
+WHEN the Rust owner returns a `gamma_regime` outside `SHORT_GAMMA|LONG_GAMMA|NEUTRAL`
+THEN `wall_context_builder.py` MUST raise an explicit runtime error
+AND it MUST NOT silently coerce or pass through the invalid regime.
+
+#### Scenario: Invalid Near-Wall Liquidity
+
+WHEN the Rust owner returns `near_wall_liquidity` that is non-finite or `< 1.0`
+THEN `wall_context_builder.py` MUST raise an explicit runtime error
+AND it MUST NOT silently clamp or normalize the invalid value in Python.
+
+#### Scenario: Invalid Wall-Context Metrics
+
+WHEN the Rust owner returns non-finite numeric wall-context metrics
+THEN `wall_context_builder.py` MUST raise an explicit runtime error
+AND it MUST NOT silently continue with a partially invalid payload.

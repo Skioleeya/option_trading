@@ -82,3 +82,8 @@ a first-class failure mode.
 
 `RecordBatch` input now passes Arrow columns directly into Rust on the hot path (no Python
 `to_pylist()` or NumPy arithmetic branch retained). Runtime owner failures raise explicitly.
+
+Wave 3 quality hardening added delegation-layer contract checks: `gamma_regime` must remain in
+the stable enum set, `near_wall_liquidity` must be finite and `>= 1.0`, and all other returned
+numeric fields must be finite. Invalid Rust return values now fail explicitly instead of being
+silently normalized in Python.

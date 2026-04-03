@@ -47,3 +47,20 @@ The cutover MUST keep the existing L2-facing output semantics unchanged.
 WHEN downstream L2 code consumes the fusion result after the Rust cutover
 THEN the returned score, confidence, and `fusion_weights` semantics MUST remain unchanged
 AND no new L3/L4-facing contract dependency may be introduced.
+
+### Requirement: Delegation Layer Must Reject Invalid Rust Return Values
+
+The Python delegation layer MUST fail explicitly when the Rust owner returns invalid runtime values.
+
+#### Scenario: Non-finite Score Or Confidence
+
+WHEN `compute_attention_fused` returns `raw_score` or `confidence` that is non-finite
+THEN `AttentionFusionEngine` MUST raise an explicit runtime error
+AND it MUST NOT continue with silent fallback or silent clamping.
+
+#### Scenario: Invalid Weights
+
+WHEN `compute_attention_fused` returns attention weights that are non-finite, negative,
+or not normalized within tolerance
+THEN `AttentionFusionEngine` MUST raise an explicit runtime error
+AND it MUST NOT silently renormalize those invalid weights in Python.

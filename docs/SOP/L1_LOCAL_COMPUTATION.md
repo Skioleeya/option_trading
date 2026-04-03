@@ -78,6 +78,7 @@ flowchart LR
 - `StreamingAggregator` bridge 现必须直接传递现成 `GreeksMatrix` 数组与原生 strike 序列到 Rust owner；`_find_flip_level()` 已迁出，`flip_level_cumulative` 由 Rust `aggregate_greeks_full` 回传，禁止重新引入 Python 侧 NumPy marshalling
 - `GreeksEngine` 的 live batch orchestration 现必须通过 `shared.services.greeks_engine_batch.build_greeks_batch_sync` 进入 Rust owner；`l1_compute/analysis/greeks_engine.py` 不得再调用 `l1_compute.analysis.bsm_fast.compute_greeks_batch()`，也不得在本文件内保留 NumPy marshalling
 - `wall_context_builder` 的数值计算 owner 现为 Rust `shared_rust.services.compute_wall_context_metrics/estimate_near_wall_liquidity/classify_wall_gamma_regime`；`RecordBatch` 分支必须直入 Rust，禁止在 Python 侧 `to_pylist()`/NumPy 算术回退；当前 Rust owner 仍允许内部数组物化路径，若进入热点需继续收敛到更低拷贝实现
+- `wall_context_builder` Python delegation 层必须对 Rust 返回值做合同硬校验：`gamma_regime` 仅允许 `SHORT_GAMMA|LONG_GAMMA|NEUTRAL`；`near_wall_liquidity` 必须 finite 且 `>= 1.0`；其余 wall-context 数值字段必须 finite；任一违规必须显式抛错，禁止静默纠偏
 
 ## 5. Boundary Rules
 

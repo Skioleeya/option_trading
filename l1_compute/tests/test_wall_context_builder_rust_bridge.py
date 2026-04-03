@@ -100,3 +100,86 @@ def test_wall_context_rust_owner_failure_is_not_silent(monkeypatch: pytest.Monke
             call_wall_gex=1.0,
             put_wall_gex=1.0,
         )
+
+
+def test_classify_wall_gamma_regime_rejects_invalid_rust_value(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(wall_mod, "rust_classify_wall_gamma_regime", lambda *args, **kwargs: "SIDEWAYS")
+
+    with pytest.raises(RuntimeError, match="Rust wall-context owner returned invalid gamma_regime"):
+        wall_mod.classify_wall_gamma_regime(-25_000.0)
+
+
+def test_estimate_near_wall_liquidity_rejects_invalid_rust_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(wall_mod, "rust_estimate_near_wall_liquidity", lambda *args, **kwargs: float("nan"))
+
+    with pytest.raises(RuntimeError, match="Rust wall-context owner returned non-finite near_wall_liquidity"):
+        wall_mod.estimate_near_wall_liquidity(
+            [{"strike": 580.0, "volume": 10.0}],
+            call_wall=580.0,
+            put_wall=575.0,
+        )
+
+    monkeypatch.setattr(wall_mod, "rust_estimate_near_wall_liquidity", lambda *args, **kwargs: 0.5)
+
+    with pytest.raises(RuntimeError, match="Rust wall-context owner returned invalid near_wall_liquidity"):
+        wall_mod.estimate_near_wall_liquidity(
+            [{"strike": 580.0, "volume": 10.0}],
+            call_wall=580.0,
+            put_wall=575.0,
+        )
+
+
+def test_build_wall_context_rejects_invalid_regime_and_metrics(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        wall_mod,
+        "rust_compute_wall_context_metrics",
+        lambda *args, **kwargs: ("SIDEWAYS", 1.0, 2.0, 3.0, 4.0),
+    )
+
+    with pytest.raises(RuntimeError, match="Rust wall-context owner returned invalid gamma_regime"):
+        wall_mod.build_wall_context(
+            [{"strike": 580.0, "volume": 10.0}],
+            net_gex=0.0,
+            call_wall=580.0,
+            put_wall=575.0,
+            call_wall_gex=1.0,
+            put_wall_gex=1.0,
+        )
+
+    monkeypatch.setattr(
+        wall_mod,
+        "rust_compute_wall_context_metrics",
+        lambda *args, **kwargs: ("SHORT_GAMMA", 1.0, 2.0, 3.0, float("nan")),
+    )
+
+    with pytest.raises(RuntimeError, match="Rust wall-context owner returned non-finite near_wall_liquidity"):
+        wall_mod.build_wall_context(
+            [{"strike": 580.0, "volume": 10.0}],
+            net_gex=0.0,
+            call_wall=580.0,
+            put_wall=575.0,
+            call_wall_gex=1.0,
+            put_wall_gex=1.0,
+        )
+
+    monkeypatch.setattr(
+        wall_mod,
+        "rust_compute_wall_context_metrics",
+        lambda *args, **kwargs: ("SHORT_GAMMA", 1.0, 2.0, 3.0, 0.5),
+    )
+
+    with pytest.raises(RuntimeError, match="Rust wall-context owner returned invalid near_wall_liquidity"):
+        wall_mod.build_wall_context(
+            [{"strike": 580.0, "volume": 10.0}],
+            net_gex=0.0,
+            call_wall=580.0,
+            put_wall=575.0,
+            call_wall_gex=1.0,
+            put_wall_gex=1.0,
+        )

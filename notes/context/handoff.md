@@ -1,12 +1,12 @@
 ﻿# Handoff (Index)
 
 ## Active Handoff
-- Path: notes/sessions/2026-04-03/impl-20260403-wave1-5-successor-migration-exec/handoff.md
-- Meta: notes/sessions/2026-04-03/impl-20260403-wave1-5-successor-migration-exec/meta.yaml
+- Path: notes/sessions/2026-04-03/impl-20260403-l1-wall-context-rust-wave3-lock/handoff.md
+- Meta: notes/sessions/2026-04-03/impl-20260403-l1-wall-context-rust-wave3-lock/meta.yaml
 
 ## Latest Outcome
-- Session: 2026-04-03/impl-20260403-wave1-5-successor-migration-exec
-- Summary: Wave 1.5 已执行完成：`l1-wall-context-rust` 与 `l2-attention-fusion-rust` successor proposal 落地；子代理复核发现已在同会话闭环（L1 薄桥接再收敛、L2 `fused_signal` 下游契约断言补齐），strict validation 通过。
+- Session: 2026-04-03/impl-20260403-l1-wall-context-rust-wave3-lock
+- Summary: Wave 3 已完成：`impl-20260403-l1-wall-context-rust` delegation 层新增 regime/metrics/liquidity 合同硬校验与 invalid-return 桥接测试；L1 测试（5+4+139）通过，`validate_session.ps1 -Strict` 与 `-Strict -FullRepoArchitectureScan` 均通过。
 
 ## Next Session Bootstrap
 1. Read this file.

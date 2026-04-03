@@ -79,6 +79,46 @@ def test_attention_fusion_rust_failure_is_not_silent(monkeypatch: pytest.MonkeyP
         engine.fuse(signals, features, "NORMAL")
 
 
+def test_attention_fusion_rust_rejects_non_finite_outputs(monkeypatch: pytest.MonkeyPatch) -> None:
+    now = datetime.now(_ET)
+    features = FeatureVector(features={}, timestamp=now)
+    signals = {
+        "momentum_signal": RawSignal("momentum_signal", "BULLISH", 0.80, 0.50, now),
+    }
+
+    engine = AttentionFusionEngine(model_available=True)
+    monkeypatch.setattr(
+        attn_mod,
+        "rust_compute_attention_fused",
+        lambda *args, **kwargs: (float("nan"), 0.5, [1.0]),
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="Rust compute_attention_fused returned non-finite raw score or confidence",
+    ):
+        engine.fuse(signals, features, "NORMAL")
+
+
+def test_attention_fusion_rust_rejects_invalid_weights(monkeypatch: pytest.MonkeyPatch) -> None:
+    now = datetime.now(_ET)
+    features = FeatureVector(features={}, timestamp=now)
+    signals = {
+        "momentum_signal": RawSignal("momentum_signal", "BULLISH", 0.80, 0.50, now),
+        "flow_analyzer": RawSignal("flow_analyzer", "BULLISH", 0.60, 0.30, now),
+    }
+
+    engine = AttentionFusionEngine(model_available=True)
+    monkeypatch.setattr(
+        attn_mod,
+        "rust_compute_attention_fused",
+        lambda *args, **kwargs: (0.2, 0.7, [0.9, 0.9]),
+    )
+
+    with pytest.raises(RuntimeError, match="Rust compute_attention_fused returned invalid attention weights"):
+        engine.fuse(signals, features, "NORMAL")
+
+
 def test_reactor_keeps_fusion_weights_populated_in_attention_mode() -> None:
     now = datetime.now(_ET)
     reactor = L2DecisionReactor(
@@ -146,3 +186,26 @@ def test_reactor_keeps_fusion_weights_populated_in_attention_mode() -> None:
     assert fused_payload.get("weights") == {
         name: round(weight, 4) for name, weight in output.fusion_weights.items()
     }
+
+
+def test_attention_fusion_rust_extreme_logits_remain_stable() -> None:
+    now = datetime.now(_ET)
+    features = FeatureVector(features={}, timestamp=now)
+    signals = {
+        "momentum_signal": RawSignal("momentum_signal", "BULLISH", 0.95, 0.9, now),
+        "trap_detector": RawSignal("trap_detector", "BEARISH", 0.95, -0.9, now),
+    }
+
+    engine = AttentionFusionEngine(model_available=True)
+    engine._attention_logits["NORMAL"] = {
+        "momentum_signal": 1200.0,
+        "trap_detector": -1200.0,
+        "iv_regime": 0.0,
+        "flow_analyzer": 0.0,
+        "micro_flow": 0.0,
+    }
+    fused = engine.fuse(signals, features, "NORMAL")
+
+    assert math.isfinite(fused.raw_score)
+    assert math.isfinite(fused.confidence)
+    assert sum(fused.fusion_weights.values()) == pytest.approx(1.0, abs=1e-12)
