@@ -18,7 +18,6 @@ export type { ActiveFlowDirection, ActiveFlowIntensity } from './activeOptionsTh
 const ACTIVE_OPTIONS_FLOW_SIGNAL_STATE_LIVE = 'LIVE'
 const ACTIVE_OPTIONS_FLOW_SIGNAL_STATE_DEGRADED = 'DEGRADED'
 const ACTIVE_OPTIONS_FLOW_SIGNAL_REASON_ALL_ENGINES_INACTIVE = 'all_engines_inactive'
-const ACTIVE_OPTIONS_ROW_QUALITY_FALLBACK_SYNTHETIC = 'FALLBACK_SYNTHETIC'
 
 function createPlaceholderOption(slotIndex: number): ActiveOption {
     return {
@@ -41,8 +40,6 @@ function createPlaceholderOption(slotIndex: number): ActiveOption {
         is_placeholder: true,
         slot_index: Math.max(1, slotIndex),
         row_quality: 'PLACEHOLDER',
-        fallback_reason: null,
-        is_synthetic_fallback: false,
         flow_signal_state: ACTIVE_OPTIONS_FLOW_SIGNAL_STATE_DEGRADED,
         flow_signal_reason: ACTIVE_OPTIONS_FLOW_SIGNAL_REASON_ALL_ENGINES_INACTIVE,
     }
@@ -160,7 +157,7 @@ function normalizeOptionalString(raw: unknown): string | null {
 
 function normalizeFlowSignalState(
     raw: unknown,
-    isSyntheticFallback: boolean
+    isPlaceholder: boolean
 ): 'LIVE' | 'DEGRADED' {
     const text = typeof raw === 'string' ? raw.trim().toUpperCase() : ''
     if (text === ACTIVE_OPTIONS_FLOW_SIGNAL_STATE_DEGRADED) {
@@ -169,7 +166,7 @@ function normalizeFlowSignalState(
     if (text === ACTIVE_OPTIONS_FLOW_SIGNAL_STATE_LIVE) {
         return ACTIVE_OPTIONS_FLOW_SIGNAL_STATE_LIVE
     }
-    if (isSyntheticFallback) {
+    if (isPlaceholder) {
         return ACTIVE_OPTIONS_FLOW_SIGNAL_STATE_DEGRADED
     }
     return ACTIVE_OPTIONS_FLOW_SIGNAL_STATE_LIVE
@@ -196,9 +193,7 @@ export function normalizeActiveOption(input: unknown): ActiveOption {
     const flowGlow = requireFlowGlow(row.flow_glow)
     const flowScore = toFiniteNumber(row.flow_score, 0)
     const rowQuality = normalizeOptionalString(row.row_quality)?.toUpperCase() ?? null
-    const fallbackReason = normalizeOptionalString(row.fallback_reason)
-    const isSyntheticFallback = Boolean(row.is_synthetic_fallback) || rowQuality === ACTIVE_OPTIONS_ROW_QUALITY_FALLBACK_SYNTHETIC
-    const flowSignalState = normalizeFlowSignalState(row.flow_signal_state, isSyntheticFallback)
+    const flowSignalState = normalizeFlowSignalState(row.flow_signal_state, false)
     const flowSignalReason = normalizeOptionalString(row.flow_signal_reason)
     if (flow > 0 && flowDirection !== 'BULLISH') {
         throw new Error('[ActiveOptionsContract] positive flow requires BULLISH flow_direction')
@@ -230,8 +225,6 @@ export function normalizeActiveOption(input: unknown): ActiveOption {
         is_placeholder: false,
         slot_index: slotIndex,
         row_quality: rowQuality,
-        fallback_reason: fallbackReason,
-        is_synthetic_fallback: isSyntheticFallback,
         flow_signal_state: flowSignalState,
         flow_signal_reason: flowSignalReason,
     }

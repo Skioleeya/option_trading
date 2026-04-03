@@ -35,26 +35,18 @@ class _DummyActiveOptionsService:
             "rows_placeholder": 4,
             "rows_real": 1,
             "rows_real_non_synthetic": 1,
-            "rows_synthetic_fallback": 0,
             "degraded_rows": 1,
             "live_rows": 4,
             "missing_gamma_rows": 1,
             "missing_turnover_rows": 0,
-            "last_fallback_mode": None,
             "all_placeholder": False,
             "empty_filter_count": 8,
             "last_empty_filter_at_utc": "2026-03-19T14:30:00+00:00",
-            "empty_filter_fallback_count": 2,
-            "last_empty_filter_fallback_at_utc": "2026-03-19T14:30:10+00:00",
-            "partial_fallback_count": 3,
-            "last_partial_fallback_at_utc": "2026-03-19T14:30:20+00:00",
-            "last_partial_fallback_mode": "turnover_open_interest",
             "filtered_candidates_count": 2,
-            "supplemented_rows": 3,
-            "engine_empty_output_fallback_count": 1,
-            "last_engine_empty_output_fallback_at_utc": "2026-03-19T14:30:30+00:00",
-            "empty_filter_fallback_enabled": True,
-            "empty_filter_fallback_max_candidates": 120,
+            "strict_no_fallback": True,
+            "halted": False,
+            "halt_reason": None,
+            "halted_at_utc": None,
             "last_update_at_utc": "2026-03-19T14:31:00+00:00",
             "min_volume_threshold": 10,
         }
@@ -186,22 +178,15 @@ def test_persistence_status_includes_active_options_and_failover_contracts() -> 
     assert body["active_options"]["rows_total"] == 5
     assert body["active_options"]["rows_real"] == 1
     assert body["active_options"]["rows_real_non_synthetic"] == 1
-    assert body["active_options"]["rows_synthetic_fallback"] == 0
     assert body["active_options"]["degraded_rows"] == 1
     assert body["active_options"]["live_rows"] == 4
     assert body["active_options"]["missing_gamma_rows"] == 1
     assert body["active_options"]["missing_turnover_rows"] == 0
-    assert body["active_options"]["partial_fallback_count"] == 3
-    assert body["active_options"]["last_partial_fallback_at_utc"] == "2026-03-19T14:30:20+00:00"
-    assert body["active_options"]["last_partial_fallback_mode"] == "turnover_open_interest"
     assert body["active_options"]["filtered_candidates_count"] == 2
-    assert body["active_options"]["supplemented_rows"] == 3
-    assert body["active_options"]["last_fallback_mode"] is None
     assert isinstance(body["active_options"]["empty_filter_count"], int)
-    assert body["active_options"]["empty_filter_fallback_count"] == 2
-    assert body["active_options"]["engine_empty_output_fallback_count"] == 1
-    assert body["active_options"]["empty_filter_fallback_enabled"] is True
-    assert body["active_options"]["empty_filter_fallback_max_candidates"] == 120
+    assert body["active_options"]["strict_no_fallback"] is True
+    assert body["active_options"]["halted"] is False
+    assert body["active_options"]["halt_reason"] is None
     assert body["active_options_input"]["valid"] is True
     assert body["active_options_input"]["source_version"] == 999
 

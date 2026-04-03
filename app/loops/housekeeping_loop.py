@@ -20,8 +20,6 @@ ACTIVE_OPTIONS_LIMIT = ACTIVE_OPTIONS_DEFAULT_LIMIT
 HOUSEKEEPING_OVERRUN_SLEEP_SECONDS = 0.01
 ACTIVE_OPTIONS_DEFAULT_GEX_REGIME = "NEUTRAL"
 ACTIVE_OPTIONS_INVALID_REASON_MISSING_INPUT = "missing_input"
-ACTIVE_OPTIONS_DEGRADED_SPOT = 0.0
-ACTIVE_OPTIONS_DEGRADED_ATM_IV = 0.0
 
 
 def _to_float(value: Any, default: float = 0.0) -> float:
@@ -111,28 +109,6 @@ def _log_active_options_flow_snapshot(
     )
 
 
-async def _update_active_options_with_degraded_input(
-    ctr: "AppContainer",
-    *,
-    invalid_reason: str,
-    gex_regime: str,
-) -> None:
-    logger.warning(
-        "[Housekeeping] active_options_input_invalid reason=%s; using degraded placeholders.",
-        invalid_reason,
-    )
-    await ctr.active_options_service.update_background(
-        chain=[],
-        spot=ACTIVE_OPTIONS_DEGRADED_SPOT,
-        atm_iv=ACTIVE_OPTIONS_DEGRADED_ATM_IV,
-        gex_regime=gex_regime,
-        ttm_seconds=None,
-        redis=ctr.redis_service.client,
-        limit=ACTIVE_OPTIONS_LIMIT,
-    )
-    _log_active_options_flow_snapshot(ctr, source_version=None)
-
-
 async def _update_active_options_from_shared_input(
     ctr: "AppContainer",
     state: SharedLoopState,
@@ -149,20 +125,15 @@ async def _update_active_options_from_shared_input(
 
     resolved_atm_iv, resolved_gex_regime = _resolve_runtime_context(state, snapshot)
     if snapshot is None:
-        await _update_active_options_with_degraded_input(
-            ctr,
-            invalid_reason=ACTIVE_OPTIONS_INVALID_REASON_MISSING_INPUT,
-            gex_regime=resolved_gex_regime,
+        raise RuntimeError(
+            f"active_options_input_invalid: reason={ACTIVE_OPTIONS_INVALID_REASON_MISSING_INPUT} gex_regime={resolved_gex_regime}"
         )
-        return last_source_version
 
     if not bool(snapshot.valid):
-        await _update_active_options_with_degraded_input(
-            ctr,
-            invalid_reason=str(snapshot.invalid_reason or ACTIVE_OPTIONS_INVALID_REASON_MISSING_INPUT),
-            gex_regime=resolved_gex_regime,
+        raise RuntimeError(
+            "active_options_input_invalid: reason=%s gex_regime=%s"
+            % (str(snapshot.invalid_reason or ACTIVE_OPTIONS_INVALID_REASON_MISSING_INPUT), resolved_gex_regime)
         )
-        return _next_input_version(snapshot, last_source_version)
 
     await ctr.active_options_service.update_background(
         chain=snapshot.chain,
@@ -213,7 +184,7 @@ async def _run_housekeeping_tick_safe(
         raise
     except Exception as exc:
         logger.exception(f"[Housekeeping] Error: {exc}")
-        return last_source_version
+        raise
 
 
 async def run_housekeeping_loop(ctr: 'AppContainer', state: SharedLoopState) -> None:

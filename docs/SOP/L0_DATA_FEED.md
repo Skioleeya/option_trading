@@ -61,6 +61,8 @@ flowchart LR
 - `shared/services/l0_runtime/source/runtime/ipc.py` 的 `ArrowIpcReader` 现为 live neutral surface；其 Rust owner 位于 `l0_ingest/l0_rust/src/ipc_runtime.rs`，并直接消费 `NativeArrowIpcReader`；
 - `shared/system/rust_shm_bridge.py` 与 `l1_compute/rust_bridge.py` 已退役并删除；旧 ring-buffer SHM 读取路径不再作为正式运行面，禁止恢复；
 - `shared/services/l0_runtime/services/runtime/builder.py`（`OptionChainBuilder` owner）必须通过 `ArrowIpcReader` 消费 Arrow batch；Python event-queue fallback 已退出正式运行链；
+  - Arrow 启动门禁为硬约束：必须先由 `SubscriptionManager` 完成首个有效订阅并创建 writer，再连接 `ArrowIpcReader`；
+  - 若 `longport_subscription_ready_timeout_sec`（默认 60 秒）内仍未形成有效订阅，启动必须 fail-fast 中止，禁止继续进入读端重试循环；
 - `shared/services/l0_runtime/normalize/bridges/__init__.py` 是 bridge 合同统一入口；market event parse、depth side shaping、trade payload direction 语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_market_bridge.rs`；
 - `shared/services/l0_runtime/normalize/pipeline/__init__.py` 是清洗合同统一入口；QUOTE/DEPTH 基础清洗、IV/OI 归一化、crossed quote 防御与 top-of-book depth 提取语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_sanitization.rs`；
 - `shared/services/l0_runtime/normalize/events/__init__.py` 是 event processor 合同统一入口；SPY spot quote 提取与 trade payload 归一化语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_event_support.rs`；
@@ -206,9 +208,8 @@ flowchart LR
   - `.VIX.US` 归一化 `vix_iv_decimal`
   - `1DTE` 最近 ATM 合约 `atm_iv_1dte`
   - `next_expiry`
-- 当 ActiveOptions 在 `min_volume` 过滤后为空且链路仍有有效候选（如 `turnover/open_interest`）时，允许运行时使用 fallback candidates 继续输出真实行，避免长期全占位降级；该路径必须保留结构化日志与诊断计数。
-- 当 ActiveOptions 因 `min_volume` 过滤导致 Top5 不足时，补位顺序必须先选真实的次阈值正成交量候选（`volume/current_volume > 0`，仍按 `VOL desc -> turnover desc -> impact_index desc`），仅在真实量能仍不足时才退化到 `turnover/open_interest` 合成 fallback。
-- ActiveOptions 行合同允许附加质量标记字段（向后兼容）：`row_quality`、`fallback_reason`、`is_synthetic_fallback`，用于区分真实可交易行与合成降级行。
+- ActiveOptions runtime 采用 strict no-fallback 合同：`min_volume` 过滤为空、引擎输出为空或输入无效时必须硬失败并进入 halted 状态，禁止生成补位/合成 fallback 行。
+- ActiveOptions 行合同不再包含 fallback 语义字段：`fallback_reason`、`is_synthetic_fallback` 已移除。
 
 ## 5.1 LongPort REST Runtime Contract
 

@@ -26,9 +26,21 @@ class _DummyUiTracker:
         return None
 
 
+class _DummyL3Store:
+    def __init__(self) -> None:
+        self.bound_redis = None
+
+    def bind_redis(self, client) -> None:
+        self.bound_redis = client
+
+
 class _DummyL3Reactor:
     def __init__(self) -> None:
+        self.store = _DummyL3Store()
         self.ui_tracker = _DummyUiTracker()
+
+    def bind_redis(self, client) -> None:
+        self.store.bind_redis(client)
 
 
 class _DummyL1Reactor:
@@ -132,3 +144,31 @@ async def test_lifespan_normalizes_none_initial_spot(monkeypatch: pytest.MonkeyP
     assert container.atm_decay_tracker.initialized_spot == 0.0
     assert container.option_chain_builder.repair_symbols_calls == []
     assert container.quote_hub_ready.is_set()
+
+
+class _BootingRedisService(_DummyRedisService):
+    async def start(self) -> None:
+        self.client = object()
+
+
+class _BootingContainer(_DummyContainer):
+    def __init__(self) -> None:
+        super().__init__()
+        self.redis_service = _BootingRedisService()
+
+
+@pytest.mark.asyncio
+async def test_lifespan_binds_redis_client_into_l3_store(monkeypatch: pytest.MonkeyPatch) -> None:
+    container = _BootingContainer()
+    app = FastAPI()
+
+    monkeypatch.setattr(lifespan_module, "build_container", lambda: container)
+    monkeypatch.setattr(lifespan_module.asyncio, "sleep", _noop_sleep)
+    monkeypatch.setattr(lifespan_module, "run_compute_loop", _noop_loop)
+    monkeypatch.setattr(lifespan_module, "run_broadcast_loop", _noop_loop)
+    monkeypatch.setattr(lifespan_module, "run_housekeeping_loop", _noop_loop)
+
+    async with lifespan_module.lifespan(app):
+        assert app.state.container is container
+
+    assert container.l3_reactor.store.bound_redis is container.redis_service.client

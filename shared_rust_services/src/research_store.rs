@@ -3,39 +3,21 @@ use crate::research_store_support::{
     settings_value, tier_schema, utc_iso, VALID_FORMATS, VALID_INTERVALS, VALID_VIEWS,
 };
 use chrono::{DateTime, Utc};
-use pyo3::exceptions::PyValueError;
-use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList, PyModule};
-use std::env;
-use std::collections::HashMap;
-use std::fs;
-use std::path::PathBuf;
+use pyo3::{exceptions::PyValueError, prelude::*, types::{PyDict, PyList, PyModule}};
+use std::{collections::HashMap, env, fs, path::PathBuf};
 use uuid::Uuid;
-
 #[derive(Clone, Default)]
 struct PendingOutcome {
-    ts: DateTime<Utc>,
-    l0_version: i64,
-    symbol: String,
-    base_spot: f64,
-    last_spot: f64,
-    min_ret: f64,
-    log_returns: Vec<f64>,
-    fwd_ret: HashMap<&'static str, Option<f64>>,
+    ts: DateTime<Utc>, l0_version: i64, symbol: String, base_spot: f64, last_spot: f64,
+    min_ret: f64, log_returns: Vec<f64>, fwd_ret: HashMap<&'static str, Option<f64>>,
 }
-
 #[derive(Clone)]
 struct ExportJob {
-    status: String,
-    path: String,
-    format: String,
-    error: Option<String>,
+    status: String, path: String, format: String, error: Option<String>,
 }
-
 fn horizons() -> HashMap<&'static str, Option<f64>> {
     HashMap::from([("1m", None), ("5m", None), ("15m", None), ("60m", None)])
 }
-
 #[pyclass(module = "shared_rust.services", unsendable)]
 pub struct ResearchFeatureStore {
     root: PathBuf,
@@ -55,7 +37,6 @@ pub struct ResearchFeatureStore {
     last_direction: Option<String>,
     last_net_gex: Option<f64>,
 }
-
 #[pymethods]
 impl ResearchFeatureStore {
     #[new]
@@ -91,7 +72,6 @@ impl ResearchFeatureStore {
             last_net_gex: None,
         })
     }
-
     #[getter(_raw_dir)]
     fn raw_dir(&self, py: Python<'_>) -> PyResult<Py<PyAny>> { path_obj(py, &self.raw_dir) }
     #[getter(_feature_dir)]
@@ -106,7 +86,6 @@ impl ResearchFeatureStore {
     fn set_max_points(&mut self, value: usize) { self.max_points_per_query = value; }
     #[getter(_max_fields_per_query)]
     fn max_fields(&self) -> usize { self.max_fields_per_query }
-
     #[pyo3(signature = (*, decision, snapshot, payload))]
     fn append_tick(&mut self, py: Python<'_>, decision: Py<PyAny>, snapshot: Py<PyAny>, payload: Py<PyAny>) -> PyResult<()> {
         let snapshot = snapshot.bind(py);
@@ -121,7 +100,6 @@ impl ResearchFeatureStore {
         self.update_pending_labels(py, ts, spot)?;
         let key = format!("{}|{}|SPY", ts.to_rfc3339(), l0_version);
         self.pending_labels.entry(key).or_insert_with(|| PendingOutcome { ts, l0_version, symbol: "SPY".into(), base_spot: spot, last_spot: spot, min_ret: 0.0, log_returns: Vec::new(), fwd_ret: horizons() });
-
         let native = l0_rust(py)?;
         let decision = decision.bind(py);
         let aggregates = snapshot.getattr("aggregates")?;
@@ -139,7 +117,6 @@ impl ResearchFeatureStore {
         self.last_direction = Some(decision.getattr("direction")?.extract::<String>()?);
         self.last_net_gex = Some(net_gex);
         if !emit_state.get_item("emit")?.and_then(|v| v.extract::<bool>().ok()).unwrap_or(false) { return Ok(()); }
-
         let mut raw_row = PyDict::new(py);
         raw_row.set_item("data_timestamp", utc_iso(ts))?;
         raw_row.set_item("as_of_utc", as_of_utc)?;
@@ -212,7 +189,6 @@ impl ResearchFeatureStore {
         self.append_rows(py, &self.feature_dir, "feature", &store_date, &PyList::new(py, [feature])?)?;
         Ok(())
     }
-
     #[pyo3(signature = (*, start, end, view="feature", fields=None, interval="1s", fmt="jsonl"))]
     fn query(&mut self, py: Python<'_>, start: &str, end: &str, view: &str, fields: Option<Vec<String>>, interval: &str, fmt: &str) -> PyResult<Py<PyDict>> {
         if !VALID_VIEWS.contains(&view) || view == "audit" { return err_dict(py, "invalid view"); }
@@ -248,7 +224,6 @@ impl ResearchFeatureStore {
         }
         Ok(out.unbind())
     }
-
     fn get_export_job(&self, py: Python<'_>, job_id: &str) -> PyResult<Option<Py<PyDict>>> { Ok(self.jobs.get(job_id).map(|job| job_dict(py, job))) }
     fn read_export(&self, _py: Python<'_>, job_id: &str) -> PyResult<Option<(String, Vec<u8>)>> {
         let Some(job) = self.jobs.get(job_id) else { return Ok(None) };
@@ -257,7 +232,6 @@ impl ResearchFeatureStore {
         let content_type = if job.path.ends_with(".parquet") { "application/x-parquet" } else { "application/x-ndjson" };
         Ok(Some((content_type.to_string(), bytes)))
     }
-
     #[pyo3(signature = (*, count, view, fields=None))]
     fn latest_feature_view(&self, py: Python<'_>, count: usize, view: &str, fields: Option<Vec<String>>) -> PyResult<Vec<Py<PyAny>>> {
         let mut records = self.load_latest_feature(py, count.max(256))?;
@@ -265,7 +239,6 @@ impl ResearchFeatureStore {
         if let Some(field_list) = fields { records = self.project_fields(py, records, view, field_list)?; }
         Ok(if count > 0 && records.len() > count { records.split_off(records.len() - count) } else { records })
     }
-
     fn diagnostics(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
         let out = PyDict::new(py);
         out.set_item("root", self.root.to_string_lossy().to_string())?;
@@ -277,7 +250,6 @@ impl ResearchFeatureStore {
         Ok(out.unbind())
     }
 }
-
 impl ResearchFeatureStore {
     fn enqueue_export(&mut self, py: Python<'_>, records: &[Py<PyAny>], fmt: &str) -> PyResult<String> {
         let job_id = Uuid::new_v4().simple().to_string();
@@ -292,30 +264,25 @@ impl ResearchFeatureStore {
         self.jobs.insert(job_id.clone(), ExportJob { status: "done".into(), path: path.to_string_lossy().to_string(), format: fmt.into(), error: None });
         Ok(job_id)
     }
-
     fn query_records(&self, py: Python<'_>, start_dt: DateTime<Utc>, end_dt: DateTime<Utc>, view: &str, fields: Option<Vec<String>>, interval: &str) -> PyResult<Vec<Py<PyAny>>> {
         let mut records = self.load_feature_range(py, start_dt, end_dt)?;
         if view == "compact" { records = self.to_compact(py, records)?; } else { self.attach_labels(py, &mut records, start_dt, end_dt)?; }
         if let Some(field_list) = fields { records = self.project_fields(py, records, view, field_list)?; }
         self.apply_interval(py, records, interval)
     }
-
     fn load_feature_range(&self, py: Python<'_>, start_dt: DateTime<Utc>, end_dt: DateTime<Utc>) -> PyResult<Vec<Py<PyAny>>> { load_range(py, &self.feature_dir, "feature", start_dt, end_dt) }
     fn load_label_range(&self, py: Python<'_>, start_dt: DateTime<Utc>, end_dt: DateTime<Utc>) -> PyResult<Vec<Py<PyAny>>> { load_range(py, &self.label_dir, "label", start_dt, end_dt) }
     fn load_latest_feature(&self, py: Python<'_>, count: usize) -> PyResult<Vec<Py<PyAny>>> { load_latest(py, &self.feature_dir, "feature", count) }
-
     fn to_compact(&self, py: Python<'_>, records: Vec<Py<PyAny>>) -> PyResult<Vec<Py<PyAny>>> {
         let native = l0_rust(py)?;
         records.into_iter().map(|row| Ok(native.call_method1("service_research_to_compact_record", (row.bind(py),))?.unbind())).collect()
     }
-
     fn project_fields(&self, py: Python<'_>, records: Vec<Py<PyAny>>, view: &str, fields: Vec<String>) -> PyResult<Vec<Py<PyAny>>> {
         if fields.len() > self.max_fields_per_query { return Err(PyValueError::new_err("too many fields requested")); }
         let native = l0_rust(py)?;
         let projected = native.call_method1("service_research_project_records", (PyList::new(py, records.iter())?, fields, project_allowed(view), self.max_fields_per_query))?;
         Ok(projected.downcast::<PyList>()?.iter().map(|row| row.unbind()).collect())
     }
-
     fn apply_interval(&self, py: Python<'_>, records: Vec<Py<PyAny>>, interval: &str) -> PyResult<Vec<Py<PyAny>>> {
         let step = VALID_INTERVALS.iter().find(|(name, _)| *name == interval).map(|(_, step)| *step).unwrap_or(1);
         if step <= 1 { return Ok(records); }
@@ -323,7 +290,6 @@ impl ResearchFeatureStore {
         let reduced = native.call_method1("service_research_apply_interval", (PyList::new(py, records.iter())?, step))?;
         Ok(reduced.downcast::<PyList>()?.iter().map(|row| row.unbind()).collect())
     }
-
     fn attach_labels(&self, py: Python<'_>, records: &mut [Py<PyAny>], start_dt: DateTime<Utc>, end_dt: DateTime<Utc>) -> PyResult<()> {
         let labels = self.load_label_range(py, start_dt, end_dt)?;
         let mut by_key: HashMap<(String, i64), Py<PyAny>> = HashMap::new();
@@ -338,13 +304,11 @@ impl ResearchFeatureStore {
         }
         Ok(())
     }
-
     fn append_rows(&self, py: Python<'_>, dir: &PathBuf, tier: &str, date_str: &str, rows: &Bound<'_, PyList>) -> PyResult<()> {
         let path = dir.join(format!("{tier}_{date_str}.parquet"));
         l0_rust(py)?.call_method1("service_research_append_parquet_rows", (path.to_string_lossy().to_string(), rows, tier_schema(py, tier)?))?;
         Ok(())
     }
-
     fn cleanup_retention_if_needed(&mut self, py: Python<'_>, date_str: &str) -> PyResult<()> {
         if self.last_cleanup_date.as_deref() == Some(date_str) { return Ok(()); }
         self.last_cleanup_date = Some(date_str.to_string());
@@ -355,7 +319,6 @@ impl ResearchFeatureStore {
         let _ = py;
         Ok(())
     }
-
     fn update_pending_labels(&mut self, py: Python<'_>, ts: DateTime<Utc>, spot: f64) -> PyResult<()> {
         let native = l0_rust(py)?;
         let mut done = Vec::new();
@@ -379,19 +342,16 @@ impl ResearchFeatureStore {
         Ok(())
     }
 }
-
 #[pyfunction]
 fn cleanup_tier(py: Python<'_>, tier_dir: &str, prefix: &str, now_et_date: &str, retention_days: i64) -> PyResult<()> {
     let _ = py;
     cleanup_tier_path(&PathBuf::from(tier_dir), prefix, parse_date(now_et_date)?, retention_days)
 }
-
 fn parse_date(text: &str) -> PyResult<chrono::NaiveDate> {
     chrono::NaiveDate::parse_from_str(text, "%Y%m%d")
         .or_else(|_| chrono::NaiveDate::parse_from_str(text, "%Y-%m-%d"))
         .map_err(|err| PyValueError::new_err(err.to_string()))
 }
-
 fn path_obj(py: Python<'_>, path: &PathBuf) -> PyResult<Py<PyAny>> { Ok(py.import("pathlib")?.getattr("Path")?.call1((path.to_string_lossy().to_string(),))?.unbind()) }
 fn safe_std(values: &[f64]) -> f64 { if values.len() < 2 { 0.0 } else { let mean = values.iter().sum::<f64>() / values.len() as f64; let var = values.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / (values.len() as f64 - 1.0); var.max(0.0).sqrt() } }
 fn get_float(obj: &Bound<'_, PyAny>, key: &str) -> Option<f64> { obj.getattr(key).ok().and_then(|v| v.extract::<f64>().ok()).filter(|v| v.is_finite()) }
@@ -401,7 +361,6 @@ fn opt_py_i64<'py>(py: Python<'py>, value: Option<i64>) -> Bound<'py, PyAny> { v
 fn dict_args<'py>(py: Python<'py>, items: &[(&str, Bound<'py, PyAny>)]) -> PyResult<Bound<'py, PyDict>> { let d = PyDict::new(py); for (k,v) in items { d.set_item(*k, v)?; } Ok(d) }
 fn job_dict(py: Python<'_>, job: &ExportJob) -> Py<PyDict> { let d = PyDict::new(py); let _ = d.set_item("status",&job.status); let _ = d.set_item("path",&job.path); let _ = d.set_item("format",&job.format); if let Some(error)=&job.error { let _ = d.set_item("error",error); } d.unbind() }
 fn err_dict(py: Python<'_>, message: &str) -> PyResult<Py<PyDict>> { let d = PyDict::new(py); d.set_item("error", message)?; Ok(d.unbind()) }
-
 fn load_range(py: Python<'_>, tier_dir: &PathBuf, prefix: &str, start_dt: DateTime<Utc>, end_dt: DateTime<Utc>) -> PyResult<Vec<Py<PyAny>>> {
     let native = l0_rust(py)?;
     let names: Vec<String> = fs::read_dir(tier_dir).map_err(|err| PyValueError::new_err(err.to_string()))?.filter_map(Result::ok).filter_map(|e| e.file_name().into_string().ok()).collect();
@@ -419,7 +378,6 @@ fn load_range(py: Python<'_>, tier_dir: &PathBuf, prefix: &str, start_dt: DateTi
     }
     Ok(rows)
 }
-
 fn load_latest(py: Python<'_>, tier_dir: &PathBuf, prefix: &str, count: usize) -> PyResult<Vec<Py<PyAny>>> {
     let native = l0_rust(py)?;
     let names: Vec<String> = fs::read_dir(tier_dir).map_err(|err| PyValueError::new_err(err.to_string()))?.filter_map(Result::ok).filter_map(|e| e.file_name().into_string().ok()).collect();
@@ -434,7 +392,6 @@ fn load_latest(py: Python<'_>, tier_dir: &PathBuf, prefix: &str, count: usize) -
     rows.sort_by_key(|row| row.bind(py).downcast::<PyDict>().ok().and_then(|dict| dict.get_item("data_timestamp").ok().flatten()).and_then(|v| v.extract::<String>().ok()).unwrap_or_default());
     Ok(rows)
 }
-
 pub fn register(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<ResearchFeatureStore>()?;
     m.add_function(wrap_pyfunction!(cleanup_tier, m)?)?;

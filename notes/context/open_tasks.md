@@ -1,9 +1,10 @@
 # Open Tasks (Index)
 
 ## Active Session Tasks
-- Path: notes/sessions/2026-04-03/impl-blocked-field-rootcause-zero-fallback/open_tasks.md
+- Path: notes/sessions/2026-04-03/impl-tdd-module-structure-remediation/open_tasks.md
 
 ## Global Backlog (Cross-Session)
+- [ ] Monitor strict startup gate telemetry for `writer_not_ready_timeout` in live market open window; retune timeout only with evidence.
 - [ ] Capture one full market-session Sub-wave F dual-run compare and append no-divergence evidence in handoff.
 - [ ] Verify/close residual `tmp/pytest_cache` write-warning path (`nodeids`) for non-escalated test runs.
 - [ ] Continue `shared/services` retirement with `l0_runtime` (Sub-wave D storage/utility assessment completed; tactical-triad wrapper retirement closed in Wave B; next: namespace convergence and remaining neutral-surface retirements).
@@ -14,3 +15,4 @@
 ## Process
 - Task details and completion evidence belong in the session-local open_tasks.md.
 - Keep this file as the long-horizon queue and session pointer only.
+

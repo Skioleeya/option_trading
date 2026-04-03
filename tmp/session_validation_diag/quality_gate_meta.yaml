@@ -1,5 +1,4 @@
 ﻿files_changed:
-  - "l3_assembly/assembly/delta_encoder.py"
-  - "l3_assembly/events/delta_events.py"
-  - "l3_assembly/events/payload_events.py"
+  - "app/loops/housekeeping_loop.py"
+  - "l3_assembly/events/active_options_contract.py"
   - "l3_assembly/events/payload_ui_state.py"

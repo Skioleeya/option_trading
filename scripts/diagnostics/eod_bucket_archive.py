@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import shutil
 import sys
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -103,6 +104,14 @@ def _read_rows(path: Path) -> int:
     return pq.read_table(path).num_rows
 
 
+def _freeze_source_file(*, src: SourceEntry, out_root: Path, date_str: str) -> Path:
+    frozen_dir = out_root / "daily" / date_str / "sources" / src.role
+    frozen_dir.mkdir(parents=True, exist_ok=True)
+    frozen_path = frozen_dir / src.path.name
+    shutil.copy2(src.path, frozen_path)
+    return frozen_path
+
+
 def _find_prev_close_spot(root: Path, date_str: str) -> tuple[float | None, str | None]:
     prev_day = _previous_xnys_session(date_str)
     prev_path = root / "research" / "raw" / f"raw_{prev_day}.parquet"
@@ -186,16 +195,18 @@ def run_archive(
                 required_missing += 1
                 quality_reasons.append(f"missing required source: {src.role}")
             continue
+        frozen_path = _freeze_source_file(src=src, out_root=out_root, date_str=date_str)
         source_files.append(
             {
                 "role": src.role,
-                "path": src.path.as_posix(),
-                "size_bytes": src.path.stat().st_size,
-                "sha256": _sha256(src.path),
+                "path": frozen_path.as_posix(),
+                "source_path": src.path.as_posix(),
+                "size_bytes": frozen_path.stat().st_size,
+                "sha256": _sha256(frozen_path),
             }
         )
-        if src.path.suffix == ".parquet":
-            rows_by_role[src.role] = _read_rows(src.path)
+        if frozen_path.suffix == ".parquet":
+            rows_by_role[src.role] = _read_rows(frozen_path)
 
     raw_path = root / "research" / "raw" / f"raw_{date_str}.parquet"
     key_nulls: dict[str, float | str] = {}

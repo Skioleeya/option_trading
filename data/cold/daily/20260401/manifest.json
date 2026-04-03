@@ -8,49 +8,55 @@
   "source_files": [
     {
       "role": "research_raw",
-      "path": "data/research/raw/raw_20260401.parquet",
-      "size_bytes": 1554696,
-      "sha256": "8be3de57f507039054e3a2fbea6e2eb884aeaca3f24ae744efbd418d6190a3f6"
+      "path": "data/cold/daily/20260401/sources/research_raw/raw_20260401.parquet",
+      "source_path": "data/research/raw/raw_20260401.parquet",
+      "size_bytes": 1571042,
+      "sha256": "df21733da662406afeec3ee3f4e5a621d1352f32177ea64285d82c232a264f8e"
     },
     {
       "role": "research_feature",
-      "path": "data/research/feature/feature_20260401.parquet",
-      "size_bytes": 3681783,
-      "sha256": "7bd721e0441491a5b6098531138aeb64e6a4a1cf2328548d1fd9765b829af040"
+      "path": "data/cold/daily/20260401/sources/research_feature/feature_20260401.parquet",
+      "source_path": "data/research/feature/feature_20260401.parquet",
+      "size_bytes": 3729484,
+      "sha256": "16075d8073acefc32b101c0e87c1d6010e1a5012771a2ee694ae5846ca391ac3"
     },
     {
       "role": "research_label",
-      "path": "data/research/label/label_20260401.parquet",
-      "size_bytes": 566317,
-      "sha256": "7ebeb7712f7d417778c2cbe33118ac63181116d60e01383dfe1700f1f049bdcc"
+      "path": "data/cold/daily/20260401/sources/research_label/label_20260401.parquet",
+      "source_path": "data/research/label/label_20260401.parquet",
+      "size_bytes": 702036,
+      "sha256": "7df2a8d6294eca1bc5b5e974762474572703a7c10f0130be94da1fb448c6fa8f"
     },
     {
       "role": "atm_series",
-      "path": "data/atm_decay/atm_series_20260401.jsonl",
+      "path": "data/cold/daily/20260401/sources/atm_series/atm_series_20260401.jsonl",
+      "source_path": "data/atm_decay/atm_series_20260401.jsonl",
       "size_bytes": 3804442,
       "sha256": "9df8cb701e36c1b32cae63c5d33663b3637b11828b74f925cc41922f2cc5ce61"
     },
     {
       "role": "mtf_iv_series",
-      "path": "data/mtf_iv/mtf_iv_series_20260401.jsonl",
-      "size_bytes": 1596671,
-      "sha256": "370b08a703257b8312162b4e6059c6ef274c61746d758035b206ba93cfe52381"
+      "path": "data/cold/daily/20260401/sources/mtf_iv_series/mtf_iv_series_20260401.jsonl",
+      "source_path": "data/mtf_iv/mtf_iv_series_20260401.jsonl",
+      "size_bytes": 1703684,
+      "sha256": "a072c62a6a043310e46167ea221c9b7ede7fd20e90c4befb086cf77e3f9bfcee"
     },
     {
       "role": "wall_series",
-      "path": "data/wall_migration/wall_series_20260401.jsonl",
-      "size_bytes": 10837,
-      "sha256": "99f346e4bf2af33a85457d656c318c0024706d422d3fc51129b89bf1a76c2ebc"
+      "path": "data/cold/daily/20260401/sources/wall_series/wall_series_20260401.jsonl",
+      "source_path": "data/wall_migration/wall_series_20260401.jsonl",
+      "size_bytes": 13627,
+      "sha256": "7236583ac1d6b918a01be5b9ef058c158de6a7d710aceefc7d60058bf3f42156"
     }
   ],
   "metrics": {
     "rows": {
-      "research_raw": 15043,
-      "research_feature": 15043,
-      "research_label": 18365
+      "research_raw": 15379,
+      "research_feature": 15379,
+      "research_label": 22447
     },
     "raw_day": {
-      "rows": 15043,
+      "rows": 15379,
       "session_rows_used": 15029,
       "spot_outlier_rows_dropped": 0,
       "net_return": 0.007457637543438851,
@@ -98,5 +104,5 @@
   "rule_hits": [
     "balance_day: default fallback"
   ],
-  "generated_at_utc": "2026-04-01T20:04:03Z"
+  "generated_at_utc": "2026-04-03T20:31:53Z"
 }

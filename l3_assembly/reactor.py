@@ -154,6 +154,10 @@ class L3AssemblyReactor:
             "research_store": self.research_store.diagnostics(),
         }
 
+    def bind_redis(self, redis: Any) -> None:
+        """Bind warm-tier Redis after RedisService startup."""
+        self.store.bind_redis(redis)
+
     # ── Private helpers ────────────────────────────────────────────────────
 
     @staticmethod

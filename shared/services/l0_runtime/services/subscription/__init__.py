@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from datetime import date, datetime, timedelta
@@ -68,6 +69,7 @@ class OptionSubscriptionManager:
         self._metadata_cache: dict[date, tuple[float, list[Any]]] = {}
         self._metadata_cache_hits = 0
         self._metadata_cache_misses = 0
+        self._writer_ready_event = asyncio.Event()
 
     @property
     def subscribed_symbols(self) -> set[str]:
@@ -84,6 +86,10 @@ class OptionSubscriptionManager:
     @property
     def symbol_to_strike(self) -> dict[str, float]:
         return self._symbol_to_strike
+
+    @property
+    def writer_ready(self) -> bool:
+        return self._writer_ready_event.is_set()
 
     def resolve_strike(self, symbol: str) -> float | None:
         return self._symbol_to_strike.get(symbol)
@@ -103,7 +109,15 @@ class OptionSubscriptionManager:
             "entries": len(self._metadata_cache),
             "ttl_sec": self._metadata_ttl_sec,
             "weight": self._metadata_weight,
+            "writer_ready": self.writer_ready,
         }
+
+    async def wait_for_writer_ready(self, timeout_sec: float) -> None:
+        timeout = max(0.01, float(timeout_sec))
+        try:
+            await asyncio.wait_for(self._writer_ready_event.wait(), timeout=timeout)
+        except TimeoutError as exc:
+            raise RuntimeError(f"writer_not_ready_timeout: timeout_sec={timeout:.2f}") from exc
 
     def _prune_metadata_cache(self, now_mono: float) -> None:
         stale_dates = [
@@ -215,11 +229,13 @@ class OptionSubscriptionManager:
         await self._runtime.subscribe(sorted(target_set), [SubType.Quote, SubType.Depth, SubType.Trade])
         self.is_rust_started = True
         self._subscribed_symbols = set(target_set)
+        self._writer_ready_event.set()
         logger.info("[SubscriptionManager] Rust runtime subscribed symbols=%d", len(self._subscribed_symbols))
 
     async def stop(self) -> None:
         await self._runtime.disconnect()
         self.is_rust_started = False
+        self._writer_ready_event.clear()
         logger.info("[SubscriptionManager] Runtime disconnected.")
 
 

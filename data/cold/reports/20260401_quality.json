@@ -7,12 +7,12 @@
   "status": "PASS",
   "reasons": [],
   "rows": {
-    "research_raw": 15043,
-    "research_feature": 15043,
-    "research_label": 18365
+    "research_raw": 15379,
+    "research_feature": 15379,
+    "research_label": 22447
   },
   "raw_metrics": {
-    "rows": 15043,
+    "rows": 15379,
     "session_rows_used": 15029,
     "spot_outlier_rows_dropped": 0,
     "net_return": 0.007457637543438851,
@@ -40,5 +40,5 @@
     "afternoon_return": -0.004119167046663509,
     "prev_trade_day": "20260331"
   },
-  "generated_at_utc": "2026-04-01T20:04:03Z"
+  "generated_at_utc": "2026-04-03T20:31:53Z"
 }

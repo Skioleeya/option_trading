@@ -59,8 +59,6 @@ def active_option_row_from_dict(raw: dict[str, Any]) -> ActiveOptionRow:
         is_placeholder=bool(raw.get("is_placeholder", False)),
         slot_index=_to_int(raw, "slot_index", 0),
         row_quality=_optional_clean_str(raw, "row_quality", upper=True),
-        fallback_reason=_optional_clean_str(raw, "fallback_reason", upper=False),
-        is_synthetic_fallback=bool(raw.get("is_synthetic_fallback", False)),
         flow_signal_state=_optional_clean_str(raw, "flow_signal_state", upper=True) or "LIVE",
         flow_signal_reason=_optional_clean_str(raw, "flow_signal_reason", upper=False),
     )

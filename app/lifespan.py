@@ -41,6 +41,7 @@ async def lifespan(app: FastAPI):
     if ctr.redis_service.client:
         await ctr.agent_g.set_redis_client(ctr.redis_service.client)
         ctr.atm_decay_tracker.redis = ctr.redis_service.client
+        ctr.l3_reactor.bind_redis(ctr.redis_service.client)
         await ctr.l3_reactor.ui_tracker.set_redis_client(ctr.redis_service.client)
             
     await ctr.option_chain_builder.initialize()

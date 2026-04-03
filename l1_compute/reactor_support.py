@@ -4,28 +4,23 @@ from datetime import datetime
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
-import numpy as np
-
 from l1_compute.output.enriched_snapshot import (
     AggregateGreeks as OutAggregateGreeks,
     ComputeQualityReport,
     EnrichedSnapshot,
     MicroSignals,
 )
+from shared.services.atm_iv import extract_atm_iv_value
 
 _ET = ZoneInfo("US/Eastern")
 
 
 def extract_atm_iv(
-    strikes: np.ndarray,
-    ivs: np.ndarray,
+    strikes: Any,
+    ivs: Any,
     spot: float,
 ) -> float:
-    """Return IV of the option strike closest to ATM."""
-    if len(strikes) == 0:
-        return 0.0
-    idx = int(np.argmin(np.abs(strikes - spot)))
-    return float(ivs[idx]) if ivs[idx] > 0 else 0.0
+    return extract_atm_iv_value(strikes=strikes, ivs=ivs, spot=spot)
 
 
 def empty_snapshot(

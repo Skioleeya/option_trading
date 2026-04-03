@@ -5,8 +5,6 @@ class FlowEngineConfig(BaseConfig):
     # VPIN / Order Flow
     vpin_bucket_size: float = Field(default=50000)
     flow_active_min_volume: int = Field(default=100)
-    flow_active_empty_filter_fallback_enabled: bool = Field(default=True)
-    flow_active_empty_filter_fallback_max_candidates: int = Field(default=120)
     research_window_size: int = Field(default=120)
 
     # DEG Composer Weights

@@ -58,6 +58,10 @@ class OptionChainBuilder:
         self._transport_status = SHM_STATUS_DISCONNECTED
         self._transport_error: str | None = None
         self._last_trade_price: dict[str, float] = {}
+        self._arrow_startup_timeout_sec = max(
+            1.0,
+            float(getattr(settings, "longport_subscription_ready_timeout_sec", 60) or 60),
+        )
 
     @property
     def on_depth(self) -> Any:
@@ -83,13 +87,6 @@ class OptionChainBuilder:
             self._runtime_bundle.quote_runtime,
             strict_connectivity=bool(getattr(settings, "longport_startup_strict_connectivity", True)),
         )
-        if self._uses_arrow_transport():
-            try:
-                self._connect_arrow_reader()
-            except RuntimeError as exc:
-                self._transport_status = SHM_STATUS_DISCONNECTED
-                self._transport_error = str(exc)
-                logger.info("[OptionChainBuilderV2] Arrow reader attach deferred until writer is live: %s", exc)
         self._services.iv_sync.set_event_loop(asyncio.get_event_loop())
 
         today_str = datetime.now(ZoneInfo("US/Eastern")).strftime("%Y%m%d")
@@ -115,11 +112,20 @@ class OptionChainBuilder:
             self._services.tier3.start(self._runtime_bundle.quote_runtime, get_spot_fn=lambda: self._state.store.spot)
 
         self._initialized = True
-        if self._uses_arrow_transport():
-            self._arrow_consumer_task = asyncio.create_task(self._arrow_consumer_loop())
-        else:
-            self._consumer_task = asyncio.create_task(self._event_consumer_loop())
         self._mgmt_task = asyncio.create_task(self._services.orchestrator.run())
+        if not self._uses_arrow_transport():
+            self._consumer_task = asyncio.create_task(self._event_consumer_loop())
+        else:
+            try:
+                await self._await_arrow_writer_ready_or_fail(timeout_sec=self._arrow_startup_timeout_sec)
+                self._connect_arrow_reader()
+            except Exception as exc:
+                self._transport_status = SHM_STATUS_ERROR
+                self._transport_error = str(exc)
+                logger.error("[OptionChainBuilderV2] Arrow startup gate failed: %s", exc)
+                await self.shutdown()
+                raise RuntimeError(f"arrow_startup_gate_failed: {exc}") from exc
+            self._arrow_consumer_task = asyncio.create_task(self._arrow_consumer_loop())
         logger.info("[OptionChainBuilderV2] L0 V2 pipeline initialized")
 
     def _apply_rest_item(self, symbol: str, item: Any) -> None:
@@ -171,14 +177,14 @@ class OptionChainBuilder:
         self._transport_status = SHM_STATUS_DISCONNECTED
         self._transport_error = None
 
+    async def _await_arrow_writer_ready_or_fail(self, timeout_sec: float) -> None:
+        await self._services.sub_mgr.wait_for_writer_ready(timeout_sec=timeout_sec)
+
     async def _arrow_consumer_loop(self) -> None:
         while self._initialized:
             try:
                 if self._arrow_reader is None:
-                    self._connect_arrow_reader()
-                if self._arrow_reader is None:
-                    await asyncio.sleep(0.5)
-                    continue
+                    raise RuntimeError("arrow_reader_unavailable_after_startup_gate")
                 batch = await self._arrow_reader.read_next_batch()
                 self._record_arrow_batch(batch)
                 self._handle_arrow_batch(batch)
@@ -191,7 +197,8 @@ class OptionChainBuilder:
                 if self._arrow_reader is not None:
                     self._arrow_reader.close()
                     self._arrow_reader = None
-                await asyncio.sleep(0.1)
+                self._initialized = False
+                raise RuntimeError(f"arrow_consumer_hard_failure: {exc}") from exc
 
     def _record_arrow_batch(self, batch: Any) -> None:
         batch_id = batch_id_from_batch(batch)

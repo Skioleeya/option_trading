@@ -4,17 +4,14 @@ use super::common::{
 };
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyDict, PyModule};
-
 #[pyclass(module = "shared_rust.services", unsendable)]
 pub struct FlowEngineD;
-
 #[pymethods]
 impl FlowEngineD {
     #[new]
     fn new() -> Self {
         Self
     }
-
     fn compute(&self, py: Python<'_>, inputs: &Bound<'_, PyAny>) -> PyResult<Vec<Py<PyAny>>> {
         let mut results = Vec::new();
         for input in as_list(inputs)?.iter() {
@@ -43,17 +40,14 @@ impl FlowEngineD {
         Ok(results)
     }
 }
-
 #[pyclass(module = "shared_rust.services", unsendable)]
 pub struct FlowEngineE;
-
 #[pymethods]
 impl FlowEngineE {
     #[new]
     fn new() -> Self {
         Self
     }
-
     fn compute(&self, py: Python<'_>, inputs: &Bound<'_, PyAny>) -> PyResult<Vec<Py<PyAny>>> {
         let mut results = Vec::new();
         for input in as_list(inputs)?.iter() {
@@ -81,17 +75,14 @@ impl FlowEngineE {
         Ok(results)
     }
 }
-
 #[pyclass(module = "shared_rust.services", unsendable)]
 pub struct FlowEngineG;
-
 #[pymethods]
 impl FlowEngineG {
     #[new]
     fn new() -> Self {
         Self
     }
-
     #[pyo3(signature = (inputs, redis=None, oi_store=None, date_str=None))]
     fn compute(
         &self,
@@ -120,7 +111,6 @@ impl FlowEngineG {
             }
             return Ok(results);
         }
-
         let get_oi_delta = py
             .import("shared.cache.oi_snapshot")?
             .getattr("get_oi_delta_sync")?;
@@ -142,7 +132,6 @@ impl FlowEngineG {
                 )?);
                 continue;
             }
-
             let delta_kwargs = PyDict::new(py);
             if let Some(ref value) = date_str {
                 delta_kwargs.set_item("date_str", value)?;
@@ -184,17 +173,14 @@ impl FlowEngineG {
         Ok(results)
     }
 }
-
 #[pyclass(module = "shared_rust.services", unsendable)]
 pub struct InstitutionalSweepDetector;
-
 #[pymethods]
 impl InstitutionalSweepDetector {
     #[new]
     fn new() -> Self {
         Self
     }
-
     fn detect(&self, py: Python<'_>, symbols: Vec<String>, z_scores: Vec<f64>) -> PyResult<Py<PyAny>> {
         let result = PyDict::new(py);
         for symbol in &symbols {
@@ -203,7 +189,6 @@ impl InstitutionalSweepDetector {
         if symbols.len() < 3 {
             return Ok(result.unbind().into_any());
         }
-
         let active: Vec<bool> = z_scores.iter().map(|score| score.abs() > 1.5).collect();
         for index in 0..symbols.len() {
             if !active[index] {
@@ -227,12 +212,10 @@ impl InstitutionalSweepDetector {
         Ok(result.unbind().into_any())
     }
 }
-
 #[pyclass(module = "shared_rust.services", unsendable)]
 pub struct DEGComposer {
     detector: InstitutionalSweepDetector,
 }
-
 #[pymethods]
 impl DEGComposer {
     #[new]
@@ -241,7 +224,6 @@ impl DEGComposer {
             detector: InstitutionalSweepDetector,
         }
     }
-
     #[pyo3(signature = (d_results, e_results, g_results, inputs_by_symbol, gex_regime, is_charm_surge=false, ttm_seconds=None))]
     fn compose(
         &self,
@@ -269,7 +251,6 @@ impl DEGComposer {
         let g_active = as_list(g_results)?
             .iter()
             .any(|item| get_attr_bool(&item, "is_valid", true));
-
         let mut symbols: Vec<String> = map_d
             .keys()
             .chain(map_e.keys())
@@ -281,7 +262,6 @@ impl DEGComposer {
         if symbols.is_empty() {
             return Ok(Vec::new());
         }
-
         let z_score = |values: &[f64]| -> Vec<f64> {
             let mean = values.iter().sum::<f64>() / values.len() as f64;
             let variance = values.iter().map(|value| (value - mean).powi(2)).sum::<f64>() / values.len() as f64;
@@ -298,7 +278,6 @@ impl DEGComposer {
         let z_d = z_score(&vals_d);
         let z_e = z_score(&vals_e);
         let z_g = z_score(&vals_g);
-
         let (mut w_d, mut w_e, mut w_g) = if gex_regime == "ACCELERATION" || is_charm_surge {
             (
                 settings_value(py, "flow_charm_surge_weight_d", 0.4_f64)?,
@@ -318,13 +297,11 @@ impl DEGComposer {
             w_e /= total;
             w_g = 0.0;
         }
-
         let initial: Vec<f64> = (0..symbols.len())
             .map(|index| (w_d * z_d[index]) + (w_e * z_e[index]) + (w_g * z_g[index]))
             .collect();
         let sweep_binding = self.detector.detect(py, symbols.clone(), initial.clone())?;
         let sweep_map = sweep_binding.bind(py).downcast::<PyDict>()?;
-
         let tau = ttm_seconds.unwrap_or(23_400.0) / 23_400.0;
         let time_factor = (-tau).exp();
         let sweep_multiplier = settings_value(py, "flow_sweep_multiplier", 1.25_f64)?;
@@ -332,7 +309,6 @@ impl DEGComposer {
         let extreme_threshold = settings_value(py, "flow_zscore_extreme_threshold", 2.0_f64)?;
         let high_threshold = settings_value(py, "flow_intensity_high_threshold", 1.0_f64)?;
         let mut outputs = Vec::new();
-
         for (index, symbol) in symbols.iter().enumerate() {
             let Some(input_row) = inputs_by_symbol.get_item(symbol)? else {
                 continue;
@@ -399,7 +375,6 @@ impl DEGComposer {
         Ok(outputs)
     }
 }
-
 pub fn register(_py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<FlowEngineD>()?;
     module.add_class::<FlowEngineE>()?;

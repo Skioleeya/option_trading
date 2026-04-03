@@ -1,5 +1,4 @@
 """L1 Compute Reactor — thin orchestrator for the L1 computation pipeline.
-
 Execution flow:
     1. Normalise L0 snapshot → Arrow RecordBatch (zero-copy)
     2. IV Resolution — IVResolver batch resolves all symbols
@@ -8,27 +7,21 @@ Execution flow:
     5. StreamingAggregator — incremental GEX/Vanna/Charm update
     6. MicroSignalBuilder — delegates microstructure + tracker assembly
     7. Build EnrichedSnapshot (immutable) and return to caller
-
 Threading model:
     - compute() is async; heavy work offloaded to asyncio.to_thread()
     - Reactor holds no mutable state shared with event loop (safe re-entry)
-
 Dependencies for microstructure assembly are injected into MicroSignalBuilder
 via constructor — reactor owns lifecycle, builder owns coordination logic.
 """
-
 from __future__ import annotations
-
 import asyncio
 import logging
 import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 from zoneinfo import ZoneInfo
-
 import numpy as np
 import pyarrow as pa
-
 from l1_compute.arrow.schema import dicts_to_record_batch, ensure_record_batch
 from l1_compute.aggregation.streaming_aggregator import AggregateGreeks, StreamingAggregator
 from l1_compute.compute.compute_router import ComputeRouter, ComputeTier
@@ -48,7 +41,6 @@ from l1_compute.output.enriched_snapshot import (
 )
 from l1_compute.reactor_support import empty_snapshot, extract_atm_iv
 from l1_compute.time.ttm_v2 import SettlementType, get_trading_ttm_v2_scalar
-
 # Tracker imports (Phase 1 Refactor — Agent B → L1)
 from l1_compute.analysis.mtf_iv_engine import MTFIVEngine
 from l1_compute.analysis.volume_imbalance_engine import VolumeImbalanceEngine
@@ -57,19 +49,13 @@ from l1_compute.trackers.iv_velocity_tracker import IVVelocityTracker
 from l1_compute.trackers.mtf_iv_persistence import MTFIVWindowPersistence
 from l1_compute.trackers.vanna_flow_analyzer import VannaFlowAnalyzer
 from l1_compute.trackers.wall_migration_tracker import WallMigrationTracker
-
 logger = logging.getLogger(__name__)
-
 _ET = ZoneInfo("US/Eastern")
 _SABR_RECALIBRATE_INTERVAL: float = 120.0   # seconds
-
-
 class L1ComputeReactor:
     """Orchestrates the full L1 computation pipeline.
-
     Designed to be instantiated once at startup (alongside OptionChainBuilder)
     and called on every chain update tick.
-
     Args:
         r:            Risk-free rate (continuously compounded).
         q:            Dividend yield (continuously compounded).
@@ -77,7 +63,6 @@ class L1ComputeReactor:
         iv_ws_ttl:    WS IV time-to-live in seconds.
         mtf_window_persistence: Optional MTFIVWindowPersistence (injected for testing).
     """
-
     def __init__(
         self,
         r: float = 0.05,
@@ -88,7 +73,6 @@ class L1ComputeReactor:
     ) -> None:
         self._r = r
         self._q = q
-
         # Core L1 pipeline components
         self._router      = ComputeRouter()
         self._aggregator  = StreamingAggregator()
@@ -96,12 +80,10 @@ class L1ComputeReactor:
         self._sabr        = SABRCalibrator() if sabr_enabled else None
         self._inst        = L1Instrumentation()
         self._last_sabr_at: float = 0.0
-
         # Microstructure (per-symbol, lazily created)
         self._vpin_map: dict[str, VPINv2] = {}
         self._bbo       = BBOv2()
         self._vol_accel = VolAccelV2()
-
         # Trackers (Phase 1 Refactor)
         self._iv_tracker      = IVVelocityTracker()
         self._wall_tracker    = WallMigrationTracker()
@@ -109,14 +91,12 @@ class L1ComputeReactor:
         self._mtf_iv_engine   = MTFIVEngine()
         self._vib_engine      = VolumeImbalanceEngine()
         self._jump_detector   = JumpDetector()
-
         # MTF buffers (per-timeframe geometric frames)
         self._MTF_INTERVALS: dict[str, float] = {"1m": 60.0, "5m": 300.0, "15m": 900.0}
         self._mtf_buf:       dict[str, list[tuple[float, float]]] = {
             "1m": [], "5m": [], "15m": []
         }
         self._mtf_last_push: dict[str, float] = {"1m": 0.0, "5m": 0.0, "15m": 0.0}
-
         if mtf_window_persistence is not None:
             self._mtf_persistence = mtf_window_persistence
         else:
@@ -125,7 +105,6 @@ class L1ComputeReactor:
             except Exception as exc:
                 logger.error("[L1ComputeReactor] MTF persistence init failed: %s", exc)
                 self._mtf_persistence = None
-
         # Microstructure signal builder (DI — receives tracker references)
         self._micro_builder = MicroSignalBuilder(
             vpin_map=self._vpin_map,
@@ -142,13 +121,11 @@ class L1ComputeReactor:
             mtf_intervals=self._MTF_INTERVALS,
             mtf_persistence=self._mtf_persistence,
         )
-
         logger.info(
             "[L1ComputeReactor] Initialized — GPU=%s SABR=%s",
             self._router.gpu_available,
             sabr_enabled,
         )
-
     async def compute(
         self,
         chain_snapshot: Union[List[dict[str, Any]], pa.RecordBatch],
@@ -159,7 +136,6 @@ class L1ComputeReactor:
         extra_metadata: Optional[dict[str, Any]] = None,
     ) -> EnrichedSnapshot:
         """Execute the full L1 compute pipeline asynchronously.
-
         Args:
             chain_snapshot: Option entries from L0/ChainStateStore.
             spot:           Current underlying spot price.
@@ -167,16 +143,13 @@ class L1ComputeReactor:
             iv_cache:       REST IV baseline {symbol: iv}.
             spot_at_sync:   {symbol: spot_at_last_iv_sync}.
             extra_metadata: Audit / diagnostics pass-through.
-
         Returns:
             Immutable EnrichedSnapshot ready for L2 Decision Layer.
         """
         if not chain_snapshot or spot <= 0:
             return empty_snapshot(l0_version, extra_metadata=extra_metadata or {})
-
         iv_cache     = iv_cache     or {}
         spot_at_sync = spot_at_sync or {}
-
         with self._inst.span_compute():
             snapshot = await asyncio.to_thread(
                 self._compute_sync,
@@ -188,7 +161,6 @@ class L1ComputeReactor:
                 extra_metadata or {},
             )
         return snapshot
-
     def update_microstructure_depth(
         self,
         symbol: str,
@@ -197,7 +169,6 @@ class L1ComputeReactor:
     ) -> None:
         """Update BBO imbalance from a depth push event (call from asyncio loop)."""
         self._bbo.update(symbol, bids, asks)
-
     def update_microstructure_trades(
         self,
         symbol: str,
@@ -207,7 +178,6 @@ class L1ComputeReactor:
         if symbol not in self._vpin_map:
             self._vpin_map[symbol] = VPINv2()
         self._vpin_map[symbol].update(trades)
-
     def _compute_sync(
         self,
         chain_snapshot: Union[List[dict[str, Any]], pa.RecordBatch],
@@ -221,23 +191,19 @@ class L1ComputeReactor:
         extra_metadata = dict(extra_metadata or {})
         t_start = time.monotonic()
         now     = datetime.now(_ET)
-
         # Normalise to RecordBatch (zero-copy where possible)
         rb = ensure_record_batch(chain_snapshot)
         n  = rb.num_rows
         self._inst.set_chain_size(n)
-
         if n == 0 or spot <= 0.0:
             logger.debug("[L1ComputeReactor] Skipping: snapshot empty or spot <= 0")
             return empty_snapshot(l0_version, extra_metadata=extra_metadata)
-
         # Step 1 — IV Resolution
         ttm_years = get_trading_ttm_v2_scalar(now)
         with self._inst.span_iv_resolution():
             resolved_ivs = self._iv_resolver.batch_resolve(
                 chain_snapshot, spot, iv_cache, spot_at_sync, ttm_years=ttm_years
             )
-
         # Step 2 — Conditional SABR recalibration
         if (
             self._sabr is not None
@@ -253,19 +219,16 @@ class L1ComputeReactor:
                 self._last_sabr_at = time.monotonic()
             except Exception as exc:
                 logger.debug("[L1ComputeReactor] SABR calibration skipped: %s", exc)
-
         # Step 3 — Build arrays for batch compute (zero-copy numpy)
         spots_arr   = np.full(n, spot, dtype=np.float64)
         strikes_arr = rb.column("strike").to_numpy()
         is_call_arr = rb.column("is_call").to_numpy(zero_copy_only=False)
         ois_arr     = rb.column("open_interest").to_numpy()
         mults_arr   = rb.column("contract_multiplier").to_numpy()
-
         symbols    = rb.column("symbol").to_pylist()
         ivs_arr    = np.zeros(n, dtype=np.float64)
         valid_mask = np.zeros(n, dtype=np.bool_)
         iv_missing = 0
-
         for i, sym in enumerate(symbols):
             rv = resolved_ivs.get(sym)
             if rv is None or not rv.is_valid:
@@ -273,14 +236,11 @@ class L1ComputeReactor:
             else:
                 ivs_arr[i]    = rv.value
                 valid_mask[i] = True
-
         n_valid  = int(np.sum(valid_mask))
         iv_stats = self._iv_resolver.stats
-
         if n_valid == 0:
             logger.info("[L1ComputeReactor] compute bypassed: n_valid=0 (n=%d)", n)
             return empty_snapshot(l0_version, extra_metadata=extra_metadata)
-
         # Step 4 — Greeks batch compute
         t_greeks = time.monotonic()
         with self._inst.span_greeks_kernel():
@@ -310,7 +270,6 @@ class L1ComputeReactor:
         greeks_ms = (time.monotonic() - t_greeks) * 1000.0
         self._inst.record_greeks_latency(greeks_ms / 1000.0)
         self._inst.record_compute_tier(decision.tier.value)
-
         # Step 5 — Streaming aggregation
         t_agg = time.monotonic()
         with self._inst.span_aggregation():
@@ -329,13 +288,11 @@ class L1ComputeReactor:
             )
             agg = self._aggregator.snapshot()
         agg_ms = (time.monotonic() - t_agg) * 1000.0
-
         atm_iv = extract_atm_iv(strikes_arr[valid_mask], ivs_arr[valid_mask], spot)
         extra_metadata["atm_iv_context"] = build_atm_iv_context(
             spot=spot, symbols=symbols, strikes=strikes_arr,
             resolved_ivs=resolved_ivs, valid_mask=valid_mask,
         )
-
         out_batch = rb.append_column("computed_iv",    pa.array(ivs_arr))
         out_batch = out_batch.append_column("computed_delta", pa.array(matrix.delta))
         out_batch = out_batch.append_column("computed_gamma", pa.array(matrix.gamma))
@@ -343,7 +300,6 @@ class L1ComputeReactor:
         out_batch = out_batch.append_column("gex",            pa.array(matrix.gex_per_contract))
         out_batch = out_batch.append_column("call_gex",       pa.array(matrix.call_gex))
         out_batch = out_batch.append_column("put_gex",        pa.array(matrix.put_gex))
-
         # Step 6 — Microstructure composite (delegated to MicroSignalBuilder)
         with self._inst.span_microstructure():
             micro_sig = self._micro_builder.build(
@@ -357,7 +313,6 @@ class L1ComputeReactor:
                 put_wall=agg.put_wall,
                 put_wall_gex=agg.put_wall_gex,
             )
-
         nan_count = int(np.sum(~np.isfinite(matrix.delta)))
         self._inst.record_contracts_computed(n_valid)
         self._inst.record_nan_count(nan_count)
@@ -366,7 +321,6 @@ class L1ComputeReactor:
         self._inst.record_iv_source("chain",   iv_stats.chain_hits)
         self._inst.record_iv_source("sabr",    iv_stats.sabr_hits)
         self._inst.record_iv_source("missing", iv_stats.misses)
-
         quality = ComputeQualityReport(
             contracts_computed=n_valid,
             contracts_skipped=n - n_valid,
@@ -385,7 +339,6 @@ class L1ComputeReactor:
                 if (self._sabr and self._sabr.params) else 0.0
             ),
         )
-
         out_agg = OutAggregateGreeks(
             net_gex=agg.net_gex,
             net_vanna_raw_sum=agg.net_vanna_raw_sum,
@@ -405,7 +358,6 @@ class L1ComputeReactor:
             num_contracts=n_valid,
             per_strike_gex=agg.per_strike_gex,
         )
-
         ttm_seconds = ttm_years * 252.0 * 6.5 * 3600.0
         total_ms    = (time.monotonic() - t_start) * 1000.0
         logger.info(
@@ -416,7 +368,6 @@ class L1ComputeReactor:
             (micro_sig.vanna_flow_result or {}).get("correlation"),
             bool(extra_metadata.get("rust_active", False)), (extra_metadata.get("shm_stats") or {}).get("status"),
         )
-
         return EnrichedSnapshot(
             spot=spot,
             chain=out_batch,

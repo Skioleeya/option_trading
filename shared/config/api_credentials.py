@@ -94,6 +94,7 @@ class APICredentialsConfig(BaseConfig):
     longport_metadata_ttl_sec: int = Field(default=30)
     longport_warmup_merge_window_sec: int = Field(default=20)
     longport_research_startup_stable_sec: int = Field(default=120)
+    longport_subscription_ready_timeout_sec: int = Field(default=60)
 
     # System Control
     log_level: str = Field(default="INFO")

@@ -1,9 +1,10 @@
-"""Compatibility shim for legacy imports.
+"""Compatibility wrapper for the legacy ATM decay import path."""
 
-Deprecated:
-    Use ``l1_compute.analysis.atm_decay.tracker.AtmDecayTracker`` instead.
-"""
+from .atm_decay.tracker import AtmDecayTracker as _AtmDecayTracker
 
-from .atm_decay.tracker import AtmDecayTracker
+
+class AtmDecayTracker(_AtmDecayTracker):
+    """Legacy import-path wrapper."""
+
 
 __all__ = ["AtmDecayTracker"]

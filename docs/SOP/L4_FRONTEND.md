@@ -49,6 +49,7 @@ flowchart LR
 - `ActiveOptions` 的 `FLOW` 展示文本必须与标准化后的 `flow` 数值同号；`flow=0` 时必须展示中性 `$0`，禁止出现 `-$0/+ $0` 等 signed-zero 文本
 - `ActiveOptions` 必须消费后端 `flow_glow` 字段（允许空字符串）；前端不得本地派生/回退 glow token
 - `ActiveOptions` 必须始终渲染固定 5 行；当后端异常少发时仅允许补齐标准占位行（`is_placeholder=true`），禁止伪造真实合约行
+- `ActiveOptions` 前端不再消费 fallback 字段；`fallback_reason`、`is_synthetic_fallback` 已退出运行合同
 - `ActiveOptions` 列表排序必须在 model 层硬切为 `VOL` 降序（同量级依次比较 `turnover`、`impact_index`，再回退输入序），组件不得恢复 OFII/impact 旧排序语义
 - `ActiveOptions` 上游（shared runtime service）榜单截断口径必须与前端一致：`VOL desc -> turnover desc -> impact_index desc -> stable key(symbol/strike/type)`，禁止再以 `impact_index` 作为 Top5 截断主键。
 - `ActiveOptions` 上游入参归一化必须保证可用成交量：当 `volume<=0` 且存在 `current_volume>0` 时，必须回退使用 `current_volume`（取整）参与 VOL 排序与门槛过滤。

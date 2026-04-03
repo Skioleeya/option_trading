@@ -23,6 +23,17 @@ def _load_module():
     return mod
 
 
+def _load_sync_module():
+    path = Path("scripts/diagnostics/check_eod_manifest_sync.py")
+    spec = importlib.util.spec_from_file_location("check_eod_manifest_sync", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("failed to load check_eod_manifest_sync module")
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
 def _write_parquet(path: Path, cols: dict[str, list]):
     path.parent.mkdir(parents=True, exist_ok=True)
     table = pa.table(cols)
@@ -446,3 +457,50 @@ def test_missing_prev_session_file_does_not_fallback_to_older_day():
     raw_day = daily["metrics"]["raw_day"]
     assert raw_day["prev_trade_day"] == "20260310"
     assert raw_day["overnight_gap_available"] is False
+
+
+def test_manifest_uses_frozen_snapshot_paths_and_remains_sync_after_source_mutation():
+    archive_mod = _load_module()
+    sync_mod = _load_sync_module()
+    root = _case_dir()
+    data_root = root / "data"
+    out_root = root / "cold"
+    date_str = "20260311"
+    _make_day_files(data_root, date_str, rows=120, include_feature_label=True, include_walls=True, with_prev_day=True)
+
+    cfg = _default_cfg()
+    cfg_path = root / "cfg_snapshot.json"
+    _write_cfg(cfg_path, cfg)
+
+    rc = archive_mod.run_cli(
+        [
+            "--date",
+            date_str,
+            "--config",
+            str(cfg_path),
+            "--root",
+            str(data_root),
+            "--out-root",
+            str(out_root),
+            "--strict-quality",
+        ]
+    )
+    assert rc == 0
+
+    manifest_path = out_root / "daily" / date_str / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    source_paths = [Path(item["path"]) for item in manifest["source_files"]]
+    frozen_root = out_root / "daily" / date_str / "sources"
+    assert source_paths
+    assert all(path.exists() for path in source_paths)
+    assert all(path.is_relative_to(frozen_root) for path in source_paths)
+
+    # Mutate upstream live source after archive snapshot is written.
+    (data_root / "mtf_iv" / f"mtf_iv_series_{date_str}.jsonl").write_text(
+        '{"ok": true}\n{"post_archive": true}\n',
+        encoding="utf-8",
+    )
+
+    result = sync_mod.check_manifest_sync(manifest_path)
+    assert result["ok"] is True
+    assert result["mismatches"] == []

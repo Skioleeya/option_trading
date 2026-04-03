@@ -13,7 +13,6 @@ use pyo3::prelude::*;
 use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc};
 use tokio::time::{self, Duration};
-
 #[pyclass]
 pub struct RustIngestGateway {
     pub config: Option<Arc<Config>>,
@@ -21,14 +20,12 @@ pub struct RustIngestGateway {
     pub shutdown_tx: Option<broadcast::Sender<()>>,
     pub quote_ctx: Option<QuoteContext>,
 }
-
 impl RustIngestGateway {
     fn configured_arc(&self) -> PyResult<Arc<Config>> {
         self.config
             .clone()
             .ok_or_else(|| PyRuntimeError::new_err("RustIngestGateway not configured"))
     }
-
     pub fn ensure_quote_ctx(&mut self) -> PyResult<()> {
         if self.quote_ctx.is_some() {
             return Ok(());
@@ -41,20 +38,16 @@ impl RustIngestGateway {
         self.quote_ctx = Some(ctx);
         Ok(())
     }
-
     pub fn clone_quote_ctx(&self) -> PyResult<QuoteContext> {
         self.quote_ctx
             .clone()
             .ok_or_else(|| PyRuntimeError::new_err("quote context unavailable"))
     }
 }
-
 fn l0_subscription_flags() -> SubFlags { SubFlags::QUOTE | SubFlags::DEPTH | SubFlags::TRADE }
-
 fn positive_or_none(value: f64) -> Option<f64> {
     if value > 0.0 { Some(value) } else { None }
 }
-
 fn quote_event(
     symbol: String, mono_ns: u64, seq_no: u64, detail: longport::quote::PushQuote,
 ) -> ArrowMarketEvent {
@@ -74,7 +67,6 @@ fn quote_event(
         arrival_mono_ns: mono_ns,
     }
 }
-
 fn trade_event(
     symbol: &str,
     mono_ns: u64,
@@ -97,7 +89,6 @@ fn trade_event(
         arrival_mono_ns: mono_ns,
     }
 }
-
 fn depth_event(
     symbol: &str,
     mono_ns: u64,
@@ -144,7 +135,6 @@ fn depth_event(
         arrival_mono_ns: mono_ns,
     }
 }
-
 fn run_stress_test(
     symbol: String,
     count: u64,
@@ -162,13 +152,11 @@ fn run_stress_test(
     );
     let mut batch_writer = ArrowBatchWriter::create_or_open(&shm_path, config)
         .map_err(|err| format!("stress test writer init failed: {err}"))?;
-
     println!(
         "[RustGateway] Starting Arrow IPC stress test: sending {} events for {}",
         count, symbol
     );
     let start = std::time::Instant::now();
-
     for i in 0..count {
         let event = ArrowMarketEvent {
             symbol: symbol.clone(),
@@ -192,7 +180,6 @@ fn run_stress_test(
     batch_writer
         .flush()
         .map_err(|err| format!("stress test flush failed: {err}"))?;
-
     let duration = start.elapsed();
     println!(
         "[RustGateway] Stress test complete. Time: {:?}, Rate: {:.2} events/sec",
@@ -201,7 +188,6 @@ fn run_stress_test(
     );
     Ok(())
 }
-
 #[pymethods]
 impl RustIngestGateway {
     #[new]
@@ -210,7 +196,6 @@ impl RustIngestGateway {
             .enable_all()
             .build()
             .map_err(|e| PyRuntimeError::new_err(format!("Tokio runtime error: {e}")))?;
-
         Ok(Self {
             config: None,
             runtime,
@@ -218,7 +203,6 @@ impl RustIngestGateway {
             quote_ctx: None,
         })
     }
-
     #[pyo3(signature = (app_key, app_secret, access_token, http_url=None, quote_ws_url=None, trade_ws_url=None, language=None, enable_overnight=false))]
     fn configure(
         &mut self,
@@ -246,7 +230,6 @@ impl RustIngestGateway {
         self.quote_ctx = None;
         Ok(())
     }
-
     #[pyo3(signature = (symbols, shm_path, cpu_id, batch_interval_ms, batch_max_rows, shm_capacity_bytes, signal_name))]
     fn start(
         &mut self,
@@ -261,7 +244,6 @@ impl RustIngestGateway {
         if self.shutdown_tx.is_some() {
             self.stop()?;
         }
-
         let arrow_shm_path = format!("{shm_path}_arrow");
         let batch_writer = ArrowBatchWriter::create_or_open(
             &arrow_shm_path,
@@ -275,7 +257,6 @@ impl RustIngestGateway {
         )
             .map_err(|err| PyRuntimeError::new_err(format!("arrow writer init failed: {err}")))?;
         let batch_interval_ms = batch_writer.batch_interval_ms();
-
         let config = self.configured_arc()?;
         let (ctx, mut receiver) = self
             .runtime
@@ -285,7 +266,6 @@ impl RustIngestGateway {
             .block_on(ctx.subscribe(symbols, l0_subscription_flags(), true))
             .map_err(|e| PyRuntimeError::new_err(format!("subscribe failed: {e}")))?;
         self.quote_ctx = Some(ctx.clone());
-
         let (event_tx, event_rx) = mpsc::unbounded_channel::<ArrowMarketEvent>();
         let (tx, _) = broadcast::channel(1);
         self.shutdown_tx = Some(tx);
@@ -299,7 +279,6 @@ impl RustIngestGateway {
             .as_ref()
             .ok_or_else(|| PyRuntimeError::new_err("shutdown channel missing"))?
             .subscribe();
-
         self.runtime.spawn(async move {
             let mut threat_engine = ThreatEngine::new();
             let mut seq_no: u64 = 0;
@@ -336,7 +315,6 @@ impl RustIngestGateway {
                 }
             }
         });
-
         self.runtime.spawn(async move {
             if let Some(id) = cpu_id {
                 if let Err(err) = affinity::set_thread_affinity(&[id]) {
@@ -345,7 +323,6 @@ impl RustIngestGateway {
                     println!("[RustGateway] Thread pinned to core {}", id);
                 }
             }
-
             let mut batch_writer = batch_writer;
             let mut flush_timer = time::interval(Duration::from_millis(batch_interval_ms));
             let mut event_rx = event_rx;
@@ -375,10 +352,8 @@ impl RustIngestGateway {
                 }
             }
         });
-
         Ok(())
     }
-
     #[pyo3(signature = (symbol, count, shm_path, batch_max_rows, signal_name, shm_capacity_bytes=0))]
     fn stress_test(
         &self,
@@ -402,23 +377,18 @@ impl RustIngestGateway {
         })
             .map_err(PyRuntimeError::new_err)
     }
-
     fn rest_quote(&mut self, symbols: Vec<String>) -> PyResult<String> {
         self.rest_quote_impl(symbols)
     }
-
     fn rest_option_quote(&mut self, symbols: Vec<String>) -> PyResult<String> {
         self.rest_option_quote_impl(symbols)
     }
-
     fn rest_option_chain_info_by_date(&mut self, symbol: String, expiry_iso: String) -> PyResult<String> {
         self.rest_option_chain_info_by_date_impl(symbol, expiry_iso)
     }
-
     fn rest_calc_indexes(&mut self, symbols: Vec<String>, indexes: Vec<String>) -> PyResult<String> {
         self.rest_calc_indexes_impl(symbols, indexes)
     }
-
     fn stop(&mut self) -> PyResult<()> {
         if let Some(tx) = self.shutdown_tx.take() {
             let _ = tx.send(());

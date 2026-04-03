@@ -146,8 +146,6 @@ class ActiveOptionRow:
     is_placeholder: bool = False
     slot_index: int = 0
     row_quality: str | None = None
-    fallback_reason: str | None = None
-    is_synthetic_fallback: bool = False
     flow_signal_state: str = "LIVE"
     flow_signal_reason: str | None = None
 
@@ -175,8 +173,6 @@ class ActiveOptionRow:
             "is_placeholder": self.is_placeholder,
             "slot_index": self.slot_index,
             "row_quality": self.row_quality,
-            "fallback_reason": self.fallback_reason,
-            "is_synthetic_fallback": self.is_synthetic_fallback,
             "flow_signal_state": self.flow_signal_state,
             "flow_signal_reason": self.flow_signal_reason,
         }
