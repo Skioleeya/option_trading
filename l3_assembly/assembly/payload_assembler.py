@@ -91,6 +91,7 @@ class PayloadAssemblerV2:
             header_volatility=snap_data.header_volatility,
             rust_active=snap_data.rust_active,
             shm_stats=snap_data.shm_stats,
+            governor_telemetry=snap_data.governor_telemetry,
         )
         logger.debug(
             "[L3 Assembler] assembled in %.2fms, spot=%s, version=%s",
@@ -126,6 +127,7 @@ class PayloadAssemblerV2:
             metadata = getattr(snapshot, "extra_metadata", {}) or {}
             data.rust_active = bool(metadata.get("rust_active", False))
             data.shm_stats = metadata.get("shm_stats")
+            data.governor_telemetry = dict(metadata.get("governor_telemetry") or {})
             data.volume_map = normalize_volume_map(
                 metadata.get("volume_map", getattr(snapshot, "volume_map", {}))
             )
@@ -146,6 +148,7 @@ class PayloadAssemblerV2:
             data.zero_gamma_level = float(snapshot.get("zero_gamma_level", 0.0) or 0.0)
             data.rust_active = bool(snapshot.get("rust_active", False))
             data.shm_stats = snapshot.get("shm_stats")
+            data.governor_telemetry = dict(snapshot.get("governor_telemetry") or {})
 
         if decision is not None:
             try:

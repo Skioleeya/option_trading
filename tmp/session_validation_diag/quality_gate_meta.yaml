@@ -1,2 +1,5 @@
 ﻿files_changed:
-  - "l1_compute/microstructure/wall_context_builder.py"
+  - "l3_assembly/assembly/delta_encoder.py"
+  - "l3_assembly/events/delta_events.py"
+  - "l3_assembly/events/payload_events.py"
+  - "l3_assembly/events/payload_ui_state.py"

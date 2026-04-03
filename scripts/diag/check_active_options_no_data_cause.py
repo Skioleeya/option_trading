@@ -215,6 +215,19 @@ def _classify(
 ) -> tuple[str, str, str, list[str]]:
     diag = evidence.active_options_diag
     if (
+        (diag.rows_real_non_synthetic or 0) > 0
+        and (diag.rows_synthetic_fallback or 0) == 0
+        and (diag.rows_total or 0) > 0
+        and (diag.rows_placeholder or 0) < (diag.rows_total or 0)
+    ):
+        return (
+            "NO_ACTIVE_ISSUE_DETECTED",
+            "当前 ActiveOptions 诊断为真实行输出（rows_real_non_synthetic>0 且无 synthetic fallback）。",
+            "HIGH",
+            [],
+        )
+
+    if (
         (evidence.runtime.chain_size or 0) > 0
         and (diag.rows_total or 0) > 0
         and (diag.rows_real_non_synthetic or 0) == 0

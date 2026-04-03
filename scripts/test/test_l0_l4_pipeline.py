@@ -1,163 +1,105 @@
 import asyncio
 import json
-import sys
-import websockets
-import jsonpatch
-import pytest
-from colorama import Fore, Style, init
 
-init(autoreset=True)
+import pytest
+import websockets
 
 WS_URL = "ws://localhost:8001/ws/dashboard"
+MAX_MESSAGES = 50
+RECV_TIMEOUT_SEC = 15.0
+
+
+def _merge_delta(current_state: dict, delta: dict) -> None:
+    changes = delta.get("changes", {})
+    if not isinstance(changes, dict):
+        return
+
+    if "agent_g_ui_state" in changes:
+        ui_state = current_state.setdefault("agent_g", {}).setdefault("data", {}).setdefault("ui_state", {})
+        ui_state.update(changes["agent_g_ui_state"])
+
+    if "signal" in changes:
+        signal_data = current_state.setdefault("agent_g", {}).setdefault("data", {})
+        signal_data.update(changes["signal"])
+
+    for key, value in changes.items():
+        if key not in ("agent_g_ui_state", "signal"):
+            current_state[key] = value
+
+
+def _is_enriched_state(state: dict) -> bool:
+    agent_data = state.get("agent_g", {}).get("data", {})
+    ui_state = agent_data.get("ui_state", {})
+    walls = ui_state.get("wall_migration", [])
+    return isinstance(walls, list) and len(walls) > 0 and any(isinstance(w, dict) and "label" in w for w in walls)
+
 
 @pytest.mark.asyncio
-async def test_l0_l4_pipeline():
-    print(f"{Fore.CYAN}[*] Connecting to L4 WebSocket Endpoint at {WS_URL}...{Style.RESET_ALL}")
-    
-    try:
-        async with websockets.connect(WS_URL, open_timeout=5, ping_timeout=10) as websocket:
-            print(f"{Fore.GREEN}[+] Connection Established! Waiting for incoming L0-L4 Payload...{Style.RESET_ALL}")
-            # Wait for a full payload (skip init if necessary)
-            print(f"{Fore.YELLOW}[*] Waiting for a fully enriched payload (applying custom L3 deltas)...{Style.RESET_ALL}")
-            current_state = None
-            data = None
-            message = ""
-            for _ in range(50): # Try up to 50 incoming messages
-                message = await asyncio.wait_for(websocket.recv(), timeout=15.0)
-                d = json.loads(message)
-                
-                if d.get("type") in ["dashboard_init", "dashboard_update"] and "agent_g" in d:
-                    current_state = d
-                elif d.get("type") == "dashboard_delta" and current_state is not None:
-                    try:
-                        changes = d.get("changes", {})
-                        if "agent_g_ui_state" in changes:
-                            ui_state = current_state.setdefault("agent_g", {}).setdefault("data", {}).setdefault("ui_state", {})
-                            ui_state.update(changes["agent_g_ui_state"])
-                        if "signal" in changes:
-                            signal_data = current_state.setdefault("agent_g", {}).setdefault("data", {})
-                            signal_data.update(changes["signal"])
-                        for k, v in changes.items():
-                            if k not in ("agent_g_ui_state", "signal"):
-                                current_state[k] = v
-                    except Exception as e:
-                        print(f"    [Trace] Patch Error: {e}")
-                elif d.get("type") == "keepalive":
-                    continue
-                else:
-                    print(f"    [Trace] Initializing state or skipping unknown type: {d.get('type')}")
-                    continue
-                    
-                if current_state:
-                    agent_test = current_state.get("agent_g", {}).get("data", {})
-                    ui_test = agent_test.get("ui_state", {})
-                    walls = ui_test.get("wall_migration", [])
-                    print(f"    [Trace] wall_migration = {walls}")
-                    if len(walls) > 0 and any("label" in w for w in walls):
-                        data = current_state
-                        break
-                    else:
-                        print(f"    [Trace] State tracked, but L3 Walls still empty or lacked label. Applying next delta...")
-            
-            if data is None:
-                print(f"{Fore.RED}[!] Could not find a full L1/L2 payload after 50 messages.{Style.RESET_ALL}")
-                try:
-                    data = json.loads(message) # fallback to last
-                except:
-                    return
-            
-            print(f"\n{Fore.YELLOW}=== L0-L4 PIPELINE INTEGRITY REPORT ==={Style.RESET_ALL}")
-            print(f"Payload Size (Bytes) : {len(message):,}")
-            print(f"Message Type         : {data.get('type', 'Unknown')}")
-            
-            # Phase 1: Verify L0 (Ingest / Feed / Rust Bridge)
-            print(f"\n{Fore.CYAN}--- L0 (Ingest / Rust Bridge) Verification ---{Style.RESET_ALL}")
-            spot = data.get("spot")
-            timestamp = data.get("data_timestamp")
-            rust_active = data.get("rust_active", False)
-            shm_stats = data.get("shm_stats", {})
+async def test_l0_l4_pipeline() -> None:
+    current_state: dict | None = None
+    last_raw_message = ""
 
-            if spot and float(spot) > 0:
-                print(f"✅ Market Spot Price : {spot}")
-            else:
-                print(f"❌ Missing or Invalid Spot Price")
-            
-            if rust_active:
-                print(f"✅ Rust Ingest Gateway: ACTIVE (Zero-Copy Path)")
-            else:
-                print(f"⚠️  Rust Ingest Gateway: INACTIVE (Falling back to legacy Python)")
+    async with websockets.connect(WS_URL, open_timeout=5, ping_timeout=10) as websocket:
+        for _ in range(MAX_MESSAGES):
+            last_raw_message = await asyncio.wait_for(websocket.recv(), timeout=RECV_TIMEOUT_SEC)
+            message = json.loads(last_raw_message)
+            message_type = message.get("type")
 
-            if shm_stats:
-                print(f"✅ IPC Bridge Health  : {shm_stats.get('status', 'OK')} (Head: {shm_stats.get('head')}, Tail: {shm_stats.get('tail')})")
-            try:
-                payload = json.loads(message)
-                print(f"[Debug] Payload Keys: {list(payload.keys())}")
-                print(f"[Debug] rust_active: {payload.get('rust_active')}")
-            except Exception as e:
-                pass # Ignore if message is not valid JSON for debug
-            
-            if timestamp:
-                print(f"✅ Snapshot Timestamp: {timestamp}")
+            if message_type in ("dashboard_init", "dashboard_update") and "agent_g" in message:
+                current_state = message
+            elif message_type == "dashboard_delta" and current_state is not None:
+                _merge_delta(current_state, message)
+            elif message_type == "keepalive":
+                continue
             else:
-                print(f"❌ Missing Timestamp")
-                
-            agent_data = data.get("agent_g", {}).get("data", {})
-            ui_state = agent_data.get("ui_state", {})
-                
-            # Phase 2: Verify L1 (Compute / Native Threat)
-            print(f"\n{Fore.CYAN}--- L1 (Compute / Native Threat) Verification ---{Style.RESET_ALL}")
-            micro = ui_state.get("micro_stats", {})
-            net_gex = micro.get("net_gex", {}).get("label")
-            impact = micro.get("impact_index", {}).get("label") # Native OFII
-            
-            if net_gex and net_gex != "—":
-                print(f"✅ Net GEX          : {net_gex}")
-                print(f"✅ Native Impact (OFII): {impact if impact else 'N/A'}")
-            else:
-                print(f"❌ Missing L1 Compute Aggregations (GEX UI unpopulated)")
-                
-            # Phase 3: Verify L2 (Decision / Agent Analysis)
-            print(f"\n{Fore.CYAN}--- L2 (Decision / Agents) Verification ---{Style.RESET_ALL}")
-            direction = agent_data.get("direction")
-            confidence = agent_data.get("confidence")
-            
-            if direction and confidence is not None:
-                print(f"✅ Master Direction : {direction}")
-                print(f"✅ Agent Confidence : {confidence * 100:.1f}%")
-            else:
-                print(f"❌ Missing L2 Agent Decisions")
-                
-            # Phase 4: Verify L3 (Assembly / Dynamic State)
-            print(f"\n{Fore.CYAN}--- L3 (Assembly / Dynamic State) Verification ---{Style.RESET_ALL}")
-            walls = ui_state.get("wall_migration", [])
-            if isinstance(walls, list) and len(walls) > 0:
-                print(f"✅ Wall Tracks       : Found {len(walls)} institutional nodes")
-            else:
-                print(f"❌ Missing L3 Assembled UI Tracks")
-                
-            depth = ui_state.get("depth_profile", [])
-            print(f"✅ Depth Profile Size: {len(depth)} dynamic levels")
+                continue
 
-            # Phase 5: Reliability & Rate Limiting
-            print(f"\n{Fore.CYAN}--- Reliability (Rate Limit Protection) ---{Style.RESET_ALL}")
-            governor = data.get("governor_telemetry", {})
-            if governor:
-                print(f"✅ Rate Governor     : Active (Symbols/Min: {governor.get('symbols_per_min', 'N/A')})")
-                if governor.get("cooldown_active"):
-                    print(f"⚠️  Rate Governor STATUS: IN COOLDOWN (301607 Mitigation Active)")
-            else:
-                print(f"✅ Rate Governor     : Operational")
+            if current_state is not None and _is_enriched_state(current_state):
+                break
 
-            print(f"\n{Fore.GREEN}[*] Pipeline Integrity Check COMPLETE!{Style.RESET_ALL}")
+    assert current_state is not None, (
+        f"Failed to assemble enriched dashboard payload within {MAX_MESSAGES} messages. "
+        f"Last message={last_raw_message[:240]}"
+    )
 
-    except websockets.exceptions.ConnectionClosed:
-        print(f"{Fore.RED}[!] WebSocket connection closed unexpectedly.{Style.RESET_ALL}")
-    except asyncio.TimeoutError:
-        print(f"{Fore.RED}[!] Timeout. (Is the market closed or backend starting up?){Style.RESET_ALL}")
-    except ConnectionRefusedError:
-        print(f"{Fore.RED}[!] Connection refused. Ensure Uvicorn is running on port 8001.{Style.RESET_ALL}")
-    except Exception as e:
-        print(f"{Fore.RED}[!] Unexpected Error: {e}{Style.RESET_ALL}")
+    spot = current_state.get("spot")
+    assert spot is not None and float(spot) > 0, f"Invalid spot propagated from L0: {spot!r}"
+
+    rust_active = current_state.get("rust_active")
+    assert rust_active is True, f"rust_active must be true in hard-fail mode, got {rust_active!r}"
+
+    shm_stats = current_state.get("shm_stats")
+    assert isinstance(shm_stats, dict), f"Missing shm_stats in payload: {shm_stats!r}"
+    assert shm_stats.get("status") == "OK", f"Expected shm_stats.status=OK, got {shm_stats.get('status')!r}"
+
+    data_timestamp = current_state.get("data_timestamp") or current_state.get("timestamp")
+    assert data_timestamp, "Missing data timestamp in assembled payload."
+
+    agent_data = current_state.get("agent_g", {}).get("data", {})
+    assert isinstance(agent_data, dict) and agent_data, "Missing agent_g.data payload."
+    ui_state = agent_data.get("ui_state", {})
+    assert isinstance(ui_state, dict), "Missing ui_state in agent payload."
+
+    micro_stats = ui_state.get("micro_stats", {})
+    net_gex_label = (micro_stats.get("net_gex") or {}).get("label")
+    assert net_gex_label not in (None, "", "—"), f"Missing net_gex label in micro_stats: {micro_stats!r}"
+
+    direction = agent_data.get("direction")
+    confidence = agent_data.get("confidence")
+    assert direction, f"Missing L2 direction in payload: {agent_data!r}"
+    assert confidence is not None, f"Missing L2 confidence in payload: {agent_data!r}"
+
+    walls = ui_state.get("wall_migration", [])
+    assert isinstance(walls, list) and len(walls) > 0, "Missing L3 wall_migration rows."
+    labels = {str(row.get("label")) for row in walls if isinstance(row, dict)}
+    assert "C" in labels and "P" in labels, f"Expected CALL/PUT wall rows, got labels={sorted(labels)}"
+
+    depth = ui_state.get("depth_profile", [])
+    assert isinstance(depth, list) and len(depth) > 0, "Missing L3 depth_profile rows."
+
+    governor = current_state.get("governor_telemetry")
+    assert isinstance(governor, dict) and governor, "Missing governor_telemetry in top-level payload."
+
 
 if __name__ == "__main__":
     asyncio.run(test_l0_l4_pipeline())

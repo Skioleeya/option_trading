@@ -20,9 +20,18 @@ import type { DashboardPayload } from '../../types/dashboard'
 
 const PREV: DashboardPayload = {
     type: 'dashboard_update',
+    version: 10,
+    data_timestamp: '2026-01-01T09:30:00Z',
+    broadcast_timestamp: '2026-01-01T09:30:00Z',
     timestamp: '2026-01-01T09:30:00Z',
+    heartbeat_timestamp: '2026-01-01T09:30:00Z',
     spot: 560.0,
+    drift_ms: 0,
+    drift_warning: false,
+    is_stale: false,
     agent_g: null,
+    rust_active: true,
+    shm_stats: { status: 'OK', head: 1, tail: 1 },
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -84,11 +93,12 @@ describe('DeltaDecoder.applyPatch', () => {
 
     it('injects timestamp meta from delta envelope', () => {
         const patch = [{ op: 'replace', path: '/spot', value: 563.0 }]
-        const meta = { timestamp: 'META-TS', heartbeat_timestamp: 'HB-TS' }
+        const meta = { timestamp: 'META-TS', heartbeat_timestamp: 'HB-TS', version: 11 }
         const result = DeltaDecoder.applyPatch(PREV, patch, meta)
         expect(result.ok).toBe(true)
         if (result.ok) {
             expect(result.value.timestamp).toBe('META-TS')
+            expect(result.value.version).toBe(11)
         }
     })
 

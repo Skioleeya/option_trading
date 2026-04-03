@@ -9,7 +9,7 @@
 
 - 低延迟: L0 到 L4 连续链路稳定
 - 强契约: 跨层字段与语义一致
-- 可降级: 外部依赖失效时服务不中断
+- 硬失败: 外部依赖失效时立即 fail-fast，不允许降级运行
 - 可审计: 每层有明确日志、指标和回归门禁
 
 ## 2. Runtime Architecture
@@ -128,7 +128,7 @@ Payload 核心语义:
 - `agent_g.data.header_volatility`: 标题栏动态波动上下文，固定包含 `IVR/IVP`、`term_structure`、`iv_price_relation`
 - `rust_active/shm_stats`: 诊断链路连续透传
 
-## 5. Startup and Degraded Mode
+## 5. Startup Hard-Fail Mode
 
 ```mermaid
 sequenceDiagram
@@ -149,11 +149,10 @@ sequenceDiagram
 
 关键要求:
 
-- 默认 `longport_startup_strict_connectivity=true`：启动必须通过最小连通性预检，否则 fail-fast 终止进程启动。
-- 当显式关闭 strict 开关时，Runtime 建连失败可降级运行，但必须输出结构化诊断日志。
-- Runtime 建连失败需有限次退避重试后再判定失败（避免瞬时网络抖动直接进入长时间降级）。
-- 降级模式必须有明确日志。
-- lifespan 启动期的 bootstrap/repair 门槛必须先将初始 `spot` 归一为非负浮点；当 `fetch_snapshot().spot` 缺失或为 `null` 时，必须按 `0.0` 处理并继续降级启动，禁止在 near-ATM repair gate 上因 `None` 比较直接抛错。
+- 启动必须执行最小连通性预检（`quote(["SPY.US"])`）；失败即 fail-fast 终止进程。
+- 禁止关闭 strict 连接门禁；`strict_connectivity=false` 视为配置违规并直接抛错。
+- 禁止 degraded/retry 启动分支；所有启动入口必须 strict-only。
+- lifespan 启动期的 bootstrap/repair 门槛必须先将初始 `spot` 归一为非负浮点；当 `fetch_snapshot().spot` 缺失或为 `null` 时，必须按 `0.0` 处理并继续 strict 启动路径校验，禁止在 near-ATM repair gate 上因 `None` 比较直接抛错。
 - 运维启动必须遵循 probe-first：先检查 `/health`、`5173`、`6380`，仅对 DOWN 组件执行启动，避免重复启动导致 `WinError 10048`。
 - 当 `8001` 端口冲突时，先以 `/health` 判定是否已有健康实例在跑；仅在需要替换实例时才释放端口占用进程。
 - LongPort Quote API 配额守卫必须持续生效:
@@ -225,8 +224,8 @@ Get-NetTCPConnection -LocalPort 6380 -State Listen -ErrorAction SilentlyContinue
 # backend strict (default)
 .\scripts\ops\start_backend.ps1
 
-# backend degraded (only when startup connectivity fails)
-.\scripts\ops\start_backend.ps1 -Degraded
+# degraded mode is forbidden by policy
+# .\scripts\ops\start_backend.ps1 -Degraded  # DO NOT USE
 
 # backend log tail (latest)
 Get-Content .\logs\backend_runtime.current.log -Tail 400

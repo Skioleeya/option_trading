@@ -35,25 +35,22 @@ async def _startup_connectivity_probe(
     strict_connectivity: bool,
     probe_symbol: str = "SPY.US",
 ) -> None:
+    if not strict_connectivity:
+        raise RuntimeError(
+            "strict_connectivity=false is forbidden by runtime policy. "
+            "Startup must enforce hard-fail connectivity checks."
+        )
+
     try:
         rows = await runtime.quote([probe_symbol])
     except Exception as exc:
         diagnostics = _runtime_diagnostics(runtime)
         profile = diagnostics.get("endpoint_profile")
         endpoint = diagnostics.get("endpoint_http_url")
-        if strict_connectivity:
-            raise RuntimeError(
-                "startup connectivity probe failed for quote runtime: "
-                f"profile={profile} endpoint={endpoint} error={exc}"
-            ) from exc
-        logger.warning(
-            "[OpenApiBootstrap] Startup connectivity probe failed but strict gate disabled. "
-            "profile=%s endpoint=%s error=%s",
-            profile,
-            endpoint,
-            exc,
-        )
-        return
+        raise RuntimeError(
+            "startup connectivity probe failed for quote runtime: "
+            f"profile={profile} endpoint={endpoint} error={exc}"
+        ) from exc
     diagnostics = _runtime_diagnostics(runtime)
     logger.info(
         "[OpenApiBootstrap] Startup connectivity probe passed: symbol=%s rows=%d profile=%s endpoint=%s",

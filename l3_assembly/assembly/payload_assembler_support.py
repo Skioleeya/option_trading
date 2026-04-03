@@ -106,6 +106,7 @@ class SnapshotData:
         "header_volatility",
         "rust_active",
         "shm_stats",
+        "governor_telemetry",
         "source_data_timestamp_utc",
     )
 
@@ -138,4 +139,5 @@ class SnapshotData:
         self.header_volatility: dict[str, Any] | None = None
         self.rust_active: bool = False
         self.shm_stats: dict[str, Any] | None = None
+        self.governor_telemetry: dict[str, Any] = {}
         self.source_data_timestamp_utc: Any = None

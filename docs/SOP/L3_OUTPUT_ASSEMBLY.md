@@ -51,6 +51,7 @@ flowchart LR
 - `active_options.flow` 必须是展示用 signed USD 流金额（与 FLOW 文本和颜色同源）
 - `active_options.flow_score` 必须承载 DEG 方向分数（`flow_deg`），仅用于分析/调试，不驱动 FLOW 配色
 - `active_options.flow_direction/flow_color` 必须由 `flow` 金额符号派生（正=红/BULLISH，负=绿/BEARISH，零=NEUTRAL）
+- `active_options` 非占位行必须显式输出 `flow_direction/flow_intensity/flow_color/flow_glow` 四元组；禁止依赖 L4 派生
 - `active_options.flow_signal_state` 必须输出 `LIVE|DEGRADED`；当信号降级时必须同时输出 `flow_signal_reason`（如 `missing_gamma/missing_vanna/missing_turnover/all_engines_inactive`）
 - `active_options` 必须固定输出 5 行槽位；真实数据不足时由后端补齐中性占位行，禁止沿用旧帧残留
 - `active_options.is_placeholder`（bool）与 `active_options.slot_index`（1..5）为固定槽位契约字段，必须稳定透传
@@ -99,6 +100,7 @@ flowchart LR
 - 周期性全量刷新用于纠偏
 - 精度收敛与窗口裁剪防止带宽放大
 - 当 payload 业务字段未变化时，`dashboard_delta` 允许仅携带 `heartbeat_timestamp`；这表示链路存活，不表示指标重算
+- 当业务字段发生变化时，`dashboard_delta.changes` 必须透传顶层契约字段变更（包括 `version/data_timestamp/broadcast_timestamp/drift_ms/drift_warning/is_stale/rust_active/shm_stats`）
 
 ## 6. Observability
 

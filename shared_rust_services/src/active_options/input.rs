@@ -1,4 +1,5 @@
 use super::common::{as_dict, as_list, logger, py_dict_get, py_to_f64, py_to_string, round_to};
+use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyDict, PyList, PyModule, PyType};
 
@@ -87,7 +88,14 @@ impl ActiveOptionsInputSnapshotData {
 fn clone_chain(py: Python<'_>, rows: Option<&Bound<'_, PyAny>>) -> PyResult<Py<PyList>> {
     let list = PyList::empty(py);
     if let Some(value) = rows {
-        for row in as_list(value)?.iter() {
+        let rows_list = if let Ok(py_list) = as_list(value) {
+            py_list.into_any()
+        } else if value.hasattr("to_pylist")? {
+            value.call_method0("to_pylist")?
+        } else {
+            return Err(PyTypeError::new_err("chain rows must be list-like or expose to_pylist()"));
+        };
+        for row in as_list(&rows_list)?.iter() {
             if let Ok(dict) = row.downcast::<PyDict>() {
                 list.append(dict.copy()?)?;
             }
@@ -177,7 +185,15 @@ fn build_active_options_input_snapshot(
     let l1_chain = l1_snapshot
         .getattr("chain")
         .ok()
-        .or_else(|| as_dict(l1_snapshot).ok().and_then(|mapping| mapping.get_item("chain").ok().flatten()));
+        .or_else(|| {
+            as_dict(l1_snapshot).ok().and_then(|mapping| {
+                mapping
+                    .get_item("chain")
+                    .ok()
+                    .flatten()
+                    .or_else(|| mapping.get_item("chain_elements").ok().flatten())
+            })
+        });
     let l1_rows = clone_chain(py, l1_chain.as_ref())?;
 
     let merged = PyList::empty(py);
@@ -219,11 +235,28 @@ fn build_active_options_input_snapshot(
         .filter(|value| value.is_finite() && *value > 0.0)
         .unwrap_or_else(|| py_to_f64(l0_snapshot.get_item("spot").ok().flatten().as_ref()));
     let atm_iv = l1_snapshot
-        .getattr("aggregates")
+        .getattr("atm_iv")
         .ok()
-        .and_then(|agg| agg.getattr("atm_iv").ok())
         .and_then(|value| value.extract::<f64>().ok())
         .filter(|value| value.is_finite() && *value > 0.0)
+        .or_else(|| {
+            l1_snapshot
+                .getattr("aggregates")
+                .ok()
+                .and_then(|agg| agg.getattr("atm_iv").ok())
+                .and_then(|value| value.extract::<f64>().ok())
+                .filter(|value| value.is_finite() && *value > 0.0)
+        })
+        .or_else(|| {
+            as_dict(l1_snapshot).ok().and_then(|mapping| {
+                mapping
+                    .get_item("atm_iv")
+                    .ok()
+                    .flatten()
+                    .and_then(|value| value.extract::<f64>().ok())
+                    .filter(|value| value.is_finite() && *value > 0.0)
+            })
+        })
         .unwrap_or(0.0);
     let ttm_seconds = l1_snapshot
         .getattr("ttm_seconds")

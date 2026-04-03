@@ -104,6 +104,29 @@ export const DebugOverlay: React.FC<Props> = memo(({ open, onClose }) => {
                         </div>
                     </div>
 
+                    <div className="grid grid-cols-5 gap-2 mb-6">
+                        <div className="bg-[#101014] border border-[#27272a] rounded px-3 py-2">
+                            <div className="text-[9px] text-[#52525b] font-bold">PAYLOAD VER</div>
+                            <div className="text-[12px] font-bold text-[#a1a1aa] mt-0.5">{raw.payloadVersion}</div>
+                        </div>
+                        <div className="bg-[#101014] border border-[#27272a] rounded px-3 py-2">
+                            <div className="text-[9px] text-[#52525b] font-bold">BROADCAST TS</div>
+                            <div className="text-[12px] font-bold text-[#a1a1aa] mt-0.5">{raw.broadcastTs}</div>
+                        </div>
+                        <div className="bg-[#101014] border border-[#27272a] rounded px-3 py-2">
+                            <div className="text-[9px] text-[#52525b] font-bold">DRIFT MS</div>
+                            <div className="text-[12px] font-bold text-[#a1a1aa] mt-0.5">{raw.driftMs}</div>
+                        </div>
+                        <div className="bg-[#101014] border border-[#27272a] rounded px-3 py-2">
+                            <div className="text-[9px] text-[#52525b] font-bold">DRIFT WARN</div>
+                            <div className="text-[12px] font-bold text-[#a1a1aa] mt-0.5">{raw.driftWarning}</div>
+                        </div>
+                        <div className="bg-[#101014] border border-[#27272a] rounded px-3 py-2">
+                            <div className="text-[9px] text-[#52525b] font-bold">IS STALE</div>
+                            <div className="text-[12px] font-bold text-[#a1a1aa] mt-0.5">{raw.isStale}</div>
+                        </div>
+                    </div>
+
                     {/* Matrix Stream Log */}
                     <div className="border border-[#27272a] rounded bg-black h-[400px] p-0 flex flex-col">
                         <div className="px-3 py-1.5 border-b border-[#27272a] text-[#52525b] font-bold bg-[#09090b] sticky top-0">
@@ -117,6 +140,11 @@ export const DebugOverlay: React.FC<Props> = memo(({ open, onClose }) => {
 --------------------------------------------------
 `}
                                 <span className="text-[#10b981]">{"{"}</span>
+                                <span className="text-[#3b82f6]">"payload_version"</span><span className="text-[#e4e4e7]">: {raw.payloadVersion},</span>
+                                <span className="text-[#3b82f6]">"broadcast_ts"</span><span className="text-[#e4e4e7]">: "{raw.broadcastTs}",</span>
+                                <span className="text-[#3b82f6]">"drift_ms"</span><span className="text-[#e4e4e7]">: {raw.driftMs},</span>
+                                <span className="text-[#3b82f6]">"drift_warning"</span><span className="text-[#e4e4e7]">: {raw.driftWarning},</span>
+                                <span className="text-[#3b82f6]">"is_stale"</span><span className="text-[#e4e4e7]">: {raw.isStale},</span>
                                 <span className="text-[#3b82f6]">"vpin_buffer"</span><span className="text-[#e4e4e7]">: {raw.vpin},</span>
                                 <span className="text-[#3b82f6]">"bbo_bias"</span><span className="text-[#e4e4e7]">: {raw.bbo},</span>
                                 <span className="text-[#3b82f6]">"accel_hz"</span><span className="text-[#e4e4e7]">: {raw.volAccel},</span>

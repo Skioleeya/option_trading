@@ -266,6 +266,7 @@ export interface AgentGResult {
 
 export interface DashboardPayload {
     type: 'dashboard_update' | 'dashboard_init' | 'dashboard_delta' | 'keepalive'
+    version?: number
     // Canonical UTC data timestamp from L0 source time (L3 aliases it to `timestamp`).
     data_timestamp?: string
     // UTC broadcast wall-clock timestamp stamped by L3 governor.
@@ -275,6 +276,9 @@ export interface DashboardPayload {
     // UTC heartbeat stamped at broadcast time.
     heartbeat_timestamp?: string
     spot: number | null
+    drift_ms?: number
+    drift_warning?: boolean
+    is_stale?: boolean
     agent_g: AgentGResult | null
     atm?: AtmDecay | null
     rust_active?: boolean

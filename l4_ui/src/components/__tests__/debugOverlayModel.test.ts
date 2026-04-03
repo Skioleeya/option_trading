@@ -5,8 +5,15 @@ import type { DashboardPayload } from '../../types/dashboard'
 function basePayload(): DashboardPayload {
     return {
         type: 'dashboard_update',
+        version: 10,
+        data_timestamp: '2026-03-06T14:31:00Z',
+        broadcast_timestamp: '2026-03-06T14:31:01Z',
         timestamp: '2026-03-06T14:31:00Z',
+        heartbeat_timestamp: '2026-03-06T14:31:02Z',
         spot: 560.12,
+        drift_ms: 0,
+        drift_warning: false,
+        is_stale: false,
         agent_g: null,
         rust_active: false,
         shm_stats: null,
@@ -78,6 +85,10 @@ describe('buildDebugOverlayModel', () => {
         expect(model.bbo).toBe('0')
         expect(model.volAccel).toBe('0')
         expect(model.connStatus).toBe('CONNECTED')
+        expect(model.payloadVersion).toBe('10')
+        expect(model.broadcastTs).toBe('2026-03-06T14:31:01Z')
+        expect(model.driftWarning).toBe('false')
+        expect(model.isStale).toBe('false')
     })
 
     it('parses shm pointers and computes lag', () => {

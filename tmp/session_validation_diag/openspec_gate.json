@@ -1,6 +1,6 @@
 {
   "status": "PASS",
-  "runtime_changed": 1,
-  "openspec_changed": 3,
+  "runtime_changed": 11,
+  "openspec_changed": 0,
   "violations": []
 }

@@ -11,6 +11,7 @@ Key schema:
 from __future__ import annotations
 
 import json
+import inspect
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -170,6 +171,43 @@ async def get_oi_delta(
         return current_oi - prev_oi
     except Exception as exc:
         logger.warning(f"[OICache] get_oi_delta failed for {symbol}: {exc}")
+        return 0
+
+
+def get_oi_delta_sync(
+    redis,
+    symbol: str,
+    current_oi: int,
+    *,
+    date_str: str | None = None,
+) -> int:
+    """Synchronous ΔOI helper for native owners.
+
+    If redis client returns an awaitable (async client), this function returns 0
+    instead of creating an un-awaited coroutine object.
+    """
+    if not redis:
+        return 0
+
+    if date_str is None:
+        date_str = datetime.now(ZoneInfo("US/Eastern")).strftime("%Y%m%d")
+
+    try:
+        key = _make_key(symbol, date_str)
+        getter = getattr(redis, "get", None)
+        if getter is None:
+            return 0
+        if inspect.iscoroutinefunction(getter):
+            return 0
+        raw = getter(key)
+        if inspect.isawaitable(raw):
+            return 0
+        if raw is None:
+            return 0
+        prev_oi = int(raw)
+        return current_oi - prev_oi
+    except Exception as exc:
+        logger.warning(f"[OICache] get_oi_delta_sync failed for {symbol}: {exc}")
         return 0
 
 

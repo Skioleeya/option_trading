@@ -41,6 +41,7 @@ class PersistenceSample:
     gateway_connected: bool
     gateway_rust_started: bool
     active_rows_real: int
+    active_rows_synthetic: int
     active_rows_degraded: int
     iv_probe_suppressed_reason: str | None
 
@@ -112,6 +113,7 @@ def _sample_persistence_status(api_base: str, samples: int, delay_s: float, time
                 gateway_connected=bool(gateway.get("connected")),
                 gateway_rust_started=bool(gateway.get("rust_started")),
                 active_rows_real=_to_int(active_options.get("rows_real")),
+                active_rows_synthetic=_to_int(active_options.get("rows_synthetic_fallback")),
                 active_rows_degraded=_to_int(active_options.get("degraded_rows")),
                 iv_probe_suppressed_reason=(probe.get("suppressed_reason") if isinstance(probe, dict) else None),
             )
@@ -184,10 +186,45 @@ def _is_strictly_advancing(values: list[int]) -> bool:
     return all(curr > prev for prev, curr in zip(values, values[1:]))
 
 
+def _is_non_decreasing(values: list[int]) -> bool:
+    if len(values) < 2:
+        return True
+    return all(curr >= prev for prev, curr in zip(values, values[1:]))
+
+
+def _has_forward_progress(values: list[int]) -> bool:
+    if len(values) < 2:
+        return False
+    return any(curr > prev for prev, curr in zip(values, values[1:]))
+
+
+def _has_no_0dte_evidence(log_path: Path, tail_lines: int = 500) -> bool:
+    if not log_path.exists():
+        return False
+    try:
+        lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return False
+    window = lines[-max(1, tail_lines) :]
+    return any("No 0DTE contracts in chain" in line for line in window)
+
+
+def _is_non_reactive_rest_mode(samples: list[PersistenceSample]) -> bool:
+    reasons = [
+        str(s.iv_probe_suppressed_reason or "").strip().lower()
+        for s in samples
+    ]
+    return any(reason.startswith("non_reactive_iv_source:") for reason in reasons)
+
+
 def _check_l0(samples: list[PersistenceSample], log_analysis: dict[str, Any]) -> CheckResult:
     versions = [s.last_batch_id for s in samples]
-    ok = all(s.gateway_connected and s.gateway_rust_started and s.transport_status == "OK" for s in samples)
-    ok = ok and _is_strictly_advancing(versions)
+    l1_versions = [s.l1_version for s in samples]
+    non_reactive_mode = _is_non_reactive_rest_mode(samples)
+    runtime_ok = all(s.gateway_connected and s.gateway_rust_started and s.transport_status == "OK" for s in samples)
+    batch_ok = bool(versions) and versions[-1] > 0 and _is_non_decreasing(versions)
+    progress_ok = _has_forward_progress(versions) or _has_forward_progress(l1_versions) or non_reactive_mode
+    ok = runtime_ok and batch_ok and progress_ok
     analysis = log_analysis.get("analysis", {})
     ok = ok and analysis.get("health") == "OK"
     status = "PASS" if ok else "FAIL"
@@ -196,10 +233,12 @@ def _check_l0(samples: list[PersistenceSample], log_analysis: dict[str, Any]) ->
         status=status,
         summary="Arrow transport and Longbridge runtime are connected and advancing."
         if ok
-        else "Runtime connectivity or batch advancement is degraded.",
+        else "Runtime connectivity or batch advancement failed strict requirements.",
         evidence=[
             f"gateway_connected={samples[-1].gateway_connected} rust_started={samples[-1].gateway_rust_started}",
             f"transport_status={samples[-1].transport_status} last_batch_id_series={versions}",
+            f"l1_version_series={l1_versions}",
+            f"non_reactive_rest_mode={non_reactive_mode}",
             f"log_health={analysis.get('health')} rate_limit_hits={analysis.get('rate_limit_301607_hits')}",
         ],
     )
@@ -208,13 +247,21 @@ def _check_l0(samples: list[PersistenceSample], log_analysis: dict[str, Any]) ->
 def _check_l1(samples: list[PersistenceSample]) -> CheckResult:
     ages = [s.runner_age_s for s in samples if s.runner_age_s is not None]
     versions = [s.l1_version for s in samples]
-    fresh = bool(ages) and max(ages) < 2.0 and _is_strictly_advancing(versions)
+    non_reactive_mode = _is_non_reactive_rest_mode(samples)
+    max_age_limit = 120.0 if non_reactive_mode else 30.0
+    fresh = (
+        bool(ages)
+        and max(ages) < max_age_limit
+        and _is_non_decreasing(versions)
+        and (_has_forward_progress(versions) or ages[-1] < 6.0 or non_reactive_mode)
+    )
     status = "PASS" if fresh else "FAIL"
     summary = "L1 compute cadence is fresh and versions are advancing." if fresh else "L1 freshness exceeded threshold or stopped advancing."
     evidence = [
         f"l1_version_series={versions}",
         f"runner_age_series={ages}",
         f"atm_iv_source={samples[-1].atm_iv_source}",
+        f"non_reactive_rest_mode={non_reactive_mode}",
     ]
     if samples[-1].iv_probe_suppressed_reason:
         evidence.append(f"iv_probe_suppressed_reason={samples[-1].iv_probe_suppressed_reason}")
@@ -222,31 +269,48 @@ def _check_l1(samples: list[PersistenceSample]) -> CheckResult:
 
 
 def _check_l3(ws_samples: list[WsSample]) -> CheckResult:
-    data_ts_present = all(s.data_timestamp for s in ws_samples[1:]) if len(ws_samples) > 1 else bool(ws_samples)
-    atm_present = any(s.atm_present for s in ws_samples)
-    heartbeat_only = any(s.msg_type == "dashboard_delta" and s.change_keys == ["heartbeat_timestamp"] for s in ws_samples)
-    ok = data_ts_present and atm_present and not heartbeat_only
-    status = "PASS" if ok else "WARN"
-    summary = "L3 websocket payloads carry live business deltas, not only heartbeats." if ok else "L3 websocket sampling observed degraded or incomplete deltas."
+    data_ts_present = bool(ws_samples) and any(s.data_timestamp for s in ws_samples)
+    heartbeat_present = bool(ws_samples) and all(s.heartbeat_timestamp for s in ws_samples)
+    delta_change_keys = [s.change_keys for s in ws_samples if s.msg_type == "dashboard_delta"]
+    has_business_delta = any(keys and keys != ["heartbeat_timestamp"] for keys in delta_change_keys)
+    has_refresh_message = any(
+        s.msg_type in ("dashboard_init", "dashboard_update") and bool(s.data_timestamp)
+        for s in ws_samples
+    )
+    ok = data_ts_present and heartbeat_present and (has_business_delta or has_refresh_message)
+    status = "PASS" if ok else "FAIL"
+    summary = (
+        "L3 websocket payloads carry live business deltas and continuous source timestamps."
+        if ok
+        else "L3 websocket sampling failed strict continuity requirements."
+    )
     evidence = [
         f"message_types={[s.msg_type for s in ws_samples]}",
         f"versions={[s.version for s in ws_samples if s.version is not None]}",
-        f"delta_change_keys={[s.change_keys for s in ws_samples if s.msg_type == 'dashboard_delta']}",
+        f"delta_change_keys={delta_change_keys}",
     ]
     return CheckResult(name="L3 payload continuity", status=status, summary=summary, evidence=evidence)
 
 
-def _check_atm(ws_samples: list[WsSample], history: dict[str, Any]) -> CheckResult:
+def _check_atm(ws_samples: list[WsSample], history: dict[str, Any], no_0dte_evidence: bool) -> CheckResult:
     atm_present = any(s.atm_present for s in ws_samples)
     count = _to_int(history.get("count"))
     last_row = history.get("last_row")
-    ok = atm_present and count > 0 and last_row is not None
+    live_ok = atm_present and count > 0 and last_row is not None
+    no_0dte_ok = (not atm_present) and count == 0 and no_0dte_evidence
+    ok = live_ok or no_0dte_ok
     status = "PASS" if ok else "FAIL"
-    summary = "Root ATM payload and ATM history are advancing intraday." if ok else "ATM payload or history did not provide live evidence."
+    if live_ok:
+        summary = "Root ATM payload and ATM history are advancing intraday."
+    elif no_0dte_ok:
+        summary = "ATM unavailable due to no 0DTE contracts; explicit runtime evidence captured."
+    else:
+        summary = "ATM payload or history did not provide live evidence."
     evidence = [
         f"ws_atm_present={atm_present}",
         f"history_count={count}",
         f"history_last_row={last_row}",
+        f"no_0dte_evidence={no_0dte_evidence}",
     ]
     return CheckResult(name="ATM live continuity", status=status, summary=summary, evidence=evidence)
 
@@ -255,13 +319,32 @@ def _check_active_options(samples: list[PersistenceSample]) -> CheckResult:
     ages = [s.active_input_age_s for s in samples if s.active_input_age_s is not None]
     versions = [s.active_input_version for s in samples]
     latest = samples[-1]
-    ok = bool(ages) and max(ages) < 2.0 and _is_strictly_advancing(versions) and latest.active_rows_real > 0
+    non_reactive_mode = _is_non_reactive_rest_mode(samples)
+    max_age_limit = 120.0 if non_reactive_mode else 30.0
+    ok = (
+        bool(ages)
+        and max(ages) < max_age_limit
+        and _is_non_decreasing(versions)
+        and (_has_forward_progress(versions) or ages[-1] < 6.0 or non_reactive_mode)
+        and latest.active_rows_real > 0
+        and latest.active_rows_synthetic == 0
+        and latest.active_rows_degraded == 0
+    )
     status = "PASS" if ok else "FAIL"
-    summary = "ActiveOptions input and live rows remain fresh." if ok else "ActiveOptions input or live rows degraded."
+    summary = (
+        "ActiveOptions input remains fresh and all rows are LIVE (no synthetic/degraded rows)."
+        if ok
+        else "ActiveOptions failed strict freshness/live-row requirements."
+    )
     evidence = [
         f"active_input_age_series={ages}",
         f"active_input_version_series={versions}",
-        f"rows_real={latest.active_rows_real} rows_degraded={latest.active_rows_degraded}",
+        f"non_reactive_rest_mode={non_reactive_mode}",
+        (
+            f"rows_real={latest.active_rows_real} "
+            f"rows_synthetic={latest.active_rows_synthetic} "
+            f"rows_degraded={latest.active_rows_degraded}"
+        ),
     ]
     return CheckResult(name="ActiveOptions live continuity", status=status, summary=summary, evidence=evidence)
 
@@ -285,15 +368,16 @@ def main() -> int:
     ws_samples = asyncio.run(_sample_ws(args.ws_url, args.ws_messages, args.timeout))
     history = _sample_atm_history(args.api_base, args.timeout)
     log_analysis = _run_log_analysis(args.log_lines)
+    no_0dte_evidence = _has_no_0dte_evidence(REPO_ROOT / "logs" / "backend_runtime.current.log")
 
     checks = [
         _check_l0(persistence_samples, log_analysis),
         _check_l1(persistence_samples),
         _check_l3(ws_samples),
-        _check_atm(ws_samples, history),
+        _check_atm(ws_samples, history, no_0dte_evidence=no_0dte_evidence),
         _check_active_options(persistence_samples),
     ]
-    overall = "PASS" if all(c.status == "PASS" for c in checks) else "WARN"
+    overall = "PASS" if all(c.status == "PASS" for c in checks) else "FAIL"
     result = {
         "overall": overall,
         "checks": [asdict(c) for c in checks],

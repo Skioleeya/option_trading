@@ -5,6 +5,11 @@ export interface DebugOverlayModel {
     bbo: string
     volAccel: string
     asOf: string
+    payloadVersion: string
+    broadcastTs: string
+    driftMs: string
+    driftWarning: string
+    isStale: string
     connStatus: string
     shmStatus: string
     shmHead: string
@@ -32,6 +37,11 @@ function formatRawValue(v: unknown): string {
 
 function formatPointer(v: number | null): string {
     return v == null ? 'N/A' : String(Math.trunc(v))
+}
+
+function formatBoolean(v: unknown): string {
+    if (typeof v !== 'boolean') return 'N/A'
+    return v ? 'true' : 'false'
 }
 
 function parseShm(payload: DashboardPayload | null): {
@@ -68,6 +78,11 @@ export function buildDebugOverlayModel(
         bbo: formatRawValue(fused?.raw_bbo_imb),
         volAccel: formatRawValue(fused?.raw_vol_accel),
         asOf: payload?.timestamp ?? 'Syncing...',
+        payloadVersion: formatRawValue(payload?.version),
+        broadcastTs: typeof payload?.broadcast_timestamp === 'string' ? payload.broadcast_timestamp : 'N/A',
+        driftMs: formatRawValue(payload?.drift_ms),
+        driftWarning: formatBoolean(payload?.drift_warning),
+        isStale: formatBoolean(payload?.is_stale),
         connStatus: connStatus.toUpperCase(),
         shmStatus: shm.status,
         shmHead: formatPointer(shm.head),

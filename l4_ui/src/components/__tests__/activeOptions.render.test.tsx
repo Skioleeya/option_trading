@@ -13,6 +13,10 @@ function row(slot: number, partial: Partial<ActiveOption>): ActiveOption {
         flow: 1000,
         impact_index: 50,
         slot_index: slot,
+        flow_direction: 'BULLISH',
+        flow_color: 'text-accent-red',
+        flow_intensity: 'LOW',
+        flow_glow: '',
         ...partial,
     }
 }
@@ -63,14 +67,16 @@ describe('ActiveOptions render contracts', () => {
 
         expect(symbolCells.slice(0, 3)).toEqual(['HIGH', 'MID', 'LOW'])
     })
-    it('renders negative FLOW with bearish green class even when backend color/direction conflict', () => {
+    it('renders negative FLOW with backend bearish green class', () => {
         const { container } = render(
             <ActiveOptions
                 options={[
                     row(1, {
                         flow: -320000,
-                        flow_direction: 'BULLISH',
-                        flow_color: 'text-accent-red',
+                        flow_direction: 'BEARISH',
+                        flow_color: 'text-accent-green',
+                        flow_intensity: 'LOW',
+                        flow_glow: '',
                         flow_deg_formatted: '-$320K',
                         flow_volume_label: '12K',
                     }),
@@ -91,8 +97,10 @@ describe('ActiveOptions render contracts', () => {
                 options={[
                     row(1, {
                         flow: 0,
-                        flow_direction: 'BEARISH',
-                        flow_color: 'text-accent-green',
+                        flow_direction: 'NEUTRAL',
+                        flow_color: 'text-text-secondary',
+                        flow_intensity: 'LOW',
+                        flow_glow: '',
                         flow_deg_formatted: '-$0',
                     }),
                 ]}

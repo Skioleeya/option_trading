@@ -121,7 +121,9 @@ impl FlowEngineG {
             return Ok(results);
         }
 
-        let get_oi_delta = py.import("shared.cache.oi_snapshot")?.getattr("get_oi_delta")?;
+        let get_oi_delta = py
+            .import("shared.cache.oi_snapshot")?
+            .getattr("get_oi_delta_sync")?;
         for input in as_list(inputs)?.iter() {
             let symbol = get_attr_string(&input, "symbol", "SPY");
             let strike = get_attr_f64(&input, "strike");

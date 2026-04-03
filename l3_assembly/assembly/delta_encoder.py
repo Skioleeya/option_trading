@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import fields as dc_fields
 from typing import Any
 
 from l3_assembly.events.payload_events import FrozenPayload, UIState
@@ -105,13 +104,14 @@ class FieldDeltaEncoder:
 
         # Delta path
         self._total_deltas += 1
-        changes = self._compute_changes(self._last_payload, stamped)
+        prev_payload = self._last_payload
+        changes = self._compute_changes(prev_payload, stamped)
         self._last_payload = stamped
 
         return DeltaPayload(
             type=DeltaType.DELTA,
             version=stamped.version,
-            prev_version=self._last_payload.version if self._last_payload else None,
+            prev_version=prev_payload.version if prev_payload else None,
             timestamp=stamped.data_timestamp,
             heartbeat_timestamp=heartbeat_timestamp,
             changes=changes,
@@ -136,8 +136,18 @@ class FieldDeltaEncoder:
         changes: dict[str, Any] = {}
 
         # Scalar top-level fields
-        for fname in ("spot", "drift_ms", "drift_warning", "is_stale",
-                      "version", "data_timestamp", "heartbeat_timestamp"):
+        for fname in (
+            "spot",
+            "drift_ms",
+            "drift_warning",
+            "is_stale",
+            "version",
+            "data_timestamp",
+            "broadcast_timestamp",
+            "heartbeat_timestamp",
+            "rust_active",
+            "shm_stats",
+        ):
             c_val = getattr(curr, fname, None)
             p_val = getattr(prev, fname, None)
             if c_val != p_val:
@@ -145,7 +155,14 @@ class FieldDeltaEncoder:
 
         # agent_g.data fields — Grouped for frontend DeltaDecoder
         agent_g_data_changes = {}
-        for fname in ("net_gex", "gamma_flip_level", "gamma_walls", "fused_signal", "micro_structure"):
+        for fname in (
+            "net_gex",
+            "gamma_flip_level",
+            "gamma_walls",
+            "fused_signal",
+            "micro_structure",
+            "header_volatility",
+        ):
             c_val = getattr(curr, fname, None)
             p_val = getattr(prev, fname, None)
             if c_val != p_val:
@@ -233,5 +250,8 @@ def _diff_ui_state(prev: UIState, curr: UIState, spot: float = 0.0) -> dict[str,
 
     if prev.macro_volume_map != curr.macro_volume_map:
         changes["macro_volume_map"] = dict(curr.macro_volume_map)
+
+    if prev.iv_velocity != curr.iv_velocity:
+        changes["iv_velocity"] = curr.iv_velocity
 
     return changes

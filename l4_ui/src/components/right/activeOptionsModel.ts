@@ -2,11 +2,8 @@ import type { ActiveOption } from '../../types/dashboard'
 import {
     ACTIVE_OPTIONS_FIXED_ROWS,
     ACTIVE_OPTIONS_ALLOWED_FLOW_COLOR,
-    ACTIVE_OPTIONS_FLOW_COLOR_BY_DIRECTION,
     ACTIVE_OPTIONS_FLOW_DIRECTION_BY_COLOR,
-    ACTIVE_OPTIONS_FLOW_GLOW_BY_DIRECTION_AND_INTENSITY,
     ACTIVE_OPTIONS_FLOW_INTENSITY_SET,
-    ACTIVE_OPTIONS_SWEEP_GLOW,
     type ActiveFlowDirection,
     type ActiveFlowIntensity,
 } from './activeOptionsTheme'
@@ -96,26 +93,48 @@ function toFiniteInteger(raw: unknown, fallback = 0): number {
     return Math.max(0, Math.trunc(toFiniteNumber(raw, fallback)))
 }
 
-function normalizeFlowDirection(flow: number): ActiveFlowDirection {
-    if (flow > 0) return 'BULLISH'
-    if (flow < 0) return 'BEARISH'
-    return 'NEUTRAL'
+function requireNonEmptyString(raw: unknown, fieldName: string): string {
+    if (typeof raw !== 'string' || raw.trim() === '') {
+        throw new Error(`[ActiveOptionsContract] ${fieldName} must be non-empty string`)
+    }
+    return raw.trim()
 }
 
-function normalizeFlowIntensity(raw: unknown): ActiveFlowIntensity {
+function requireFlowDirection(raw: unknown): ActiveFlowDirection {
+    const text = typeof raw === 'string' ? raw.trim().toUpperCase() : ''
+    if (text === 'BULLISH' || text === 'BEARISH' || text === 'NEUTRAL') {
+        return text
+    }
+    throw new Error(`[ActiveOptionsContract] invalid flow_direction=${String(raw)}`)
+}
+
+function requireFlowIntensity(raw: unknown): ActiveFlowIntensity {
     const text = typeof raw === 'string' ? raw.trim().toUpperCase() : ''
     if (ACTIVE_OPTIONS_FLOW_INTENSITY_SET.has(text)) {
         return text as ActiveFlowIntensity
     }
-    return 'LOW'
+    throw new Error(`[ActiveOptionsContract] invalid flow_intensity=${String(raw)}`)
 }
 
-function normalizeFlowColor(raw: unknown, direction: ActiveFlowDirection): string {
+function requireFlowColor(raw: unknown, direction: ActiveFlowDirection): string {
     const text = typeof raw === 'string' ? raw.trim() : ''
-    if (text && ACTIVE_OPTIONS_ALLOWED_FLOW_COLOR.has(text) && ACTIVE_OPTIONS_FLOW_DIRECTION_BY_COLOR[text] === direction) {
-        return text
+    if (!ACTIVE_OPTIONS_ALLOWED_FLOW_COLOR.has(text)) {
+        throw new Error(`[ActiveOptionsContract] invalid flow_color=${String(raw)}`)
     }
-    return ACTIVE_OPTIONS_FLOW_COLOR_BY_DIRECTION[direction]
+    const expectedDirection = ACTIVE_OPTIONS_FLOW_DIRECTION_BY_COLOR[text]
+    if (expectedDirection !== direction) {
+        throw new Error(
+            `[ActiveOptionsContract] flow_color(${text}) mismatches flow_direction(${direction})`
+        )
+    }
+    return text
+}
+
+function requireFlowGlow(raw: unknown): string {
+    if (typeof raw !== 'string') {
+        throw new Error(`[ActiveOptionsContract] invalid flow_glow=${String(raw)}`)
+    }
+    return raw.trim()
 }
 
 function normalizeFlowDisplayLabel(raw: unknown, flow: number): string | undefined {
@@ -167,23 +186,32 @@ export function normalizeActiveOption(input: unknown): ActiveOption {
     }
 
     const isSweep = Boolean(row.is_sweep)
-    const flowFromLabel = toFiniteNumber(row.flow_deg_formatted, 0)
-    const flow = toFiniteNumber(row.flow, flowFromLabel)
-    const flowDirection = normalizeFlowDirection(flow)
-    const flowIntensity = normalizeFlowIntensity(row.flow_intensity)
-    const flowColor = normalizeFlowColor(row.flow_color, flowDirection)
+    const flow = toFiniteNumber(row.flow, Number.NaN)
+    if (!Number.isFinite(flow)) {
+        throw new Error('[ActiveOptionsContract] flow must be finite')
+    }
+    const flowDirection = requireFlowDirection(row.flow_direction)
+    const flowIntensity = requireFlowIntensity(row.flow_intensity)
+    const flowColor = requireFlowColor(row.flow_color, flowDirection)
+    const flowGlow = requireFlowGlow(row.flow_glow)
     const flowScore = toFiniteNumber(row.flow_score, 0)
     const rowQuality = normalizeOptionalString(row.row_quality)?.toUpperCase() ?? null
     const fallbackReason = normalizeOptionalString(row.fallback_reason)
     const isSyntheticFallback = Boolean(row.is_synthetic_fallback) || rowQuality === ACTIVE_OPTIONS_ROW_QUALITY_FALLBACK_SYNTHETIC
     const flowSignalState = normalizeFlowSignalState(row.flow_signal_state, isSyntheticFallback)
     const flowSignalReason = normalizeOptionalString(row.flow_signal_reason)
-    const normalizedGlow = isSweep
-        ? ACTIVE_OPTIONS_SWEEP_GLOW
-        : ACTIVE_OPTIONS_FLOW_GLOW_BY_DIRECTION_AND_INTENSITY[flowDirection][flowIntensity]
+    if (flow > 0 && flowDirection !== 'BULLISH') {
+        throw new Error('[ActiveOptionsContract] positive flow requires BULLISH flow_direction')
+    }
+    if (flow < 0 && flowDirection !== 'BEARISH') {
+        throw new Error('[ActiveOptionsContract] negative flow requires BEARISH flow_direction')
+    }
+    if (flow === 0 && flowDirection !== 'NEUTRAL') {
+        throw new Error('[ActiveOptionsContract] zero flow requires NEUTRAL flow_direction')
+    }
 
     return {
-        symbol: typeof row.symbol === 'string' && row.symbol.trim() ? row.symbol : 'SPY',
+        symbol: requireNonEmptyString(row.symbol, 'symbol'),
         option_type: normalizeOptionType(row.option_type),
         strike: toFiniteNumber(row.strike, 0),
         implied_volatility: Math.max(0, toFiniteNumber(row.implied_volatility, 0)),
@@ -196,7 +224,7 @@ export function normalizeActiveOption(input: unknown): ActiveOption {
         flow_deg_formatted: normalizeFlowDisplayLabel(row.flow_deg_formatted, flow),
         flow_volume_label: typeof row.flow_volume_label === 'string' ? row.flow_volume_label : undefined,
         flow_color: flowColor,
-        flow_glow: normalizedGlow,
+        flow_glow: flowGlow,
         flow_intensity: flowIntensity,
         flow_direction: flowDirection,
         is_placeholder: false,
@@ -211,7 +239,10 @@ export function normalizeActiveOption(input: unknown): ActiveOption {
 
 export function normalizeActiveOptions(input: unknown, limit = ACTIVE_OPTIONS_FIXED_ROWS): ActiveOption[] {
     const target = Math.max(0, limit)
-    const source = Array.isArray(input) ? input : []
+    if (!Array.isArray(input)) {
+        throw new Error('[ActiveOptionsContract] active_options must be an array')
+    }
+    const source = input
     const ranked = source
         .map((item, idx) => ({
             row: normalizeActiveOption(item),
@@ -243,8 +274,9 @@ export function normalizeActiveOptions(input: unknown, limit = ACTIVE_OPTIONS_FI
             slot_index: idx + 1,
         }))
 
-    while (normalized.length < target) {
-        normalized.push(createPlaceholderOption(normalized.length + 1))
+    for (let idx = normalized.length; idx < target; idx += 1) {
+        normalized.push(createPlaceholderOption(idx + 1))
     }
+
     return normalized
 }

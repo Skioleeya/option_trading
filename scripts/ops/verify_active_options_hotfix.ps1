@@ -83,7 +83,8 @@ Write-Output "[verify-hotfix] chain_size=$chainSize active_options_total=$totalR
 Write-Output "[verify-hotfix] live_rows=$liveRows degraded_rows=$degradedRows missing_gamma_rows=$missingGammaRows missing_turnover_rows=$missingTurnoverRows"
 
 if ($chainSize -gt 0 -and $liveRows -lt 1) {
-    Write-Warning "[verify-hotfix] chain has data but live_rows=0 (can be expected in degraded/after-hours scenarios)."
+    Write-Error "[verify-hotfix] chain has data but live_rows=0; degraded output is forbidden."
+    exit 1
 }
 
 if ($chainSize -gt 0 -and $realRows -lt 1) {
@@ -93,6 +94,11 @@ if ($chainSize -gt 0 -and $realRows -lt 1) {
 
 if ($chainSize -gt 0 -and $totalRows -lt 1) {
     Write-Error "[verify-hotfix] chain has data but active_options diagnostics report zero rows."
+    exit 1
+}
+
+if ($chainSize -gt 0 -and $degradedRows -gt 0) {
+    Write-Error "[verify-hotfix] chain has data but degraded_rows > 0; fallback/degraded rows are forbidden."
     exit 1
 }
 

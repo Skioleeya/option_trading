@@ -1,12 +1,12 @@
-﻿# Handoff (Index)
+# Handoff (Index)
 
 ## Active Handoff
-- Path: notes/sessions/2026-04-03/impl-20260403-l1-wall-context-rust-wave3-lock/handoff.md
-- Meta: notes/sessions/2026-04-03/impl-20260403-l1-wall-context-rust-wave3-lock/meta.yaml
+- Path: notes/sessions/2026-04-03/impl-blocked-field-rootcause-zero-fallback/handoff.md
+- Meta: notes/sessions/2026-04-03/impl-blocked-field-rootcause-zero-fallback/meta.yaml
 
 ## Latest Outcome
-- Session: 2026-04-03/impl-20260403-l1-wall-context-rust-wave3-lock
-- Summary: Wave 3 已完成：`impl-20260403-l1-wall-context-rust` delegation 层新增 regime/metrics/liquidity 合同硬校验与 invalid-return 桥接测试；L1 测试（5+4+139）通过，`validate_session.ps1 -Strict` 与 `-Strict -FullRepoArchitectureScan` 均通过。
+- Session: 2026-04-03/impl-blocked-field-rootcause-zero-fallback
+- Summary: L3->L4 blocked-field penetration fixes executed with strict no-fallback contract enforcement; ActiveOptions fixed-row continuity and payload strict-validation path verified by targeted Vitest + pipeline/audit regressions.
 
 ## Next Session Bootstrap
 1. Read this file.

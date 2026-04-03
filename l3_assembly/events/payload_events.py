@@ -113,6 +113,7 @@ class FrozenPayload:
     header_volatility: dict[str, Any] | None = None
     rust_active: bool = False
     shm_stats: dict[str, Any] | None = None
+    governor_telemetry: dict[str, Any] = field(default_factory=dict)
     heartbeat_timestamp: str = ""
     is_stale: bool = False
     type: str = "dashboard_update"
@@ -120,6 +121,7 @@ class FrozenPayload:
     def to_dict(self) -> dict[str, Any]:
         return {
             "type": self.type,
+            "version": self.version,
             "data_timestamp": self.data_timestamp,
             "broadcast_timestamp": self.broadcast_timestamp,
             "heartbeat_timestamp": self.heartbeat_timestamp,
@@ -149,6 +151,7 @@ class FrozenPayload:
             },
             "rust_active": self.rust_active,
             "shm_stats": self.shm_stats,
+            "governor_telemetry": dict(self.governor_telemetry),
         }
 
     def with_broadcast_fields(

@@ -94,7 +94,19 @@ pub fn py_to_f64(value: Option<&Bound<'_, PyAny>>) -> f64 {
 }
 
 pub fn py_to_i64(value: Option<&Bound<'_, PyAny>>) -> i64 {
-    value.and_then(|raw| raw.extract::<i64>().ok()).unwrap_or(0)
+    value
+        .and_then(|raw| {
+            raw.extract::<i64>().ok().or_else(|| {
+                raw.extract::<f64>().ok().and_then(|v| {
+                    if v.is_finite() {
+                        Some(v.round() as i64)
+                    } else {
+                        None
+                    }
+                })
+            })
+        })
+        .unwrap_or(0)
 }
 
 pub fn py_to_bool(value: Option<&Bound<'_, PyAny>>, default: bool) -> bool {

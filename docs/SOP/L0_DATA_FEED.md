@@ -172,11 +172,11 @@ flowchart LR
   - `quote_api_rest_calc_indexes_contracts`
   - source-of-truth 位于 `l0_ingest/l0_rust/src/gateway_rest.rs`
 
-## 4. Degraded Startup Contract
+## 4. Hard-Fail Startup Contract
 
-- `longport_startup_strict_connectivity=true`（默认）时，启动阶段必须执行 `quote(["SPY.US"])` 连通性预检；两端点均失败时必须 fail-fast 中止启动。
-- `longport_startup_strict_connectivity=false` 时，允许显式降级并输出结构化诊断（`endpoint_profile/endpoint_http_url/error`）。
-- 降级模式下必须保持 L4 广播连续（空链 + 诊断），禁止静默停更。
+- 启动阶段必须执行 `quote(["SPY.US"])` 连通性预检；两端点均失败时必须 fail-fast 中止启动。
+- `longport_startup_strict_connectivity=false` 为禁用配置：必须直接抛错并阻止进程启动。
+- 禁止 degraded 启动与 fallback 广播；连接失败时不进入运行态。
 - Rust REST pull 路径必须支持 `QuoteContext` 懒初始化（不依赖先 `start/subscribe`），
   防止冷启动阶段出现 `spot -> subscribe -> quote_ctx` 的闭环阻塞。
 
@@ -200,6 +200,7 @@ flowchart LR
   - `error`: `rust_active=false`, `shm_stats.status=ERROR`
 - `fetch_snapshot()` 只负责 L0 原始快照与诊断投影，禁止在 L0 内补算 legacy Greeks / TTM 兼容字段
 - `fetch_snapshot(include_chain_arrow=true)` 允许为 L1 compute 快路径附带内部字段 `chain_arrow`（`RecordBatch`）；该字段仅供进程内 L0->L1 使用，不作为外部 API 稳定合同
+- `app/loops/compute_loop.py` 在构建 ActiveOptions 输入时必须直接传递 `EnrichedSnapshot` 到 `build_active_options_input_snapshot`，禁止先降格为 legacy dict（否则会丢失 `computed_gamma/computed_vanna` 与 `atm_iv`，触发伪降级）。
 - `aggregate_greeks` 与 `ttm_seconds` 不再属于 L0 输出合同；若下游需要，必须由 L1 或 shared 中立服务产出
 - `header_volatility_aux_diagnostics` 允许作为 L0 低频辅助诊断字段透传，当前用于标题栏波动上下文：
   - `.VIX.US` 归一化 `vix_iv_decimal`
@@ -284,8 +285,7 @@ Raw + Normalized 规则：
 ## 8. Failure Handling
 
 - 网络失败:
-  - strict 开启: 启动失败并显式报错
-  - strict 关闭: 降级运行 + 明确日志
+  - 启动失败并显式报错（strict-only，禁止降级）
 - REST 限频: governor cooldown
 - 启动期限频保护:
   - Symbol governor 采用双阶段 profile:

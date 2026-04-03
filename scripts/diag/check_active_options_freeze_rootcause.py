@@ -16,11 +16,12 @@ from pathlib import Path
 from typing import Iterable
 
 DEFAULT_LOG_PATHS = (
+    Path("logs/backend_runtime.current.log"),
     Path("logs/backend_runtime.err.log"),
     Path("logs/backend.verify.err.log"),
     Path("logs/backend.verify.escalated.err.log"),
 )
-DEFAULT_RUNTIME_SERVICE = Path("shared/services/active_options/runtime_service.py")
+DEFAULT_RUNTIME_SERVICE = Path("shared/services/active_options_runtime.py")
 
 RETAIN_PATTERN = re.compile(
     r"No options above min_volume threshold.*retaining last valid payload",

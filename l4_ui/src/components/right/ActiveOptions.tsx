@@ -50,9 +50,8 @@ export const ActiveOptions: React.FC<Props> = memo(({ options: propOptions, pref
                     {options.map((opt, i) => {
                         const isPlaceholder = Boolean(opt.is_placeholder)
                         const isCall = !isPlaceholder && opt.option_type === 'CALL'
-                        const flowNeg = opt.flow < 0
                         const impactValue = typeof opt.impact_index === 'number' ? opt.impact_index : 0
-                        const rowGlow = isPlaceholder ? '' : (opt.flow_glow || '')
+                        const rowGlow = isPlaceholder ? '' : opt.flow_glow
                         const slot = opt.slot_index && opt.slot_index > 0 ? opt.slot_index : (i + 1)
 
                         return (
@@ -79,7 +78,7 @@ export const ActiveOptions: React.FC<Props> = memo(({ options: propOptions, pref
                                         {isPlaceholder ? '—' : (opt.flow_volume_label || fmtVolume(opt.volume))}
                                     </span>
                                 </td>
-                                <td className={`py-1 text-right font-bold transition-all duration-500 pr-1 ${isPlaceholder ? 'text-text-secondary' : (opt.flow_color || (flowNeg ? 'text-accent-green' : 'text-accent-red'))}`}>
+                                <td className={`py-1 text-right font-bold transition-all duration-500 pr-1 ${isPlaceholder ? 'text-text-secondary' : opt.flow_color}`}>
                                     {isPlaceholder ? '—' : (opt.flow_deg_formatted || fmtFlow(opt.flow))}
                                 </td>
                             </tr>

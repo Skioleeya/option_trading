@@ -65,6 +65,7 @@ def _build_l1_extra_metadata(
     metadata = {
         "rust_active": snapshot.get("rust_active", False),
         "shm_stats": snapshot.get("shm_stats"),
+        "governor_telemetry": dict(snapshot.get("governor_telemetry") or {}),
         "volume_map": _normalize_volume_map(snapshot.get("volume_map")),
         "source_data_timestamp_utc": _normalize_source_timestamp_utc(snapshot),
         "longport_option_diagnostics": _build_longport_option_diagnostics(snapshot),

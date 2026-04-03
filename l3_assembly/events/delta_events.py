@@ -57,9 +57,12 @@ class DeltaPayload:
         """Serialize to the exact wire format expected by the React frontend."""
         base: dict[str, Any] = {
             "type":                self.type.value,
+            "version":             self.version,
             "timestamp":           self.timestamp,
             "heartbeat_timestamp": self.heartbeat_timestamp,
         }
+        if self.prev_version is not None:
+            base["prev_version"] = self.prev_version
         if self.type == DeltaType.FULL or self.type == DeltaType.INIT:
             assert self.data is not None
             base.update(self.data)

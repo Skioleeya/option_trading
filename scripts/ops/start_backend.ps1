@@ -33,16 +33,15 @@ if ([System.IO.Path]::IsPathRooted($LogFile)) {
 $logDir = Split-Path -Parent $logPath
 New-Item -ItemType Directory -Path $logDir -Force | Out-Null
 
-$useDegraded = [bool]$Degraded -or [bool]$HotfixActiveOptions
+if ($Degraded) {
+    throw "Degraded startup mode is forbidden. Use strict startup only."
+}
+
 $bootMode = "strict"
 $envCmd = "set PYTHONPATH=."
-if ($useDegraded) {
-    $bootMode = "degraded"
-    $envCmd = "$envCmd&& set LONGPORT_STARTUP_STRICT_CONNECTIVITY=false&& set LONGBRIDGE_STARTUP_STRICT_CONNECTIVITY=false"
-}
 if ($HotfixActiveOptions) {
     $hotfixVolume = [Math]::Max(1, [int]$HotfixMinVolume)
-    $bootMode = "degraded+active-options-hotfix"
+    $bootMode = "strict+active-options-hotfix"
     $envCmd = "$envCmd&& set FLOW_ACTIVE_MIN_VOLUME=$hotfixVolume"
 }
 
@@ -68,10 +67,6 @@ Add-Content -Path $logPath -Encoding utf8 -Value "[$stamp] [BOOT] mode=$bootMode
 
 if ($Foreground) {
     $env:PYTHONPATH = "."
-    if ($useDegraded) {
-        $env:LONGPORT_STARTUP_STRICT_CONNECTIVITY = "false"
-        $env:LONGBRIDGE_STARTUP_STRICT_CONNECTIVITY = "false"
-    }
     if ($HotfixActiveOptions) {
         $env:FLOW_ACTIVE_MIN_VOLUME = [string]$hotfixVolume
     }

@@ -43,12 +43,12 @@ flowchart LR
 - 亚洲盘语义必须保持一致：`红=涨/多头(BULLISH)`，`绿=跌/空头(BEARISH)`；`NET GEX`、`Call/Put Wall` 的颜色映射必须由状态归一化模块统一管理，组件不得各自反向硬编码
 - 方向色 token 治理：`market.up/down` 是唯一方向源；`accent.red/green` 必须分别与 `market.up/down` 对齐，`text-market-*` 与 `text-accent-*` 只允许同向别名，不得出现反向映射。
 - Wall 展示治理：Center/Left 的 CALL WALL 必须使用 market.up(红)，PUT WALL 必须使用 market.down(绿)，未知标签必须回退中性色，禁止默认归入 PUT 语义。
-- `ActiveOptions` 必须在 model 层收敛 `flow_direction/flow_intensity/flow_color`：无效值回退到亚洲语义白名单（BULLISH→`text-accent-red`，BEARISH→`text-accent-green`，NEUTRAL→`text-text-secondary`）
-- `ActiveOptions` 的 `FLOW` 方向判定必须“数值符号优先于后端 direction/color 文本”；当 `flow<0` 时颜色必须强制为 `text-accent-green`，不得出现红/灰混色
+- `ActiveOptions` 非占位行必须携带完整后端契约字段：`flow_direction/flow_intensity/flow_color/flow_glow`
+- `ActiveOptions` model 层必须执行硬校验：`flow` 符号与 `flow_direction` 一致；`flow_color` 与 `flow_direction` 一致；不一致直接抛错并中断该帧消费
 - `ActiveOptions` 合同中 `flow_score` 是 DEG 分数，不参与 `FLOW` 配色；配色只跟随 `flow`（USD signed amount）与其显示文本
 - `ActiveOptions` 的 `FLOW` 展示文本必须与标准化后的 `flow` 数值同号；`flow=0` 时必须展示中性 `$0`，禁止出现 `-$0/+ $0` 等 signed-zero 文本
-- `ActiveOptions` 的发光样式必须由前端基于 `flow_intensity/is_sweep` 本地白名单生成，禁止直接信任后端 `flow_glow` 字符串
-- `ActiveOptions` 必须始终渲染固定 5 行；当后端异常少发时前端 model 必须补齐占位行，禁止面板高度跳变
+- `ActiveOptions` 必须消费后端 `flow_glow` 字段（允许空字符串）；前端不得本地派生/回退 glow token
+- `ActiveOptions` 必须始终渲染固定 5 行；当后端异常少发时仅允许补齐标准占位行（`is_placeholder=true`），禁止伪造真实合约行
 - `ActiveOptions` 列表排序必须在 model 层硬切为 `VOL` 降序（同量级依次比较 `turnover`、`impact_index`，再回退输入序），组件不得恢复 OFII/impact 旧排序语义
 - `ActiveOptions` 上游（shared runtime service）榜单截断口径必须与前端一致：`VOL desc -> turnover desc -> impact_index desc -> stable key(symbol/strike/type)`，禁止再以 `impact_index` 作为 Top5 截断主键。
 - `ActiveOptions` 上游入参归一化必须保证可用成交量：当 `volume<=0` 且存在 `current_volume>0` 时，必须回退使用 `current_volume`（取整）参与 VOL 排序与门槛过滤。

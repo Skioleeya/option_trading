@@ -185,7 +185,24 @@ fn active_options_rank_outputs(py: Python<'_>, outputs: &Bound<'_, PyAny>) -> Py
     rows.sort_by(|left, right| {
         let left = left.bind(py);
         let right = right.bind(py);
+        let left_live_rank = if get_attr_bool(&left, "engine_d_active", true)
+            && get_attr_bool(&left, "engine_e_active", true)
+            && get_attr_bool(&left, "engine_g_active", true)
+        {
+            0
+        } else {
+            1
+        };
+        let right_live_rank = if get_attr_bool(&right, "engine_d_active", true)
+            && get_attr_bool(&right, "engine_e_active", true)
+            && get_attr_bool(&right, "engine_g_active", true)
+        {
+            0
+        } else {
+            1
+        };
         (
+            left_live_rank,
             -(get_attr_f64(&left, "volume") as i64),
             -((get_attr_f64(&left, "turnover") * 100.0) as i64),
             -((get_attr_f64(&left, "impact_index") * 1000.0) as i64),
@@ -194,6 +211,7 @@ fn active_options_rank_outputs(py: Python<'_>, outputs: &Bound<'_, PyAny>) -> Py
             get_attr_string(&left, "option_type", ""),
         )
             .cmp(&(
+                right_live_rank,
                 -(get_attr_f64(&right, "volume") as i64),
                 -((get_attr_f64(&right, "turnover") * 100.0) as i64),
                 -((get_attr_f64(&right, "impact_index") * 1000.0) as i64),

@@ -48,7 +48,13 @@ export interface DashboardState {
     spot: number | null
     ivPct: number | null
     headerVolatility: HeaderVolatilityContext | null
-    /** Monotonic version counter; incremented on every state write. */
+    /** Payload version from backend wire contract. */
+    payloadVersion: number | null
+    broadcastTimestamp: string | null
+    driftMs: number | null
+    driftWarning: boolean | null
+    isStale: boolean | null
+    /** Local store write sequence, increments on every state write. */
     version: number
 
     // ── ATM Decay series ────────────────────────────────────────────────────
@@ -242,6 +248,11 @@ export const useDashboardStore = create<DashboardState>()(
         spot: null,
         ivPct: null,
         headerVolatility: null,
+        payloadVersion: null,
+        broadcastTimestamp: null,
+        driftMs: null,
+        driftWarning: null,
+        isStale: null,
         atm: null,
         atmHistory: [],
         version: 0,
@@ -271,6 +282,11 @@ export const useDashboardStore = create<DashboardState>()(
                     spot: extractSpot(merged),
                     ivPct: extractIvPct(merged),
                     headerVolatility: extractHeaderVolatility(merged),
+                    payloadVersion: merged.version ?? null,
+                    broadcastTimestamp: merged.broadcast_timestamp ?? null,
+                    driftMs: merged.drift_ms ?? null,
+                    driftWarning: merged.drift_warning ?? null,
+                    isStale: merged.is_stale ?? null,
                     atm,
                     atmHistory: nextHistory,
                     version: state.version + 1,
@@ -301,6 +317,11 @@ export const useDashboardStore = create<DashboardState>()(
                     spot: extractSpot(merged),
                     ivPct: extractIvPct(merged),
                     headerVolatility: extractHeaderVolatility(merged),
+                    payloadVersion: merged.version ?? null,
+                    broadcastTimestamp: merged.broadcast_timestamp ?? null,
+                    driftMs: merged.drift_ms ?? null,
+                    driftWarning: merged.drift_warning ?? null,
+                    isStale: merged.is_stale ?? null,
                     atm,
                     atmHistory: nextHistory,
                     version: state.version + 1,
@@ -411,6 +432,21 @@ export const selectFusedIvRegime = (s: DashboardState) =>
 
 export const selectRustActive = (s: DashboardState) =>
     s.payload?.rust_active ?? null
+
+export const selectPayloadVersion = (s: DashboardState) =>
+    s.payloadVersion
+
+export const selectBroadcastTimestamp = (s: DashboardState) =>
+    s.broadcastTimestamp
+
+export const selectDriftMs = (s: DashboardState) =>
+    s.driftMs
+
+export const selectDriftWarning = (s: DashboardState) =>
+    s.driftWarning
+
+export const selectIsStale = (s: DashboardState) =>
+    s.isStale
 
 /** Selector: fused signal */
 export const selectFused = (s: DashboardState) =>

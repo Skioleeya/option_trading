@@ -87,8 +87,7 @@ function Start-BackendService {
         [string]$BindHost,
         [int]$Port,
         [int]$TimeoutSec,
-        [string]$LogFile,
-        [switch]$DisableRetry
+        [string]$LogFile
     )
     $backendScript = Join-Path $RepoRoot "scripts/ops/start_backend.ps1"
     if (-not (Test-Path $backendScript)) {
@@ -102,24 +101,12 @@ function Start-BackendService {
         Write-Step "Backend is listening on port $Port (strict)."
         return
     }
-
-    if ($DisableRetry) {
-        throw "Backend strict mode failed and degraded retry is disabled."
+    $logPath = Resolve-AbsPath -RepoRoot $RepoRoot -PathOrRelative $LogFile
+    if (Test-Path $logPath) {
+        Write-Step "Backend log tail:"
+        Get-Content -Path $logPath -Tail 40
     }
-
-    Write-Step "Strict mode did not become ready in ${TimeoutSec}s, retrying with -Degraded ..."
-    & $backendScript -BindHost $BindHost -Port $Port -LogFile $LogFile -Degraded
-
-    if (-not (Wait-ListeningPort -Port $Port -TimeoutSec $TimeoutSec)) {
-        $logPath = Resolve-AbsPath -RepoRoot $RepoRoot -PathOrRelative $LogFile
-        if (Test-Path $logPath) {
-            Write-Step "Backend log tail:"
-            Get-Content -Path $logPath -Tail 40
-        }
-        throw "Backend failed in strict and degraded mode (port $Port not listening)."
-    }
-
-    Write-Step "Backend is listening on port $Port (degraded)."
+    throw "Backend strict mode failed (port $Port not listening)."
 }
 
 function Start-FrontendService {
@@ -215,11 +202,15 @@ if ($VerifyOnly) {
     exit 0
 }
 
+if ($NoDegradedRetry) {
+    Write-Step "NoDegradedRetry is deprecated; startup already enforces strict-only behavior."
+}
+
 Write-Step "RepoRoot=$repoRoot"
-Write-Step "Startup order: Redis -> Backend(strict, fallback degraded) -> Frontend"
+Write-Step "Startup order: Redis -> Backend(strict-only) -> Frontend"
 
 Start-RedisService -RepoRoot $repoRoot -Port $RedisPort -TimeoutSec $WaitTimeoutSec
-Start-BackendService -RepoRoot $repoRoot -BindHost $BindHost -Port $BackendPort -TimeoutSec $WaitTimeoutSec -LogFile $BackendLog -DisableRetry:$NoDegradedRetry
+Start-BackendService -RepoRoot $repoRoot -BindHost $BindHost -Port $BackendPort -TimeoutSec $WaitTimeoutSec -LogFile $BackendLog
 Start-FrontendService -RepoRoot $repoRoot -Port $FrontendPort -TimeoutSec $WaitTimeoutSec -LogFile $FrontendLog
 
 Verify-Stack -RedisPort $RedisPort -BackendPort $BackendPort -FrontendPort $FrontendPort
