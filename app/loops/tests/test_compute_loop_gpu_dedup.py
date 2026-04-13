@@ -83,8 +83,50 @@ class _FakeAtmDecayTracker:
 
 
 class _FakeActiveOptionsService:
+    def __init__(self) -> None:
+        self._latest: list[dict[str, Any]] = []
+        self._latest_source_version = 0
+
+    async def update_background(self, **kwargs: Any) -> None:
+        source_version = int(kwargs.get("source_version", 0) or 0)
+        if source_version > 0:
+            self._latest_source_version = source_version
+        chain = kwargs.get("chain") or []
+        if not chain:
+            self._latest = []
+            return
+        row = dict(chain[0])
+        self._latest = [{
+            "symbol": row.get("symbol", "SPY"),
+            "option_type": row.get("option_type", row.get("type", "CALL")),
+            "strike": row.get("strike", 0.0),
+            "volume": int(row.get("volume", 0) or 0),
+            "turnover": float(row.get("turnover", 0.0) or 0.0),
+            "flow": 0.0,
+            "flow_score": 0.0,
+            "impact_index": 0.0,
+            "is_sweep": False,
+            "flow_deg_formatted": "$0",
+            "flow_volume_label": "0",
+            "flow_color": "text-accent-red",
+            "flow_glow": "",
+            "flow_intensity": "LOW",
+            "flow_direction": "NEUTRAL",
+            "flow_d_z": 0.0,
+            "flow_e_z": 0.0,
+            "flow_g_z": 0.0,
+            "is_placeholder": False,
+            "slot_index": 1,
+            "row_quality": "REAL",
+            "flow_signal_state": "LIVE",
+            "flow_signal_reason": None,
+        }]
+
+    def get_diagnostics(self) -> dict[str, Any]:
+        return {"latest_source_version": self._latest_source_version}
+
     def get_latest(self) -> list[dict[str, Any]]:
-        return []
+        return list(self._latest)
 
 
 class _FakeBuilder:
@@ -161,6 +203,7 @@ async def test_compute_loop_skips_duplicate_snapshot_versions(monkeypatch: pytes
     assert active_input_diag["valid"] is True
     assert active_input_diag["chain_size"] == 1
     assert active_input_diag["source_version"] == 102
+    assert ctr.active_options_service.get_diagnostics()["latest_source_version"] == 102
 
 
 @pytest.mark.asyncio
@@ -182,3 +225,4 @@ async def test_compute_loop_prefers_chain_arrow_when_available(monkeypatch: pyte
     active_input_diag = state.get_diagnostics()["active_options_input"]
     assert active_input_diag["updates"] == 1
     assert active_input_diag["valid"] is True
+    assert ctr.active_options_service.get_diagnostics()["latest_source_version"] == 201

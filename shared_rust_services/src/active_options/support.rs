@@ -34,6 +34,39 @@ fn sanitize_volume(value: i64) -> i64 {
     }
 }
 
+fn normalized_strike(row: &Bound<'_, PyDict>) -> f64 {
+    py_to_f64(py_dict_get(row, "strike").as_ref())
+        .max(py_to_f64(py_dict_get(row, "strike_price").as_ref()))
+        .max(0.0)
+}
+
+fn detect_strike_spacing(rows: &Bound<'_, PyList>) -> f64 {
+    let mut strikes: Vec<f64> = Vec::new();
+    for item in rows.iter() {
+        let Ok(row) = as_dict(&item) else {
+            continue;
+        };
+        let strike = normalized_strike(&row);
+        if strike.is_finite() && strike > 0.0 {
+            strikes.push(strike);
+        }
+    }
+    strikes.sort_by(|left, right| left.total_cmp(right));
+
+    let mut spacing = f64::INFINITY;
+    for window in strikes.windows(2) {
+        let diff = (window[1] - window[0]).abs();
+        if diff.is_finite() && diff > 0.0 && diff < spacing {
+            spacing = diff;
+        }
+    }
+    if spacing.is_finite() {
+        spacing
+    } else {
+        1.0
+    }
+}
+
 fn flow_reason(output: &Bound<'_, PyAny>) -> (String, Option<String>) {
     let mut reasons = Vec::new();
     if !get_attr_bool(output, "engine_d_active", true) {
@@ -89,30 +122,39 @@ fn format_volume(volume: i64) -> String {
 pub(crate) fn normalize_and_filter_chain_impl(
     py: Python<'_>,
     chain: &Bound<'_, PyAny>,
-    min_volume: i64,
+    spot: f64,
+    spot_window_steps: i64,
 ) -> PyResult<Py<PyList>> {
+    let rows = as_list(chain)?;
     let out = PyList::empty(py);
-    for row in as_list(chain)?.iter() {
+    if !spot.is_finite() || spot <= 0.0 {
+        return Ok(out.unbind());
+    }
+
+    let spacing = detect_strike_spacing(&rows);
+    let window_steps = spot_window_steps.max(0) as f64;
+    let half_window = spacing * window_steps;
+    for row in rows.iter() {
         let row = as_dict(&row)?;
         let normalized = PyDict::new(py);
         for (key, value) in row.iter() {
             normalized.set_item(key, value)?;
         }
         normalized.set_item("option_type", normalize_option_type(&row))?;
-        let strike = py_to_f64(py_dict_get(&row, "strike").as_ref())
-            .max(py_to_f64(py_dict_get(&row, "strike_price").as_ref()));
-        normalized.set_item("strike", strike.max(0.0))?;
+        let strike = normalized_strike(&row);
+        if (strike - spot).abs() > half_window {
+            continue;
+        }
+        normalized.set_item("strike", strike)?;
 
-        let mut volume = sanitize_volume(py_to_i64(py_dict_get(&row, "volume").as_ref()));
+        // LongBridge contract source-of-truth: volume (int64, 成交量)
+        let contract_volume = sanitize_volume(py_to_i64(py_dict_get(&row, "volume").as_ref()));
         let current_volume = sanitize_volume(
             py_to_i64(py_dict_get(&row, "current_volume").as_ref())
-                .max(py_to_i64(py_dict_get(&row, "currentVolume").as_ref()))
-                .max(py_to_i64(py_dict_get(&row, "vol").as_ref())),
+                .max(py_to_i64(py_dict_get(&row, "currentVolume").as_ref())),
         );
-        if volume <= 0 && current_volume > 0 {
-            volume = current_volume;
-        }
-        normalized.set_item("volume", volume)?;
+        normalized.set_item("day_volume", contract_volume)?;
+        normalized.set_item("volume", contract_volume)?;
         normalized.set_item("current_volume", current_volume as f64)?;
 
         normalized.set_item(
@@ -162,21 +204,20 @@ pub(crate) fn normalize_and_filter_chain_impl(
             py_to_f64(py_dict_get(&row, "computed_vanna").as_ref())
                 .max(py_to_f64(py_dict_get(&row, "vanna").as_ref())),
         )?;
-        if volume >= min_volume {
-            out.append(normalized)?;
-        }
+        out.append(normalized)?;
     }
     Ok(out.unbind())
 }
 
 #[pyfunction]
-#[pyo3(signature = (*, chain, min_volume))]
+#[pyo3(signature = (*, chain, spot, spot_window_steps))]
 fn active_options_normalize_and_filter_chain(
     py: Python<'_>,
     chain: &Bound<'_, PyAny>,
-    min_volume: i64,
+    spot: f64,
+    spot_window_steps: i64,
 ) -> PyResult<Py<PyList>> {
-    normalize_and_filter_chain_impl(py, chain, min_volume)
+    normalize_and_filter_chain_impl(py, chain, spot, spot_window_steps)
 }
 
 #[pyfunction]
@@ -185,24 +226,7 @@ fn active_options_rank_outputs(py: Python<'_>, outputs: &Bound<'_, PyAny>) -> Py
     rows.sort_by(|left, right| {
         let left = left.bind(py);
         let right = right.bind(py);
-        let left_live_rank = if get_attr_bool(&left, "engine_d_active", true)
-            && get_attr_bool(&left, "engine_e_active", true)
-            && get_attr_bool(&left, "engine_g_active", true)
-        {
-            0
-        } else {
-            1
-        };
-        let right_live_rank = if get_attr_bool(&right, "engine_d_active", true)
-            && get_attr_bool(&right, "engine_e_active", true)
-            && get_attr_bool(&right, "engine_g_active", true)
-        {
-            0
-        } else {
-            1
-        };
         (
-            left_live_rank,
             -(get_attr_f64(&left, "volume") as i64),
             -((get_attr_f64(&left, "turnover") * 100.0) as i64),
             -((get_attr_f64(&left, "impact_index") * 1000.0) as i64),
@@ -211,7 +235,6 @@ fn active_options_rank_outputs(py: Python<'_>, outputs: &Bound<'_, PyAny>) -> Py
             get_attr_string(&left, "option_type", ""),
         )
             .cmp(&(
-                right_live_rank,
                 -(get_attr_f64(&right, "volume") as i64),
                 -((get_attr_f64(&right, "turnover") * 100.0) as i64),
                 -((get_attr_f64(&right, "impact_index") * 1000.0) as i64),

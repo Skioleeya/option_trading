@@ -54,13 +54,15 @@ flowchart LR
 - `active_options` 非占位行必须显式输出 `flow_direction/flow_intensity/flow_color/flow_glow` 四元组；禁止依赖 L4 派生
 - `active_options.flow_signal_state` 必须输出 `LIVE|DEGRADED`；当信号降级时必须同时输出 `flow_signal_reason`（如 `missing_gamma/missing_vanna/missing_turnover/all_engines_inactive`）
 - `active_options` 后端仅输出真实行；固定 5 行展示由 L4 model 层补占位，不得在 L3/L0 伪造 fallback 行
+- `active_options` 必须按每个 source tick 直接提交最新 Top5 结果，禁止使用多 tick signature 确认门限（如 switch-confirm）延后提交，防止 UI 排行冻结
 - `active_options.is_placeholder`（bool）与 `active_options.slot_index`（1..5）为固定槽位契约字段，必须稳定透传
 - `shared/services/active_options_runtime.py`、`shared/services/active_options_input.py`、`shared/services/active_options_engines.py` 现为 root-neutral Python surface；实际 owner 位于 `shared_rust.services`，禁止恢复 `_active_options_*` Python helper owner
 - `mtf_flow` 必须是纯状态合同：`m1/m5/m15.{state,relative_displacement,pressure_gradient,distance_to_vacuum,kinetic_level}`
 - `mtf_flow` 严禁携带视觉字段（如 `dot_color/text_color/border/animate/align_color`）与统计语义字段（如 `zscore/z/strength`）
 - 保留 `impact_index` 与 `is_sweep`
 - 不返回空结构破坏前端渲染
-- `ui_state.depth_profile` 的可见 strike 窗口必须优先覆盖 `spot` 与 `gamma_flip_level` 关键位；当 flip 仅落在 spot 居中窗口外侧时，L3 必须最小幅度平移窗口以保留可见 `is_flip` 行，禁止只输出顶层 `gamma_flip_level` 数值而让深度图显示“无 flip 行”
+- `ui_state.depth_profile` 的可见 strike 窗口必须固定奇数行并严格围绕 `spot` 上下对称；当 `gamma_flip_level` 落在窗口外侧时必须保持固定行数且不打 `is_flip`，禁止扩窗、禁止平移中心
+- flip 单一事实源：`agent_g.data.gamma_flip_level` 与 `ui_state.depth_profile[*].is_flip` 必须同源于 `zero_gamma_level`；当 `zero_gamma_level` 无效时必须输出 `gamma_flip_level=null` 且不打 `is_flip`，禁止回退 `flip_level_cumulative`
 - `/history` 默认视图必须为 `compact`，禁止默认返回重字段全量 payload
 - 研究下载必须走字段投影（`fields`）与时间降采样（`interval`），超限查询进入异步导出
 - 历史查询接口支持版本协商：`schema=v1|v2`（默认 `v2`，`v1` 仅兼容保留）

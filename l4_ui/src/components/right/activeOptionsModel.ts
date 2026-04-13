@@ -236,36 +236,16 @@ export function normalizeActiveOptions(input: unknown, limit = ACTIVE_OPTIONS_FI
         throw new Error('[ActiveOptionsContract] active_options must be an array')
     }
     const source = input
-    const ranked = source
-        .map((item, idx) => ({
-            row: normalizeActiveOption(item),
-            idx,
-        }))
-        .sort((a, b) => {
-            const aPlaceholder = Boolean(a.row.is_placeholder)
-            const bPlaceholder = Boolean(b.row.is_placeholder)
-            if (aPlaceholder !== bPlaceholder) return aPlaceholder ? 1 : -1
-
-            const volumeDiff = b.row.volume - a.row.volume
-            if (volumeDiff !== 0) return volumeDiff
-
-            const turnoverDiff = b.row.turnover - a.row.turnover
-            if (turnoverDiff !== 0) return turnoverDiff
-
-            const impactA = typeof a.row.impact_index === 'number' ? a.row.impact_index : 0
-            const impactB = typeof b.row.impact_index === 'number' ? b.row.impact_index : 0
-            const impactDiff = impactB - impactA
-            if (impactDiff !== 0) return impactDiff
-
-            return a.idx - b.idx
-        })
-
-    const normalized: ActiveOption[] = ranked
+    const normalized: ActiveOption[] = source
+        .map((item) => normalizeActiveOption(item))
         .slice(0, target)
-        .map(({ row }, idx) => ({
-            ...row,
-            slot_index: idx + 1,
-        }))
+        .map((row, idx) => {
+            const slotIndex = toFiniteInteger(row.slot_index, 0)
+            return {
+                ...row,
+                slot_index: slotIndex > 0 ? slotIndex : (idx + 1),
+            }
+        })
 
     for (let idx = normalized.length; idx < target; idx += 1) {
         normalized.push(createPlaceholderOption(idx + 1))

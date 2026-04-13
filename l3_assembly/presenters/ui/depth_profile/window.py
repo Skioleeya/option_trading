@@ -2,32 +2,22 @@
 
 from __future__ import annotations
 
-import math
-
-
 def build_contiguous_strikes(
     *,
     center: float,
     spacing: float,
     count: int,
-    flip_level: float | None,
 ) -> list[float]:
     if count <= 0:
         return []
 
-    half = count // 2
-    start = center - (half * spacing)
-    end = start + ((count - 1) * spacing)
+    # Enforce a fixed odd-window symmetry around center.
+    final_count = count if count % 2 == 1 else count + 1
+    half = final_count // 2
 
-    if flip_level is not None and math.isfinite(flip_level):
-        if flip_level > end:
-            shift = math.ceil((flip_level - end) / spacing)
-            start += shift * spacing
-        elif flip_level < start:
-            shift = math.ceil((start - flip_level) / spacing)
-            start -= shift * spacing
+    start = center - (half * spacing)
 
     return sorted(
-        [round(start + (i * spacing), 2) for i in range(count)],
+        [round(start + (i * spacing), 2) for i in range(final_count)],
         reverse=True,
     )

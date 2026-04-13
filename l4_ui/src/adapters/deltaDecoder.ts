@@ -54,8 +54,10 @@ function validateActiveOptionsRows(payload: DashboardPayload): void {
     if (!Array.isArray(rows)) {
         throw new Error('[L4 Contract] ui_state.active_options must be an array or null')
     }
-    if (rows.length !== 5) {
-        throw new Error(`[L4 Contract] ui_state.active_options must contain 5 rows, got ${rows.length}`)
+    // Premarket / no-qualified-flow windows can legitimately produce 0 rows.
+    // UI model normalizes to fixed 5 render slots via placeholders.
+    if (rows.length > 5) {
+        throw new Error(`[L4 Contract] ui_state.active_options must contain at most 5 rows, got ${rows.length}`)
     }
 
     for (const row of rows) {

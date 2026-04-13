@@ -6,7 +6,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyDict, PyModule};
 
 #[pyfunction]
-#[pyo3(signature = (*, latest_rows, empty_filter_count=0, last_empty_filter_at_utc=None, empty_filter_fallback_count=0, last_empty_filter_fallback_at_utc=None, partial_fallback_count=0, last_partial_fallback_at_utc=None, last_partial_fallback_mode=None, filtered_candidates_count=0, supplemented_rows=0, engine_empty_output_fallback_count=0, last_engine_empty_output_fallback_at_utc=None, last_fallback_mode=None, last_update_at_utc=None, min_volume_threshold=100, empty_filter_fallback_enabled=true, empty_filter_fallback_max_candidates=120))]
+#[pyo3(signature = (*, latest_rows, empty_filter_count=0, last_empty_filter_at_utc=None, empty_filter_fallback_count=0, last_empty_filter_fallback_at_utc=None, partial_fallback_count=0, last_partial_fallback_at_utc=None, last_partial_fallback_mode=None, filtered_candidates_count=0, supplemented_rows=0, engine_empty_output_fallback_count=0, last_engine_empty_output_fallback_at_utc=None, last_fallback_mode=None, last_update_at_utc=None, empty_filter_fallback_enabled=true, empty_filter_fallback_max_candidates=120))]
 fn active_options_build_runtime_diagnostics(
     py: Python<'_>,
     latest_rows: &Bound<'_, PyAny>,
@@ -23,7 +23,6 @@ fn active_options_build_runtime_diagnostics(
     last_engine_empty_output_fallback_at_utc: Option<String>,
     last_fallback_mode: Option<String>,
     last_update_at_utc: Option<String>,
-    min_volume_threshold: i64,
     empty_filter_fallback_enabled: bool,
     empty_filter_fallback_max_candidates: i64,
 ) -> PyResult<Py<PyDict>> {
@@ -129,7 +128,6 @@ fn active_options_build_runtime_diagnostics(
     out.set_item("last_engine_empty_output_fallback_at_utc", last_engine_empty_output_fallback_at_utc)?;
     out.set_item("last_fallback_mode", last_fallback_mode)?;
     out.set_item("last_update_at_utc", last_update_at_utc)?;
-    out.set_item("min_volume_threshold", min_volume_threshold)?;
     out.set_item("empty_filter_fallback_enabled", empty_filter_fallback_enabled)?;
     out.set_item("empty_filter_fallback_max_candidates", empty_filter_fallback_max_candidates)?;
     Ok(out.unbind())

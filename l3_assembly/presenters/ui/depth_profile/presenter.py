@@ -248,13 +248,13 @@ class DepthProfilePresenter:
         raw_center = spot if spot is not None else sorted_keys[len(sorted_keys) // 2]
         snapped_center = _stable_center(raw_center, spacing)
 
-        count = thresholds.STRIKE_COUNT
+        base_count = thresholds.STRIKE_COUNT
         contiguous_strikes = build_contiguous_strikes(
             center=snapped_center,
             spacing=spacing,
-            count=count,
-            flip_level=flip_level,
+            count=base_count,
         )
+        window_count = len(contiguous_strikes)
 
         if not raw_by_strike:
             logger.warning("[DepthProfilePresenter] raw_by_strike is EMPTY. Snapshot size: %d", len(per_strike_gex))
@@ -265,14 +265,14 @@ class DepthProfilePresenter:
         # Institutional standard for 0DTE sparse chains (Ref: arxiv 2025)
         GAUSSIAN_KERNEL = [0.15, 0.70, 0.15]  # sigma approx 0.8
         
-        raw_calls  = np.zeros(count, dtype=np.float64)
-        raw_puts   = np.zeros(count, dtype=np.float64)
-        raw_tox    = np.zeros(count, dtype=np.float64)
-        raw_bbo    = np.zeros(count, dtype=np.float64)
+        raw_calls  = np.zeros(window_count, dtype=np.float64)
+        raw_puts   = np.zeros(window_count, dtype=np.float64)
+        raw_tox    = np.zeros(window_count, dtype=np.float64)
+        raw_bbo    = np.zeros(window_count, dtype=np.float64)
 
         # Buffer for discrete strikes before smoothing
-        buf_calls = np.zeros(count, dtype=np.float64)
-        buf_puts  = np.zeros(count, dtype=np.float64)
+        buf_calls = np.zeros(window_count, dtype=np.float64)
+        buf_puts  = np.zeros(window_count, dtype=np.float64)
 
         # Find spot proximity for debugging
         logger.info("[DepthProfilePresenter] Build started. Spot: %.2f, Strikes: %d", spot if spot is not None else -1.0, len(contiguous_strikes))
@@ -304,10 +304,10 @@ class DepthProfilePresenter:
 
         # Apply Gaussian Spatial Smoothing (1D Convolution)
         # This bleeds Gamma into adjacent strikes to fill liquidity gaps
-        for i in range(count):
+        for i in range(window_count):
             for j, weight in enumerate(GAUSSIAN_KERNEL):
                 idx_kernel = i + (j - 1)
-                if 0 <= idx_kernel < count:
+                if 0 <= idx_kernel < window_count:
                     raw_calls[i] += buf_calls[idx_kernel] * weight
                     raw_puts[i]  += buf_puts[idx_kernel] * weight
 

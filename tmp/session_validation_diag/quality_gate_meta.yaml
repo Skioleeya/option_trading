@@ -1,4 +1,2 @@
 ﻿files_changed:
   - "app/loops/housekeeping_loop.py"
-  - "l3_assembly/events/active_options_contract.py"
-  - "l3_assembly/events/payload_ui_state.py"

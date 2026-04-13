@@ -1,7 +1,7 @@
-# Open Tasks (Index)
+﻿# Open Tasks (Index)
 
 ## Active Session Tasks
-- Path: notes/sessions/2026-04-03/impl-tdd-module-structure-remediation/open_tasks.md
+- Path: notes/sessions/2026-04-08/fix-l4-active-options-empty-contract/open_tasks.md
 
 ## Global Backlog (Cross-Session)
 - [ ] Monitor strict startup gate telemetry for `writer_not_ready_timeout` in live market open window; retune timeout only with evidence.
@@ -15,4 +15,3 @@
 ## Process
 - Task details and completion evidence belong in the session-local open_tasks.md.
 - Keep this file as the long-horizon queue and session pointer only.
-

@@ -48,7 +48,6 @@ class _DummyActiveOptionsService:
             "halt_reason": None,
             "halted_at_utc": None,
             "last_update_at_utc": "2026-03-19T14:31:00+00:00",
-            "min_volume_threshold": 10,
         }
 
 

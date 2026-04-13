@@ -8,6 +8,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from app.loops.atm_live_payload import build_duplicate_snapshot_live_refresh
+from app.loops.active_options_sync import ensure_active_options_same_version
 from app.loops.compute_metadata import _build_l1_extra_metadata
 from app.loops.payload_debug import emit_payload_debug, should_log_duplicate_payload_debug
 from app.loops.compute_probe import (
@@ -32,8 +33,6 @@ logger = logging.getLogger(__name__)
 L2_AUDIT_FLUSH_EVERY_TICKS = 60
 LOOP_OVERRUN_SLEEP_SECONDS = 0.01
 ACTIVE_OPTIONS_DEFAULT_GEX_REGIME = "NEUTRAL"
-
-
 def _to_shared_active_options_input(
     snapshot: ActiveOptionsInputSnapshotData,
 ) -> ActiveOptionsInputSnapshot:
@@ -51,16 +50,15 @@ def _to_shared_active_options_input(
 
 
 def _publish_active_options_input(
-    state: SharedLoopState,
     *,
     l0_snapshot: dict[str, Any],
     l1_snapshot: Any,
-) -> None:
+) -> ActiveOptionsInputSnapshot:
     adapted = build_active_options_input_snapshot(
         l0_snapshot=l0_snapshot,
         l1_snapshot=l1_snapshot,
     )
-    state.update_active_options_input(_to_shared_active_options_input(adapted))
+    return _to_shared_active_options_input(adapted)
 
 
 def _select_l1_chain_input(snapshot: dict[str, Any]) -> Any:
@@ -188,10 +186,14 @@ async def _process_snapshot_tick(
         atm_iv_context=_extract_runtime_atm_iv_context(l1_snap),
     )
     state.update_snapshot_version_iv_probe(probe_diag)
-    _publish_active_options_input(
-        state,
+    active_options_input = _publish_active_options_input(
         l0_snapshot=snapshot,
         l1_snapshot=l1_snap,
+    )
+    await ensure_active_options_same_version(
+        ctr,
+        active_options_input=active_options_input,
+        snapshot_version=snapshot_version,
     )
 
     atm_decay_payload = await ctr.atm_decay_tracker.update(
@@ -215,6 +217,7 @@ async def _process_snapshot_tick(
         atm_decay_payload=atm_decay_payload,
         spot=snapshot.get("spot"),
     )
+    state.update_active_options_input(active_options_input)
 
     if state.total_computations > 0 and state.total_computations % L2_AUDIT_FLUSH_EVERY_TICKS == 0:
         ctr.l2_reactor.flush_audit()

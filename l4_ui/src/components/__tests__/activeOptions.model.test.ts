@@ -69,7 +69,7 @@ describe('activeOptionsModel', () => {
         ).toThrow(/flow_glow/i)
     })
 
-    it('returns bounded list sorted by VOL desc and reindexes slot', () => {
+    it('returns bounded list in backend order and reindexes slot when missing', () => {
         const rows = normalizeActiveOptions(
             [
                 { ...validRow, symbol: 'LOW', volume: 100 },
@@ -79,8 +79,8 @@ describe('activeOptionsModel', () => {
             2
         )
         expect(rows).toHaveLength(2)
-        expect(rows[0].symbol).toBe('HIGH')
-        expect(rows[1].symbol).toBe('MID')
+        expect(rows[0].symbol).toBe('LOW')
+        expect(rows[1].symbol).toBe('HIGH')
         expect(rows[0].slot_index).toBe(1)
         expect(rows[1].slot_index).toBe(2)
     })

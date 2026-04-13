@@ -108,6 +108,17 @@ class _FakeAtmDecayTracker:
 class _FakeActiveOptionsService:
     def __init__(self) -> None:
         self.calls = 0
+        self.update_calls = 0
+        self._latest_source_version = 0
+
+    async def update_background(self, **kwargs: Any) -> None:
+        self.update_calls += 1
+        source_version = int(kwargs.get("source_version", 0) or 0)
+        if source_version > 0:
+            self._latest_source_version = source_version
+
+    def get_diagnostics(self) -> dict[str, Any]:
+        return {"latest_source_version": self._latest_source_version}
 
     def get_latest(self) -> list[dict[str, Any]]:
         self.calls += 1
@@ -197,6 +208,7 @@ async def test_duplicate_snapshot_tick_keeps_atm_live_updates(monkeypatch: pytes
 
     assert ctr.l1_reactor.calls == 1
     assert ctr.atm_decay_tracker.calls == 3
+    assert ctr.active_options_service.update_calls == 1
     assert state.frozen is not None
     assert state.frozen.atm is not None
     assert state.frozen.atm["timestamp"] == "2026-03-25T10:00:03-04:00"
@@ -222,6 +234,7 @@ async def test_duplicate_snapshot_tick_keeps_active_options_live_updates(
 
     assert ctr.l1_reactor.calls == 1
     assert ctr.active_options_service.calls == 3
+    assert ctr.active_options_service.update_calls == 1
     assert state.frozen is not None
     assert state.frozen.ui_state.active_options
     assert state.frozen.ui_state.active_options[0].strike == pytest.approx(563.0)

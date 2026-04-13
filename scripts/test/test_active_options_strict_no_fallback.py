@@ -12,14 +12,11 @@ def _build_service_stub() -> ActiveOptionsRuntimeService:
     svc = ActiveOptionsRuntimeService.__new__(ActiveOptionsRuntimeService)
     svc._latest_payload = []
     svc._latest_signature = None
-    svc._pending_signature = None
-    svc._pending_rows = []
-    svc._pending_hits = 0
-    svc._switch_confirm_ticks = 1
     svc._empty_filter_count = 0
     svc._last_empty_filter_at_utc = None
     svc._last_filtered_candidates_count = 0
     svc._last_update_at_utc = None
+    svc._latest_source_version = 0
     svc._halted = False
     svc._halt_reason = None
     svc._halted_at_utc = None
@@ -32,10 +29,10 @@ async def test_update_background_hard_fails_when_filtered_candidates_empty(monke
     monkeypatch.setattr(
         ActiveOptionsRuntimeService,
         "_normalize_and_filter_chain",
-        staticmethod(lambda *, chain, min_volume: []),
+        staticmethod(lambda *, chain, spot, spot_window_steps: []),
     )
 
-    with pytest.raises(ActiveOptionsHardFailure, match="subthreshold_volume_no_candidates"):
+    with pytest.raises(ActiveOptionsHardFailure, match="normalized_chain_empty_no_candidates"):
         await svc.update_background(
             chain=[{"symbol": "SPY.TEST.C", "strike": 560.0, "volume": 1}],
             spot=560.0,
@@ -55,7 +52,7 @@ async def test_update_background_hard_fails_when_filtered_candidates_empty(monke
 async def test_update_background_rejects_when_service_already_halted() -> None:
     svc = _build_service_stub()
     svc._halted = True
-    svc._halt_reason = "subthreshold_volume_no_candidates"
+    svc._halt_reason = "normalized_chain_empty_no_candidates"
     svc._halted_at_utc = "2026-04-03T10:30:00+00:00"
 
     with pytest.raises(ActiveOptionsHardFailure, match="service_halted"):
@@ -65,3 +62,40 @@ async def test_update_background_rejects_when_service_already_halted() -> None:
             atm_iv=0.2,
             limit=5,
         )
+
+
+@pytest.mark.asyncio
+async def test_update_background_commits_new_signature_each_tick() -> None:
+    svc = _build_service_stub()
+
+    async def _noop_save(*, redis, filtered) -> None:
+        return None
+
+    async def _fake_run_pipeline(*, filtered, spot, atm_iv, gex_regime, ttm_seconds, redis):
+        return [{"symbol": "unused"}]
+
+    ranked = [
+        (
+            [{"symbol": "SPY", "option_type": "CALL", "strike": 680.0, "volume": 10, "turnover": 1000.0}],
+            (("SPY260413C680000.US", "CALL", 680.0),),
+        ),
+        (
+            [{"symbol": "SPY", "option_type": "CALL", "strike": 686.0, "volume": 20, "turnover": 2000.0}],
+            (("SPY260413C686000.US", "CALL", 686.0),),
+        ),
+    ]
+
+    svc._normalize_and_filter_chain = lambda *, chain, spot, spot_window_steps: [dict(chain[0])]  # type: ignore[assignment]
+    svc._save_oi_snapshot_if_enabled = _noop_save  # type: ignore[assignment]
+    svc._run_flow_pipeline = _fake_run_pipeline  # type: ignore[assignment]
+    svc._build_ranked_candidate = lambda outputs, limit: ranked.pop(0)  # type: ignore[assignment]
+
+    base_chain = [{"symbol": "SPY260413C680000.US", "strike": 680.0, "volume": 1, "turnover": 1.0}]
+
+    await svc.update_background(chain=base_chain, spot=680.0, atm_iv=0.2, limit=5)
+    assert svc.get_latest()[0]["strike"] == 680.0
+    assert svc.get_latest()[0]["volume"] == 10
+
+    await svc.update_background(chain=base_chain, spot=680.0, atm_iv=0.2, limit=5)
+    assert svc.get_latest()[0]["strike"] == 686.0
+    assert svc.get_latest()[0]["volume"] == 20

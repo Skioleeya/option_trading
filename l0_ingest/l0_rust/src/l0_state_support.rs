@@ -148,17 +148,15 @@ fn l0_state_apply_quote(
 
         if event_type == 1 || event_type == 3 {
             let turnover_positive = turnover.as_ref().and_then(extract_float).map(|num| num > 0.0).unwrap_or(false);
-            let volume_owned_by_ws = event_type == 3 || turnover_positive;
-            let ws_volume = match (sanitized_volume, sanitized_current_volume) {
-                (Some(left), Some(right)) => left.min(right),
-                (Some(left), None) => left,
-                (None, Some(right)) => right,
-                (None, None) => 0.0,
-            };
-            if volume_owned_by_ws && ws_volume > 0.0 {
-                next_entry.set_item("volume", ws_volume)?;
-                changed = true;
-                next_ws_volume_seen = true;
+            if event_type == 1 {
+                if let Some(value) = sanitized_volume {
+                    let volume_int = value as i64;
+                    if volume_int > 0 {
+                        next_entry.set_item("volume", volume_int)?;
+                        changed = true;
+                        next_ws_volume_seen = true;
+                    }
+                }
             }
             if let Some(value) = sanitized_current_volume {
                 next_entry.set_item("current_volume", value)?;

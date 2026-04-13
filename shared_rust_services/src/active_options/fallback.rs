@@ -79,7 +79,7 @@ fn active_options_fallback_candidates_when_empty(
     if target == 0 {
         return Ok((PyList::empty(py).unbind(), "none".to_string()));
     }
-    let normalized = normalize_and_filter_chain_impl(py, chain, 0)?;
+    let normalized = normalize_and_filter_chain_impl(py, chain, 1.0, i64::MAX)?;
     let normalized = normalized.bind(py);
 
     let mut positive: Vec<Py<PyAny>> = Vec::new();
@@ -147,7 +147,7 @@ fn active_options_supplement_partial_candidates(
         existing.insert(row_signature_key(&row));
         out.append(row.copy()?)?;
     }
-    let normalized_chain = normalize_and_filter_chain_impl(py, chain, 0)?;
+    let normalized_chain = normalize_and_filter_chain_impl(py, chain, 1.0, i64::MAX)?;
     let remainder = PyList::empty(py);
     for row in normalized_chain.bind(py).iter() {
         let row = row.downcast::<PyDict>()?;

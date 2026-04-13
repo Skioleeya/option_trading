@@ -49,10 +49,11 @@ flowchart LR
 - `ActiveOptions` 的 `FLOW` 展示文本必须与标准化后的 `flow` 数值同号；`flow=0` 时必须展示中性 `$0`，禁止出现 `-$0/+ $0` 等 signed-zero 文本
 - `ActiveOptions` 必须消费后端 `flow_glow` 字段（允许空字符串）；前端不得本地派生/回退 glow token
 - `ActiveOptions` 必须始终渲染固定 5 行；当后端异常少发时仅允许补齐标准占位行（`is_placeholder=true`），禁止伪造真实合约行
+- `ActiveOptions` 协议消费允许 `ui_state.active_options` 返回 `0..5` 行；`0` 行在盘前/无合格流窗口属于合法状态，L4 必须通过 model 层补齐到固定 5 行展示
 - `ActiveOptions` 前端不再消费 fallback 字段；`fallback_reason`、`is_synthetic_fallback` 已退出运行合同
-- `ActiveOptions` 列表排序必须在 model 层硬切为 `VOL` 降序（同量级依次比较 `turnover`、`impact_index`，再回退输入序），组件不得恢复 OFII/impact 旧排序语义
-- `ActiveOptions` 上游（shared runtime service）榜单截断口径必须与前端一致：`VOL desc -> turnover desc -> impact_index desc -> stable key(symbol/strike/type)`，禁止再以 `impact_index` 作为 Top5 截断主键。
-- `ActiveOptions` 上游入参归一化必须保证可用成交量：当 `volume<=0` 且存在 `current_volume>0` 时，必须回退使用 `current_volume`（取整）参与 VOL 排序与门槛过滤。
+- `ActiveOptions` 前端 model 层禁止二次排序；必须严格保持后端榜单顺序与槽位语义，组件不得恢复 OFII/impact 旧排序语义。
+- `ActiveOptions` 上游（shared runtime service）是唯一排序 owner：`VOL desc -> turnover desc -> impact_index desc -> stable key(symbol/strike/type)`；前端仅消费结果，不得重排。
+- `ActiveOptions` 上游入参与排序口径必须硬切到当日累计成交量：`VOL` 排序只允许使用 `volume`；`current_volume` 禁止用于排序、禁止兜底回填。
 - `ActiveOptions` 上游发布必须启用 3 tick 签名确认门控；候选 Top5 签名连续 3 tick 一致才允许替换当前榜单，首次无历史榜单可立即提交。
 - `ActiveOptions` 3 tick 门控仅用于“换榜”（签名变化）确认；当签名不变时，`volume/flow/impact` 等数值必须每 tick 刷新，禁止冻结同榜单数值。
 - `dashboardStore` 不得将 `ui_state.active_options` 作为 sticky key；当后端发送 `null/[]` 时必须按显式更新清空，禁止保留旧榜单。

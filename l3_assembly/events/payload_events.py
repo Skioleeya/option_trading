@@ -107,7 +107,7 @@ class FrozenPayload:
     gamma_walls: dict[str, float | None] = field(
         default_factory=lambda: {"call_wall": None, "put_wall": None}
     )
-    gamma_flip_level: float = 0.0
+    gamma_flip_level: float | None = None
     fused_signal: dict[str, Any] | None = None
     micro_structure: dict[str, Any] | None = None
     header_volatility: dict[str, Any] | None = None
@@ -143,7 +143,11 @@ class FrozenPayload:
                         key: round(value, 2) if value is not None else None
                         for key, value in self.gamma_walls.items()
                     },
-                    "gamma_flip_level": round(self.gamma_flip_level, 2),
+                    "gamma_flip_level": (
+                        round(self.gamma_flip_level, 2)
+                        if self.gamma_flip_level is not None
+                        else None
+                    ),
                     "fused_signal": self.fused_signal,
                     "micro_structure": self.micro_structure,
                     "header_volatility": self.header_volatility,

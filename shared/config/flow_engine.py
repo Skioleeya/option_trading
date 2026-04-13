@@ -4,7 +4,7 @@ from shared.config._base import BaseConfig
 class FlowEngineConfig(BaseConfig):
     # VPIN / Order Flow
     vpin_bucket_size: float = Field(default=50000)
-    flow_active_min_volume: int = Field(default=100)
+    flow_active_spot_window_steps: int = Field(default=7)
     research_window_size: int = Field(default=120)
 
     # DEG Composer Weights

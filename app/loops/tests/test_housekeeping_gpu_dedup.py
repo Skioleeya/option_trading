@@ -106,6 +106,7 @@ async def test_housekeeping_consumes_shared_active_options_input_and_dedups(monk
     assert ctr.active_options_service.last_kwargs.get("spot") == pytest.approx(561.0)
     assert ctr.active_options_service.last_kwargs.get("atm_iv") == pytest.approx(0.22)
     assert ctr.active_options_service.last_kwargs.get("gex_regime") == "NEUTRAL"
+    assert ctr.active_options_service.last_kwargs.get("source_version") == 777
     assert ctr.active_options_service.last_kwargs.get("chain")
 
 
@@ -174,6 +175,24 @@ async def test_housekeeping_logs_active_options_flow_trace(monkeypatch: pytest.M
     assert "source_version=778" in caplog.text
     assert "SPY.TEST.C/CALL/560.0" in caplog.text
     assert "flow=125000.0" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_housekeeping_waits_for_first_shared_input(monkeypatch: pytest.MonkeyPatch, caplog) -> None:
+    monkeypatch.setattr(settings, "websocket_update_interval", 0.001, raising=False)
+
+    ctr = _FakeContainer()
+    state = SharedLoopState()
+
+    with caplog.at_level("WARNING"):
+        task = asyncio.create_task(run_housekeeping_loop(ctr, state))
+        await asyncio.sleep(0.02)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    assert ctr.active_options_service.calls == 0
+    assert "waiting_input reason=missing_input" in caplog.text
 
 
 def test_sync_anchor_symbols_clears_mandatory_symbols_when_anchor_is_empty() -> None:

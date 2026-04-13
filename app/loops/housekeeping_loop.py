@@ -75,6 +75,38 @@ def _is_duplicate_source_version(
     return source_version > 0 and last_source_version == source_version
 
 
+def _summarize_active_options_input(
+    snapshot: ActiveOptionsInputSnapshot,
+) -> dict[str, Any]:
+    chain = snapshot.chain if isinstance(snapshot.chain, list) else []
+    day_volume_gt_zero = 0
+    current_volume_gt_zero = 0
+    turnover_gt_zero = 0
+    gamma_nonzero = 0
+    for row in chain:
+        if not isinstance(row, dict):
+            continue
+        day_volume = _to_float(row.get("volume"), 0.0)
+        current_volume = _to_float(row.get("current_volume"), 0.0)
+        turnover = _to_float(row.get("turnover"), 0.0)
+        gamma = _to_float(row.get("gamma"), 0.0)
+        if day_volume > 0.0:
+            day_volume_gt_zero += 1
+        if current_volume > 0.0:
+            current_volume_gt_zero += 1
+        if turnover > 0.0:
+            turnover_gt_zero += 1
+        if gamma != 0.0:
+            gamma_nonzero += 1
+    return {
+        "chain_size": len(chain),
+        "day_volume_gt_zero": day_volume_gt_zero,
+        "current_volume_gt_zero": current_volume_gt_zero,
+        "turnover_gt_zero": turnover_gt_zero,
+        "gamma_nonzero": gamma_nonzero,
+    }
+
+
 def _log_active_options_flow_snapshot(
     ctr: "AppContainer",
     *,
@@ -109,6 +141,19 @@ def _log_active_options_flow_snapshot(
     )
 
 
+def _service_latest_source_version(ctr: "AppContainer") -> int:
+    service = getattr(ctr, "active_options_service", None)
+    if service is None or not hasattr(service, "get_diagnostics"):
+        return 0
+    diagnostics = service.get_diagnostics()
+    if not isinstance(diagnostics, dict):
+        return 0
+    try:
+        return max(0, int(diagnostics.get("latest_source_version", 0) or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
 async def _update_active_options_from_shared_input(
     ctr: "AppContainer",
     state: SharedLoopState,
@@ -125,15 +170,46 @@ async def _update_active_options_from_shared_input(
 
     resolved_atm_iv, resolved_gex_regime = _resolve_runtime_context(state, snapshot)
     if snapshot is None:
-        raise RuntimeError(
-            f"active_options_input_invalid: reason={ACTIVE_OPTIONS_INVALID_REASON_MISSING_INPUT} gex_regime={resolved_gex_regime}"
+        logger.warning(
+            "[ActiveOptionsFlow] waiting_input reason=%s gex_regime=%s",
+            ACTIVE_OPTIONS_INVALID_REASON_MISSING_INPUT,
+            resolved_gex_regime,
         )
+        return last_source_version
 
     if not bool(snapshot.valid):
+        logger.error(
+            "[ActiveOptionsFlow] invalid_input reason=%s source_version=%s gex_regime=%s",
+            str(snapshot.invalid_reason or ACTIVE_OPTIONS_INVALID_REASON_MISSING_INPUT),
+            int(snapshot.source_version or 0),
+            resolved_gex_regime,
+        )
         raise RuntimeError(
             "active_options_input_invalid: reason=%s gex_regime=%s"
             % (str(snapshot.invalid_reason or ACTIVE_OPTIONS_INVALID_REASON_MISSING_INPUT), resolved_gex_regime)
         )
+
+    summary = _summarize_active_options_input(snapshot)
+    source_version = int(snapshot.source_version or 0)
+    if source_version > 0 and _service_latest_source_version(ctr) == source_version:
+        logger.debug(
+            "[ActiveOptionsFlow] source_version_already_synced=%s skip_housekeeping_compute=true",
+            source_version,
+        )
+        return _next_input_version(snapshot, last_source_version)
+    logger.debug(
+        "[ActiveOptionsFlow] input source_version=%s valid=%s gex_regime=%s "
+        "chain_size=%s day_volume_gt_zero=%s current_volume_gt_zero=%s "
+        "turnover_gt_zero=%s gamma_nonzero=%s",
+        int(snapshot.source_version or 0),
+        bool(snapshot.valid),
+        resolved_gex_regime,
+        summary["chain_size"],
+        summary["day_volume_gt_zero"],
+        summary["current_volume_gt_zero"],
+        summary["turnover_gt_zero"],
+        summary["gamma_nonzero"],
+    )
 
     await ctr.active_options_service.update_background(
         chain=snapshot.chain,
@@ -143,6 +219,7 @@ async def _update_active_options_from_shared_input(
         ttm_seconds=snapshot.ttm_seconds,
         redis=ctr.redis_service.client,
         limit=ACTIVE_OPTIONS_LIMIT,
+        source_version=source_version,
     )
     _log_active_options_flow_snapshot(
         ctr,

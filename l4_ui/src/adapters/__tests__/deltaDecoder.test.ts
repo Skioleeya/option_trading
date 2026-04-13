@@ -111,3 +111,30 @@ describe('DeltaDecoder.applyPatch', () => {
         }
     })
 })
+
+describe('DeltaDecoder.validatePayload active_options contract', () => {
+    function withActiveOptions(rows: unknown[]): DashboardPayload {
+        return {
+            ...PREV,
+            agent_g: {
+                data: {
+                    ui_state: {
+                        active_options: rows,
+                    },
+                },
+            } as unknown as DashboardPayload['agent_g'],
+        }
+    }
+
+    it('accepts empty active_options rows (premarket/no-qualified-flow)', () => {
+        const payload = withActiveOptions([])
+        const result = DeltaDecoder.validatePayload(payload)
+        expect(result.ok).toBe(true)
+    })
+
+    it('rejects active_options rows above fixed render capacity', () => {
+        const payload = withActiveOptions(new Array(6).fill({ is_placeholder: true }))
+        const result = DeltaDecoder.validatePayload(payload)
+        expect(result.ok).toBe(false)
+    })
+})

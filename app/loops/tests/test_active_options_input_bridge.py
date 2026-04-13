@@ -6,7 +6,6 @@ import pyarrow as pa
 import pytest
 
 from app.loops.compute_loop import _publish_active_options_input
-from app.loops.shared_state import SharedLoopState
 
 
 @dataclass
@@ -51,11 +50,7 @@ def _l0_snapshot() -> dict[str, object]:
 
 
 def test_publish_active_options_input_uses_enriched_snapshot_chain_and_atm_iv() -> None:
-    state = SharedLoopState()
-    _publish_active_options_input(state, l0_snapshot=_l0_snapshot(), l1_snapshot=_L1Snapshot())
-
-    snap = state.latest_active_options_input
-    assert snap is not None
+    snap = _publish_active_options_input(l0_snapshot=_l0_snapshot(), l1_snapshot=_L1Snapshot())
     assert snap.valid is True
     assert snap.source_version == 1485
     assert snap.atm_iv == pytest.approx(0.1458)
@@ -68,7 +63,6 @@ def test_publish_active_options_input_uses_enriched_snapshot_chain_and_atm_iv() 
 
 
 def test_publish_active_options_input_accepts_dict_chain_elements_contract() -> None:
-    state = SharedLoopState()
     l1_snapshot = {
         "version": 1485,
         "spot": 655.83,
@@ -85,10 +79,7 @@ def test_publish_active_options_input_accepts_dict_chain_elements_contract() -> 
             }
         ],
     }
-    _publish_active_options_input(state, l0_snapshot=_l0_snapshot(), l1_snapshot=l1_snapshot)
-
-    snap = state.latest_active_options_input
-    assert snap is not None
+    snap = _publish_active_options_input(l0_snapshot=_l0_snapshot(), l1_snapshot=l1_snapshot)
     assert snap.valid is True
     assert snap.atm_iv == pytest.approx(0.1458)
     row = snap.chain[0]

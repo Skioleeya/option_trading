@@ -1,15 +1,14 @@
 # Handoff (Index)
 
 ## Active Handoff
-- Path: notes/sessions/2026-04-03/impl-tdd-module-structure-remediation/handoff.md
-- Meta: notes/sessions/2026-04-03/impl-tdd-module-structure-remediation/meta.yaml
+- Path: notes/sessions/2026-04-08/fix-l4-active-options-empty-contract/handoff.md
+- Meta: notes/sessions/2026-04-08/fix-l4-active-options-empty-contract/meta.yaml
 
 ## Latest Outcome
-- Session: 2026-04-03/impl-tdd-module-structure-remediation
-- Summary: Completed hard-cut remediation: deleted L2 flow compatibility modules, removed ActiveOptions fallback semantics, added L0 Arrow writer-ready startup gate, synchronized L3/L4 contracts, and verified with strict gate + real-host first-100 startup logs.
+- Session: 2026-04-08/fix-l4-active-options-empty-contract
+- Summary: Completed ActiveOptions hard cut to day cumulative volume (`volume`) for gate/sort, removed `current_volume` fallback behavior, and synced L0/L4 SOP.
 
 ## Next Session Bootstrap
 1. Read this file.
 2. Read notes/context/project_state.md and notes/context/open_tasks.md.
 3. Open the active session folder and continue from its handoff.md.
-

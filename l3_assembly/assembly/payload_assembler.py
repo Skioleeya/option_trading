@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import time
 from datetime import datetime, timezone
 from typing import Any
@@ -60,7 +61,12 @@ class PayloadAssemblerV2:
             snap_data.source_data_timestamp_utc,
             signal,
         )
-        ui_state = self._build_ui_state(snap_data, active_options or ())
+        ui_flip_level = self._resolve_ui_flip_level(snap_data)
+        ui_state = self._build_ui_state(
+            snap_data,
+            active_options or (),
+            flip_level=ui_flip_level,
+        )
         fused_signal, micro_structure = self._extract_l2_payload(decision, ui_metrics)
         now_iso = datetime.now(timezone.utc).isoformat()
 
@@ -81,11 +87,7 @@ class PayloadAssemblerV2:
             atm_iv=snap_data.atm_iv,
             net_gex=snap_data.net_gex,
             gamma_walls={"call_wall": snap_data.call_wall, "put_wall": snap_data.put_wall},
-            gamma_flip_level=(
-                snap_data.zero_gamma_level
-                if snap_data.zero_gamma_level
-                else snap_data.flip_level_cumulative
-            ),
+            gamma_flip_level=ui_flip_level,
             fused_signal=fused_signal,
             micro_structure=micro_structure,
             header_volatility=snap_data.header_volatility,
@@ -207,7 +209,26 @@ class PayloadAssemblerV2:
     ) -> str:
         return to_utc_iso(source_timestamp) or to_utc_iso(signal.computed_at) or default_now_iso
 
-    def _build_ui_state(self, snap: SnapshotData, active_options: Any) -> UIState:
+    @staticmethod
+    def _resolve_ui_flip_level(snap: SnapshotData) -> float | None:
+        level = getattr(snap, "zero_gamma_level", None)
+        if level is None:
+            return None
+        try:
+            numeric = float(level)
+        except (TypeError, ValueError):
+            return None
+        if not math.isfinite(numeric) or numeric <= 0.0:
+            return None
+        return numeric
+
+    def _build_ui_state(
+        self,
+        snap: SnapshotData,
+        active_options: Any,
+        *,
+        flip_level: float | None,
+    ) -> UIState:
         try:
             micro_stats = MicroStatsPresenterV2.build(
                 gex_regime=snap.gex_regime,
@@ -242,7 +263,7 @@ class PayloadAssemblerV2:
             depth_profile = DepthProfilePresenterV2.build(
                 per_strike_gex=snap.per_strike_gex,
                 spot=snap.spot if snap.spot else None,
-                flip_level=snap.flip_level_cumulative if snap.flip_level_cumulative else None,
+                flip_level=flip_level,
             )
         except Exception as exc:
             logger.warning("[L3 Assembler] DepthProfile failed: %s", exc)

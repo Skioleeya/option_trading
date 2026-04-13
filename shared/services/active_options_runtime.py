@@ -20,12 +20,12 @@ from shared_rust.services import (
     active_options_normalize_and_filter_chain,
     active_options_rank_outputs,
 )
+from .active_options_runtime_metrics import summarize_chain_input
 
 from .active_options_constants import (
     ACTIVE_OPTIONS_CHARM_SURGE_END_HOUR_ET,
     ACTIVE_OPTIONS_CHARM_SURGE_START_HOUR_ET,
     ACTIVE_OPTIONS_DEFAULT_LIMIT,
-    ACTIVE_OPTIONS_SWITCH_CONFIRM_TICKS,
 )
 
 logger = logging.getLogger(__name__)
@@ -51,14 +51,17 @@ class ActiveOptionsRuntimeService:
         self._oi_store = PersistentOIStore()
         self._latest_payload: list[dict[str, Any]] = []
         self._latest_signature: tuple[tuple[str, str, float], ...] | None = None
-        self._pending_signature: tuple[tuple[str, str, float], ...] | None = None
-        self._pending_rows: list[dict[str, Any]] = []
-        self._pending_hits = 0
-        self._switch_confirm_ticks = ACTIVE_OPTIONS_SWITCH_CONFIRM_TICKS
         self._empty_filter_count = 0
         self._last_empty_filter_at_utc: str | None = None
         self._last_filtered_candidates_count = 0
         self._last_update_at_utc: str | None = None
+        self._last_input_chain_size = 0
+        self._last_input_day_volume_gt_zero = 0
+        self._last_input_current_volume_gt_zero = 0
+        self._last_input_turnover_gt_zero = 0
+        self._last_input_gamma_nonzero = 0
+        self._spot_window_steps = max(0, int(settings.flow_active_spot_window_steps))
+        self._latest_source_version = 0
         self._halted = False
         self._halt_reason: str | None = None
         self._halted_at_utc: str | None = None
@@ -100,12 +103,18 @@ class ActiveOptionsRuntimeService:
             "empty_filter_count": self._empty_filter_count,
             "last_empty_filter_at_utc": self._last_empty_filter_at_utc,
             "filtered_candidates_count": self._last_filtered_candidates_count,
+            "input_chain_size_last": self._last_input_chain_size,
+            "input_day_volume_gt_zero_last": self._last_input_day_volume_gt_zero,
+            "input_current_volume_gt_zero_last": self._last_input_current_volume_gt_zero,
+            "input_turnover_gt_zero_last": self._last_input_turnover_gt_zero,
+            "input_gamma_nonzero_last": self._last_input_gamma_nonzero,
+            "spot_window_steps": self._spot_window_steps,
+            "latest_source_version": self._latest_source_version,
             "strict_no_fallback": True,
             "halted": self._halted,
             "halt_reason": self._halt_reason,
             "halted_at_utc": self._halted_at_utc,
             "last_update_at_utc": self._last_update_at_utc,
-            "min_volume_threshold": int(getattr(settings, "flow_active_min_volume", 100) or 100),
         }
 
     async def update_background(
@@ -117,6 +126,7 @@ class ActiveOptionsRuntimeService:
         ttm_seconds: float | None = None,
         redis: Any | None = None,
         limit: int = ACTIVE_OPTIONS_DEFAULT_LIMIT,
+        source_version: int | None = None,
     ) -> None:
         if self._halted:
             raise ActiveOptionsHardFailure(
@@ -125,20 +135,54 @@ class ActiveOptionsRuntimeService:
 
         self._last_update_at_utc = self._utc_now_iso()
         target_limit = max(0, int(limit))
+        self._spot_window_steps = max(0, int(settings.flow_active_spot_window_steps))
+        if source_version is not None:
+            source_version_int = max(0, int(source_version))
+            if source_version_int > 0:
+                self._latest_source_version = source_version_int
+
+        input_stats = summarize_chain_input(chain=chain)
+        self._last_input_chain_size = int(input_stats["chain_size"])
+        self._last_input_day_volume_gt_zero = int(input_stats["day_volume_gt_zero"])
+        self._last_input_current_volume_gt_zero = int(input_stats["current_volume_gt_zero"])
+        self._last_input_turnover_gt_zero = int(input_stats["turnover_gt_zero"])
+        self._last_input_gamma_nonzero = int(input_stats["gamma_nonzero"])
+        logger.debug(
+            "[ActiveOptionsFlow] runtime_input chain_size=%s spot_window_steps=%s "
+            "day_volume_gt_zero=%s current_volume_gt_zero=%s "
+            "turnover_gt_zero=%s gamma_nonzero=%s",
+            self._last_input_chain_size,
+            self._spot_window_steps,
+            self._last_input_day_volume_gt_zero,
+            self._last_input_current_volume_gt_zero,
+            self._last_input_turnover_gt_zero,
+            self._last_input_gamma_nonzero,
+        )
         if self._apply_zero_limit_guard(target_limit):
             return
 
-        filtered = self._normalize_and_filter_chain(chain=chain, min_volume=settings.flow_active_min_volume)
+        filtered = self._normalize_and_filter_chain(
+            chain=chain,
+            spot=spot,
+            spot_window_steps=self._spot_window_steps,
+        )
         self._last_filtered_candidates_count = len(filtered)
+        logger.debug(
+            "[ActiveOptionsFlow] filtered_candidates count=%s target_limit=%s halted=%s",
+            self._last_filtered_candidates_count,
+            target_limit,
+            self._halted,
+        )
 
         if not filtered and target_limit > 0:
             self._empty_filter_count += 1
             self._last_empty_filter_at_utc = self._utc_now_iso()
             self._halt_and_raise(
-                reason="subthreshold_volume_no_candidates",
+                reason="normalized_chain_empty_no_candidates",
                 chain_size=len(chain),
-                min_volume=int(getattr(settings, "flow_active_min_volume", 100) or 100),
                 target_limit=target_limit,
+                turnover_gt_zero=self._last_input_turnover_gt_zero,
+                gamma_nonzero=self._last_input_gamma_nonzero,
             )
 
         await self._save_oi_snapshot_if_enabled(redis=redis, filtered=filtered)
@@ -165,16 +209,15 @@ class ActiveOptionsRuntimeService:
                 outputs_count=len(outputs),
                 target_limit=target_limit,
             )
-        self._commit_or_hold_candidate(rows=self._sanitize_output_rows(rows), signature=signature)
+        self._latest_payload = self._sanitize_output_rows(rows)
+        self._latest_signature = signature
 
     def _apply_zero_limit_guard(self, target_limit: int) -> bool:
         if target_limit > 0:
             return False
         self._latest_payload = []
         self._latest_signature = None
-        self._pending_signature = None
-        self._pending_rows = []
-        self._pending_hits = 0
+        self._latest_source_version = 0
         return True
 
     def _halt_and_raise(self, reason: str, **context: Any) -> None:
@@ -193,9 +236,16 @@ class ActiveOptionsRuntimeService:
     def _normalize_and_filter_chain(
         *,
         chain: list[dict[str, Any]],
-        min_volume: int,
+        spot: float,
+        spot_window_steps: int,
     ) -> list[dict[str, Any]]:
-        return list(active_options_normalize_and_filter_chain(chain=chain, min_volume=min_volume))
+        return list(
+            active_options_normalize_and_filter_chain(
+                chain=chain,
+                spot=spot,
+                spot_window_steps=spot_window_steps,
+            )
+        )
 
     @staticmethod
     async def _save_oi_snapshot_if_enabled(
@@ -257,39 +307,6 @@ class ActiveOptionsRuntimeService:
             row["flow_signal_reason"] = None
             sanitized.append(row)
         return sanitized
-
-    def _commit_or_hold_candidate(
-        self,
-        *,
-        rows: list[dict[str, Any]],
-        signature: tuple[tuple[str, str, float], ...],
-    ) -> None:
-        if self._latest_signature is None:
-            self._latest_payload = rows
-            self._latest_signature = signature
-            self._pending_signature = None
-            self._pending_rows = []
-            self._pending_hits = 0
-            return
-        if signature == self._latest_signature:
-            self._latest_payload = rows
-            self._pending_signature = None
-            self._pending_rows = []
-            self._pending_hits = 0
-            return
-        if signature != self._pending_signature:
-            self._pending_signature = signature
-            self._pending_rows = rows
-            self._pending_hits = 1
-            return
-        self._pending_hits += 1
-        if self._pending_hits < self._switch_confirm_ticks:
-            return
-        self._latest_payload = self._pending_rows
-        self._latest_signature = self._pending_signature
-        self._pending_signature = None
-        self._pending_rows = []
-        self._pending_hits = 0
 
     @staticmethod
     def _rank_outputs(outputs: list[FlowEngineOutput]) -> list[FlowEngineOutput]:
