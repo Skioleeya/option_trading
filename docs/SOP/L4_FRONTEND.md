@@ -66,7 +66,7 @@ flowchart LR
 - `MtfFlow` 必须仅消费纯状态字段（`state=-1|0|1` + 物理标量），不得消费后端样式字段
 - `MtfFlow` 的颜色/边框/动画必须由前端白名单 `Record<FlowState, VisualTokenSet>` 本地映射生成
 - 对脏 payload 中的 `color/red/green/dot_color/text_color/border/animate/align_color` 必须忽略，禁止视觉状态倒灌
-- `TacticalTriad` / `SkewDynamics` 的视觉 token 必须由前端 model 基于状态标签本地生成，组件不得直接信任后端 class token。`TacticalTriad` 强度白名单固定为 `EXTREME/HIGH/MEDIUM/LOW`（不兼容 `MODERATE`）；状态词白名单必须覆盖 L3 tactical labels（如 `BUY/SELL/TOXIC/FLIP`），未知词统一回落中性。`S-VOL` 若收到占位状态 `S-VOL` 且存在有效 `sub_label/value`，前端必须推导为可交易态（`GRIND/FLIP/TOXIC/STBL`），禁止在状态位显示占位词。`SkewDynamics` 阈值与公式来源固定为 L3（`rr25_call_minus_put` + `skew_speculative_max/skew_defensive_min`）；L4 只允许白名单状态（`SPECULATIVE/DEFENSIVE/NEUTRAL/UNAVAILABLE`）并负责本地 token 映射，未知状态硬切 `NEUTRAL`。
+- `TacticalTriad` / `SkewDynamics` 的视觉 token 必须由前端 model 基于状态标签本地生成，组件不得直接信任后端 class token。`TacticalTriad` 强度白名单固定为 `EXTREME/HIGH/MEDIUM/LOW`（不兼容 `MODERATE`）；状态词白名单必须覆盖 L3 tactical labels（如 `BUY/SELL/TOXIC/FLIP`），未知词统一回落中性。`S-VOL` 若收到占位状态 `S-VOL` 且存在有效 `sub_label/value`，前端必须推导为可交易态（`GRIND/FLIP/TOXIC/STBL`），禁止在状态位显示占位词。`SkewDynamics` 阈值与公式来源固定为 L3（`rr25_call_minus_put` + `skew_rr25_defensive_max/skew_rr25_speculative_min`）；L4 只允许白名单状态（`SPECULATIVE/DEFENSIVE/NEUTRAL/UNAVAILABLE`）并负责本地 token 映射，未知状态硬切 `NEUTRAL`。
 - `AtmDecayChart` 时间窗口初始化必须固定到当日 ET `09:30-16:00`，不得因本地 ring buffer 裁剪导致只显示午后片段
 - `AtmDecayChart` 交互必须采用 Focus+Context：曲线命中时仅高亮命中家族（PUT/CALL/STRADDLE），其他家族临时隐藏，离开图表后复位
 - `AtmDecayChart` 在 `displayMode=both` 时必须“同族双线聚焦”：命中某家族后，raw+smoothed 同时高亮；非命中家族四条线同步隐藏

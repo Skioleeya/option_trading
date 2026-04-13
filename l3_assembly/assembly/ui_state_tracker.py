@@ -304,10 +304,10 @@ class UIStateTracker:
             }
 
         skew_state = "NEUTRAL"
-        if skew_val < getattr(settings, "skew_speculative_max", -0.10):
-            skew_state = "SPECULATIVE"
-        elif skew_val > getattr(settings, "skew_defensive_min", 0.15):
+        if skew_val <= settings.skew_rr25_defensive_max:
             skew_state = "DEFENSIVE"
+        elif skew_val >= settings.skew_rr25_speculative_min:
+            skew_state = "SPECULATIVE"
 
         return {
             "skew_value": skew_val,
