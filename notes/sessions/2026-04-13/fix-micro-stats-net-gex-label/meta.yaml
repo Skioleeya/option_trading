@@ -1,0 +1,35 @@
+session_id: "2026-04-13/fix-micro-stats-net-gex-label"
+title: "fix micro stats net gex label hard-cut"
+scope: "l3 gex regime contract hard-fail and microstats fallback removal"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-04-13 15:28:52 -04:00"
+updated_at_et: "2026-04-13 15:31:53 -04:00"
+parent_session: "2026-04-08/fix-l4-active-options-empty-contract"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "00a88fd"
+head_commit: "00a88fd"
+
+files_changed:
+  - "l3_assembly/assembly/gex_regime_contract.py"
+  - "l3_assembly/assembly/ui_state_tracker.py"
+  - "l3_assembly/presenters/micro_stats.py"
+  - "l3_assembly/presenters/ui/micro_stats/presenter.py"
+  - "app/tests/test_ui_state_tracker_gex_regime.py"
+  - "app/tests/test_micro_stats_net_gex_contract.py"
+  - "docs/SOP/L3_OUTPUT_ASSEMBLY.md"
+  - "notes/sessions/2026-04-13/fix-micro-stats-net-gex-label/project_state.md"
+  - "notes/sessions/2026-04-13/fix-micro-stats-net-gex-label/open_tasks.md"
+  - "notes/sessions/2026-04-13/fix-micro-stats-net-gex-label/handoff.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId fix-micro-stats-net-gex-label -Title \"fix micro stats net gex label hard-cut\" -Scope \"l3 gex regime contract hard-fail and microstats fallback removal\" -Owner \"Codex\" -ParentSession \"2026-04-08/fix-l4-active-options-empty-contract\" -Timezone \"Eastern Standard Time\""
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/tests/test_ui_state_tracker_gex_regime.py app/tests/test_micro_stats_net_gex_contract.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "scripts/test/run_pytest.ps1 app/tests/test_ui_state_tracker_gex_regime.py app/tests/test_micro_stats_net_gex_contract.py (8 passed)"
+  - "scripts/validate_session.ps1 -Strict (PASS)"
+tests_failed: []
+blockers: []
+notes:
+  - "Root cause: object-path string gex_regime was downgraded to NEUTRAL due to .value-only extraction."

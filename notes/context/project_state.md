@@ -1,16 +1,16 @@
 ﻿# Project State (Index)
 
 ## Active Session
-- Path: notes/sessions/2026-04-08/fix-l4-active-options-empty-contract/project_state.md
-- Meta: notes/sessions/2026-04-08/fix-l4-active-options-empty-contract/meta.yaml
+- Path: notes/sessions/2026-04-13/retune-gex-superpin-4b/project_state.md
+- Meta: notes/sessions/2026-04-13/retune-gex-superpin-4b/meta.yaml
 - Status: ACTIVE
 
 ## Recent Sessions
+- notes/sessions/2026-04-13/retune-gex-superpin-4b/
+- notes/sessions/2026-04-13/fix-micro-stats-net-gex-label/
 - notes/sessions/2026-04-08/fix-l4-active-options-empty-contract/
 - notes/sessions/2026-04-03/impl-tdd-module-structure-remediation/
 - notes/sessions/2026-04-03/fix-activeoptions-root-cause-no-fallback/
-- notes/sessions/2026-04-03/impl-20260403-hard-fail-l0-l4/
-- notes/sessions/2026-04-03/impl-20260403-l1-wall-context-rust-wave3-lock/
 
 ## Global Rules
 - Session folders are immutable records; do not overwrite prior sessions.

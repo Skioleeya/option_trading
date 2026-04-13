@@ -14,9 +14,9 @@ class AgentGConfig(BaseConfig):
     fusion_confidence_threshold: float = Field(default=0.5)
 
     # GEX thresholds are configured in Million USD (MMUSD).
-    # Current production scale uses 20B/100B cutoffs => 20_000 / 100_000 MMUSD.
-    gex_neutral_threshold: float = Field(default=20000.0)      # 20B
-    gex_super_pin_threshold: float = Field(default=100000.0)   # 100B
+    # Current production scale uses 0.8B/4B cutoffs => 800 / 4_000 MMUSD.
+    gex_neutral_threshold: float = Field(default=800.0)        # 0.8B
+    gex_super_pin_threshold: float = Field(default=4000.0)     # 4B
     gex_strong_positive: float = Field(default=50000.0)        # 50B
     gex_strong_negative: float = Field(default=-50000.0)       # -50B
     gex_moderate_threshold: float = Field(default=30000.0)     # 30B

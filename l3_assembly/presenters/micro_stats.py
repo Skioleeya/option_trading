@@ -16,6 +16,7 @@ from l3_assembly.events.payload_events import (
     MicroStatsState,
     VALID_BADGE_TOKENS,
 )
+from l3_assembly.presenters.ui.micro_stats.presenter import MicroStatsPresenter
 
 
 # ── Badge normalizer ── keeps frontend token semantics while supporting aliases
@@ -66,18 +67,12 @@ class MicroStatsPresenterV2:
         momentum: str,
     ) -> MicroStatsState:
         """Build typed MicroStatsState by calling the legacy presenter."""
-        try:
-            from l3_assembly.presenters.ui.micro_stats.presenter import MicroStatsPresenter
-            raw = MicroStatsPresenter.build(
-                gex_regime=gex_regime,
-                wall_dyn=wall_dyn,
-                vanna=vanna,
-                momentum=momentum,
-            )
-        except ImportError:
-            # Legacy backend not on path (e.g. isolated test env) — use minimal fallback
-            raw = cls._fallback_build(gex_regime, wall_dyn, vanna, momentum)
-
+        raw = MicroStatsPresenter.build(
+            gex_regime=gex_regime,
+            wall_dyn=wall_dyn,
+            vanna=vanna,
+            momentum=momentum,
+        )
         return cls._dict_to_state(raw)
 
     @classmethod
@@ -100,18 +95,3 @@ class MicroStatsPresenterV2:
             momentum=_card(raw.get("momentum")),
         )
 
-    @staticmethod
-    def _fallback_build(
-        gex_regime: str,
-        wall_dyn: dict[str, Any],
-        vanna: str,
-        momentum: str,
-    ) -> dict[str, Any]:
-        """Minimal fallback for when legacy presenter is unavailable."""
-        neutral_card = {"label": "—", "badge": "badge-neutral"}
-        return {
-            "net_gex":  {"label": gex_regime or "NEUTRAL", "badge": "badge-neutral"},
-            "wall_dyn": neutral_card,
-            "vanna":    {"label": vanna or "NORMAL",   "badge": "badge-neutral"},
-            "momentum": {"label": momentum or "NEUTRAL", "badge": "badge-neutral"},
-        }

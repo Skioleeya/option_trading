@@ -89,10 +89,11 @@ class MicroStatsPresenter:
         wall_key = _last_committed_wall_key
 
         # ─── 2. 查表组装 UI 状态 ──────────────────────────────────────────
+        gex_card = mappings.GEX_REGIME_MAP.get(gex_regime)
+        if gex_card is None:
+            raise ValueError(f"Unknown gex_regime: {gex_regime!r}")
         return {
-            "net_gex":  mappings.GEX_REGIME_MAP.get(
-                gex_regime, mappings.GEX_REGIME_MAP["NEUTRAL"]
-            ),
+            "net_gex": gex_card,
             "wall_dyn": mappings.WALL_DYNAMICS_MAP.get(
                 wall_key, mappings.WALL_DYNAMICS_MAP["STABLE"]
             ),

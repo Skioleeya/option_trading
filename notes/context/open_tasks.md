@@ -1,7 +1,7 @@
 ﻿# Open Tasks (Index)
 
 ## Active Session Tasks
-- Path: notes/sessions/2026-04-08/fix-l4-active-options-empty-contract/open_tasks.md
+- Path: notes/sessions/2026-04-13/retune-gex-superpin-4b/open_tasks.md
 
 ## Global Backlog (Cross-Session)
 - [ ] Monitor strict startup gate telemetry for `writer_not_ready_timeout` in live market open window; retune timeout only with evidence.

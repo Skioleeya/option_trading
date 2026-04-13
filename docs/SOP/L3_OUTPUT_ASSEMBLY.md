@@ -56,6 +56,7 @@ flowchart LR
 - `active_options` 后端仅输出真实行；固定 5 行展示由 L4 model 层补占位，不得在 L3/L0 伪造 fallback 行
 - `active_options` 必须按每个 source tick 直接提交最新 Top5 结果，禁止使用多 tick signature 确认门限（如 switch-confirm）延后提交，防止 UI 排行冻结
 - `active_options.is_placeholder`（bool）与 `active_options.slot_index`（1..5）为固定槽位契约字段，必须稳定透传
+- `ui_state.micro_stats.net_gex` 的上游 `gex_regime` 合同只允许 `SUPER_PIN|DAMPING|ACCELERATION|NEUTRAL`；未知值必须在 L3 fail-fast 抛错，禁止静默降级到 `NEUTRAL`
 - `shared/services/active_options_runtime.py`、`shared/services/active_options_input.py`、`shared/services/active_options_engines.py` 现为 root-neutral Python surface；实际 owner 位于 `shared_rust.services`，禁止恢复 `_active_options_*` Python helper owner
 - `mtf_flow` 必须是纯状态合同：`m1/m5/m15.{state,relative_displacement,pressure_gradient,distance_to_vacuum,kinetic_level}`
 - `mtf_flow` 严禁携带视觉字段（如 `dot_color/text_color/border/animate/align_color`）与统计语义字段（如 `zscore/z/strength`）

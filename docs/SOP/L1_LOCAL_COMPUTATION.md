@@ -58,6 +58,8 @@ flowchart LR
   - `gex_per_contract = gamma * open_interest * contract_multiplier * spot^2 * 0.01 / 1_000_000`
   - `total_call_gex` 与 `total_put_gex` 必须是非负幅度值（单位：`Million USD`）
   - `net_gex = total_call_gex - total_put_gex`（输出单位：`Million USD`）
+  - `gex_regime` 正向分级阈值（`Million USD`）：`<800 => NEUTRAL`、`[800, 4000) => DAMPING`、`>=4000 => SUPER_PIN`
+  - `net_gex < 0` 必须保持 `ACCELERATION`，不参与 `DAMPING/SUPER_PIN` 正向分级
   - `flip_level_cumulative` 必须基于按 strike 排序后的 cumulative net GEX 首次过零点（深度图语义）
   - `zero_gamma_level` 必须基于 spot 网格重算 `net_gex(S)` 后的过零插值（真实 zero-gamma 语义）
   - `flip_level` 作为兼容别名，等于 `flip_level_cumulative`

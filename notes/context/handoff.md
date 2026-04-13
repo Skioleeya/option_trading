@@ -1,12 +1,12 @@
-# Handoff (Index)
+﻿# Handoff (Index)
 
 ## Active Handoff
-- Path: notes/sessions/2026-04-08/fix-l4-active-options-empty-contract/handoff.md
-- Meta: notes/sessions/2026-04-08/fix-l4-active-options-empty-contract/meta.yaml
+- Path: notes/sessions/2026-04-13/retune-gex-superpin-4b/handoff.md
+- Meta: notes/sessions/2026-04-13/retune-gex-superpin-4b/meta.yaml
 
 ## Latest Outcome
-- Session: 2026-04-08/fix-l4-active-options-empty-contract
-- Summary: Completed ActiveOptions hard cut to day cumulative volume (`volume`) for gate/sort, removed `current_volume` fallback behavior, and synced L0/L4 SOP.
+- Session: 2026-04-13/retune-gex-superpin-4b
+- Summary: Recalibrated GEX thresholds to 0.8B/4B (MMUSD 800/4000), validated with tests and live chain check (`net_gex>4000 => SUPER PIN`).
 
 ## Next Session Bootstrap
 1. Read this file.

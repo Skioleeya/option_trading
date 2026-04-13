@@ -11,6 +11,7 @@ import math
 from types import SimpleNamespace
 from typing import Any
 
+from l3_assembly.assembly.gex_regime_contract import parse_gex_regime
 from shared.config import settings
 from shared_rust.services import HeaderVolatilityContextService
 from shared_rust.services import (
@@ -65,7 +66,7 @@ class UIStateTracker:
 
         vanna_state_raw = getattr(getattr(vanna_view, "state", None), "value", "UNAVAILABLE")
         vanna_state_str = normalize_svol_state(vanna_state_raw)
-        gex_regime_str = getattr(getattr(vanna_view, "gex_regime", None), "value", "NEUTRAL")
+        gex_regime_str = parse_gex_regime(getattr(vanna_view, "gex_regime", None))
 
         svol_corr, svol_state = resolve_svol_fields(vanna_view)
 
