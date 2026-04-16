@@ -83,7 +83,6 @@ export interface MicroStructureState {
     iv_velocity: IVVelocityResult | null
     wall_migration: WallMigrationResult | null
     vanna_flow_result: VannaFlowResult | null
-    net_vanna_raw_sum?: number | null
 }
 
 export interface GammaWalls {

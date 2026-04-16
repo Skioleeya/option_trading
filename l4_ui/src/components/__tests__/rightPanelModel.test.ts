@@ -15,11 +15,6 @@ describe('rightPanelModel', () => {
                 signal: 'NEUTRAL',
                 as_of: '2026-03-11T14:20:00Z',
                 data: {
-                    micro_structure: {
-                        micro_structure_state: {
-                            net_vanna_raw_sum: 1250000,
-                        },
-                    },
                     fused_signal: {
                         direction: 'BULLISH',
                         confidence: 0.8,
@@ -66,8 +61,6 @@ describe('rightPanelModel', () => {
 
         expect(out.fused?.direction).toBe('BULLISH')
         expect(out.netGex?.label).toBe('GEX +88M')
-        expect(out.rawVanna.value).toBe('+1.25M')
-        expect(out.rawVanna.stateLabel).toBe('POSITIVE')
         expect(out.activeOptions).toHaveLength(RIGHT_PANEL_ACTIVE_OPTION_ROWS)
         expect(out.activeOptions[0].symbol).toBe('SPY')
         expect(out.activeOptions[0].slot_index).toBe(1)
@@ -79,7 +72,6 @@ describe('rightPanelModel', () => {
 
         expect(out.fused).toBeNull()
         expect(out.netGex).toBeNull()
-        expect(out.rawVanna.stateLabel).toBe('UNAVAILABLE')
         expect(out.tacticalTriad.vrp.state_label).toBe('VRP')
         expect(out.skewDynamics.state_label).toBe('NEUTRAL')
         expect(out.mtfFlow.alignLabel).toBe('DIVERGE')
@@ -97,11 +89,6 @@ describe('rightPanelModel', () => {
                 signal: 'NEUTRAL',
                 as_of: '2026-03-11T14:20:00Z',
                 data: {
-                    micro_structure: {
-                        micro_structure_state: {
-                            net_vanna_raw_sum: -842500,
-                        },
-                    },
                     fused_signal: {
                         direction: 'NEUTRAL',
                         confidence: 0.5,
@@ -195,8 +182,6 @@ describe('rightPanelModel', () => {
         const out = deriveRightPanelContracts(payload)
 
         expect(out.netGex?.badge).toBe('badge-neutral')
-        expect(out.rawVanna.value).toBe('-842.50K')
-        expect(out.rawVanna.badgeClass).toBe('badge-hollow-amber')
         expect(out.tacticalTriad.vrp.color_class).toBe('text-accent-red')
         expect(out.tacticalTriad.svol.state_label).toBe('GRIND')
         expect(out.skewDynamics.badge).toBe('badge-green')

@@ -9,7 +9,6 @@ import type {
 } from '../../types/dashboard'
 import { ActiveOptions } from '../right/ActiveOptions'
 import { MtfFlow } from '../right/MtfFlow'
-import { RightPanel } from '../right/RightPanel'
 import { SkewDynamics } from '../right/SkewDynamics'
 import { TacticalTriad } from '../right/TacticalTriad'
 
@@ -69,7 +68,6 @@ function makePayload(
                         iv_velocity: null,
                         wall_migration: null,
                         vanna_flow_result: null,
-                        net_vanna_raw_sum: 1250000,
                     },
                 },
                 ui_state: {
@@ -208,68 +206,6 @@ describe('Right panel typed contract integration', () => {
         expect(screen.getByText('88.12')).toBeInTheDocument()
         expect(screen.getByText('$1.25M')).toBeInTheDocument()
         expect(screen.getByText('50K')).toBeInTheDocument()
-    })
-
-    it('renders raw vanna card from micro_structure diagnostics contract', () => {
-        const tacticalTriad: TacticalTriadState = {
-            vrp: {
-                value: '+1.2%',
-                state_label: 'FAIR',
-                color_class: 'text-text-primary',
-                border_class: 'border-bg-border',
-                bg_class: 'bg-bg-card',
-                shadow_class: 'shadow-none',
-                animation: '',
-                sub_intensity: 'LOW',
-                sub_label: 'NEUTRAL',
-            },
-            charm: {
-                value: '2.4',
-                state_label: 'RISING',
-                color_class: 'text-accent-red',
-                border_class: 'border-accent-red/40',
-                bg_class: 'bg-accent-red/5',
-                shadow_class: 'shadow-none',
-                multiplier: null,
-                sub_intensity: 'LOW',
-                sub_label: 'REVERSAL',
-            },
-            svol: {
-                value: '0.31',
-                state_label: 'GRIND',
-                color_class: 'text-accent-cyan',
-                border_class: 'border-accent-cyan/40',
-                bg_class: 'bg-accent-cyan/5',
-                shadow_class: 'shadow-none',
-                animation: '',
-                sub_intensity: 'LOW',
-                sub_label: 'MOMENTUM',
-            },
-        }
-        const skewDynamics: SkewDynamicsState = {
-            value: '-0.33',
-            state_label: 'SPECULATIVE',
-            color_class: 'text-accent-red',
-            border_class: 'border-accent-red/40',
-            bg_class: 'bg-accent-red/5',
-            shadow_class: 'shadow-none',
-            badge: 'badge-red',
-        }
-        const mtfFlow: MtfFlowState = {
-            m1: { state: 1, relative_displacement: 0.02, pressure_gradient: 0.001, distance_to_vacuum: 0.3, kinetic_level: 0.8 },
-            m5: { state: 1, relative_displacement: 0.012, pressure_gradient: 0.0004, distance_to_vacuum: 0.5, kinetic_level: 0.7 },
-            m15: { state: 0, relative_displacement: 0, pressure_gradient: 0, distance_to_vacuum: 0.7, kinetic_level: 0.2 },
-        }
-
-        useDashboardStore.setState({
-            payload: makePayload(tacticalTriad, skewDynamics, mtfFlow, []),
-        })
-
-        render(<RightPanel mode="stable" />)
-
-        expect(screen.getByText('RAW VANNA')).toBeInTheDocument()
-        expect(screen.getByText('+1.25M')).toBeInTheDocument()
-        expect(screen.getByText('raw +1,250,000.00')).toBeInTheDocument()
     })
 
     it('renders unavailable skew as N/A with neutral styling contract', () => {
