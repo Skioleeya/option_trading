@@ -40,7 +40,7 @@
 ## Debt Record (Mandatory)
 - DEBT-EXEMPT: 本会话无新增债务，属阈值重标定闭环修复。
 - DEBT-OWNER: Codex
-- DEBT-DUE: 2026-04-13
+- DEBT-DUE: 2026-04-16
 - DEBT-RISK: 无
 - DEBT-NEW: 0
 - DEBT-CLOSED: 0

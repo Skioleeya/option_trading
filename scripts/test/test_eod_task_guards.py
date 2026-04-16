@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shutil
+import subprocess
 import sys
 import uuid
 from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+import pytest
 
 
 def _load_module(path: str, name: str):
@@ -71,6 +74,32 @@ def test_wait_parser_defaults_cover_late_post_close_writes():
     assert args.poll_seconds == 15.0
 
 
+def test_wait_for_settle_ignores_optional_source_churn():
+    snapshots = iter(
+        [
+            (_sig("research_raw", True, 20, 100), _sig("mtf_iv_series", False, required=False)),
+            (_sig("research_raw", True, 20, 100), _sig("mtf_iv_series", True, 1, 101, required=False)),
+            (_sig("research_raw", True, 20, 100), _sig("mtf_iv_series", True, 2, 102, required=False)),
+            (_sig("research_raw", True, 20, 100), _sig("mtf_iv_series", True, 3, 103, required=False)),
+            (_sig("research_raw", True, 20, 100), _sig("mtf_iv_series", True, 4, 104, required=False)),
+        ]
+    )
+    times = iter([0.0, 0.0, 5.0, 10.0, 15.0, 20.0])
+
+    result = WAIT_MOD.wait_for_settle(
+        capture_fn=lambda: next(snapshots),
+        stable_window_seconds=15.0,
+        timeout_seconds=60.0,
+        poll_seconds=5.0,
+        monotonic_fn=lambda: next(times),
+        time_ns_fn=lambda: 0,
+        sleep_fn=lambda _: None,
+    )
+
+    assert result.stable is True
+    assert result.elapsed_seconds == 15.0
+
+
 def test_wait_for_settle_returns_immediately_for_historical_stable_snapshot():
     snapshot = (_sig("research_raw", True, 10, 1_000_000_000), _sig("research_feature", True, 10, 1_000_000_000))
 
@@ -119,3 +148,63 @@ def test_check_manifest_sync_reports_row_hash_and_size_mismatch():
     reasons = {item["reason"] for item in result["mismatches"]}
     assert result["ok"] is False
     assert {"size_mismatch", "hash_mismatch", "row_mismatch"} <= reasons
+
+
+def test_runner_continues_archive_when_settle_guard_times_out():
+    if shutil.which("powershell") is None:
+        pytest.skip("powershell is required for run_eod_bucket.ps1 integration test")
+
+    base_dir = Path("tmp/pytest_cache/test_eod_task_guards")
+    base_dir.mkdir(parents=True, exist_ok=True)
+    tmp_path = base_dir / f"runner_case_{uuid.uuid4().hex[:8]}"
+    tmp_path.mkdir(parents=True, exist_ok=True)
+
+    date_str = "20260326"
+    data_root = tmp_path / "data"
+    out_root = tmp_path / "cold"
+
+    for folder, filename in (
+        ("atm_decay", f"atm_series_{date_str}.jsonl"),
+        ("mtf_iv", f"mtf_iv_series_{date_str}.jsonl"),
+        ("wall_migration", f"wall_series_{date_str}.jsonl"),
+    ):
+        path = data_root / folder / filename
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text('{"ok": true}\n', encoding="utf-8")
+
+    cmd = [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "scripts/ops/run_eod_bucket.ps1",
+        "-Date",
+        date_str,
+        "-DataRoot",
+        str(data_root),
+        "-OutRoot",
+        str(out_root),
+        "-SettleStableWindowSeconds",
+        "1",
+        "-SettleTimeoutSeconds",
+        "0.2",
+        "-SettlePollSeconds",
+        "0.1",
+        "-MaxAttempts",
+        "1",
+        "-RunLabel",
+        "pytest",
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+
+    assert result.returncode == 2
+    output = f"{result.stdout}\n{result.stderr}"
+    assert "settle_guard=timeout" in output
+    assert "archive=start" in output
+
+    manifest_path = out_root / "daily" / date_str / "manifest.json"
+    assert manifest_path.exists()
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["primary_day_type"] == "INCOMPLETE_SOURCE"
+    assert manifest["quality"]["classification_blocked"] is True

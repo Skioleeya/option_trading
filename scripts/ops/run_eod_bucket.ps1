@@ -6,9 +6,9 @@ param(
     [string]$DataRoot = "data",
     [string]$OutRoot = "data/cold",
     [string]$RunLabel = "manual",
-    [double]$SettleStableWindowSeconds = 300,
-    [double]$SettleTimeoutSeconds = 2400,
-    [double]$SettlePollSeconds = 15,
+    [double]$SettleStableWindowSeconds = 30,
+    [double]$SettleTimeoutSeconds = 900,
+    [double]$SettlePollSeconds = 5,
     [int]$MaxAttempts = 2
 )
 
@@ -40,8 +40,12 @@ for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
     Write-Host "[EODBucketRunner][$RunLabel] attempt=$attempt date=$Date settle_guard=start"
     & $PythonExe $waitScript --date $Date --root $DataRoot --stable-window-seconds $SettleStableWindowSeconds --timeout-seconds $SettleTimeoutSeconds --poll-seconds $SettlePollSeconds
     $settleExit = $LASTEXITCODE
-    if ($settleExit -ne 0) {
-        Write-Host "[EODBucketRunner][$RunLabel] attempt=$attempt settle_guard=failed exit=$settleExit"
+    if ($settleExit -eq 0) {
+        Write-Host "[EODBucketRunner][$RunLabel] attempt=$attempt settle_guard=passed"
+    } elseif ($settleExit -eq 2) {
+        Write-Warning "[EODBucketRunner][$RunLabel] attempt=$attempt settle_guard=timeout exit=2; continuing archive for INCOMPLETE_SOURCE evidence."
+    } else {
+        Write-Host "[EODBucketRunner][$RunLabel] attempt=$attempt settle_guard=error exit=$settleExit"
         exit $settleExit
     }
 

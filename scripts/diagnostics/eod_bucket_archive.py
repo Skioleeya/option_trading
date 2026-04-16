@@ -235,12 +235,19 @@ def run_archive(
         elif float(pct) > max_null_pct:
             quality_reasons.append(f"raw key column null ratio too high: {col}={float(pct):.4f}")
 
-    classification = _classify_metrics(raw_metrics, thresholds, primary_priority)
-    primary_day_type = str(classification["primary_day_type"])
-    context_modifiers = list(classification["context_modifiers"])
-    close_profile = str(classification["close_profile"])
-    rule_hits = list(classification["rule_hits"])
-    quality_status = "LOW_QUALITY_DAY" if required_missing > 0 or quality_reasons else "PASS"
+    quality_failed = required_missing > 0 or bool(quality_reasons)
+    quality_status = "LOW_QUALITY_DAY" if quality_failed else "PASS"
+    if quality_failed:
+        primary_day_type = "INCOMPLETE_SOURCE"
+        context_modifiers = []
+        close_profile = "UNKNOWN"
+        rule_hits = [f"classification_blocked:{reason}" for reason in quality_reasons] or ["classification_blocked:missing_required_source"]
+    else:
+        classification = _classify_metrics(raw_metrics, thresholds, primary_priority)
+        primary_day_type = str(classification["primary_day_type"])
+        context_modifiers = list(classification["context_modifiers"])
+        close_profile = str(classification["close_profile"])
+        rule_hits = list(classification["rule_hits"])
 
     manifest = {
         "version": VERSION,
@@ -254,6 +261,7 @@ def run_archive(
         "quality": {
             "status": quality_status,
             "reasons": quality_reasons,
+            "classification_blocked": quality_failed,
             "min_rows": {
                 "raw": int(quality_gate["min_rows_raw"]),
                 "feature": int(quality_gate["min_rows_feature"]),
@@ -284,6 +292,7 @@ def run_archive(
                 "close_profile": close_profile,
                 "status": quality_status,
                 "reasons": quality_reasons,
+                "classification_blocked": quality_failed,
                 "rows": rows_by_role,
                 "raw_metrics": raw_metrics,
                 "generated_at_utc": _utc_iso(),

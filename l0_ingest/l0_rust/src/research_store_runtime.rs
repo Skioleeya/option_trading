@@ -50,17 +50,14 @@ fn service_research_to_compact_record(py: Python<'_>, row: Bound<'_, PyAny>) -> 
         "call_wall",
         "put_wall",
         "flip_level",
-        "direction",
-        "confidence",
-        "gex_intensity",
-        "iv_regime",
-        "vpin_composite",
         "bbo_imbalance_raw",
-        "vol_accel_ratio",
-        "mtf_consensus",
-        "mtf_alignment",
-        "mtf_strength",
+        "direction_code",
+        "iv_regime_code",
+        "gex_intensity_code",
+        "confidence",
+        "max_impact",
         "dealer_squeeze_alert",
+        "stored_at",
     ];
     for key in keys {
         out.set_item(key, mapping_item(&row, key)?)?;
@@ -129,21 +126,21 @@ fn service_research_apply_interval(
     }
 
     let mut last_bucket: Option<i64> = None;
-    let mut last_direction: Option<String> = None;
+    let mut last_direction_code: Option<i64> = None;
     for item in records.try_iter()? {
         let row = item?;
         let timestamp = mapping_item(&row, "data_timestamp")?;
-        let direction = mapping_item(&row, "direction")?.extract::<String>().unwrap_or_default();
+        let direction_code = mapping_item(&row, "direction_code")?.extract::<Option<i64>>().ok().flatten();
         let parsed = timestamp.call_method0("timestamp");
         let bucket = match parsed {
             Ok(value) => value.extract::<f64>().ok().map(|inner| (inner / step as f64).floor() as i64),
             Err(_) => None,
         };
-        let event_keep = last_direction.as_deref().is_some_and(|prev| prev != direction);
+        let event_keep = last_direction_code.is_some_and(|prev| Some(prev) != direction_code);
         if event_keep || bucket != last_bucket {
             out.append(&row)?;
             last_bucket = bucket;
-            last_direction = Some(direction);
+            last_direction_code = direction_code;
         }
     }
     Ok(out.unbind())
@@ -215,35 +212,6 @@ fn service_research_latest_files(names: Vec<String>, prefix: String) -> Vec<Stri
 }
 
 #[pyfunction]
-#[pyo3(signature = (timestamp_seconds, direction, guard_actions_count, net_gex, last_direction=None, last_net_gex=None, last_bucket_5s=None))]
-fn service_research_emit_decision(
-    py: Python<'_>,
-    timestamp_seconds: f64,
-    direction: String,
-    guard_actions_count: usize,
-    net_gex: f64,
-    last_direction: Option<String>,
-    last_net_gex: Option<f64>,
-    last_bucket_5s: Option<i64>,
-) -> PyResult<Py<PyDict>> {
-    let bucket_5s = (timestamp_seconds / 5.0).floor() as i64;
-    let mut event_trigger = guard_actions_count > 0;
-    if last_direction.as_deref().is_some_and(|prev| prev != direction) {
-        event_trigger = true;
-    }
-    if last_net_gex.is_some_and(|prev| (net_gex - prev).abs() >= 1e8) {
-        event_trigger = true;
-    }
-    let sampled_5s = last_bucket_5s.is_none_or(|prev| prev != bucket_5s);
-    let out = PyDict::new(py);
-    out.set_item("bucket_5s", bucket_5s)?;
-    out.set_item("event_trigger", event_trigger)?;
-    out.set_item("sampled_5s", sampled_5s)?;
-    out.set_item("emit", event_trigger || sampled_5s)?;
-    Ok(out.unbind())
-}
-
-#[pyfunction]
 fn service_research_longport_columns(py: Python<'_>, diagnostics: Bound<'_, PyAny>) -> PyResult<Py<PyDict>> {
     let out = PyDict::new(py);
     out.set_item("longport_tier2_contracts", mapping_i64(&diagnostics, "tier2_contracts").unwrap_or(0))?;
@@ -301,7 +269,6 @@ pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(service_research_retention_candidates, module)?)?;
     module.add_function(wrap_pyfunction!(service_research_range_files, module)?)?;
     module.add_function(wrap_pyfunction!(service_research_latest_files, module)?)?;
-    module.add_function(wrap_pyfunction!(service_research_emit_decision, module)?)?;
     module.add_function(wrap_pyfunction!(service_research_longport_columns, module)?)?;
     module.add_function(wrap_pyfunction!(service_research_label_row, module)?)?;
     Ok(())

@@ -146,3 +146,11 @@ def test_flow_compat_modules_removed() -> None:
         if (REPO_ROOT / rel_path).exists()
     ]
     assert not present, "Flow compatibility modules must be removed:\n" + "\n".join(present)
+
+
+def test_research_store_no_legacy_tactical_import() -> None:
+    source = (REPO_ROOT / "shared_rust_services/src/research_store.rs").read_text(
+        encoding="utf-8",
+        errors="ignore",
+    )
+    assert "shared.system.tactical_triad_logic" not in source

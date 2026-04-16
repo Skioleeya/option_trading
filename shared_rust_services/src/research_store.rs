@@ -1,8 +1,12 @@
 use crate::research_store_support::{
-    cleanup_tier_path, ensure_dirs, et_date, l0_rust, parse_ts_any, parse_ts_text, project_allowed,
-    settings_value, tier_schema, utc_iso, VALID_FORMATS, VALID_INTERVALS, VALID_VIEWS,
+    cleanup_tier_path, direction_to_code, ensure_dirs, et_date, gex_intensity_to_code, is_rth,
+    iv_regime_to_code, l0_rust, parse_ts_any, parse_ts_text, project_allowed, settings_value,
+    tier_schema, utc_iso, VALID_FORMATS, VALID_INTERVALS, VALID_VIEWS,
 };
+use crate::tactical::compute_vrp_impl;
+use crate::research_store_io::{load_latest, load_range};
 use chrono::{DateTime, Utc};
+use chrono_tz::US::Eastern;
 use pyo3::{exceptions::PyValueError, prelude::*, types::{PyDict, PyList, PyModule}};
 use std::{collections::HashMap, env, fs, path::PathBuf};
 use uuid::Uuid;
@@ -33,9 +37,12 @@ pub struct ResearchFeatureStore {
     pending_labels: HashMap<String, PendingOutcome>,
     jobs: HashMap<String, ExportJob>,
     last_cleanup_date: Option<String>,
-    last_sample_bucket_5s: Option<i64>,
-    last_direction: Option<String>,
-    last_net_gex: Option<f64>,
+    last_persist_second: Option<i64>,
+    rth_ticks_seen: u64,
+    rth_rows_persisted: u64,
+    non_rth_ticks_skipped: u64,
+    write_failures: u64,
+    last_persist_et: Option<String>,
 }
 #[pymethods]
 impl ResearchFeatureStore {
@@ -67,9 +74,12 @@ impl ResearchFeatureStore {
             pending_labels: HashMap::new(),
             jobs: HashMap::new(),
             last_cleanup_date: None,
-            last_sample_bucket_5s: None,
-            last_direction: None,
-            last_net_gex: None,
+            last_persist_second: None,
+            rth_ticks_seen: 0,
+            rth_rows_persisted: 0,
+            non_rth_ticks_skipped: 0,
+            write_failures: 0,
+            last_persist_et: None,
         })
     }
     #[getter(_raw_dir)]
@@ -97,48 +107,55 @@ impl ResearchFeatureStore {
         let as_of_utc = payload.getattr("data_timestamp").ok().and_then(|raw| raw.extract::<String>().ok()).unwrap_or_else(|| utc_iso(ts));
         let store_date = et_date(ts);
         self.cleanup_retention_if_needed(py, &store_date)?;
-        self.update_pending_labels(py, ts, spot)?;
-        let key = format!("{}|{}|SPY", ts.to_rfc3339(), l0_version);
-        self.pending_labels.entry(key).or_insert_with(|| PendingOutcome { ts, l0_version, symbol: "SPY".into(), base_spot: spot, last_spot: spot, min_ret: 0.0, log_returns: Vec::new(), fwd_ret: horizons() });
-        let native = l0_rust(py)?;
+        if !is_rth(ts) {
+            self.non_rth_ticks_skipped = self.non_rth_ticks_skipped.saturating_add(1);
+            return Ok(());
+        }
+        self.rth_ticks_seen = self.rth_ticks_seen.saturating_add(1);
+        let second_bucket = ts.timestamp();
+        if self.last_persist_second == Some(second_bucket) { return Ok(()); }
         let decision = decision.bind(py);
         let aggregates = snapshot.getattr("aggregates")?;
         let micro = snapshot.getattr("microstructure")?;
-        let net_gex = get_float(&aggregates, "net_gex").unwrap_or(0.0);
-        let guard_actions = decision.getattr("guard_actions").ok().unwrap_or(PyList::empty(py).into_any());
-        let emit_state = native.call_method(
-            "service_research_emit_decision",
-            (ts.timestamp() as f64, decision.getattr("direction")?.extract::<String>()?, guard_actions.len().unwrap_or(0), net_gex),
-            Some(&dict_args(py, &[("last_direction", opt_py_str(py, self.last_direction.as_deref())), ("last_net_gex", opt_py_float(py, self.last_net_gex)), ("last_bucket_5s", opt_py_i64(py, self.last_sample_bucket_5s))])?),
-        )?.downcast_into::<PyDict>()?;
-        if emit_state.get_item("sampled_5s")?.and_then(|v| v.extract::<bool>().ok()).unwrap_or(false) {
-            self.last_sample_bucket_5s = emit_state.get_item("bucket_5s")?.and_then(|v| v.extract::<i64>().ok());
-        }
-        self.last_direction = Some(decision.getattr("direction")?.extract::<String>()?);
-        self.last_net_gex = Some(net_gex);
-        if !emit_state.get_item("emit")?.and_then(|v| v.extract::<bool>().ok()).unwrap_or(false) { return Ok(()); }
-        let mut raw_row = PyDict::new(py);
+        let native = l0_rust(py)?;
+        let atm_iv = get_float(&aggregates, "atm_iv").unwrap_or(0.0);
+        let direction = decision.getattr("direction")?.extract::<String>()?;
+        let iv_regime = decision.getattr("iv_regime")?.extract::<String>()?;
+        let gex_intensity = decision.getattr("gex_intensity")?.extract::<String>()?;
+        let raw_row = PyDict::new(py);
         raw_row.set_item("data_timestamp", utc_iso(ts))?;
-        raw_row.set_item("as_of_utc", as_of_utc)?;
+        raw_row.set_item("as_of_utc", &as_of_utc)?;
         raw_row.set_item("l0_version", l0_version)?;
         raw_row.set_item("symbol", "SPY")?;
         raw_row.set_item("spot", spot)?;
-        for key_name in ["atm_iv","net_gex","net_vanna_raw_sum","net_charm_raw_sum","call_wall","put_wall","flip_level"] {
+        for key_name in ["atm_iv","net_gex","call_wall","put_wall","flip_level"] {
             raw_row.set_item(key_name, get_float(&aggregates, key_name).unwrap_or(0.0))?;
         }
-        raw_row.set_item("net_vanna", get_float(&aggregates, "net_vanna_raw_sum").unwrap_or(0.0))?;
-        raw_row.set_item("net_charm", get_float(&aggregates, "net_charm_raw_sum").unwrap_or(0.0))?;
-        for key_name in ["vpin_1m","vpin_5m","vpin_15m","vpin_composite","bbo_imbalance_raw","bbo_ewma_fast","bbo_ewma_slow","bbo_persistence","vol_accel_ratio","vol_accel_threshold","vol_entropy"] {
-            raw_row.set_item(key_name, get_float(&micro, key_name).unwrap_or(0.0))?;
-        }
-        raw_row.set_item("vol_accel_elevated", micro.getattr("vol_accel_elevated").ok().and_then(|v| v.extract::<bool>().ok()).unwrap_or(false))?;
+        raw_row.set_item("bbo_imbalance_raw", get_float(&micro, "bbo_imbalance_raw").unwrap_or(0.0))?;
         raw_row.set_item("session_phase", micro.getattr("session_phase").ok().and_then(|v| v.extract::<String>().ok()).unwrap_or_default())?;
-        raw_row.set_item("mtf_consensus", "NEUTRAL")?;
-        raw_row.set_item("mtf_alignment", 0.0)?;
-        raw_row.set_item("mtf_strength", 0.0)?;
         raw_row.set_item("stored_at", utc_iso(Utc::now()))?;
+
         let feature = PyDict::new(py);
-        for (key, value) in raw_row.iter() { feature.set_item(key, value)?; }
+        feature.set_item("data_timestamp", utc_iso(ts))?;
+        feature.set_item("as_of_utc", &as_of_utc)?;
+        feature.set_item("l0_version", l0_version)?;
+        feature.set_item("symbol", "SPY")?;
+        feature.set_item("spot", spot)?;
+        feature.set_item("atm_iv", atm_iv)?;
+        feature.set_item("net_gex", get_float(&aggregates, "net_gex").unwrap_or(0.0))?;
+        feature.set_item("call_wall", get_float(&aggregates, "call_wall").unwrap_or(0.0))?;
+        feature.set_item("put_wall", get_float(&aggregates, "put_wall").unwrap_or(0.0))?;
+        feature.set_item("flip_level", get_float(&aggregates, "flip_level").unwrap_or(0.0))?;
+        feature.set_item("bbo_imbalance_raw", get_float(&micro, "bbo_imbalance_raw").unwrap_or(0.0))?;
+        feature.set_item(
+            "session_phase",
+            micro
+                .getattr("session_phase")
+                .ok()
+                .and_then(|v| v.extract::<String>().ok())
+                .unwrap_or_default(),
+        )?;
+        feature.set_item("stored_at", utc_iso(Utc::now()))?;
         let feature_vector = decision.getattr("feature_vector").ok().and_then(|v| v.downcast_into::<PyDict>().ok());
         for key_name in ["skew_25d_normalized","rr25_call_minus_put","realized_volatility_15m","vol_risk_premium","vrp_realized_based"] {
             let value = feature_vector
@@ -150,43 +167,42 @@ impl ResearchFeatureStore {
                 None => feature.set_item(key_name, py.None())?,
             }
         }
-        let diagnostics = snapshot
+        let diagnostics_any = snapshot
             .getattr("extra_metadata")?
             .downcast_into::<PyDict>()
             .ok()
             .and_then(|d| d.get_item("longport_option_diagnostics").ok().flatten())
             .unwrap_or_else(|| PyDict::new(py).into_any());
-        for (key, value) in native.call_method1("service_research_longport_columns", (diagnostics,))?.downcast_into::<PyDict>()?.iter() {
-            feature.set_item(key, value)?;
-        }
-        let official_hv_decimal = feature
-            .get_item("longport_official_hv_decimal")
-            .ok()
-            .flatten()
-            .and_then(|v| v.extract::<f64>().ok());
-        let atm_iv = get_float(&aggregates, "atm_iv").unwrap_or(0.0);
+        let longport_cols = native.call_method1("service_research_longport_columns", (diagnostics_any,))?.downcast_into::<PyDict>()?;
+        let official_hv_decimal = longport_cols.get_item("longport_official_hv_decimal").ok().flatten().and_then(|v| v.extract::<f64>().ok());
+        feature.set_item("longport_official_hv_decimal", official_hv_decimal)?;
+        feature.set_item("longport_official_hv_sample_count", longport_cols.get_item("longport_official_hv_sample_count").ok().flatten().and_then(|v| v.extract::<i64>().ok()).unwrap_or(0))?;
+        feature.set_item("longport_official_hv_age_sec", longport_cols.get_item("longport_official_hv_age_sec").ok().flatten().and_then(|v| v.extract::<f64>().ok()))?;
         if let Some(hv) = official_hv_decimal.filter(|hv| *hv > 0.0 && atm_iv > 0.0) {
-            let vrp = py
-                .import("shared.system.tactical_triad_logic")?
-                .getattr("compute_vrp")?
-                .call1((atm_iv, hv))?;
-            feature.set_item("vrp_official_hv_based", vrp)?;
+            feature.set_item("vrp_official_hv_based", compute_vrp_impl(Some(atm_iv), Some(hv)))?;
         } else {
             feature.set_item("vrp_official_hv_based", py.None())?;
         }
-        feature.set_item("direction", decision.getattr("direction")?)?;
+        feature.set_item("direction_code", direction_to_code(&direction))?;
+        feature.set_item("iv_regime_code", iv_regime_to_code(&iv_regime))?;
+        feature.set_item("gex_intensity_code", gex_intensity_to_code(&gex_intensity))?;
         feature.set_item("confidence", decision.getattr("confidence").ok().and_then(|v| v.extract::<f64>().ok()).unwrap_or(0.0))?;
-        feature.set_item("pre_guard_direction", decision.getattr("pre_guard_direction").ok().and_then(|v| v.extract::<String>().ok()).unwrap_or_else(|| "NEUTRAL".into()))?;
-        feature.set_item("guard_actions_json", py.import("json")?.call_method1("dumps", (guard_actions,))?)?;
-        for key_name in ["fusion_weights","signal_summary","feature_vector"] {
-            feature.set_item(format!("{key_name}_json"), py.import("json")?.call_method1("dumps", (decision.getattr(key_name).ok().unwrap_or(PyDict::new(py).into_any()),))?)?;
-        }
-        feature.set_item("iv_regime", decision.getattr("iv_regime").ok().and_then(|v| v.extract::<String>().ok()).unwrap_or_else(|| "NORMAL".into()))?;
-        feature.set_item("gex_intensity", decision.getattr("gex_intensity").ok().and_then(|v| v.extract::<String>().ok()).unwrap_or_else(|| "NEUTRAL".into()))?;
         feature.set_item("max_impact", decision.getattr("max_impact").ok().and_then(|v| v.extract::<f64>().ok()).unwrap_or(0.0))?;
         feature.set_item("dealer_squeeze_alert", micro.getattr("dealer_squeeze_alert").ok().and_then(|v| v.extract::<bool>().ok()).unwrap_or(false))?;
-        self.append_rows(py, &self.raw_dir, "raw", &store_date, &PyList::new(py, [raw_row])?)?;
-        self.append_rows(py, &self.feature_dir, "feature", &store_date, &PyList::new(py, [feature])?)?;
+
+        if let Err(err) = self.append_rows(py, &self.raw_dir, "raw", &store_date, &PyList::new(py, [raw_row])?) {
+            self.write_failures = self.write_failures.saturating_add(1);
+            return Err(err);
+        }
+        if let Err(err) = self.append_rows(py, &self.feature_dir, "feature", &store_date, &PyList::new(py, [feature])?) {
+            self.write_failures = self.write_failures.saturating_add(1);
+            return Err(err);
+        }
+        self.last_persist_second = Some(second_bucket);
+        self.rth_rows_persisted = self.rth_rows_persisted.saturating_add(1);
+        self.last_persist_et = Some(ts.with_timezone(&Eastern).to_rfc3339());
+        self.update_pending_labels(py, ts, spot)?;
+        self.pending_labels.entry(format!("{}|{}|SPY", ts.to_rfc3339(), l0_version)).or_insert_with(|| PendingOutcome { ts, l0_version, symbol: "SPY".into(), base_spot: spot, last_spot: spot, min_ret: 0.0, log_returns: Vec::new(), fwd_ret: horizons() });
         Ok(())
     }
     #[pyo3(signature = (*, start, end, view="feature", fields=None, interval="1s", fmt="jsonl"))]
@@ -247,6 +263,11 @@ impl ResearchFeatureStore {
         out.set_item("raw_retention_days", self.raw_retention_days)?;
         out.set_item("feature_retention_days", self.feature_retention_days)?;
         out.set_item("label_retention_days", self.label_retention_days)?;
+        out.set_item("rth_ticks_seen", self.rth_ticks_seen)?;
+        out.set_item("rth_rows_persisted", self.rth_rows_persisted)?;
+        out.set_item("non_rth_ticks_skipped", self.non_rth_ticks_skipped)?;
+        out.set_item("write_failures", self.write_failures)?;
+        out.set_item("last_persist_et", self.last_persist_et.clone())?;
         Ok(out.unbind())
     }
 }
@@ -355,43 +376,8 @@ fn parse_date(text: &str) -> PyResult<chrono::NaiveDate> {
 fn path_obj(py: Python<'_>, path: &PathBuf) -> PyResult<Py<PyAny>> { Ok(py.import("pathlib")?.getattr("Path")?.call1((path.to_string_lossy().to_string(),))?.unbind()) }
 fn safe_std(values: &[f64]) -> f64 { if values.len() < 2 { 0.0 } else { let mean = values.iter().sum::<f64>() / values.len() as f64; let var = values.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / (values.len() as f64 - 1.0); var.max(0.0).sqrt() } }
 fn get_float(obj: &Bound<'_, PyAny>, key: &str) -> Option<f64> { obj.getattr(key).ok().and_then(|v| v.extract::<f64>().ok()).filter(|v| v.is_finite()) }
-fn opt_py_str<'py>(py: Python<'py>, value: Option<&str>) -> Bound<'py, PyAny> { value.unwrap_or("").into_pyobject(py).unwrap().into_any() }
-fn opt_py_float<'py>(py: Python<'py>, value: Option<f64>) -> Bound<'py, PyAny> { value.map_or(py.None().bind(py).clone(), |v| v.into_pyobject(py).unwrap().into_any()) }
-fn opt_py_i64<'py>(py: Python<'py>, value: Option<i64>) -> Bound<'py, PyAny> { value.map_or(py.None().bind(py).clone(), |v| v.into_pyobject(py).unwrap().into_any()) }
-fn dict_args<'py>(py: Python<'py>, items: &[(&str, Bound<'py, PyAny>)]) -> PyResult<Bound<'py, PyDict>> { let d = PyDict::new(py); for (k,v) in items { d.set_item(*k, v)?; } Ok(d) }
 fn job_dict(py: Python<'_>, job: &ExportJob) -> Py<PyDict> { let d = PyDict::new(py); let _ = d.set_item("status",&job.status); let _ = d.set_item("path",&job.path); let _ = d.set_item("format",&job.format); if let Some(error)=&job.error { let _ = d.set_item("error",error); } d.unbind() }
 fn err_dict(py: Python<'_>, message: &str) -> PyResult<Py<PyDict>> { let d = PyDict::new(py); d.set_item("error", message)?; Ok(d.unbind()) }
-fn load_range(py: Python<'_>, tier_dir: &PathBuf, prefix: &str, start_dt: DateTime<Utc>, end_dt: DateTime<Utc>) -> PyResult<Vec<Py<PyAny>>> {
-    let native = l0_rust(py)?;
-    let names: Vec<String> = fs::read_dir(tier_dir).map_err(|err| PyValueError::new_err(err.to_string()))?.filter_map(Result::ok).filter_map(|e| e.file_name().into_string().ok()).collect();
-    let files = native.call_method1("service_research_range_files", (names, prefix, et_date(start_dt), et_date(end_dt)))?.downcast_into::<PyList>()?;
-    let mut rows = Vec::new();
-    for file in files.iter() {
-        let path = tier_dir.join(file.extract::<String>()?);
-        let out = native.call_method1("service_research_read_parquet_rows", (path.to_string_lossy().to_string(),))?;
-        for row in out.downcast::<PyList>()?.iter() {
-            let dict = row.downcast::<PyDict>()?;
-            if let Some(ts) = dict.get_item("data_timestamp")?.and_then(|v| parse_ts_any(&v).ok().flatten()) {
-                if ts >= start_dt && ts <= end_dt { rows.push(row.unbind()); }
-            }
-        }
-    }
-    Ok(rows)
-}
-fn load_latest(py: Python<'_>, tier_dir: &PathBuf, prefix: &str, count: usize) -> PyResult<Vec<Py<PyAny>>> {
-    let native = l0_rust(py)?;
-    let names: Vec<String> = fs::read_dir(tier_dir).map_err(|err| PyValueError::new_err(err.to_string()))?.filter_map(Result::ok).filter_map(|e| e.file_name().into_string().ok()).collect();
-    let files = native.call_method1("service_research_latest_files", (names, prefix))?.downcast_into::<PyList>()?;
-    let mut rows = Vec::new();
-    for file in files.iter() {
-        let path = tier_dir.join(file.extract::<String>()?);
-        let out = native.call_method1("service_research_read_parquet_rows", (path.to_string_lossy().to_string(),))?;
-        for row in out.downcast::<PyList>()?.iter() { rows.push(row.unbind()); }
-        if rows.len() >= count { break; }
-    }
-    rows.sort_by_key(|row| row.bind(py).downcast::<PyDict>().ok().and_then(|dict| dict.get_item("data_timestamp").ok().flatten()).and_then(|v| v.extract::<String>().ok()).unwrap_or_default());
-    Ok(rows)
-}
 pub fn register(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<ResearchFeatureStore>()?;
     m.add_function(wrap_pyfunction!(cleanup_tier, m)?)?;

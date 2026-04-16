@@ -17,7 +17,9 @@ fn service_research_records_to_parquet(py: Python<'_>, records: Bound<'_, PyAny>
     let sink = pa.getattr("BufferOutputStream")?.call0()?;
     let kwargs = PyDict::new(py);
     kwargs.set_item("compression", "zstd")?;
+    kwargs.set_item("compression_level", 19)?;
     kwargs.set_item("use_dictionary", true)?;
+    kwargs.set_item("write_statistics", false)?;
     pq.call_method(
         "write_table",
         (table, &sink),
@@ -65,7 +67,9 @@ fn service_research_append_parquet_rows(
     };
     let write_kwargs = PyDict::new(py);
     write_kwargs.set_item("compression", "zstd")?;
+    write_kwargs.set_item("compression_level", 19)?;
     write_kwargs.set_item("use_dictionary", true)?;
+    write_kwargs.set_item("write_statistics", false)?;
     pq.call_method(
         "write_table",
         (final_table, path),

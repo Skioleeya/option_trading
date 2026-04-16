@@ -8,7 +8,7 @@ const VALID_VIEWS: [&str; 3] = ["compact", "feature", "audit"];
 const VALID_INTERVALS: [(&str, u64); 3] = [("1s", 1), ("5s", 5), ("1m", 60)];
 const VALID_FORMATS: [&str; 2] = ["jsonl", "parquet"];
 
-const COMPACT_FIELDS: [&str; 21] = [
+const COMPACT_FIELDS: [&str; 18] = [
     "data_timestamp",
     "as_of_utc",
     "l0_version",
@@ -19,33 +19,24 @@ const COMPACT_FIELDS: [&str; 21] = [
     "call_wall",
     "put_wall",
     "flip_level",
-    "direction",
-    "confidence",
-    "gex_intensity",
-    "iv_regime",
-    "vpin_composite",
     "bbo_imbalance_raw",
-    "vol_accel_ratio",
-    "mtf_consensus",
-    "mtf_alignment",
-    "mtf_strength",
+    "direction_code",
+    "iv_regime_code",
+    "gex_intensity_code",
+    "confidence",
+    "max_impact",
     "dealer_squeeze_alert",
+    "stored_at",
 ];
 
-const FEATURE_FIELDS: [&str; 57] = [
+const FEATURE_FIELDS: [&str; 28] = [
     "data_timestamp", "as_of_utc", "l0_version", "symbol", "spot", "atm_iv",
-    "skew_25d_normalized", "rr25_call_minus_put", "realized_volatility_15m", "vol_risk_premium",
-    "vrp_realized_based", "longport_tier2_contracts", "longport_tier3_contracts",
-    "longport_tier2_standard_ratio", "longport_tier3_standard_ratio", "longport_tier2_avg_premium",
-    "longport_tier3_avg_premium", "longport_official_hv_decimal", "longport_official_hv_sample_count",
-    "longport_official_hv_age_sec", "vrp_official_hv_based", "net_gex", "net_vanna_raw_sum",
-    "net_vanna", "net_charm_raw_sum", "net_charm", "call_wall", "put_wall", "flip_level",
-    "vpin_1m", "vpin_5m", "vpin_15m", "vpin_composite", "bbo_imbalance_raw", "bbo_ewma_fast",
-    "bbo_ewma_slow", "bbo_persistence", "vol_accel_ratio", "vol_accel_threshold", "vol_accel_elevated",
-    "vol_entropy", "session_phase", "mtf_consensus", "mtf_alignment", "mtf_strength", "direction",
-    "confidence", "pre_guard_direction", "guard_actions_json", "fusion_weights_json",
-    "signal_summary_json", "feature_vector_json", "iv_regime", "gex_intensity", "max_impact",
-    "dealer_squeeze_alert", "stored_at",
+    "net_gex", "call_wall", "put_wall", "flip_level", "bbo_imbalance_raw", "session_phase",
+    "skew_25d_normalized", "rr25_call_minus_put", "realized_volatility_15m",
+    "vol_risk_premium", "vrp_realized_based", "longport_official_hv_decimal",
+    "longport_official_hv_sample_count", "longport_official_hv_age_sec",
+    "vrp_official_hv_based", "direction_code", "iv_regime_code", "gex_intensity_code",
+    "confidence", "max_impact", "dealer_squeeze_alert", "stored_at",
 ];
 
 const LABEL_FIELDS: [&str; 11] = [

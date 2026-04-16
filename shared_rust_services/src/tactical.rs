@@ -48,7 +48,7 @@ fn normalize_guard_vrp_threshold_pct_impl(value: Option<f64>, default_pct: f64) 
     }
 }
 
-fn compute_vrp_impl(atm_iv: Option<f64>, baseline_hv: Option<f64>) -> Option<f64> {
+pub(crate) fn compute_vrp_impl(atm_iv: Option<f64>, baseline_hv: Option<f64>) -> Option<f64> {
     let atm_iv_pct = normalize_iv_percent_impl(atm_iv)?;
     Some(atm_iv_pct - normalize_vrp_baseline_hv_pct_impl(baseline_hv))
 }

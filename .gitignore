@@ -85,3 +85,4 @@ tmp/session_validation_diag/*.yaml
 
 # Local Cargo target-dir override (machine-specific)
 .cargo/config.toml
+tmp/cargo_target/

@@ -5,6 +5,7 @@ mod header_context;
 mod history;
 mod realized;
 mod research_schema;
+mod research_store_io;
 mod research_store;
 mod research_store_support;
 mod research_utils;

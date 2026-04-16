@@ -72,8 +72,8 @@ def _required_sources_ready(snapshot: Iterable[SourceSignature]) -> bool:
     return bool(required) and all(sig.exists for sig in required)
 
 
-def _all_sources_present(snapshot: Iterable[SourceSignature]) -> bool:
-    return all(sig.exists for sig in snapshot)
+def _required_snapshot(snapshot: Iterable[SourceSignature]) -> tuple[SourceSignature, ...]:
+    return tuple(sig for sig in snapshot if sig.required)
 
 
 def _all_existing_sources_older_than(
@@ -103,18 +103,20 @@ def wait_for_settle(
 ) -> WaitResult:
     start = monotonic_fn()
     stable_since: float | None = None
-    previous: tuple[SourceSignature, ...] | None = None
+    previous_required: tuple[SourceSignature, ...] | None = None
     latest: tuple[SourceSignature, ...] = tuple()
+    latest_required: tuple[SourceSignature, ...] = tuple()
 
     while True:
         now = monotonic_fn()
         latest = capture_fn()
+        latest_required = _required_snapshot(latest)
         ready = _required_sources_ready(latest)
-        changed = previous is not None and latest != previous
+        changed = previous_required is not None and latest_required != previous_required
 
         if ready:
-            if _all_sources_present(latest) and _all_existing_sources_older_than(
-                latest,
+            if _all_existing_sources_older_than(
+                latest_required,
                 stable_window_seconds=stable_window_seconds,
                 now_ns=time_ns_fn(),
             ):
@@ -129,7 +131,7 @@ def wait_for_settle(
         if now - start >= timeout_seconds:
             return WaitResult(False, now - start, latest)
 
-        previous = latest
+        previous_required = latest_required
         sleep_fn(poll_seconds)
 
 
@@ -156,6 +158,7 @@ def run_cli(argv: list[str] | None = None) -> int:
         "date": str(args.date),
         "stable": result.stable,
         "elapsed_seconds": round(result.elapsed_seconds, 3),
+        "settle_scope": "required_only",
         "snapshot": [asdict(sig) for sig in result.snapshot],
     }
     prefix = "[EODSettle]"

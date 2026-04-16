@@ -27,7 +27,7 @@ class _DummyWarmStore:
 
 
 class _DummyResearchStore:
-    async def query(self, **_: object):
+    def query(self, **_: object):
         return {
             "status": "ok",
             "count": 1,

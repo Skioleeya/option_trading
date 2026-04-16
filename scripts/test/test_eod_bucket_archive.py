@@ -362,6 +362,40 @@ def test_strict_quality_still_returns_2():
     assert rc == 2
 
 
+def test_low_quality_blocks_primary_classification():
+    mod = _load_module()
+    root = _case_dir()
+    data_root = root / "data"
+    out_root = root / "cold"
+    date_str = "20260311"
+    _make_day_files(data_root, date_str, rows=10, include_feature_label=False, include_walls=True, with_prev_day=False)
+
+    cfg = _default_cfg()
+    cfg["thresholds"]["quality_gate"]["min_rows_raw"] = 100
+    cfg["thresholds"]["quality_gate"]["min_rows_feature"] = 100
+    cfg["thresholds"]["quality_gate"]["min_rows_label"] = 100
+    cfg_path = root / "cfg_blocked.json"
+    _write_cfg(cfg_path, cfg)
+
+    rc = mod.run_cli(
+        [
+            "--date",
+            date_str,
+            "--config",
+            str(cfg_path),
+            "--root",
+            str(data_root),
+            "--out-root",
+            str(out_root),
+        ]
+    )
+    assert rc == 0
+    daily = json.loads((out_root / "daily" / date_str / "manifest.json").read_text(encoding="utf-8"))
+    assert daily["primary_day_type"] == "INCOMPLETE_SOURCE"
+    assert daily["context_modifiers"] == []
+    assert daily["quality"]["classification_blocked"] is True
+
+
 def test_primary_manifest_is_idempotent_and_by_regime_aligned():
     mod = _load_module()
     root = _case_dir()

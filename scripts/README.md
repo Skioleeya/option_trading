@@ -17,7 +17,7 @@
 - `reconcile_net_gex_online.py`: WS 原始 `net_gex` 与前端展示逐 tick 对账证据导出。
 - `reconcile_depth_profile_online.py`: Depth Profile 逐 tick 对账证据导出。
 - `eod_bucket_archive.py`: 收盘后按 canonical taxonomy 分桶，只输出 `primary_day_type + context_modifiers + close_profile` 作为日型合同；`by_regime` 目录按 canonical `primary_day_type` 建立索引，交易日按 `XNYS` 日历校验，非交易日直接失败。
-- `wait_for_eod_sources_settle.py`: 归档前等待 `research/raw|feature|label` 与可选 cold 源文件进入稳定窗口，默认 5 分钟稳定、40 分钟超时。
+- `wait_for_eod_sources_settle.py`: 归档前仅按 required 源 `research/raw|feature|label` 判定稳定窗口；可选 cold 源仅做快照归档不参与触发门控，默认 30 秒稳定、15 分钟超时、5 秒轮询。
 - `check_eod_manifest_sync.py`: 校验 `data/cold/daily/<date>/manifest.json` 是否与当前源文件的 size/hash/rows 完全一致。
 - `check_payload_size.py`: Redis 快照 payload 体积与 UI 关键字段规模核查。
 - `check_redis_atm.py`: Redis 中 ATM 开盘锚点与序列键状态核查。
@@ -25,8 +25,8 @@
 - `diag_env.py`: 运行时导入路径与关键模块加载诊断。
 
 ### ⏱️ [ops/](./ops/) — 运维调度脚本
-- `register_eod_bucket_task.ps1`: 生成/注册 EOD 分桶计划任务（16:01 主任务 + 17:00 重试），并给任务入口标记 `Primary/Retry` 运行标签。
-- `run_eod_bucket.ps1`: 计划任务调用入口；会先等待源文件稳定，再运行归档，并在归档后做 manifest sync 校验，支持显式 `-Date YYYYMMDD` 重跑。
+- `register_eod_bucket_task.ps1`: 生成/注册 EOD 分桶计划任务（16:01 主任务 + 16:04 重试），并给任务入口标记 `Primary/Retry` 运行标签。
+- `run_eod_bucket.ps1`: 计划任务调用入口；会先等待 required 源稳定，再运行归档，并在归档后做 manifest sync 校验，支持显式 `-Date YYYYMMDD` 重跑（默认 settle 参数与调度保持一致：30/900/5）。若 settle 超时，会继续归档并产出 `INCOMPLETE_SOURCE` 证据（严格模式返回码保持 `2`）。
 
 ### ⚡ [perf/](./perf/) — 性能分析与资源监控
 - `perf_monitor.py`: 监控后端计算循环延迟与 WebSocket 推送频率。

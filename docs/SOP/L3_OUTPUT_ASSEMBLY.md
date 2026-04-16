@@ -89,6 +89,11 @@ flowchart LR
 - `shared/services/research_feature_store.py`、`shared/services/research_feature_store_io.py`、`shared/services/header_volatility_context.py` 已退役，不得再恢复 Python compat owner
 - `/api/research/features`、`/api/research/exports/*` 现直接调用 `shared_rust.services.ResearchFeatureStore` 的同步接口；路由层不再保留这组 root owner 的 async Python 壳
 - 研究表主键必须包含 `data_timestamp + l0_version`，用于跨层 join 对齐
+- `ResearchFeatureStore` 的 label pending queue 只能在 raw/feature 成功写入后注册；禁止出现未落 raw/feature 的 label-only 样本。
+- EOD 归档质量闸门触发时必须阻断主日型分类并标记 `primary_day_type=INCOMPLETE_SOURCE`，禁止在低质量样本上输出 `balance_day` 等交易日型结论。
+- `ResearchFeatureStore` 采样必须限制为 RTH (`09:30-16:00 ET`) 且固定 1s 频率（同一秒最多一行）；禁止事件触发扩采样导致样本间隔不稳定。
+- 研究存储契约采用最小字段集：`feature/compact` 仅保留编码字段 `direction_code/iv_regime_code/gex_intensity_code`，禁止在落盘层重复写入同义字符串状态。
+- Parquet 研究存储写入必须使用 `zstd` 高压缩配置（level=19, no statistics）以最小化磁盘占用。
 
 ## 4. Boundary Rules (Hard)
 

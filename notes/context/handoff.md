@@ -1,12 +1,12 @@
 ﻿# Handoff (Index)
 
 ## Active Handoff
-- Path: notes/sessions/2026-04-13/retune-gex-superpin-4b/handoff.md
-- Meta: notes/sessions/2026-04-13/retune-gex-superpin-4b/meta.yaml
+- Path: notes/sessions/2026-04-16/fix-research-store-rust-vrp-owner/handoff.md
+- Meta: notes/sessions/2026-04-16/fix-research-store-rust-vrp-owner/meta.yaml
 
 ## Latest Outcome
-- Session: 2026-04-13/retune-gex-superpin-4b
-- Summary: Recalibrated GEX thresholds to 0.8B/4B (MMUSD 800/4000), validated with tests and live chain check (`net_gex>4000 => SUPER PIN`).
+- Session: 2026-04-16/fix-research-store-rust-vrp-owner
+- Summary: Rebuilt/reloaded `shared_rust/services.pyd`, restarted backend in strict mode, and verified logs no longer show `shared.system.tactical_triad_logic` import failure; same-day research file append remains pending until RTH window (09:30 ET).
 
 ## Next Session Bootstrap
 1. Read this file.

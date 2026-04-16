@@ -1,4 +1,4 @@
-use chrono::{DateTime, Duration, NaiveDate, Utc};
+use chrono::{DateTime, Duration, NaiveDate, Timelike, Utc};
 use chrono_tz::US::Eastern;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -112,24 +112,61 @@ pub fn cleanup_tier_path(tier_dir: &Path, prefix: &str, now_et_date: NaiveDate, 
 pub fn project_allowed(view: &str) -> &'static [&'static str] {
     const COMPACT: &[&str] = &[
         "data_timestamp", "as_of_utc", "l0_version", "symbol", "spot", "atm_iv", "net_gex",
-        "call_wall", "put_wall", "flip_level", "direction", "confidence", "gex_intensity",
-        "iv_regime", "vpin_composite", "bbo_imbalance_raw",
+        "call_wall", "put_wall", "flip_level", "bbo_imbalance_raw", "direction_code",
+        "iv_regime_code", "gex_intensity_code", "confidence", "max_impact",
+        "dealer_squeeze_alert", "stored_at",
     ];
     const FEATURE: &[&str] = &[
         "data_timestamp", "as_of_utc", "l0_version", "symbol", "spot", "atm_iv", "net_gex",
-        "net_vanna_raw_sum", "net_vanna", "net_charm_raw_sum", "net_charm", "call_wall", "put_wall",
-        "flip_level", "vpin_1m", "vpin_5m", "vpin_15m", "vpin_composite", "bbo_imbalance_raw",
-        "bbo_ewma_fast", "bbo_ewma_slow", "bbo_persistence", "vol_accel_ratio", "vol_accel_threshold",
-        "vol_accel_elevated", "vol_entropy", "session_phase", "mtf_consensus", "mtf_alignment",
-        "mtf_strength", "stored_at", "skew_25d_normalized", "rr25_call_minus_put",
-        "realized_volatility_15m", "vol_risk_premium", "vrp_realized_based",
-        "longport_tier2_contracts", "longport_tier3_contracts", "longport_tier2_standard_ratio",
-        "longport_tier3_standard_ratio", "longport_tier2_avg_premium", "longport_tier3_avg_premium",
-        "longport_official_hv_decimal", "longport_official_hv_sample_count", "longport_official_hv_age_sec",
-        "vrp_official_hv_based", "direction", "confidence", "pre_guard_direction", "guard_actions_json",
-        "fusion_weights_json", "signal_summary_json", "feature_vector_json", "iv_regime", "gex_intensity",
-        "max_impact", "dealer_squeeze_alert", "fwd_ret_1m", "fwd_ret_5m", "fwd_ret_15m", "fwd_ret_60m",
-        "max_adverse_excursion", "realized_vol_horizon", "horizon_observed_seconds",
+        "call_wall", "put_wall", "flip_level", "bbo_imbalance_raw", "session_phase",
+        "skew_25d_normalized", "rr25_call_minus_put", "realized_volatility_15m",
+        "vol_risk_premium", "vrp_realized_based", "longport_official_hv_decimal",
+        "longport_official_hv_sample_count", "longport_official_hv_age_sec",
+        "vrp_official_hv_based", "direction_code", "iv_regime_code", "gex_intensity_code",
+        "confidence", "max_impact", "dealer_squeeze_alert", "stored_at", "fwd_ret_1m",
+        "fwd_ret_5m", "fwd_ret_15m", "fwd_ret_60m", "max_adverse_excursion",
+        "realized_vol_horizon", "horizon_observed_seconds",
     ];
     if view == "compact" { COMPACT } else { FEATURE }
+}
+
+pub fn is_rth(ts: DateTime<Utc>) -> bool {
+    let et = ts.with_timezone(&Eastern);
+    let minute_of_day = et.hour() as i32 * 60 + et.minute() as i32;
+    (9 * 60 + 30..16 * 60).contains(&minute_of_day)
+}
+
+pub fn direction_to_code(direction: &str) -> i8 {
+    match direction.trim().to_ascii_uppercase().as_str() {
+        "BULLISH" => 1,
+        "BEARISH" => -1,
+        "HALT" => 2,
+        "NO_TRADE" => 3,
+        _ => 0,
+    }
+}
+
+pub fn iv_regime_to_code(iv_regime: &str) -> i8 {
+    match iv_regime.trim().to_ascii_uppercase().as_str() {
+        "VERY_LOW" => -2,
+        "LOW" => -1,
+        "NORMAL" => 0,
+        "ELEVATED" => 1,
+        "HIGH" => 2,
+        "EXTREME" | "CRISIS" => 3,
+        _ => 0,
+    }
+}
+
+pub fn gex_intensity_to_code(gex_intensity: &str) -> i8 {
+    match gex_intensity.trim().to_ascii_uppercase().as_str() {
+        "EXTREME_NEGATIVE" => -3,
+        "STRONG_NEGATIVE" => -2,
+        "NEGATIVE" => -1,
+        "NEUTRAL" => 0,
+        "POSITIVE" => 1,
+        "STRONG_POSITIVE" => 2,
+        "EXTREME_POSITIVE" => 3,
+        _ => 0,
+    }
 }
