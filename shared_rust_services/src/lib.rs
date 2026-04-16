@@ -17,6 +17,8 @@ mod aggregation_rust_bridge;
 mod microstructure;
 mod sabr;
 mod fusion;
+mod mm_flow;
+mod mm_flow_snapshot;
 
 #[pymodule]
 fn services(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -33,5 +35,6 @@ fn services(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     microstructure::register(py, m)?;
     sabr::register(py, m)?;
     fusion::register(py, m)?;
+    mm_flow::register(m)?;
     Ok(())
 }

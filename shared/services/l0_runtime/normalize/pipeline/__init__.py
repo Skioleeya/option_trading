@@ -57,6 +57,8 @@ class CleanQuoteEvent:
     ask: float | None = None
     last_price: float | None = None
     volume: int | None = None
+    bid_volume: int | None = None
+    ask_volume: int | None = None
     open_interest: int | None = None
     implied_volatility: float | None = None
     iv_timestamp: float | None = None
@@ -68,6 +70,8 @@ class CleanQuoteEvent:
     turnover: float | None = None
     impact_index: float | None = 0.0
     is_sweep: bool | None = False
+    trade_type: str | None = None
+    trade_session: str | None = None
 
 
 @dataclass(frozen=True)
@@ -150,6 +154,8 @@ class SanitizationPipeline:
             arrival_mono=float(native["arrival_mono"]),
             impact_index=native.get("impact_index", 0.0),
             is_sweep=bool(native.get("is_sweep", False)),
+            trade_type=native.get("trade_type"),
+            trade_session=native.get("trade_session"),
         )
 
     def parse_depth(self, raw: RawMarketEvent) -> CleanDepthEvent | None:

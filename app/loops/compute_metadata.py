@@ -6,6 +6,8 @@ import math
 from datetime import datetime, timezone
 from typing import Any
 
+from app.loops.mm_flow_metadata import build_mm_flow_metrics
+
 
 def _coerce_utc_datetime(raw: Any) -> datetime | None:
     if isinstance(raw, datetime):
@@ -62,6 +64,7 @@ def _build_l1_extra_metadata(
     compute_audit: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build the L0->L1 metadata pass-through contract."""
+    mm_flow_metrics = build_mm_flow_metrics(snapshot)
     metadata = {
         "rust_active": snapshot.get("rust_active", False),
         "shm_stats": snapshot.get("shm_stats"),
@@ -70,6 +73,7 @@ def _build_l1_extra_metadata(
         "source_data_timestamp_utc": _normalize_source_timestamp_utc(snapshot),
         "longport_option_diagnostics": _build_longport_option_diagnostics(snapshot),
         "header_volatility_aux": dict(snapshot.get("header_volatility_aux_diagnostics") or {}),
+        "mm_flow_metrics": mm_flow_metrics,
     }
     if compute_audit:
         metadata["compute_audit"] = dict(compute_audit)

@@ -64,6 +64,8 @@ flowchart LR
   - Arrow 启动门禁为硬约束：必须先由 `SubscriptionManager` 完成首个有效订阅并创建 writer，再连接 `ArrowIpcReader`；
   - 若 `longport_subscription_ready_timeout_sec`（默认 60 秒）内仍未形成有效订阅，启动必须 fail-fast 中止，禁止继续进入读端重试循环；
 - `shared/services/l0_runtime/normalize/bridges/__init__.py` 是 bridge 合同统一入口；market event parse、depth side shaping、trade payload direction 语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_market_bridge.rs`；
+- trade callback payload 合同必须透传 `trade_type` 与 `trade_session`（来自 LongPort 推送），不得在 bridge 层硬编码为常量；
+- trade callback 在 `price == midpoint` 场景必须执行 tick-rule（`prev_price` + `prev_direction`）判定方向，禁止输出模糊方向；
 - `shared/services/l0_runtime/normalize/pipeline/__init__.py` 是清洗合同统一入口；QUOTE/DEPTH 基础清洗、IV/OI 归一化、crossed quote 防御与 top-of-book depth 提取语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_sanitization.rs`；
 - `shared/services/l0_runtime/normalize/events/__init__.py` 是 event processor 合同统一入口；SPY spot quote 提取与 trade payload 归一化语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_event_support.rs`；
 - `shared/services/l0_runtime/state/runtime/__init__.py` 是 state owner 合同统一入口；entry 初始化、WS/REST flow owner merge、depth merge 语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_state_support.rs`；

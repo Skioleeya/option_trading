@@ -239,17 +239,34 @@ export function normalizeActiveOptions(input: unknown, limit = ACTIVE_OPTIONS_FI
     const normalized: ActiveOption[] = source
         .map((item) => normalizeActiveOption(item))
         .slice(0, target)
-        .map((row, idx) => {
-            const slotIndex = toFiniteInteger(row.slot_index, 0)
-            return {
-                ...row,
-                slot_index: slotIndex > 0 ? slotIndex : (idx + 1),
-            }
-        })
 
-    for (let idx = normalized.length; idx < target; idx += 1) {
-        normalized.push(createPlaceholderOption(idx + 1))
+    const usedSlots = new Set<number>()
+    const nextAvailableSlot = (): number => {
+        for (let slot = 1; slot <= target; slot += 1) {
+            if (!usedSlots.has(slot)) {
+                return slot
+            }
+        }
+        return target
     }
 
-    return normalized
+    const withSlots = normalized.map((row, idx) => {
+        const preferred = toFiniteInteger(row.slot_index, idx + 1)
+        const slotIndex = preferred > 0 && preferred <= target && !usedSlots.has(preferred)
+            ? preferred
+            : nextAvailableSlot()
+        usedSlots.add(slotIndex)
+        return {
+            ...row,
+            slot_index: slotIndex,
+        }
+    })
+
+    for (let slot = 1; slot <= target; slot += 1) {
+        if (!usedSlots.has(slot)) {
+            withSlots.push(createPlaceholderOption(slot))
+        }
+    }
+
+    return withSlots
 }

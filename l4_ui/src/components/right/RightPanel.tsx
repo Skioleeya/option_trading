@@ -3,6 +3,7 @@ import { useDashboardStore, selectPayload } from '../../store/dashboardStore'
 import { ActiveOptions } from './ActiveOptions'
 import { DecisionEngine } from './DecisionEngine'
 import { MtfFlow } from './MtfFlow'
+import { MmFlowCard } from './MmFlowCard'
 import { RawVannaCard } from './RawVannaCard'
 import { SkewDynamics } from './SkewDynamics'
 import { TacticalTriad } from './TacticalTriad'
@@ -20,6 +21,7 @@ export const RightPanel: React.FC<RightPanelProps> = memo(({ mode }) => {
         return (
             <>
                 <DecisionEngine fused={stableContracts.fused} netGex={stableContracts.netGex} preferProp />
+                <MmFlowCard metrics={stableContracts.mmFlow} preferProp />
                 <TacticalTriad uiState={stableContracts.tacticalTriad} preferProp />
                 <RawVannaCard state={stableContracts.rawVanna} />
                 <SkewDynamics uiState={stableContracts.skewDynamics} preferProp />
@@ -32,6 +34,7 @@ export const RightPanel: React.FC<RightPanelProps> = memo(({ mode }) => {
     return (
         <>
             <DecisionEngine />
+            <MmFlowCard />
             <TacticalTriad />
             <RawVannaCard state={stableContracts.rawVanna} />
             <SkewDynamics />

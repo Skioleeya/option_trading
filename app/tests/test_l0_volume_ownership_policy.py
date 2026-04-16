@@ -11,9 +11,15 @@ def _event(
     seq_no: int,
     event_type: EventType,
     volume: int | None = None,
+    bid_volume: int | None = None,
+    ask_volume: int | None = None,
     current_volume: float | None = None,
     turnover: float | None = None,
     last_price: float | None = 1.0,
+    impact_index: float | None = 0.0,
+    trade_type: str | None = None,
+    trade_session: str | None = None,
+    is_sweep: bool | None = None,
 ) -> CleanQuoteEvent:
     return CleanQuoteEvent(
         seq_no=seq_no,
@@ -24,8 +30,14 @@ def _event(
         arrival_mono=1.0,
         last_price=last_price,
         volume=volume,
+        bid_volume=bid_volume,
+        ask_volume=ask_volume,
         current_volume=current_volume,
         turnover=turnover,
+        impact_index=impact_index,
+        trade_type=trade_type,
+        trade_session=trade_session,
+        is_sweep=is_sweep,
     )
 
 
@@ -111,3 +123,35 @@ def test_trade_first_must_not_lock_rest_day_volume_backfill() -> None:
     assert accepted is True
     row_after_rest = _row(store)
     assert int(float(row_after_rest["volume"])) == 441000
+
+
+def test_depth_and_trade_fields_persist_to_chain_snapshot() -> None:
+    store = ChainStateStore()
+    store.apply_event(
+        _event(
+            seq_no=1,
+            event_type=EventType.DEPTH,
+            bid_volume=410,
+            ask_volume=230,
+            impact_index=1.75,
+            last_price=None,
+        )
+    )
+    store.apply_event(
+        _event(
+            seq_no=2,
+            event_type=EventType.TRADE,
+            volume=3,
+            trade_type="Late Print",
+            trade_session="RTH",
+            is_sweep=True,
+            last_price=7.8,
+        )
+    )
+    row = _row(store)
+    assert int(float(row["bid_volume"])) == 410
+    assert int(float(row["ask_volume"])) == 230
+    assert float(row["impact_index"]) == pytest.approx(1.75)
+    assert row["trade_type"] == "Late Print"
+    assert row["trade_session"] == "RTH"
+    assert bool(row["is_sweep"]) is True

@@ -10,6 +10,7 @@ import { ACTIVE_OPTIONS_FIXED_ROWS } from './activeOptionsTheme'
 import { normalizeMtfFlowState, type MtfFlowViewState } from './mtfFlowModel'
 import { normalizeSkewDynamicsState } from './skewDynamicsModel'
 import { normalizeTacticalTriadState } from './tacticalTriadModel'
+import { deriveMmFlowMetrics, type MmFlowMetrics } from './mmFlowModel'
 
 export interface NetGexBadgeState {
     label: string
@@ -29,6 +30,7 @@ export interface RawVannaCardState {
 export interface RightPanelContracts {
     fused: FusedSignal | null
     netGex: NetGexBadgeState | null
+    mmFlow: MmFlowMetrics | null
     rawVanna: RawVannaCardState
     tacticalTriad: TacticalTriadState
     skewDynamics: SkewDynamicsState
@@ -147,6 +149,7 @@ export function deriveRightPanelContracts(payload: DashboardPayload | null): Rig
     return {
         fused: data?.fused_signal ?? null,
         netGex: normalizeNetGexBadge(uiState?.micro_stats?.net_gex ?? null),
+        mmFlow: deriveMmFlowMetrics(payload),
         rawVanna: normalizeRawVanna(rawVanna),
         tacticalTriad: normalizeTacticalTriadState(uiState?.tactical_triad ?? null),
         skewDynamics: normalizeSkewDynamicsState(uiState?.skew_dynamics ?? null),

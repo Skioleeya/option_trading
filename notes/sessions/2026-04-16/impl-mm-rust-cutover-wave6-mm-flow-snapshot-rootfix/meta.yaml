@@ -1,0 +1,50 @@
+session_id: "2026-04-16/impl-mm-rust-cutover-wave6-mm-flow-snapshot-rootfix"
+title: "mm flow snapshot root-cause fix + live postmarket test"
+scope: "rust mm_flow_snapshot contract correction + redis/backend/frontend live verify"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-04-16 18:49:53 -04:00"
+updated_at_et: "2026-04-16 19:40:00 -04:00"
+parent_session: "2026-04-16/impl-mm-rust-cutover-wave5-l4-activeoptions-regression"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "e91cff0"
+head_commit: "e91cff0"
+
+files_changed:
+  - l0_ingest/l0_rust/src/schema.rs
+  - l0_ingest/l0_rust/src/ipc_writer.rs
+  - l0_ingest/l0_rust/src/gateway_core.rs
+  - l0_ingest/l0_rust/src/gateway_event_map.rs
+  - l0_ingest/l0_rust/src/gateway_stress.rs
+  - l0_ingest/l0_rust/src/l0_market_bridge.rs
+  - l0_ingest/l0_rust/src/l0_state_support.rs
+  - l0_ingest/l0_rust/src/l0_event_support.rs
+  - l0_ingest/l0_rust/src/lib.rs
+  - shared/services/l0_runtime/normalize/pipeline/__init__.py
+  - shared/services/l0_runtime/normalize/bridges/__init__.py
+  - shared_rust_services/src/mm_flow_snapshot.rs
+  - app/tests/test_l0_volume_ownership_policy.py
+  - app/loops/tests/test_mm_flow_metadata.py
+commands:
+  - cargo build --release (workdir=l0_ingest/l0_rust)
+  - cargo build --release (workdir=shared_rust_services)
+  - copy l0_rust.dll -> shared/services/l0_runtime/_native_generated/**/l0_rust.pyd
+  - copy services.dll -> shared_rust/services.pyd
+  - powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/tests/test_l0_volume_ownership_policy.py app/loops/tests/test_mm_flow_metadata.py app/loops/tests/test_compute_metadata_mm_flow.py
+  - powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict
+  - powershell -ExecutionPolicy Bypass -File scripts/ops/start_all.ps1 (failed at Redis PING readiness)
+  - powershell -ExecutionPolicy Bypass -File scripts/ops/start_backend.ps1 -BindHost 0.0.0.0 -Port 8001 -LogFile logs/backend_runtime.current.log
+  - cmd /c npm run dev -- --host 0.0.0.0 --port 5173 (l4_ui)
+  - python scripts/test/run_longport_option_flow_mvp_monitor.py (with .env + PYTHONPATH)
+tests_passed:
+  - app/tests/test_l0_volume_ownership_policy.py (4 passed)
+  - app/loops/tests/test_mm_flow_metadata.py (3 passed)
+  - app/loops/tests/test_compute_metadata_mm_flow.py (1 passed)
+  - scripts/validate_session.ps1 -Strict (PASS)
+tests_failed: []
+blockers: []
+notes:
+  - First strict validation run failed due empty session metadata; resolved by updating session records before re-run.
+  - postmarket live monitor CSV produced at scripts/test/longport_option_flow_monitor_20260416_193358.csv with elapsed 140.89s.
+  - start_all Redis readiness check timed out; backend health and frontend HTTP endpoint were still reachable.

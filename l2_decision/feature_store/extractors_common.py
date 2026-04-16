@@ -50,6 +50,31 @@ def _get_ms(obj: Any, key: str, default: Any = None):
     return default
 
 
+def _get_meta(obj: Any, key: str, default: Any = None):
+    """Get value from EnrichedSnapshot.extra_metadata or nested dict payload."""
+    if hasattr(obj, "extra_metadata") and isinstance(obj.extra_metadata, dict):
+        return obj.extra_metadata.get(key, default)
+    if isinstance(obj, dict):
+        meta = obj.get("extra_metadata") or {}
+        if isinstance(meta, dict):
+            return meta.get(key, default)
+    return default
+
+
+def _get_mm_metric(obj: Any, key: str, default: float = 0.0) -> float:
+    metrics = _get_meta(obj, "mm_flow_metrics", {})
+    if not isinstance(metrics, dict):
+        return default
+    raw = metrics.get(key, default)
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return default
+    if not math.isfinite(value):
+        return default
+    return value
+
+
 def _safe(fn: Callable[[], float], default: float = 0.0) -> float:
     """Safely evaluate a feature extractor, returning default on exception."""
     try:

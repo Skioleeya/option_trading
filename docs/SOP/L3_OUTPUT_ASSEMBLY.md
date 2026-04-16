@@ -30,6 +30,7 @@ flowchart LR
 - `ui_state`
 - `agent_g.data.micro_structure`（诊断通道；可承载 canonical raw Greek live debug 字段，如 `micro_structure_state.net_vanna_raw_sum`）
 - `agent_g.data.header_volatility`（标题栏动态波动上下文；固定包含 `lookback_days/lookback_effective_days/ivr/ivp/term_structure/iv_price_relation`）
+- `agent_g.data.mm_flow`（机构流向合同字段；来源于 L2 `fused_signal.mm_flow`，并要求在 delta 路径可增量更新）
 - `rust_active`
 - `shm_stats`
 - `shared/system/snapshot_builder.py` 已退役；`L3AssemblyReactor` 直接由 `PayloadAssemblerV2` 组装 payload，不再保留 legacy SnapshotBuilder shadow compare。

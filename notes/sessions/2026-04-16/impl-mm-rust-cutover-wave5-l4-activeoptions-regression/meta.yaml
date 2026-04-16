@@ -1,0 +1,44 @@
+session_id: "2026-04-16/impl-mm-rust-cutover-wave5-l4-activeoptions-regression"
+title: "fix activeoptions render regressions wave5"
+scope: "l4 activeoptions render contract fix + full-suite green"
+owner: "Codex"
+timezone: "Eastern Standard Time"
+started_at_et: "2026-04-16 18:24:54 -04:00"
+updated_at_et: "2026-04-16 18:31:37 -04:00"
+parent_session: "2026-04-16/impl-mm-rust-cutover-wave4-l4-ui-runtime"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "e91cff0"
+head_commit: "e91cff0"
+
+files_changed:
+  - "l4_ui/src/components/right/activeOptionsModel.ts"
+  - "l4_ui/src/components/__tests__/activeOptions.render.test.tsx"
+  - "docs/SOP/L4_FRONTEND.md"
+  - "openspec/changes/impl-20260416-mm-rust-cutover-parent/proposal.md"
+  - "openspec/changes/impl-20260416-mm-rust-cutover-parent/tasks.md"
+  - "openspec/changes/impl-20260416-mm-rust-cutover-wave5-l4-activeoptions-regression/proposal.md"
+  - "openspec/changes/impl-20260416-mm-rust-cutover-wave5-l4-activeoptions-regression/design.md"
+  - "openspec/changes/impl-20260416-mm-rust-cutover-wave5-l4-activeoptions-regression/tasks.md"
+  - "openspec/changes/impl-20260416-mm-rust-cutover-wave5-l4-activeoptions-regression/specs/mm-flow-wave5/spec.md"
+  - "notes/sessions/2026-04-16/impl-mm-rust-cutover-wave5-l4-activeoptions-regression/project_state.md"
+  - "notes/sessions/2026-04-16/impl-mm-rust-cutover-wave5-l4-activeoptions-regression/open_tasks.md"
+  - "notes/sessions/2026-04-16/impl-mm-rust-cutover-wave5-l4-activeoptions-regression/handoff.md"
+  - "notes/sessions/2026-04-16/impl-mm-rust-cutover-wave5-l4-activeoptions-regression/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId impl-mm-rust-cutover-wave5-l4-activeoptions-regression -Title \"fix activeoptions render regressions wave5\" -Scope \"l4 activeoptions render contract fix + full-suite green\" -Owner \"Codex\" -ParentSession \"2026-04-16/impl-mm-rust-cutover-wave4-l4-ui-runtime\" -Timezone \"Eastern Standard Time\" -UpdatePointer"
+  - "npm --prefix l4_ui run test -- src/components/__tests__/activeOptions.render.test.tsx"
+  - "npm --prefix l4_ui run test -- src/components/__tests__/activeOptions.model.test.ts src/components/__tests__/activeOptions.render.test.tsx"
+  - "npm --prefix l4_ui run test"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "npm --prefix l4_ui run test -- src/components/__tests__/activeOptions.model.test.ts src/components/__tests__/activeOptions.render.test.tsx (2 files, 14 tests passed)"
+  - "npm --prefix l4_ui run test (38 files, 183 tests passed)"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict (PASS)"
+tests_failed: []
+blockers: []
+notes:
+  - "activeoptions regression fixed by slot dedupe + test contract alignment (no local vol sort)."

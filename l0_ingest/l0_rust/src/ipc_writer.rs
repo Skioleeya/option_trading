@@ -94,10 +94,14 @@ impl ArrowBatchWriter {
         let symbols = self.rows.iter().map(|row| row.symbol.clone()).collect::<Vec<_>>();
         let seq_no = self.rows.iter().map(|row| row.seq_no).collect::<Vec<_>>();
         let event_type = self.rows.iter().map(|row| row.event_type).collect::<Vec<_>>();
+        let trade_type = self.rows.iter().map(|row| row.trade_type.clone()).collect::<Vec<_>>();
+        let trade_session = self.rows.iter().map(|row| row.trade_session.clone()).collect::<Vec<_>>();
         let bid = self.rows.iter().map(|row| row.bid).collect::<Vec<_>>();
         let ask = self.rows.iter().map(|row| row.ask).collect::<Vec<_>>();
         let last_price = self.rows.iter().map(|row| row.last_price).collect::<Vec<_>>();
         let volume = self.rows.iter().map(|row| row.volume).collect::<Vec<_>>();
+        let bid_volume = self.rows.iter().map(|row| row.bid_volume).collect::<Vec<_>>();
+        let ask_volume = self.rows.iter().map(|row| row.ask_volume).collect::<Vec<_>>();
         let current_volume = self.rows.iter().map(|row| row.current_volume).collect::<Vec<_>>();
         let turnover = self.rows.iter().map(|row| row.turnover).collect::<Vec<_>>();
         let current_turnover = self.rows.iter().map(|row| row.current_turnover).collect::<Vec<_>>();
@@ -110,10 +114,14 @@ impl ArrowBatchWriter {
             Arc::new(StringArray::from(symbols)),
             Arc::new(UInt64Array::from(seq_no)),
             Arc::new(UInt8Array::from(event_type)),
+            Arc::new(StringArray::from(trade_type)),
+            Arc::new(StringArray::from(trade_session)),
             Arc::new(Float64Array::from(bid)),
             Arc::new(Float64Array::from(ask)),
             Arc::new(Float64Array::from(last_price)),
             Arc::new(UInt64Array::from(volume)),
+            Arc::new(UInt64Array::from(bid_volume)),
+            Arc::new(UInt64Array::from(ask_volume)),
             Arc::new(UInt64Array::from(current_volume)),
             Arc::new(Float64Array::from(turnover)),
             Arc::new(Float64Array::from(current_turnover)),

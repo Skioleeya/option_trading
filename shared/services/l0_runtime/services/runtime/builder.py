@@ -58,6 +58,8 @@ class OptionChainBuilder:
         self._transport_status = SHM_STATUS_DISCONNECTED
         self._transport_error: str | None = None
         self._last_trade_price: dict[str, float] = {}
+        self._last_trade_direction: dict[str, int] = {}
+        self._top_of_book: dict[str, tuple[float | None, float | None]] = {}
         self._arrow_startup_timeout_sec = max(
             1.0,
             float(getattr(settings, "longport_subscription_ready_timeout_sec", 60) or 60),
@@ -217,6 +219,7 @@ class OptionChainBuilder:
             return
         self._state.store.apply_event(clean)
         if clean.event_type == EventType.DEPTH:
+            self._top_of_book[clean.symbol] = (clean.bid, clean.ask)
             dispatch_depth_event(clean, on_depth=self._hooks.on_depth)
             return
         if clean.event_type == EventType.TRADE:
@@ -224,6 +227,8 @@ class OptionChainBuilder:
                 clean,
                 on_trade=self._hooks.on_trade,
                 last_trade_price=self._last_trade_price,
+                last_trade_direction=self._last_trade_direction,
+                top_of_book=self._top_of_book,
             )
 
     async def fetch_snapshot(self, *, include_chain_arrow: bool = False) -> dict[str, Any]:

@@ -38,6 +38,7 @@ flowchart LR
 
 - `version` 必须透传 L0 真实版本
 - `extra_metadata.source_data_timestamp_utc` 必须绑定 L0 `as_of_utc`
+- `extra_metadata.mm_flow_metrics` 必须透传 Rust owner 聚合指标（`net_delta_exposure_live/net_gamma_exposure_live/residual_delta_after_netting/oi_participation_ratio_live/flow_suppression_bias/flow_dominance_ratio/midpoint_tickrule_count/condition_filtered_count/complex_spread_count`），供 L2 直接进入 feature vector
 - `extra_metadata.atm_iv_context` 作为运行时诊断合同字段时，必须保持稳定字典结构，至少包含 `atm_symbol/atm_strike/atm_distance/atm_iv/raw_iv/iv_source/iv_confidence/spot`
 - L1 不得再依赖 L0 提供的 `aggregate_greeks` 或 `ttm_seconds` 兜底；这些值应由 L1 自身计算或由 shared 中立服务融合
 - 当 L1 进入空快照/降级返回路径时，`extra_metadata` 必须保持透传，尤其是 `rust_active`、`shm_stats`、`source_data_timestamp_utc` 不得丢失

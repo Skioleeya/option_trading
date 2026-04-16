@@ -24,6 +24,27 @@ fn safe_int(value: Option<Bound<'_, PyAny>>, default: i64) -> i64 {
     default
 }
 
+fn safe_string(value: Option<Bound<'_, PyAny>>, default: &str) -> String {
+    if let Some(inner) = value {
+        if let Ok(parsed) = inner.extract::<Option<String>>()
+            && let Some(text) = parsed
+        {
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                return trimmed.to_string();
+            }
+        }
+        if let Ok(text) = inner.str() {
+            let rendered = text.to_string();
+            let trimmed = rendered.trim();
+            if !trimmed.is_empty() {
+                return trimmed.to_string();
+            }
+        }
+    }
+    default.to_string()
+}
+
 fn extract_float(value: &Bound<'_, PyAny>) -> Option<f64> {
     if let Ok(parsed) = value.extract::<Option<f64>>() {
         return parsed.filter(|num| num.is_finite());
@@ -112,7 +133,10 @@ fn l0_event_normalize_trade_entry(py: Python<'_>, trade: Bound<'_, PyAny>) -> Py
     out.set_item("timestamp", timestamp)?;
     out.set_item("dir", dir_sign)?;
     out.set_item("direction", dir_sign)?;
-    out.set_item("trade_type", safe_int(mapping_or_attr(&trade, "trade_type"), 0))?;
+    out.set_item(
+        "trade_type",
+        safe_string(mapping_or_attr(&trade, "trade_type"), "UNKNOWN"),
+    )?;
     Ok(out.unbind())
 }
 

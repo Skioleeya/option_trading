@@ -205,6 +205,7 @@ class DecisionOutput:
         )
         iv_regime = resolve_iv_regime(self.iv_regime) if self.iv_regime else component_iv_regime
         gex_intensity = str(self.gex_intensity or "NEUTRAL").strip().upper() or "NEUTRAL"
+        mm_flow = self._extract_mm_flow_payload(self.feature_vector)
 
         return {
             "fused_signal": {
@@ -219,6 +220,7 @@ class DecisionOutput:
                 "raw_vpin":        self.raw_telemetry.get("vpin_composite", 0.0),
                 "raw_bbo_imb":     self.raw_telemetry.get("bbo_imbalance_raw", 0.0),
                 "raw_vol_accel":   self.raw_telemetry.get("vol_accel_ratio", 0.0),
+                "mm_flow":         mm_flow,
             }
         }
 
@@ -230,6 +232,30 @@ class DecisionOutput:
             and self.direction != "HALT"
         )
 
+    @staticmethod
+    def _extract_mm_flow_payload(features: dict[str, float]) -> dict[str, float]:
+        keys = (
+            "net_delta_exposure_live",
+            "net_gamma_exposure_live",
+            "residual_delta_after_netting",
+            "oi_participation_ratio_live",
+            "flow_suppression_bias",
+            "flow_dominance_ratio",
+            "midpoint_tickrule_count",
+            "condition_filtered_count",
+            "complex_spread_count",
+        )
+        out: dict[str, float] = {}
+        for key in keys:
+            raw = features.get(key, 0.0)
+            try:
+                value = float(raw)
+            except (TypeError, ValueError):
+                value = 0.0
+            if not math.isfinite(value):
+                value = 0.0
+            out[key] = value
+        return out
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Audit Trail Entry

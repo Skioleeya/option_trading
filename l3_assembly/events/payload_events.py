@@ -109,6 +109,7 @@ class FrozenPayload:
     )
     gamma_flip_level: float | None = None
     fused_signal: dict[str, Any] | None = None
+    mm_flow: dict[str, Any] | None = None
     micro_structure: dict[str, Any] | None = None
     header_volatility: dict[str, Any] | None = None
     rust_active: bool = False
@@ -119,6 +120,7 @@ class FrozenPayload:
     type: str = "dashboard_update"
 
     def to_dict(self) -> dict[str, Any]:
+        mm_flow_payload = self._resolve_mm_flow_payload()
         return {
             "type": self.type,
             "version": self.version,
@@ -149,6 +151,7 @@ class FrozenPayload:
                         else None
                     ),
                     "fused_signal": self.fused_signal,
+                    "mm_flow": mm_flow_payload,
                     "micro_structure": self.micro_structure,
                     "header_volatility": self.header_volatility,
                 },
@@ -157,6 +160,16 @@ class FrozenPayload:
             "shm_stats": self.shm_stats,
             "governor_telemetry": dict(self.governor_telemetry),
         }
+
+    def _resolve_mm_flow_payload(self) -> dict[str, Any]:
+        if isinstance(self.mm_flow, dict):
+            return dict(self.mm_flow)
+        fused = self.fused_signal
+        if isinstance(fused, dict):
+            mm_flow = fused.get("mm_flow")
+            if isinstance(mm_flow, dict):
+                return dict(mm_flow)
+        return {}
 
     def with_broadcast_fields(
         self,

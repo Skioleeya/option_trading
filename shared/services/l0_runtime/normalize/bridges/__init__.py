@@ -13,7 +13,7 @@ from shared.services.l0_runtime.normalize.pipeline import CleanQuoteEvent, Event
 logger = logging.getLogger(__name__)
 
 DepthCallback = Callable[[str, list[dict[str, float]], list[dict[str, float]]], None]
-TradeCallback = Callable[[str, list[dict[str, float | int]]], None]
+TradeCallback = Callable[[str, list[dict[str, float | int | str]]], None]
 
 _ws_event_counter = 0
 
@@ -53,8 +53,14 @@ def _market_depth_levels_native(event: Any) -> tuple[list[dict[str, float]], lis
     return list(out.get("bids", [])), list(out.get("asks", []))
 
 
-def _market_trade_payload_native(event: Any, previous_price: float | None) -> dict[str, Any] | None:
-    out = l0_rust.l0_market_trade_payload(event, previous_price)
+def _market_trade_payload_native(
+    event: Any,
+    previous_price: float | None,
+    previous_direction: int | None,
+    bid1: float | None,
+    ask1: float | None,
+) -> dict[str, Any] | None:
+    out = l0_rust.l0_market_trade_payload(event, previous_price, previous_direction, bid1, ask1)
     return None if out is None else dict(out)
 
 
@@ -92,6 +98,8 @@ def parse_market_event(
         ask=ask,
         last_price=native.get("last_price"),
         volume=native.get("volume"),
+        bid_volume=native.get("bid_volume"),
+        ask_volume=native.get("ask_volume"),
         open_interest=native.get("open_interest"),
         implied_volatility=native.get("implied_volatility"),
         current_volume=native.get("current_volume"),
@@ -99,6 +107,8 @@ def parse_market_event(
         arrival_mono=float(native.get("arrival_mono", 0.0) or 0.0),
         impact_index=native.get("impact_index"),
         is_sweep=bool(native.get("is_sweep", False)),
+        trade_type=native.get("trade_type"),
+        trade_session=native.get("trade_session"),
     )
 
 
@@ -127,12 +137,21 @@ def dispatch_trade_event(
     *,
     on_trade: TradeCallback | None,
     last_trade_price: dict[str, float],
+    last_trade_direction: dict[str, int],
+    top_of_book: dict[str, tuple[float | None, float | None]] | None = None,
 ) -> None:
     if on_trade is None:
         logger.debug("[MarketEventBridge] Trade callback not set")
         return
 
-    trade = _market_trade_payload_native(event, last_trade_price.get(event.symbol))
+    bid1, ask1 = (top_of_book or {}).get(event.symbol, (event.bid, event.ask))
+    trade = _market_trade_payload_native(
+        event,
+        last_trade_price.get(event.symbol),
+        last_trade_direction.get(event.symbol),
+        bid1,
+        ask1,
+    )
     if trade is None:
         logger.debug(
             "[MarketEventBridge] Trade bridge skipped (non-positive volume): symbol=%s",
@@ -141,6 +160,9 @@ def dispatch_trade_event(
         return
     if event.last_price is not None and event.last_price > 0.0:
         last_trade_price[event.symbol] = float(event.last_price)
+    direction = int(trade.get("direction", trade.get("dir", 0)) or 0)
+    if direction != 0:
+        last_trade_direction[event.symbol] = 1 if direction > 0 else -1
     try:
         on_trade(event.symbol, [trade])
     except (RuntimeError, ValueError, TypeError, AttributeError) as exc:

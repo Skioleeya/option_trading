@@ -22,7 +22,7 @@ function row(slot: number, partial: Partial<ActiveOption>): ActiveOption {
 }
 
 describe('ActiveOptions render contracts', () => {
-    it('keeps fixed slot markers 1..5 across rerenders', () => {
+    it('keeps slot markers unique and within 1..5 across rerenders', () => {
         const { rerender, container } = render(
             <ActiveOptions
                 options={[
@@ -34,7 +34,9 @@ describe('ActiveOptions render contracts', () => {
 
         let rows = Array.from(container.querySelectorAll('tbody tr'))
         expect(rows).toHaveLength(5)
-        expect(rows.map((el) => el.getAttribute('data-slot'))).toEqual(['1', '2', '3', '4', '5'])
+        let slots = rows.map((el) => el.getAttribute('data-slot') ?? '')
+        expect(new Set(slots).size).toBe(5)
+        expect(slots.slice().sort()).toEqual(['1', '2', '3', '4', '5'])
 
         rerender(
             <ActiveOptions
@@ -48,10 +50,12 @@ describe('ActiveOptions render contracts', () => {
 
         rows = Array.from(container.querySelectorAll('tbody tr'))
         expect(rows).toHaveLength(5)
-        expect(rows.map((el) => el.getAttribute('data-slot'))).toEqual(['1', '2', '3', '4', '5'])
+        slots = rows.map((el) => el.getAttribute('data-slot') ?? '')
+        expect(new Set(slots).size).toBe(5)
+        expect(slots.slice().sort()).toEqual(['1', '2', '3', '4', '5'])
     })
 
-    it('renders rows sorted by VOL desc', () => {
+    it('renders rows in backend order (no local VOL sorting)', () => {
         const { container } = render(
             <ActiveOptions
                 options={[
@@ -65,7 +69,7 @@ describe('ActiveOptions render contracts', () => {
         const symbolCells = Array.from(container.querySelectorAll('tbody tr td:nth-child(2)'))
             .map((el) => el.textContent?.trim())
 
-        expect(symbolCells.slice(0, 3)).toEqual(['HIGH', 'MID', 'LOW'])
+        expect(symbolCells.slice(0, 3)).toEqual(['LOW', 'HIGH', 'MID'])
     })
     it('renders negative FLOW with backend bearish green class', () => {
         const { container } = render(

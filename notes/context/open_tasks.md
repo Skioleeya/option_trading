@@ -1,9 +1,12 @@
 ﻿# Open Tasks (Index)
 
 ## Active Session Tasks
-- Path: notes/sessions/2026-04-16/fix-research-store-rust-vrp-owner/open_tasks.md
+- Path: notes/sessions/2026-04-16/impl-mm-rust-cutover-wave6-mm-flow-snapshot-rootfix/open_tasks.md
 
 ## Global Backlog (Cross-Session)
+- [ ] Complete wave6 strict validation pass evidence and attach command output to session handoff.
+- [ ] Execute postmarket 120-second live runtime verification (Redis/backend/frontend + mm_flow key metrics non-zero evidence).
+- [ ] Add dedicated model test for duplicate/out-of-range `slot_index` sanitation in ActiveOptions.
 - [ ] Monitor strict startup gate telemetry for `writer_not_ready_timeout` in live market open window; retune timeout only with evidence.
 - [ ] Capture one full market-session Sub-wave F dual-run compare and append no-divergence evidence in handoff.
 - [ ] Verify/close residual `tmp/pytest_cache` write-warning path (`nodeids`) for non-escalated test runs.

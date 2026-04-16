@@ -88,6 +88,7 @@ flowchart LR
 - `rr25_call_minus_put` 明确定义为 canonical 25Δ risk reversal `call_iv - put_iv`
 - L2 必须同时输出 `skew_25d_valid`（1/0）以区分“真实 0”与“不可计算”
 - L2 对 `net_vanna_raw_sum` / `net_charm_raw_sum` 必须优先消费 canonical raw-sum 字段；`net_vanna` / `net_charm` 仅作兼容 alias，不得在文案中表述为 inventory exposure
+- L2 feature store 必须消费 `extra_metadata.mm_flow_metrics` 并稳定输出 MM 微观结构字段到 `feature_vector`（至少包含 `net_delta_exposure_live/net_gamma_exposure_live/residual_delta_after_netting/oi_participation_ratio_live/flow_suppression_bias/flow_dominance_ratio/midpoint_tickrule_count/condition_filtered_count/complex_spread_count`）
 - `shared/models/agent_output.py` 与 `shared/models/microstructure.py` 现为 Rust-backed wrappers；L2 不得在本地复制 AgentB1 output 默认结构或 microstructure 状态枚举。
 - `shared/system/tactical_triad_logic.py` 现为 Rust-backed wrapper；VRP、guard-VRP、S-VOL 归一化的 source-of-truth 位于 `l0_ingest/l0_rust/src/tactical_triad_logic.rs`，L2 不得再本地复制这些归一化规则。
 - `vrp_realized_based` 仅允许进入 research / diagnostics / optional feature path；现网默认决策继续使用 proxy `vol_risk_premium`

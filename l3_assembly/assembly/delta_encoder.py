@@ -34,6 +34,17 @@ logger = logging.getLogger(__name__)
 _FULL_SNAPSHOT_INTERVAL: float = 30.0
 
 
+def _resolve_mm_flow(payload: FrozenPayload) -> dict[str, Any]:
+    if isinstance(payload.mm_flow, dict):
+        return dict(payload.mm_flow)
+    fused = payload.fused_signal
+    if isinstance(fused, dict):
+        mm_flow = fused.get("mm_flow")
+        if isinstance(mm_flow, dict):
+            return dict(mm_flow)
+    return {}
+
+
 class FieldDeltaEncoder:
     """Field-level delta encoder for FrozenPayload → DeltaPayload.
 
@@ -160,11 +171,16 @@ class FieldDeltaEncoder:
             "gamma_flip_level",
             "gamma_walls",
             "fused_signal",
+            "mm_flow",
             "micro_structure",
             "header_volatility",
         ):
-            c_val = getattr(curr, fname, None)
-            p_val = getattr(prev, fname, None)
+            if fname == "mm_flow":
+                c_val = _resolve_mm_flow(curr)
+                p_val = _resolve_mm_flow(prev)
+            else:
+                c_val = getattr(curr, fname, None)
+                p_val = getattr(prev, fname, None)
             if c_val != p_val:
                 agent_g_data_changes[fname] = c_val
         

@@ -1,13 +1,14 @@
-use crate::helpers::{non_negative_volume_to_u64, now_unix_nanos};
+use crate::gateway_event_map::{depth_event, l0_subscription_flags, quote_event, trade_event};
+use crate::gateway_stress::run_stress_test;
+use crate::helpers::now_unix_nanos;
 use crate::ipc_writer::{ArrowBatchWriter, ArrowWriterConfig};
 use crate::sdk_config::build_sdk_config;
 use crate::schema::ArrowMarketEvent;
 use crate::threat::ThreatEngine;
 use longport::{
-    quote::{PushEventDetail, SubFlags},
+    quote::PushEventDetail,
     Config, QuoteContext,
 };
-use num_traits::ToPrimitive;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use std::sync::Arc;
@@ -44,150 +45,7 @@ impl RustIngestGateway {
             .ok_or_else(|| PyRuntimeError::new_err("quote context unavailable"))
     }
 }
-fn l0_subscription_flags() -> SubFlags { SubFlags::QUOTE | SubFlags::DEPTH | SubFlags::TRADE }
-fn positive_or_none(value: f64) -> Option<f64> {
-    if value > 0.0 { Some(value) } else { None }
-}
-fn quote_event(
-    symbol: String, mono_ns: u64, seq_no: u64, detail: longport::quote::PushQuote,
-) -> ArrowMarketEvent {
-    ArrowMarketEvent {
-        symbol,
-        seq_no,
-        event_type: 1,
-        bid: None,
-        ask: None,
-        last_price: positive_or_none(detail.last_done.to_f64().unwrap_or_default()),
-        volume: Some(non_negative_volume_to_u64(detail.volume)),
-        current_volume: Some(non_negative_volume_to_u64(detail.current_volume)),
-        turnover: Some(detail.turnover.to_f64().unwrap_or_default()),
-        current_turnover: Some(detail.current_turnover.to_f64().unwrap_or_default()),
-        impact_index: Some(0.0),
-        is_sweep: false,
-        arrival_mono_ns: mono_ns,
-    }
-}
-fn trade_event(
-    symbol: &str,
-    mono_ns: u64,
-    seq_no: u64,
-    trade: longport::quote::Trade,
-) -> ArrowMarketEvent {
-    ArrowMarketEvent {
-        symbol: symbol.to_string(),
-        seq_no,
-        event_type: 3,
-        bid: None,
-        ask: None,
-        last_price: positive_or_none(trade.price.to_f64().unwrap_or_default()),
-        volume: Some(non_negative_volume_to_u64(trade.volume)),
-        current_volume: None,
-        turnover: None,
-        current_turnover: None,
-        impact_index: Some(0.0),
-        is_sweep: trade.trade_type.contains('F'),
-        arrival_mono_ns: mono_ns,
-    }
-}
-fn depth_event(
-    symbol: &str,
-    mono_ns: u64,
-    seq_no: u64,
-    detail: longport::quote::PushDepth,
-    threat_engine: &mut ThreatEngine,
-) -> ArrowMarketEvent {
-    let bid = detail
-        .bids
-        .first()
-        .and_then(|level| level.price)
-        .and_then(|value| value.to_f64())
-        .unwrap_or(0.0);
-    let ask = detail
-        .asks
-        .first()
-        .and_then(|level| level.price)
-        .and_then(|value| value.to_f64())
-        .unwrap_or(0.0);
-    let bid_vol = detail
-        .bids
-        .first()
-        .map(|level| non_negative_volume_to_u64(level.volume))
-        .unwrap_or(0);
-    let ask_vol = detail
-        .asks
-        .first()
-        .map(|level| non_negative_volume_to_u64(level.volume))
-        .unwrap_or(0);
-    let impact_index = threat_engine.calculate_ofii(symbol, bid, bid_vol, ask, ask_vol);
-    ArrowMarketEvent {
-        symbol: symbol.to_string(),
-        seq_no,
-        event_type: 2,
-        bid: positive_or_none(bid),
-        ask: positive_or_none(ask),
-        last_price: None,
-        volume: None,
-        current_volume: None,
-        turnover: None,
-        current_turnover: None,
-        impact_index: Some(impact_index),
-        is_sweep: false,
-        arrival_mono_ns: mono_ns,
-    }
-}
-fn run_stress_test(
-    symbol: String,
-    count: u64,
-    shm_path: String,
-    batch_max_rows: usize,
-    shm_capacity_bytes: usize,
-    signal_name: String,
-) -> Result<(), String> {
-    let config = ArrowWriterConfig::new(
-        &shm_path,
-        1,
-        batch_max_rows,
-        shm_capacity_bytes,
-        Some(signal_name),
-    );
-    let mut batch_writer = ArrowBatchWriter::create_or_open(&shm_path, config)
-        .map_err(|err| format!("stress test writer init failed: {err}"))?;
-    println!(
-        "[RustGateway] Starting Arrow IPC stress test: sending {} events for {}",
-        count, symbol
-    );
-    let start = std::time::Instant::now();
-    for i in 0..count {
-        let event = ArrowMarketEvent {
-            symbol: symbol.clone(),
-            seq_no: i,
-            event_type: 3,
-            bid: None,
-            ask: None,
-            last_price: Some(100.0 + (i as f64 * 0.01)),
-            volume: Some(100),
-            current_volume: Some(1),
-            turnover: Some(0.0),
-            current_turnover: Some(0.0),
-            impact_index: Some(0.0),
-            is_sweep: false,
-            arrival_mono_ns: now_unix_nanos(),
-        };
-        batch_writer
-            .push_event(event)
-            .map_err(|err| format!("stress test push failed: {err}"))?;
-    }
-    batch_writer
-        .flush()
-        .map_err(|err| format!("stress test flush failed: {err}"))?;
-    let duration = start.elapsed();
-    println!(
-        "[RustGateway] Stress test complete. Time: {:?}, Rate: {:.2} events/sec",
-        duration,
-        count as f64 / duration.as_secs_f64()
-    );
-    Ok(())
-}
+
 #[pymethods]
 impl RustIngestGateway {
     #[new]

@@ -1,6 +1,6 @@
 # L4 SOP — FRONTEND
 
-> Version: 2026-03-11
+> Version: 2026-04-16
 > Layer: L4 UI Runtime
 
 ## 1. Responsibility
@@ -37,6 +37,7 @@ flowchart LR
 - `heartbeat_timestamp` 按链路心跳解释
 - 右栏模型必须先 normalize 再渲染
 - Right Panel 诊断型数值卡片（如 raw Greek）应优先从 `agent_g.data.micro_structure.micro_structure_state.*` 派生，避免扩大 `ui_state` presenter 合同
+- Right Panel `MM FLOW` 卡片必须优先消费 `agent_g.data.mm_flow`，仅在缺失时回退 `agent_g.data.fused_signal.mm_flow`；L4 仅负责展示映射，不得在组件层重算 Delta/Gamma/OI 指标
 - 标题栏 IV 主值必须继续消费 `spy_atm_iv`；动态补充信息单独消费 `agent_g.data.header_volatility`
 - 标题栏动态 token 顺序固定为 `R{ivr}`、`P{ivp}`、`1D {ratio}`、`VX {ratio}`、`β {state}`
 - 标题栏动态 token 缺值时必须显示 `—`，禁止沿用旧值 sticky
@@ -61,6 +62,7 @@ flowchart LR
 - `ActiveOptions` 当 5 行全部为占位行时，右上角状态必须显示 `DEGRADED`；只要存在至少 1 行真实合约则必须显示 `TOP BY VOL`，禁止在空数据降级阶段误报活跃榜单。
 - `ActiveOptions` 当任一真实行 `flow_signal_state=DEGRADED` 时，右上角状态必须显示 `DEGRADED`（显式信号降级），禁止静默显示 `$0` 且继续标记 `TOP BY VOL`。
 - `ActiveOptions` 行稳定键优先使用 `slot_index`（1..5），避免跨帧重排抖动
+- `ActiveOptions` 若接收到重复/越界 `slot_index`，model 层必须在保持后端行顺序前提下执行 1..5 去重补位，保证 DOM key 唯一且始终覆盖完整槽位集合
 - `DecisionEngine` 禁止渲染 `fused_signal.explanation` 文案（包括 tooltip/title）；guard 说明仅保留在后端审计与诊断链路，不在前端主视图展示
 - `DecisionEngine` 的 GEX badge 必须与 `ui_state.micro_stats.net_gex` 同源（label+badge）；仅当该字段缺失时允许回退 `fused_signal.gex_intensity`
 - `MtfFlow` 必须仅消费纯状态字段（`state=-1|0|1` + 物理标量），不得消费后端样式字段
@@ -98,6 +100,7 @@ flowchart LR
 - `SkewDynamics`
 - `MtfFlow`
 - `ActiveOptions`
+- `MmFlowCard`
 
 要求:
 

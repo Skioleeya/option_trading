@@ -20,12 +20,37 @@ fn mapping_i64(row: &Bound<'_, PyAny>, key: &str) -> Option<i64> {
         .flatten()
 }
 
+fn mapping_string(row: &Bound<'_, PyAny>, key: &str) -> Option<String> {
+    if let Ok(value) = row.call_method1("get", (key,))
+        && let Ok(parsed) = value.extract::<Option<String>>()
+        && let Some(cleaned) = parsed.map(|inner| inner.trim().to_string())
+        && !cleaned.is_empty()
+    {
+        return Some(cleaned);
+    }
+    row.getattr(key)
+        .ok()
+        .and_then(|value| value.extract::<Option<String>>().ok())
+        .flatten()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
 fn attr_f64(row: &Bound<'_, PyAny>, key: &str) -> Option<f64> {
     row.getattr(key)
         .ok()
         .and_then(|value| value.extract::<Option<f64>>().ok())
         .flatten()
         .filter(|value| value.is_finite())
+}
+
+fn midpoint(bid: Option<f64>, ask: Option<f64>) -> Option<f64> {
+    match (bid, ask) {
+        (Some(bid_px), Some(ask_px)) if bid_px > 0.0 && ask_px > 0.0 && ask_px >= bid_px => {
+            Some((bid_px + ask_px) * 0.5)
+        }
+        _ => None,
+    }
 }
 
 fn positive_or_none(value: Option<f64>) -> Option<f64> {
@@ -81,6 +106,8 @@ fn l0_market_parse_event(
     let out = PyDict::new(py);
     out.set_item("seq_no", mapping_i64(&event, "seq_no").unwrap_or(0))?;
     out.set_item("event_type", event_type_value)?;
+    out.set_item("trade_type", mapping_string(&event, "trade_type"))?;
+    out.set_item("trade_session", mapping_string(&event, "trade_session"))?;
     out.set_item("symbol", symbol.clone())?;
     out.set_item("strike", strike_value)?;
     out.set_item("opt_type", infer_opt_type(&symbol))?;
@@ -88,6 +115,14 @@ fn l0_market_parse_event(
     out.set_item("ask", positive_or_none(mapping_f64(&event, "ask")))?;
     out.set_item("last_price", positive_or_none(mapping_f64(&event, "last_price")))?;
     out.set_item("volume", safe_int_or_none(mapping_i64(&event, "volume")))?;
+    out.set_item(
+        "bid_volume",
+        safe_int_or_none(mapping_i64(&event, "bid_volume")),
+    )?;
+    out.set_item(
+        "ask_volume",
+        safe_int_or_none(mapping_i64(&event, "ask_volume")),
+    )?;
     out.set_item("open_interest", py.None())?;
     out.set_item("implied_volatility", py.None())?;
     out.set_item("current_volume", mapping_f64(&event, "current_volume"))?;
@@ -137,28 +172,57 @@ fn l0_market_depth_levels(py: Python<'_>, event: Bound<'_, PyAny>) -> PyResult<P
 }
 
 #[pyfunction]
-#[pyo3(signature = (event, previous_price=None))]
+#[pyo3(signature = (event, previous_price=None, previous_direction=None, bid1=None, ask1=None))]
 fn l0_market_trade_payload(
     py: Python<'_>,
     event: Bound<'_, PyAny>,
     previous_price: Option<f64>,
+    previous_direction: Option<i64>,
+    bid1: Option<f64>,
+    ask1: Option<f64>,
 ) -> PyResult<Option<Py<PyDict>>> {
     let volume = attr_f64(&event, "volume").unwrap_or(0.0);
     if volume <= 0.0 {
         return Ok(None);
     }
     let last_price = positive_or_none(attr_f64(&event, "last_price"));
-    let direction = match (previous_price, last_price) {
-        (_, None) => impact_sign(attr_f64(&event, "impact_index")),
-        (None, Some(_)) => impact_sign(attr_f64(&event, "impact_index")),
-        (Some(prev), Some(last)) if last > prev => 1,
-        (Some(prev), Some(last)) if last < prev => -1,
-        _ => impact_sign(attr_f64(&event, "impact_index")),
-    };
+    let bid = bid1.or_else(|| positive_or_none(attr_f64(&event, "bid")));
+    let ask = ask1.or_else(|| positive_or_none(attr_f64(&event, "ask")));
+    let mut direction = impact_sign(attr_f64(&event, "impact_index"));
+    if let Some(last) = last_price {
+        let tick_rule_dir = match previous_price {
+            Some(prev) if last > prev => 1,
+            Some(prev) if last < prev => -1,
+            _ => previous_direction.unwrap_or(0),
+        };
+        let mid = midpoint(bid, ask);
+        if let Some(mid_px) = mid {
+            if (last - mid_px).abs() <= 1e-6 {
+                direction = tick_rule_dir;
+            } else if let Some(ask_px) = ask {
+                if last >= (ask_px - 1e-6) {
+                    direction = 1;
+                } else if let Some(bid_px) = bid {
+                    if last <= (bid_px + 1e-6) {
+                        direction = -1;
+                    } else {
+                        direction = tick_rule_dir;
+                    }
+                }
+            } else {
+                direction = tick_rule_dir;
+            }
+        } else {
+            direction = tick_rule_dir;
+        }
+    }
+    let trade_type = mapping_string(&event, "trade_type").unwrap_or_else(|| "UNKNOWN".to_string());
+    let trade_session = mapping_string(&event, "trade_session").unwrap_or_else(|| "UNKNOWN".to_string());
     let timestamp = py
         .import("time")?
         .call_method0("time")?
         .extract::<f64>()?
+        .mul_add(1000.0, 0.0)
         .floor() as i64;
     let out = PyDict::new(py);
     out.set_item("price", last_price.unwrap_or(0.0))?;
@@ -167,7 +231,8 @@ fn l0_market_trade_payload(
     out.set_item("timestamp", timestamp)?;
     out.set_item("dir", direction)?;
     out.set_item("direction", direction)?;
-    out.set_item("trade_type", 0)?;
+    out.set_item("trade_type", trade_type)?;
+    out.set_item("trade_session", trade_session)?;
     Ok(Some(out.unbind()))
 }
 

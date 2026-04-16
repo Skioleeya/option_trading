@@ -75,6 +75,8 @@ fn l0_state_default_entry(
     out.set_item("ask", 0.0_f64)?;
     out.set_item("last_price", 0.0_f64)?;
     out.set_item("volume", 0_i64)?;
+    out.set_item("bid_volume", 0_i64)?;
+    out.set_item("ask_volume", 0_i64)?;
     out.set_item("open_interest", 0_i64)?;
     out.set_item("implied_volatility", 0.0_f64)?;
     out.set_item("iv_timestamp", 0.0_f64)?;
@@ -84,6 +86,10 @@ fn l0_state_default_entry(
     out.set_item("vega", 0.0_f64)?;
     out.set_item("current_volume", 0.0_f64)?;
     out.set_item("turnover", 0.0_f64)?;
+    out.set_item("impact_index", 0.0_f64)?;
+    out.set_item("is_sweep", false)?;
+    out.set_item("trade_type", py.None())?;
+    out.set_item("trade_session", py.None())?;
     Ok(out.unbind())
 }
 
@@ -106,8 +112,14 @@ fn l0_state_apply_quote(
     let ask = mapping_or_attr(&event, "ask");
     let last_price = mapping_or_attr(&event, "last_price");
     let volume = mapping_or_attr(&event, "volume");
+    let bid_volume = mapping_or_attr(&event, "bid_volume");
+    let ask_volume = mapping_or_attr(&event, "ask_volume");
     let current_volume = mapping_or_attr(&event, "current_volume");
     let turnover = mapping_or_attr(&event, "turnover");
+    let impact_index = mapping_or_attr(&event, "impact_index");
+    let is_sweep = mapping_or_attr(&event, "is_sweep");
+    let trade_type = mapping_or_attr(&event, "trade_type");
+    let trade_session = mapping_or_attr(&event, "trade_session");
     let event_type = mapping_or_attr(&event, "event_type")
         .and_then(|raw| extract_int(&raw).or_else(|| raw.getattr("value").ok().and_then(|inner| extract_int(&inner))))
         .unwrap_or(0);
@@ -168,6 +180,28 @@ fn l0_state_apply_quote(
                 if turnover_positive {
                     next_ws_turnover_seen = true;
                 }
+            }
+        }
+        if event_type == 2 {
+            if let Some(value) = bid_volume {
+                set_if_changed(&next_entry, "bid_volume", &value, &mut changed)?;
+            }
+            if let Some(value) = ask_volume {
+                set_if_changed(&next_entry, "ask_volume", &value, &mut changed)?;
+            }
+            if let Some(value) = impact_index {
+                set_if_changed(&next_entry, "impact_index", &value, &mut changed)?;
+            }
+        }
+        if event_type == 3 {
+            if let Some(value) = trade_type {
+                set_if_changed(&next_entry, "trade_type", &value, &mut changed)?;
+            }
+            if let Some(value) = trade_session {
+                set_if_changed(&next_entry, "trade_session", &value, &mut changed)?;
+            }
+            if let Some(value) = is_sweep {
+                set_if_changed(&next_entry, "is_sweep", &value, &mut changed)?;
             }
         }
     } else {
