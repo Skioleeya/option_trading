@@ -1,7 +1,7 @@
-﻿# Open Tasks (Index)
+# Open Tasks (Index)
 
 ## Active Session Tasks
-- Path: notes/sessions/2026-04-16/impl-mm-rust-cutover-wave6-mm-flow-snapshot-rootfix/open_tasks.md
+- Path: notes/sessions/2026-04-17/impl-l4-center-header-adaptive-layout/open_tasks.md
 
 ## Global Backlog (Cross-Session)
 - [ ] Complete wave6 strict validation pass evidence and attach command output to session handoff.
@@ -14,6 +14,14 @@
 - [ ] Collapse temporary Rust-only service module names into the final `shared_rust.services` namespace.
 - [x] **DEBT-L1-1 CLOSED (2026-04-02, impl-20260402-claude-audit-fixes-closeout)** `l1_compute/analysis/bsm_aggregation.py` Rust owner migration closed.
 - [x] **DEBT-L1-2 CLOSED (2026-04-02, impl-20260402-claude-audit-fixes-closeout)** `l1_compute/aggregation/zero_gamma.py` Rust owner migration closed.
+
+## Session-Specific Status
+- [x] L4 header grouped masthead structure landed.
+- [x] IV detail badge readability pass landed.
+- [x] SPY broker-style tick feedback landed.
+- [x] Header `SCALE` display removed and right-rail spacing cleaned up.
+- [x] Targeted frontend tests passed for the affected modules.
+- [x] Strict validation pass evidence recorded for the active session.
 
 ## Process
 - Task details and completion evidence belong in the session-local open_tasks.md.

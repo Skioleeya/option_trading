@@ -6,7 +6,7 @@
  *   • AlertToast rendered as portal-sibling (bottom-right stack)
  *   • AlertEngine.start() called on mount, stop() on unmount
  *
- * Layout / DOM / CSS: 100% UNCHANGED
+ * Layout now uses viewport-driven layout tokens; whole-app transform scaling was removed.
  */
 
 import React, { useEffect } from 'react'
@@ -28,6 +28,8 @@ import { deriveMarketStatus } from './center/headerState'
 import { decodeHistoryRows } from '../lib/historyColumnar'
 import type { AtmDecay } from '../types/dashboard'
 import { runtimeConfig } from '../config/runtime'
+import { buildLayoutScaleVars } from '../lib/layoutScale'
+import { useLayoutScale } from '../hooks/useLayoutScale'
 
 function toNullableNumber(raw: unknown): number | null {
     if (raw === null || raw === undefined) return null
@@ -76,6 +78,7 @@ export const App: React.FC = () => {
     useDashboardWS()
     const [debugOpen, setDebugOpen] = React.useState(false)
     const moduleFlags = runtimeConfig.flags
+    const { scale, profile } = useLayoutScale()
 
     useEffect(() => {
         L4Rum.markFmp()
@@ -133,17 +136,22 @@ export const App: React.FC = () => {
     }, [moduleFlags.centerV2, moduleFlags.leftV2, moduleFlags.rightV2])
 
     const marketStatus = deriveMarketStatus()
+    const layoutScaleStyle = buildLayoutScaleVars(scale, profile) as React.CSSProperties
 
     return (
-        <>
+        <div
+            className="h-screen w-screen overflow-hidden bg-bg-primary"
+            style={layoutScaleStyle}
+            data-layout-profile={profile}
+        >
             <DebugOverlay open={debugOpen} onClose={() => setDebugOpen(false)} />
-            {/* ─── Portal siblings (no layout impact) ─────────────────────────── */}
+            {/* ─── Portal siblings (no layout impact) ─────────────────── */}
             <CommandPalette />
             <AlertToast />
 
-            {/* ─── Main layout ───────────────────────────────────────────────── */}
+            {/* ─── Main layout ───────────────────────────────────────── */}
             <div
-                className="flex flex-col h-screen w-screen overflow-hidden bg-bg-primary"
+                className="flex flex-col h-full w-full overflow-hidden bg-bg-primary"
                 data-center-module={moduleFlags.centerV2 ? 'v2' : 'stable'}
                 data-right-module={moduleFlags.rightV2 ? 'v2' : 'stable'}
                 data-left-module={moduleFlags.leftV2 ? 'v2' : 'stable'}
@@ -157,21 +165,29 @@ export const App: React.FC = () => {
                     {/* CENTER PANEL */}
                     <div className="relative flex flex-col flex-1 overflow-hidden bg-[#090a0c]">
                         <div className="flex-1 overflow-hidden relative"><AtmDecayChart /></div>
-                        <div className="absolute top-3 left-3 z-10 pointer-events-none">
+                        <div
+                            className="absolute z-10 pointer-events-none"
+                            style={{ top: 'var(--l4-space-3)', left: 'var(--l4-space-3)' }}
+                        >
                             <div className="pointer-events-auto"><AtmDecayOverlay /></div>
                         </div>
-                        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+                        <div
+                            className="absolute left-1/2 -translate-x-1/2 z-20 pointer-events-none"
+                            style={{ bottom: 'var(--l4-space-8)' }}
+                        >
                             <div className="pointer-events-auto"><GexStatusBar /></div>
                         </div>
                     </div>
 
                     {/* RIGHT PANEL */}
-                    <div className="flex flex-col border-l border-bg-border overflow-y-auto"
-                        style={{ width: '320px', minWidth: '320px' }}>
+                    <div
+                        className="flex flex-col border-l border-bg-border overflow-y-auto"
+                        style={{ width: 'var(--l4-right-w)', minWidth: 'var(--l4-right-w)' }}
+                    >
                         <RightPanel mode={moduleFlags.rightV2 ? 'v2' : 'stable'} />
                     </div>
                 </div>
             </div>
-        </>
+        </div>
     )
 }

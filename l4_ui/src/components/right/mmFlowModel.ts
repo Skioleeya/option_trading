@@ -25,18 +25,6 @@ export interface MmFlowView {
     spreadCount: string
 }
 
-const MM_FLOW_KEYS: Array<keyof MmFlowMetrics> = [
-    'net_delta_exposure_live',
-    'net_gamma_exposure_live',
-    'residual_delta_after_netting',
-    'oi_participation_ratio_live',
-    'flow_suppression_bias',
-    'flow_dominance_ratio',
-    'midpoint_tickrule_count',
-    'condition_filtered_count',
-    'complex_spread_count',
-]
-
 function finite(value: unknown, fallback = 0): number {
     return typeof value === 'number' && Number.isFinite(value) ? value : fallback
 }
@@ -82,11 +70,17 @@ function readMmFlowCandidate(payload: DashboardPayload | null): Record<string, u
 export function deriveMmFlowMetrics(payload: DashboardPayload | null): MmFlowMetrics | null {
     const raw = readMmFlowCandidate(payload)
     if (!raw) return null
-    const out: Record<string, number> = {}
-    for (const key of MM_FLOW_KEYS) {
-        out[key] = finite(raw[key], 0)
+    return {
+        net_delta_exposure_live: finite(raw.net_delta_exposure_live, 0),
+        net_gamma_exposure_live: finite(raw.net_gamma_exposure_live, 0),
+        residual_delta_after_netting: finite(raw.residual_delta_after_netting, 0),
+        oi_participation_ratio_live: finite(raw.oi_participation_ratio_live, 0),
+        flow_suppression_bias: finite(raw.flow_suppression_bias, 0),
+        flow_dominance_ratio: finite(raw.flow_dominance_ratio, 0),
+        midpoint_tickrule_count: finite(raw.midpoint_tickrule_count, 0),
+        condition_filtered_count: finite(raw.condition_filtered_count, 0),
+        complex_spread_count: finite(raw.complex_spread_count, 0),
     }
-    return out as MmFlowMetrics
 }
 
 export function deriveMmFlowView(metrics: MmFlowMetrics | null): MmFlowView | null {
@@ -108,4 +102,3 @@ export function deriveMmFlowView(metrics: MmFlowMetrics | null): MmFlowView | nu
         spreadCount: signed(metrics.complex_spread_count, 0),
     }
 }
-

@@ -1,0 +1,42 @@
+session_id: "2026-04-17/impl-l4-compressed-modules-scale-fix"
+title: "L4 compressed modules scale fix"
+scope: "bugfix"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-17 16:01:01 -04:00"
+updated_at_et: "2026-04-17 16:17:00 -04:00"
+parent_session: "2026-04-17/impl-l4-monitor-profile-optimization"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "c40af8f"
+head_commit: "c40af8f"
+
+files_changed:
+  - l4_ui/src/lib/layoutScale.ts
+  - l4_ui/src/components/left/WallMigration.tsx
+  - l4_ui/src/components/right/ActiveOptions.tsx
+  - l4_ui/src/components/right/DecisionEngine.tsx
+  - l4_ui/src/components/right/MtfFlow.tsx
+  - l4_ui/src/components/right/decisionEngineModel.ts
+  - l4_ui/src/components/right/mtfFlowModel.ts
+  - l4_ui/src/lib/__tests__/layoutScale.test.ts
+  - l4_ui/src/components/__tests__/activeOptions.render.test.tsx
+  - l4_ui/src/components/__tests__/decisionEngineModel.test.ts
+  - docs/SOP/L4_FRONTEND.md
+  - notes/sessions/2026-04-17/impl-l4-compressed-modules-scale-fix/project_state.md
+  - notes/sessions/2026-04-17/impl-l4-compressed-modules-scale-fix/open_tasks.md
+  - notes/sessions/2026-04-17/impl-l4-compressed-modules-scale-fix/handoff.md
+  - notes/sessions/2026-04-17/impl-l4-compressed-modules-scale-fix/meta.yaml
+commands:
+  - powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId "impl-l4-compressed-modules-scale-fix" -Title "L4 compressed modules scale fix" -Scope "bugfix" -Owner "Codex" -ParentSession "2026-04-17/impl-l4-monitor-profile-optimization" -Timezone "America/New_York" -UpdatePointer
+  - git status --short --branch
+  - npm --prefix l4_ui run test
+  - powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict
+tests_passed:
+  - npm --prefix l4_ui run test (40 files passed, 195 tests passed)
+  - powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict (PASS)
+tests_failed:
+  - npm --prefix l4_ui run build (not run in this session)
+blockers: []
+notes:
+  - Compact-profile scaling was corrected by rebalancing layout tokens and deleting decorative status bars, not by changing the canonical `WallMigration` or `ActiveOptions` structures.

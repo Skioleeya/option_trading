@@ -1,10 +1,11 @@
-import { afterEach, describe, expect, it } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Header } from '../center/Header'
 import { useDashboardStore } from '../../store/dashboardStore'
 
 afterEach(() => {
     cleanup()
+    vi.useRealTimers()
     useDashboardStore.setState({
         payload: null,
         connectionStatus: 'connecting',
@@ -89,16 +90,34 @@ describe('Header component render', () => {
 
         render(<Header marketStatus="OPEN" />)
 
+        expect(screen.getByTestId('header-center').className).toContain('l4-header__center')
+        expect(screen.getByTestId('header-center-shell').className).toContain('l4-header__center-shell')
+        expect(screen.getByTestId('header-group-left').className).toContain('l4-header__group-left')
+        expect(screen.getByTestId('header-group-middle').className).toContain('l4-header__group-middle')
+        expect(screen.getByTestId('header-group-right').className).toContain('l4-header__group-right')
+        const ivSummary = screen.getByTestId('header-iv-summary')
+        const middleGroup = screen.getByTestId('header-group-middle')
+        const detailBadgeWrap = screen.getByTestId('header-detail-badge-wrap')
+        const volMicro = screen.getByTestId('header-vol-micro')
+        expect(ivSummary).toBeInTheDocument()
+        expect(middleGroup.contains(ivSummary)).toBe(true)
+        expect(detailBadgeWrap.contains(ivSummary)).toBe(false)
+        expect(screen.getByTestId('header-vol-badge')).toBeInTheDocument()
+        expect(volMicro).toBeInTheDocument()
+        expect(screen.queryByText('...')).not.toBeInTheDocument()
         expect(screen.getByText('10:30:45 ET')).toBeInTheDocument()
         expect(screen.getByText('RDS LIVE')).toBeInTheDocument()
         expect(screen.getByText('RUST')).toBeInTheDocument()
-        expect(screen.getByText(/VOL_EXPANSION/)).toBeInTheDocument()
+        expect(screen.getByText('TACTICAL OFFENSIVE')).toBeInTheDocument()
+        expect(screen.queryByText(/SCALE/)).not.toBeInTheDocument()
+        expect(screen.getByText('IV')).toBeInTheDocument()
+        expect(screen.getByText(/UP VOL_EXPANSION/)).toBeInTheDocument()
         expect(screen.getByText('24.50%')).toBeInTheDocument()
-        expect(screen.getByText('R72')).toBeInTheDocument()
-        expect(screen.getByText('P68')).toBeInTheDocument()
-        expect(screen.getByText('1D 1.12')).toBeInTheDocument()
-        expect(screen.getByText('VX 1.08')).toBeInTheDocument()
-        expect(screen.getByText('β INV')).toBeInTheDocument()
+        expect(volMicro.textContent).toContain('R72')
+        expect(volMicro.textContent).toContain('P68')
+        expect(volMicro.textContent).toContain('1D 1.12')
+        expect(volMicro.textContent).toContain('VX 1.08')
+        expect(volMicro.textContent).toContain('β INV')
     })
 
     it('uses prop timestamp fallback when payload timestamp is missing', () => {
@@ -113,5 +132,54 @@ describe('Header component render', () => {
 
         expect(screen.getByText('13:00:00 ET')).toBeInTheDocument()
         expect(screen.getByText('10.00%')).toBeInTheDocument()
+        expect(screen.queryByText(/SCALE/)).not.toBeInTheDocument()
+        expect(screen.getByTestId('header-group-left').className).toContain('l4-header__group-left')
+        expect(screen.getByTestId('header-group-right')).toBeInTheDocument()
+    })
+
+    it('applies broker-style SPY tick direction classes for up and down ticks', () => {
+        vi.useFakeTimers()
+
+        const { rerender } = render(<Header marketStatus="OPEN" spot={710.14} />)
+        const spotValue = screen.getByTestId('header-spot-value')
+
+        expect(spotValue.className).toContain('l4-header__spot-value--neutral')
+        expect(spotValue.className).not.toContain('l4-header__spot-value--tick-up')
+        expect(spotValue.className).not.toContain('l4-header__spot-value--tick-down')
+
+        act(() => {
+            rerender(<Header marketStatus="OPEN" spot={710.24} />)
+        })
+
+        expect(spotValue.className).toContain('l4-header__spot-value--up')
+        expect(spotValue.className).toContain('l4-header__spot-value--tick-up')
+
+        act(() => {
+            vi.advanceTimersByTime(400)
+        })
+
+        expect(spotValue.className).toContain('l4-header__spot-value--up')
+        expect(spotValue.className).not.toContain('l4-header__spot-value--tick-up')
+
+        act(() => {
+            rerender(<Header marketStatus="OPEN" spot={710.08} />)
+        })
+
+        expect(spotValue.className).toContain('l4-header__spot-value--down')
+        expect(spotValue.className).toContain('l4-header__spot-value--tick-down')
+
+        act(() => {
+            vi.advanceTimersByTime(400)
+        })
+
+        expect(spotValue.className).toContain('l4-header__spot-value--down')
+        expect(spotValue.className).not.toContain('l4-header__spot-value--tick-down')
+
+        act(() => {
+            rerender(<Header marketStatus="OPEN" spot={710.08} />)
+        })
+
+        expect(spotValue.className).toContain('l4-header__spot-value--down')
+        expect(spotValue.className).not.toContain('l4-header__spot-value--tick-down')
     })
 })

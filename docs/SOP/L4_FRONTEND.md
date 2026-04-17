@@ -26,6 +26,21 @@ flowchart LR
 - 组件通过 selector 精准订阅
 - 连接与历史端点必须由环境变量驱动（`VITE_L4_WS_URL`、`VITE_L4_API_BASE`），禁止在入口硬编码地址
 - 模块切换必须由显式开关控制（`VITE_L4_ENABLE_CENTER_V2`、`VITE_L4_ENABLE_RIGHT_V2`、`VITE_L4_ENABLE_LEFT_V2`），并保留稳定回退路径
+- 全局布局必须使用单一路径的布局令牌缩放：固定设计基准 `1920x1080`，按 `min(width_ratio,height_ratio)` 同步窗口/浏览器缩放，并限制在 `50%~125%`
+- 禁止对整棵应用 DOM 使用 `transform: scale(...)` + 反向 `width/height` 补偿；缩放只允许通过布局变量驱动左右栏宽度、关键浮层宽度和定位偏移
+- L4 不得尝试按“物理主屏/副屏设备身份”分支；浏览器运行时唯一允许的定向优化依据是当前窗口 viewport 尺寸
+- 布局必须按 viewport 档位自动切换：
+  - `primary_standard`: `width > 1366` 且 `height > 768`
+  - `secondary_compact`: `width <= 1366` 或 `height <= 768`
+- `primary_standard` 与 `secondary_compact` 必须分别拥有独立布局 token 集，至少覆盖左右栏宽度、Header 高度与间距、GEX bar 宽度、中心浮层偏移、Right/Left panel padding 与关键字号
+- `secondary_compact` 布局收敛原则必须是“装饰先让位，核心信息后让位”：允许扩大左右栏信息 rail、收紧非核心 padding，但禁止通过改写核心表格/核心监控模块结构来掩盖 token 失衡
+- 缩放百分比继续只用于驱动布局 token 计算，不得再作为 Header 文案状态输出；右侧 masthead 诊断簇仅保留 `TACTICAL OFFENSIVE` 与 `RUST`
+- Center `Header` 禁止依赖 `scale`、`flex-shrink`、`ellipsis` 或内部换行来硬塞信息；必须使用嵌套分组骨架：左组固定承载 `SPX SENTINEL / 时间 / 状态 / SPY / spot`，中组承载 `IV` 与附属波动 badge，右组独立承载 `RDS LIVE`
+- Center `Header` 组内元素只允许通过紧凑 gap 控制间距，禁止在组内使用 `justify-between`、`flex-1` 或其他会破坏区块感的拉伸策略
+- Center `Header` 小屏收敛必须通过 container-query 触发物理级裁剪：`IV {pct}` 主值是 Tier-0 指标，任何 viewport 下都不得隐藏；只允许依次隐藏 `vol micro`、`vol velocity`、整块附属波动 badge；`RDS LIVE` 保持保留，禁止把左组核心区挤压变形
+- Center `Header` 的视觉层级必须保持机构终端风格：`IV {pct}` 是唯一中心主锚点，品牌/时间/状态属于次级信息，右侧 utility（如 offense/scale/rust）必须弱化到诊断层，不得与 IV 争抢主视觉
+- Center `Header` 的 IV 附属 detail badge 必须保持可读性下限：默认 viewport 下禁止把 regime/micro token 压到接近调试字级别；应优先提高字号/行高并提前触发裁剪，而不是维持不可读的小字
+- Center `Header` 的 `SPY` 主价必须提供 broker-style last-tick 反馈：按亚洲盘语义执行 `红=涨`、`绿=跌`，仅数值本身响应 tick 方向并触发短促无位移的高亮，不得把该动态扩散到整个 header cluster
 - Center 图表入口必须通过 `ChartEngineAdapter` 抽象创建，当前生产引擎键固定 `lightweight`
 - Right 面板入口必须通过 `RightPanel` 边界组件切换 `v2/stable` 路径；`stable` 路径仅接收 payload 派生的 typed contracts，不得依赖 Center/Left 内部实现
 - Right stable 路径的状态→颜色映射必须先经过 `rightPanelModel` 总线归一化（`tacticalTriad/skewDynamics/mtfFlow/activeOptions/netGex`），组件层不得反向恢复后端样式 token。
@@ -65,6 +80,7 @@ flowchart LR
 - `ActiveOptions` 若接收到重复/越界 `slot_index`，model 层必须在保持后端行顺序前提下执行 1..5 去重补位，保证 DOM key 唯一且始终覆盖完整槽位集合
 - `DecisionEngine` 禁止渲染 `fused_signal.explanation` 文案（包括 tooltip/title）；guard 说明仅保留在后端审计与诊断链路，不在前端主视图展示
 - `DecisionEngine` 的 GEX badge 必须与 `ui_state.micro_stats.net_gex` 同源（label+badge）；仅当该字段缺失时允许回退 `fused_signal.gex_intensity`
+- `DecisionEngine` 与 `MtfFlow` 右栏进攻区禁止使用横向进度/状态条；状态强弱只能通过文字、数值、badge、dot 和颜色表达，避免在紧凑档浪费垂直/横向空间
 - `MtfFlow` 必须仅消费纯状态字段（`state=-1|0|1` + 物理标量），不得消费后端样式字段
 - `MtfFlow` 的颜色/边框/动画必须由前端白名单 `Record<FlowState, VisualTokenSet>` 本地映射生成
 - 对脏 payload 中的 `color/red/green/dot_color/text_color/border/animate/align_color` 必须忽略，禁止视觉状态倒灌
@@ -90,7 +106,11 @@ flowchart LR
 - `App.tsx` 在 ATM history cold-boot hydrate 成功时必须打印一次 `[L4 ATM]` 日志，最少包含 `rows / last timestamp / straddle / call / put`，用于确认 TradingView 曲线数据已进入浏览器侧
 - Left `stable` 适配层必须优先消费 canonical wall 行字段（`label/strike/history/lights`），并兼容 legacy 字段（`type_label/current/h1/h2`），禁止在 stable 路径锁死旧合同。
 - `WallMigration` 当前墙位数值（`CALL/PUT` 的 `strike`）必须以 `gamma_walls.call_wall/put_wall` 为 canonical source；`wall_migration` 仅承载迁移状态与历史上下文，不得反向覆盖主墙位数值。
+- `WallMigration` 必须保持 `CALL/PUT` 双行横向结构；禁止改造成纵向卡片或改变行语义
+- `WallMigration` 行内列宽必须随容器响应式重分配：`h1/h2/current` 三个 strike 容器必须使用等份自适应轨道，禁止按 `current` 文本长度或内容给单列特权扩张；`state` 保持独立尾列并允许先收缩截断
+- `WallMigration` 的 `h1/h2/current` strike 展示必须使用紧凑整数标签（如 `711`），不得在该模块继续显示 `.00` 小数尾巴；该规则仅限 `WallMigration`，不得外溢到 Header/GEX Bar 等其他价格展示模块
 - Left `MicroStats.wall_dyn` 的 badge 必须由前端本地状态语义归一化（与 `WallMigration` 一致）生成，禁止直接信任后端 badge：`RETREAT/BREACH/COLLAPSE -> amber`，`DECAY/SIEGE/PINCH -> neutral`，`REINFORCED` 按方向映射红/绿；未知/未收录状态必须硬切为 `neutral`，不得回退后端原始 badge。
+- `ActiveOptions` 必须维持 canonical table 结构与表头顺序（`# / SYM / T / STRIKE / IMP / VOL / FLOW`）；紧凑档若出现挤压，必须优先修正 rail/token/padding，而不是改成 list/card 结构
 
 ### 4.1 Right Panel Typed Contract
 

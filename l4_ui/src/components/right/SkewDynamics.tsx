@@ -18,7 +18,7 @@ export const SkewDynamics: React.FC<Props> = memo(({ uiState: propState, preferP
     const state = normalizeSkewDynamicsState(preferProp ? (propState ?? storeState) : (storeState ?? propState))
 
     return (
-        <div className="border-t border-bg-border p-2">
+        <div className="border-t border-bg-border" style={{ padding: 'var(--l4-panel-pad)' }}>
             <div className="flex items-center justify-between mb-1">
                 <span className="section-header">SKEW DYNAMICS</span>
                 <span className="section-header text-text-muted">IV SKEW ANALYSIS</span>
@@ -30,12 +30,12 @@ export const SkewDynamics: React.FC<Props> = memo(({ uiState: propState, preferP
                     </div>
                     <div>
                         <div className="section-header">IV SKEW</div>
-                        <div className={`badge ${state.badge} text-[9px] px-1 py-0! tracking-wider`}>
+                        <div className={`badge ${state.badge} px-1 py-0! tracking-wider`} style={{ fontSize: 'var(--l4-font-9)' }}>
                             {state.state_label}
                         </div>
                     </div>
                 </div>
-                <span className={`mono text-xl font-bold ${state.color_class}`}>{state.value}</span>
+                <span className={`mono font-bold ${state.color_class}`} style={{ fontSize: 'var(--l4-triad-value-font)' }}>{state.value}</span>
             </div>
         </div>
     )

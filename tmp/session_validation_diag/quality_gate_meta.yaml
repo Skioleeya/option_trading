@@ -1,10 +1,1 @@
 ﻿files_changed:
-  - "l0_ingest/l0_rust/src/schema.rs"
-  - "l0_ingest/l0_rust/src/ipc_writer.rs"
-  - "l0_ingest/l0_rust/src/gateway_core.rs"
-  - "l0_ingest/l0_rust/src/gateway_event_map.rs"
-  - "l0_ingest/l0_rust/src/gateway_stress.rs"
-  - "l0_ingest/l0_rust/src/l0_market_bridge.rs"
-  - "l0_ingest/l0_rust/src/l0_state_support.rs"
-  - "l0_ingest/l0_rust/src/l0_event_support.rs"
-  - "l0_ingest/l0_rust/src/lib.rs"

@@ -250,7 +250,7 @@ export function normalizeActiveOptions(input: unknown, limit = ACTIVE_OPTIONS_FI
         return target
     }
 
-    const withSlots = normalized.map((row, idx) => {
+    const withSlots: ActiveOption[] = normalized.map((row, idx) => {
         const preferred = toFiniteInteger(row.slot_index, idx + 1)
         const slotIndex = preferred > 0 && preferred <= target && !usedSlots.has(preferred)
             ? preferred

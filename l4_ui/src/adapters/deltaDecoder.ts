@@ -134,8 +134,9 @@ function validatePayloadStrict(payload: unknown): DashboardPayload {
         throw new Error('[L4 Contract] timestamp must equal data_timestamp')
     }
 
-    validateActiveOptionsRows(payload as DashboardPayload)
-    return payload as DashboardPayload
+    const dashboardPayload = payload as unknown as DashboardPayload
+    validateActiveOptionsRows(dashboardPayload)
+    return dashboardPayload
 }
 
 export const DeltaDecoder = {

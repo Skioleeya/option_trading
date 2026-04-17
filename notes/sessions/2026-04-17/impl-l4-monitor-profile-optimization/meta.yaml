@@ -1,0 +1,55 @@
+﻿session_id: "2026-04-17/impl-l4-monitor-profile-optimization"
+title: "L4 monitor profile optimization"
+scope: "bugfix"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-17 15:40:47 -04:00"
+updated_at_et: "2026-04-17 15:50:00 -04:00"
+parent_session: "2026-04-17/fix-l4-layout-scale-root-cause"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "c40af8f"
+head_commit: "c40af8f"
+
+files_changed:
+  - l4_ui/src/lib/layoutScale.ts
+  - l4_ui/src/hooks/useLayoutScale.ts
+  - l4_ui/src/components/App.tsx
+  - l4_ui/src/components/center/Header.tsx
+  - l4_ui/src/components/center/GexStatusBar.tsx
+  - l4_ui/src/components/center/AtmDecayOverlay.tsx
+  - l4_ui/src/components/left/LeftPanel.tsx
+  - l4_ui/src/components/left/MicroStats.tsx
+  - l4_ui/src/components/left/WallMigration.tsx
+  - l4_ui/src/components/right/DecisionEngine.tsx
+  - l4_ui/src/components/right/MmFlowCard.tsx
+  - l4_ui/src/components/right/ActiveOptions.tsx
+  - l4_ui/src/components/right/MtfFlow.tsx
+  - l4_ui/src/components/right/TacticalTriad.tsx
+  - l4_ui/src/components/right/SkewDynamics.tsx
+  - l4_ui/src/index.css
+  - l4_ui/src/lib/__tests__/layoutScale.test.ts
+  - l4_ui/src/hooks/__tests__/useLayoutScale.test.ts
+  - l4_ui/src/components/__tests__/debugHotkey.integration.test.tsx
+  - docs/SOP/L4_FRONTEND.md
+  - notes/sessions/2026-04-17/impl-l4-monitor-profile-optimization/project_state.md
+  - notes/sessions/2026-04-17/impl-l4-monitor-profile-optimization/open_tasks.md
+  - notes/sessions/2026-04-17/impl-l4-monitor-profile-optimization/handoff.md
+  - notes/sessions/2026-04-17/impl-l4-monitor-profile-optimization/meta.yaml
+  - notes/context/project_state.md
+  - notes/context/open_tasks.md
+  - notes/context/handoff.md
+commands:
+  - powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId "impl-l4-monitor-profile-optimization" -Title "L4 monitor profile optimization" -Scope "bugfix" -Owner "Codex" -ParentSession "2026-04-17/fix-l4-layout-scale-root-cause" -Timezone "America/New_York" -UpdatePointer
+  - npm --prefix l4_ui run test
+  - powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict
+tests_passed:
+  - npm --prefix l4_ui run test (40 files passed, 194 tests passed)
+  - powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict (PASS)
+tests_failed:
+  - npm --prefix l4_ui run build (not run in this session)
+blockers: []
+notes:
+  - Main vs secondary optimization is implemented strictly as viewport-profile layout switching; no physical monitor identity detection or manual profile override exists.
+
+

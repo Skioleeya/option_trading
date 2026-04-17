@@ -22,6 +22,20 @@ function row(slot: number, partial: Partial<ActiveOption>): ActiveOption {
 }
 
 describe('ActiveOptions render contracts', () => {
+    it('keeps the canonical table header order unchanged', () => {
+        render(<ActiveOptions options={[]} preferProp />)
+
+        expect(screen.getAllByRole('columnheader').map((node) => node.textContent)).toEqual([
+            '#',
+            'SYM',
+            'T',
+            'STRIKE',
+            'IMP',
+            'VOL',
+            'FLOW',
+        ])
+    })
+
     it('keeps slot markers unique and within 1..5 across rerenders', () => {
         const { rerender, container } = render(
             <ActiveOptions

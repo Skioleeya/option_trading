@@ -1,0 +1,45 @@
+session_id: "2026-04-17/impl-l4-center-header-adaptive-layout"
+title: "L4 center header adaptive layout"
+scope: "bugfix"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-17 17:03:39 -04:00"
+updated_at_et: "2026-04-17 18:35:23 -04:00"
+parent_session: "2026-04-17/fix-l4-typescript-build-errors"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "c40af8f"
+head_commit: "c40af8f"
+
+files_changed:
+  - l4_ui/src/components/App.tsx
+  - l4_ui/src/components/center/Header.tsx
+  - l4_ui/src/index.css
+  - l4_ui/src/components/__tests__/header.render.test.tsx
+  - docs/SOP/L4_FRONTEND.md
+  - notes/context/project_state.md
+  - notes/context/open_tasks.md
+  - notes/context/handoff.md
+  - notes/sessions/2026-04-17/impl-l4-center-header-adaptive-layout/project_state.md
+  - notes/sessions/2026-04-17/impl-l4-center-header-adaptive-layout/open_tasks.md
+  - notes/sessions/2026-04-17/impl-l4-center-header-adaptive-layout/handoff.md
+  - notes/sessions/2026-04-17/impl-l4-center-header-adaptive-layout/meta.yaml
+commands:
+  - git rev-parse --abbrev-ref HEAD
+  - git rev-parse --short HEAD
+  - Get-Date -Format "yyyy-MM-dd HH:mm:ss zzz"
+  - npm --prefix l4_ui run build
+  - npm --prefix l4_ui run test -- src/components/__tests__/header.render.test.tsx src/lib/__tests__/layoutScale.test.ts
+  - powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict
+tests_passed:
+  - npm --prefix l4_ui run build
+  - npm --prefix l4_ui run test -- src/components/__tests__/header.render.test.tsx src/lib/__tests__/layoutScale.test.ts (2 files passed, 10 tests passed)
+  - powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict (passed)
+tests_failed:
+  - Live browser screenshot verification not rerun in this session
+blockers: []
+notes:
+  - Center header was rebuilt into nested left/middle/right groups to restore deterministic grouping.
+  - `IV {pct}` remains outside the discardable detail badge and is never hidden by container breakpoints.
+  - `SPY` spot now carries broker-style last-tick red/green semantics with short local flash feedback.
+  - Header right rail now omits `SCALE` and keeps only `TACTICAL OFFENSIVE` plus `RUST` as the utility cluster.

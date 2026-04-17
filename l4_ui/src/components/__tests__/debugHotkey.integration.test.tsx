@@ -35,6 +35,16 @@ import { App } from '../App'
 
 beforeEach(() => {
     vi.stubEnv('DEV', true)
+    Object.defineProperty(window, 'innerWidth', {
+        configurable: true,
+        writable: true,
+        value: 1536,
+    })
+    Object.defineProperty(window, 'innerHeight', {
+        configurable: true,
+        writable: true,
+        value: 864,
+    })
     vi.stubGlobal(
         'fetch',
         vi.fn().mockResolvedValue({
@@ -59,6 +69,23 @@ afterEach(() => {
 })
 
 describe('Debug hotkey integration', () => {
+    it('marks the root container with the active layout profile', () => {
+        Object.defineProperty(window, 'innerWidth', {
+            configurable: true,
+            writable: true,
+            value: 1280,
+        })
+        Object.defineProperty(window, 'innerHeight', {
+            configurable: true,
+            writable: true,
+            value: 720,
+        })
+
+        const { container } = render(<App />)
+
+        expect(container.firstElementChild).toHaveAttribute('data-layout-profile', 'secondary_compact')
+    })
+
     it('toggles debug overlay via Ctrl/Cmd + D command hotkey chain', async () => {
         render(<App />)
 
