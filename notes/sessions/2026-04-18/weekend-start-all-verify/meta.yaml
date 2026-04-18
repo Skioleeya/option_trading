@@ -1,0 +1,35 @@
+session_id: "2026-04-18/weekend-start-all-verify"
+title: "Weekend start_all runtime verification"
+scope: "runtime verification"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-18 08:31:56 -04:00"
+updated_at_et: "2026-04-18 08:34:38 -04:00"
+parent_session: null
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "c114661"
+head_commit: "c114661"
+
+files_changed:
+  - "notes/sessions/2026-04-18/weekend-start-all-verify/project_state.md"
+  - "notes/sessions/2026-04-18/weekend-start-all-verify/open_tasks.md"
+  - "notes/sessions/2026-04-18/weekend-start-all-verify/handoff.md"
+  - "notes/sessions/2026-04-18/weekend-start-all-verify/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/ops/start_all.ps1"
+  - "Invoke-RestMethod http://127.0.0.1:8001/health"
+  - "Invoke-RestMethod http://127.0.0.1:8001/debug/persistence_status"
+  - "Invoke-RestMethod http://127.0.0.1:8001/debug/active_options_capture"
+  - "Invoke-WebRequest http://127.0.0.1:5173"
+  - "ClientWebSocket ws://127.0.0.1:8001/ws/dashboard"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "Runtime verification passed: Redis/Backend/Frontend listening; health + diagnostics + ws init verified."
+tests_failed: []
+blockers:
+  - "Tooling elevation is not full UAC admin token; start_all emits admin warning though stack is healthy."
+notes: []

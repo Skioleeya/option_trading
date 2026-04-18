@@ -1,12 +1,12 @@
-# Handoff (Index)
+﻿# Handoff (Index)
 
 ## Active Handoff
-- Path: notes/sessions/2026-04-17/impl-l4-center-header-adaptive-layout/handoff.md
-- Meta: notes/sessions/2026-04-17/impl-l4-center-header-adaptive-layout/meta.yaml
+- Path: notes/sessions/2026-04-18/weekend-start-all-verify/handoff.md
+- Meta: notes/sessions/2026-04-18/weekend-start-all-verify/meta.yaml
 
 ## Latest Outcome
-- Session: 2026-04-17/impl-l4-center-header-adaptive-layout
-- Summary: L4 masthead grouped structure, IV detail readability, SPY broker-style tick feedback, right-rail `SCALE` removal, and strict validation pass all completed.
+- Session: 2026-04-18/weekend-start-all-verify
+- Summary: 周末 `start_all` 启动与 L0-L4 链路验证已完成，strict gate 已通过并入档。
 
 ## Next Session Bootstrap
 1. Read this file.

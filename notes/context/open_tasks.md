@@ -1,7 +1,7 @@
-# Open Tasks (Index)
+﻿# Open Tasks (Index)
 
 ## Active Session Tasks
-- Path: notes/sessions/2026-04-17/impl-l4-center-header-adaptive-layout/open_tasks.md
+- Path: notes/sessions/2026-04-18/weekend-start-all-verify/open_tasks.md
 
 ## Global Backlog (Cross-Session)
 - [ ] Complete wave6 strict validation pass evidence and attach command output to session handoff.
@@ -16,12 +16,10 @@
 - [x] **DEBT-L1-2 CLOSED (2026-04-02, impl-20260402-claude-audit-fixes-closeout)** `l1_compute/aggregation/zero_gamma.py` Rust owner migration closed.
 
 ## Session-Specific Status
-- [x] L4 header grouped masthead structure landed.
-- [x] IV detail badge readability pass landed.
-- [x] SPY broker-style tick feedback landed.
-- [x] Header `SCALE` display removed and right-rail spacing cleaned up.
-- [x] Targeted frontend tests passed for the affected modules.
-- [x] Strict validation pass evidence recorded for the active session.
+- [x] 周末 `start_all.ps1` 启动成功（Redis/Backend/Frontend）。
+- [x] L0-L4 运行验证通过（health/persistence_status/active_options/ws）。
+- [ ] 如需管理员令牌无 warning 证据，需外部 UAC 管理员终端复验。
+- [x] 当前会话 strict validation 已通过并写入 handoff。
 
 ## Process
 - Task details and completion evidence belong in the session-local open_tasks.md.

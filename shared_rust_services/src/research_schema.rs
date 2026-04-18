@@ -11,14 +11,17 @@ const COMPACT_FIELDS: [&str; 18] = [
     "iv_regime_code", "gex_intensity_code", "confidence", "max_impact",
     "dealer_squeeze_alert", "stored_at",
 ];
-const FEATURE_FIELDS: [&str; 28] = [
+const FEATURE_FIELDS: [&str; 37] = [
     "data_timestamp", "as_of_utc", "l0_version", "symbol", "spot", "atm_iv", "net_gex",
     "call_wall", "put_wall", "flip_level", "bbo_imbalance_raw", "session_phase",
     "skew_25d_normalized", "rr25_call_minus_put", "realized_volatility_15m",
     "vol_risk_premium", "vrp_realized_based", "longport_official_hv_decimal",
     "longport_official_hv_sample_count", "longport_official_hv_age_sec",
-    "vrp_official_hv_based", "direction_code", "iv_regime_code", "gex_intensity_code",
-    "confidence", "max_impact", "dealer_squeeze_alert", "stored_at",
+    "vrp_official_hv_based", "direction_code", "iv_regime_code", "gex_intensity_code", "confidence",
+    "max_impact", "dealer_squeeze_alert", "net_delta_exposure_live", "net_gamma_exposure_live",
+    "residual_delta_after_netting", "oi_participation_ratio_live", "flow_suppression_bias",
+    "flow_dominance_ratio", "midpoint_tickrule_count", "condition_filtered_count",
+    "complex_spread_count", "stored_at",
 ];
 const LABEL_FIELDS: [&str; 8] = [
     "fwd_ret_1m", "fwd_ret_5m", "fwd_ret_15m", "fwd_ret_60m", "max_adverse_excursion",
@@ -92,7 +95,12 @@ fn research_feature_schema(py: Python<'_>) -> PyResult<Py<PyAny>> {
         ("longport_official_hv_sample_count", "int64"), ("longport_official_hv_age_sec", "float64"),
         ("vrp_official_hv_based", "float64"), ("direction_code", "int8"),
         ("iv_regime_code", "int8"), ("gex_intensity_code", "int8"), ("confidence", "float64"),
-        ("max_impact", "float64"), ("dealer_squeeze_alert", "bool_"), ("stored_at", "string"),
+        ("max_impact", "float64"), ("dealer_squeeze_alert", "bool_"),
+        ("net_delta_exposure_live", "float64"), ("net_gamma_exposure_live", "float64"),
+        ("residual_delta_after_netting", "float64"), ("oi_participation_ratio_live", "float64"),
+        ("flow_suppression_bias", "float64"), ("flow_dominance_ratio", "float64"),
+        ("midpoint_tickrule_count", "float64"), ("condition_filtered_count", "float64"),
+        ("complex_spread_count", "float64"), ("stored_at", "string"),
     ])
 }
 

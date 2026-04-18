@@ -123,9 +123,12 @@ pub fn project_allowed(view: &str) -> &'static [&'static str] {
         "vol_risk_premium", "vrp_realized_based", "longport_official_hv_decimal",
         "longport_official_hv_sample_count", "longport_official_hv_age_sec",
         "vrp_official_hv_based", "direction_code", "iv_regime_code", "gex_intensity_code",
-        "confidence", "max_impact", "dealer_squeeze_alert", "stored_at", "fwd_ret_1m",
-        "fwd_ret_5m", "fwd_ret_15m", "fwd_ret_60m", "max_adverse_excursion",
-        "realized_vol_horizon", "horizon_observed_seconds",
+        "confidence", "max_impact", "dealer_squeeze_alert", "net_delta_exposure_live",
+        "net_gamma_exposure_live", "residual_delta_after_netting", "oi_participation_ratio_live",
+        "flow_suppression_bias", "flow_dominance_ratio", "midpoint_tickrule_count",
+        "condition_filtered_count", "complex_spread_count", "stored_at", "fwd_ret_1m",
+        "fwd_ret_5m", "fwd_ret_15m", "fwd_ret_60m", "max_adverse_excursion", "realized_vol_horizon",
+        "horizon_observed_seconds",
     ];
     if view == "compact" { COMPACT } else { FEATURE }
 }

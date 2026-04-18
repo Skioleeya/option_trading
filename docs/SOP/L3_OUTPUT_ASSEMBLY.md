@@ -94,6 +94,7 @@ flowchart LR
 - EOD 归档质量闸门触发时必须阻断主日型分类并标记 `primary_day_type=INCOMPLETE_SOURCE`，禁止在低质量样本上输出 `balance_day` 等交易日型结论。
 - `ResearchFeatureStore` 采样必须限制为 RTH (`09:30-16:00 ET`) 且固定 1s 频率（同一秒最多一行）；禁止事件触发扩采样导致样本间隔不稳定。
 - 研究存储契约采用最小字段集：`feature/compact` 仅保留编码字段 `direction_code/iv_regime_code/gex_intensity_code`，禁止在落盘层重复写入同义字符串状态。
+- `feature` tier 必须持久化 MM FLOW 9 字段：`net_delta_exposure_live/net_gamma_exposure_live/residual_delta_after_netting/oi_participation_ratio_live/flow_suppression_bias/flow_dominance_ratio/midpoint_tickrule_count/condition_filtered_count/complex_spread_count`；`append_tick` 遇到缺失或非数值必须显式报错，禁止 fallback。
 - Parquet 研究存储写入必须使用 `zstd` 高压缩配置（level=19, no statistics）以最小化磁盘占用。
 
 ## 4. Boundary Rules (Hard)

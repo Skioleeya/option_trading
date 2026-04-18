@@ -167,6 +167,12 @@ impl ResearchFeatureStore {
                 None => feature.set_item(key_name, py.None())?,
             }
         }
+        let mm_flow = payload.getattr("fused_signal").ok().and_then(|v| v.downcast_into::<PyDict>().ok()).and_then(|d| d.get_item("mm_flow").ok().flatten()).and_then(|v| v.downcast_into::<PyDict>().ok()).ok_or_else(|| PyValueError::new_err("payload.fused_signal.mm_flow missing or invalid"))?;
+        for key_name in [
+            "net_delta_exposure_live", "net_gamma_exposure_live", "residual_delta_after_netting",
+            "oi_participation_ratio_live", "flow_suppression_bias", "flow_dominance_ratio",
+            "midpoint_tickrule_count", "condition_filtered_count", "complex_spread_count",
+        ] { feature.set_item(key_name, required_finite_f64(&mm_flow, key_name, "payload.fused_signal.mm_flow")?)?; }
         let diagnostics_any = snapshot
             .getattr("extra_metadata")?
             .downcast_into::<PyDict>()
@@ -372,6 +378,12 @@ fn parse_date(text: &str) -> PyResult<chrono::NaiveDate> {
     chrono::NaiveDate::parse_from_str(text, "%Y%m%d")
         .or_else(|_| chrono::NaiveDate::parse_from_str(text, "%Y-%m-%d"))
         .map_err(|err| PyValueError::new_err(err.to_string()))
+}
+fn required_finite_f64(dict: &Bound<'_, PyDict>, key: &str, ctx: &str) -> PyResult<f64> {
+    let raw = dict.get_item(key).ok().flatten().ok_or_else(|| PyValueError::new_err(format!("{ctx} missing key: {key}")))?;
+    let value = raw.extract::<f64>().map_err(|_| PyValueError::new_err(format!("{ctx} key not float: {key}")))?;
+    if !value.is_finite() { return Err(PyValueError::new_err(format!("{ctx} key not finite: {key}"))); }
+    Ok(value)
 }
 fn path_obj(py: Python<'_>, path: &PathBuf) -> PyResult<Py<PyAny>> { Ok(py.import("pathlib")?.getattr("Path")?.call1((path.to_string_lossy().to_string(),))?.unbind()) }
 fn safe_std(values: &[f64]) -> f64 { if values.len() < 2 { 0.0 } else { let mean = values.iter().sum::<f64>() / values.len() as f64; let var = values.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / (values.len() as f64 - 1.0); var.max(0.0).sqrt() } }
