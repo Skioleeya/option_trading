@@ -1,4 +1,5 @@
 import type { DashboardPayload, ConnectionStatus } from '../types/dashboard'
+import { L4Rum } from '../observability/l4_rum'
 
 export interface DebugOverlayModel {
     vpin: string
@@ -15,6 +16,14 @@ export interface DebugOverlayModel {
     shmHead: string
     shmTail: string
     shmLag: string
+    quoteMode: string
+    sourceGapMs: string
+    sourceEvents1s: string
+    distinctSpots1s: string
+    wireLagMs: string
+    msgToStoreMs: string
+    storeToPaintMs: string
+    sourceToPaintMs: string
 }
 
 function toNumber(v: unknown): number | null {
@@ -72,6 +81,10 @@ export function buildDebugOverlayModel(
 ): DebugOverlayModel {
     const fused = payload?.agent_g?.data?.fused_signal
     const shm = parseShm(payload)
+    const quoteLane = payload?.governor_telemetry && typeof payload.governor_telemetry === 'object'
+        ? (payload.governor_telemetry as Record<string, unknown>).quote_lane as Record<string, unknown> | undefined
+        : undefined
+    const rum = L4Rum.snapshot()
 
     return {
         vpin: formatRawValue(fused?.raw_vpin),
@@ -88,5 +101,13 @@ export function buildDebugOverlayModel(
         shmHead: formatPointer(shm.head),
         shmTail: formatPointer(shm.tail),
         shmLag: formatPointer(shm.lag),
+        quoteMode: formatRawValue(quoteLane?.mode),
+        sourceGapMs: formatRawValue(quoteLane?.last_source_gap_ms),
+        sourceEvents1s: formatRawValue(quoteLane?.source_event_count_1s),
+        distinctSpots1s: formatRawValue(quoteLane?.distinct_spot_count_1s),
+        wireLagMs: formatRawValue(rum.lastWireLagMs),
+        msgToStoreMs: formatRawValue(rum.lastMsgLatencyMs),
+        storeToPaintMs: formatRawValue(rum.lastStoreToPaintMs),
+        sourceToPaintMs: formatRawValue(rum.lastSourceToPaintObservedMs),
     }
 }

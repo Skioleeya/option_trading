@@ -19,19 +19,16 @@ from shared_rust.contracts import (
 from shared.config import settings
 from shared.services.l0_runtime.normalize.bridges import (
     batch_id_from_batch,
-    dispatch_depth_event,
-    dispatch_trade_event,
     iter_arrow_batch_rows,
-    parse_market_event,
 )
 from shared.services.l0_runtime.normalize.events import StateEventProcessor
-from shared.services.l0_runtime.normalize.pipeline import EventType
 from shared.services.l0_runtime.projection import (
     build_error_snapshot_payload,
     build_snapshot_payload,
     build_uninitialized_snapshot_payload,
 )
 from shared.services.l0_runtime.services import RuntimeServices, apply_preloaded_oi_events, apply_rest_update
+from shared.services.l0_runtime.services.runtime.arrow_events import handle_arrow_event
 from shared.services.l0_runtime.source import build_runtime_bundle
 from shared.services.l0_runtime.source.runtime import ArrowIpcReader, _startup_connectivity_probe
 from shared.services.l0_runtime.state import LiveState
@@ -57,13 +54,19 @@ class OptionChainBuilder:
         self._last_arrow_batch_id = 0
         self._transport_status = SHM_STATUS_DISCONNECTED
         self._transport_error: str | None = None
+        self._arrow_decode_failures_total = 0
+        self._arrow_decode_failures_streak = 0
         self._last_trade_price: dict[str, float] = {}
         self._last_trade_direction: dict[str, int] = {}
         self._top_of_book: dict[str, tuple[float | None, float | None]] = {}
+        self._on_spot: Any = None
+        self.on_quote_lane: Any = None
         self._arrow_startup_timeout_sec = max(
             1.0,
             float(getattr(settings, "longport_subscription_ready_timeout_sec", 60) or 60),
         )
+        self._state.store.add_spot_listener(self._emit_spot_update)
+        self._state.store.set_quote_lane_listener(self._emit_quote_lane_update)
 
     @property
     def on_depth(self) -> Any:
@@ -81,14 +84,23 @@ class OptionChainBuilder:
     def on_trade(self, callback: Any) -> None:
         self._hooks.on_trade = callback
 
+    @property
+    def on_spot(self) -> Any:
+        return self._on_spot
+
+    @on_spot.setter
+    def on_spot(self, callback: Any) -> None:
+        self._on_spot = callback
+
     async def initialize(self) -> None:
         if self._initialized:
             return
         await self._services.sub_mgr.connect()
-        await _startup_connectivity_probe(
+        startup_spot = await _startup_connectivity_probe(
             self._runtime_bundle.quote_runtime,
             strict_connectivity=bool(getattr(settings, "longport_startup_strict_connectivity", True)),
         )
+        self._state.store.update_spot(startup_spot)
         self._services.iv_sync.set_event_loop(asyncio.get_event_loop())
 
         today_str = datetime.now(ZoneInfo("US/Eastern")).strftime("%Y%m%d")
@@ -193,6 +205,19 @@ class OptionChainBuilder:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
+                if self._is_arrow_transient_error(exc):
+                    self._arrow_decode_failures_total += 1
+                    self._arrow_decode_failures_streak += 1
+                    self._transport_status = SHM_STATUS_DISCONNECTED
+                    self._transport_error = str(exc)
+                    logger.warning(
+                        "[OptionChainBuilderV2] Arrow transient decode error: %s (streak=%s total=%s)",
+                        exc,
+                        self._arrow_decode_failures_streak,
+                        self._arrow_decode_failures_total,
+                    )
+                    await self._recover_arrow_reader(delay_sec=0.05)
+                    continue
                 self._transport_status = SHM_STATUS_ERROR
                 self._transport_error = str(exc)
                 logger.error("[OptionChainBuilderV2] Arrow consumer loop error: %s", exc)
@@ -208,28 +233,23 @@ class OptionChainBuilder:
             self._last_arrow_batch_id = max(self._last_arrow_batch_id, batch_id)
         self._transport_status = SHM_STATUS_OK
         self._transport_error = None
+        self._arrow_decode_failures_streak = 0
 
     def _handle_arrow_batch(self, batch: Any) -> None:
         for row in iter_arrow_batch_rows(batch):
             self._handle_rust_event(row)
 
     def _handle_rust_event(self, event: dict[str, Any]) -> None:
-        clean = parse_market_event(event, symbol_to_strike=self._services.sub_mgr.symbol_to_strike)
-        if clean is None:
-            return
-        self._state.store.apply_event(clean)
-        if clean.event_type == EventType.DEPTH:
-            self._top_of_book[clean.symbol] = (clean.bid, clean.ask)
-            dispatch_depth_event(clean, on_depth=self._hooks.on_depth)
-            return
-        if clean.event_type == EventType.TRADE:
-            dispatch_trade_event(
-                clean,
-                on_trade=self._hooks.on_trade,
-                last_trade_price=self._last_trade_price,
-                last_trade_direction=self._last_trade_direction,
-                top_of_book=self._top_of_book,
-            )
+        handle_arrow_event(
+            event,
+            store=self._state.store,
+            symbol_to_strike=self._services.sub_mgr.symbol_to_strike,
+            on_depth=self._hooks.on_depth,
+            on_trade=self._hooks.on_trade,
+            last_trade_price=self._last_trade_price,
+            last_trade_direction=self._last_trade_direction,
+            top_of_book=self._top_of_book,
+        )
 
     async def fetch_snapshot(self, *, include_chain_arrow: bool = False) -> dict[str, Any]:
         if not self._initialized:
@@ -280,6 +300,9 @@ class OptionChainBuilder:
                 "status": self._transport_status,
                 "last_batch_id": self._last_arrow_batch_id,
                 "error": self._transport_error,
+                "decode_failures_total": self._arrow_decode_failures_total,
+                "decode_failures_streak": self._arrow_decode_failures_streak,
+                **(self._arrow_reader.transport_diagnostics() if self._arrow_reader is not None else {}),
                 **(
                     getattr(self._runtime_bundle.quote_runtime, "transport_contract", lambda: {})()
                     or {}
@@ -311,6 +334,10 @@ class OptionChainBuilder:
         await self._services.iv_sync.stop()
         await self._services.tier2.stop()
         await self._services.tier3.stop()
+        self._state.store.remove_spot_listener(self._emit_spot_update)
+        self._state.store.set_quote_lane_listener(None)
+        self._on_spot = None
+        self.on_quote_lane = None
         logger.info("[OptionChainBuilderV2] L0 V2 pipeline shutdown complete")
 
     def _build_runtime_status(self) -> dict[str, Any]:
@@ -328,10 +355,45 @@ class OptionChainBuilder:
         status = self._transport_status
         if status != SHM_STATUS_ERROR:
             status = SHM_STATUS_OK if rust_started else SHM_STATUS_DISCONNECTED
-        batch_id = self._last_arrow_batch_id if rust_started else 0
+        transport_diag = self._arrow_reader.transport_diagnostics() if self._arrow_reader is not None else {}
+        writer_batch_id = int(transport_diag.get("writer_batch_id", self._last_arrow_batch_id) or 0)
+        reader_batch_id = int(transport_diag.get("reader_last_batch_id", self._last_arrow_batch_id) or 0)
         return {
             "rust_active": rust_started,
             "rust_shm_path": transport_contract.get("shm_path") if rust_started else None,
-            "shm_stats": build_shm_stats(status, head=batch_id, tail=batch_id),
+            "shm_stats": build_shm_stats(status, head=writer_batch_id, tail=reader_batch_id),
         }
+
+    @staticmethod
+    def _is_arrow_transient_error(exc: Exception) -> bool:
+        message = str(exc)
+        return (
+            "arrow_ipc_payload_empty" in message
+            or "arrow_ipc_payload_decode_failed" in message
+            or "Arrow IPC stream contained no record batch" in message
+            or "Expected to be able to read" in message
+        )
+
+    async def _recover_arrow_reader(self, delay_sec: float) -> None:
+        if self._arrow_reader is not None:
+            self._arrow_reader.close()
+            self._arrow_reader = None
+        await asyncio.sleep(max(0.01, delay_sec))
+        if not self._initialized:
+            return
+        try:
+            self._connect_arrow_reader()
+        except Exception as exc:
+            self._transport_status = SHM_STATUS_DISCONNECTED
+            self._transport_error = f"arrow_reconnect_failed: {exc}"
+            logger.warning("[OptionChainBuilderV2] Arrow reconnect failed: %s", exc)
+
+    def _emit_spot_update(self, spot: float, version: int, data_timestamp: str) -> None:
+        callback = self._on_spot
+        if callable(callback):
+            callback(spot=spot, version=version, data_timestamp=data_timestamp)
+    def _emit_quote_lane_update(self, quote_lane: dict[str, Any]) -> None:
+        callback = self.on_quote_lane
+        if callable(callback):
+            callback(quote_lane)
 

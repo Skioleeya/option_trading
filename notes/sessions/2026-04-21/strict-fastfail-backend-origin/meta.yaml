@@ -1,0 +1,42 @@
+session_id: "2026-04-21/strict-fastfail-backend-origin"
+title: "strict-fastfail-backend-origin"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-21 10:06:58 -04:00"
+updated_at_et: "2026-04-21 11:46:27 -04:00"
+parent_session: null
+
+branch: "fix/frontend-data-zero-fallback"
+base_commit: "3ff3ba1"
+head_commit: "3ff3ba1"
+
+files_changed:
+  - docs/SOP/L4_FRONTEND.md
+  - l4_ui/src/lib/utils.ts
+  - l4_ui/src/lib/__tests__/utils.test.ts
+  - l4_ui/src/components/right/ActiveOptions.tsx
+  - l4_ui/src/components/__tests__/activeOptions.render.test.tsx
+  - l4_ui/src/components/__tests__/rightPanelContract.integration.test.tsx
+  - notes/sessions/2026-04-21/strict-fastfail-backend-origin/project_state.md
+  - notes/sessions/2026-04-21/strict-fastfail-backend-origin/open_tasks.md
+  - notes/sessions/2026-04-21/strict-fastfail-backend-origin/handoff.md
+  - notes/sessions/2026-04-21/strict-fastfail-backend-origin/meta.yaml
+  - notes/context/handoff.md
+commands:
+  - sed -n '1,220p' l4_ui/src/lib/utils.ts
+  - sed -n '1,180p' l4_ui/src/components/right/ActiveOptions.tsx
+  - npm --prefix l4_ui run test -- src/lib/__tests__/utils.test.ts
+  - npm --prefix l4_ui run test -- src/components/__tests__/activeOptions.render.test.tsx
+  - npm --prefix l4_ui run test -- src/components/__tests__/rightPanelContract.integration.test.tsx
+  - python3 manage.py validate-session --strict
+tests_passed:
+  - npm --prefix l4_ui run test -- src/lib/__tests__/utils.test.ts
+  - npm --prefix l4_ui run test -- src/components/__tests__/activeOptions.render.test.tsx
+  - npm --prefix l4_ui run test -- src/components/__tests__/rightPanelContract.integration.test.tsx
+  - python3 manage.py validate-session --strict
+tests_failed: []
+blockers: []
+notes:
+  - "IMP formatting is now owned by fmtImpact instead of component-local toFixed(2)."
+  - "ActiveOptions and right-panel integration tests were updated to assert compact IMP units."

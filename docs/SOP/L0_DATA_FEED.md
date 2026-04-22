@@ -39,8 +39,9 @@ flowchart LR
 2. `OptionSubscriptionManager` 通过 runtime 抽象触发 Rust 订阅与 REST 拉取。
  - 订阅池执行硬上限：`subscription_max` 会被运行时钳制到官方上限 `500`。
  - 超过上限时按离 spot 距离优先保留近端合约，输出 drop 诊断日志。
- - `L0QuoteRuntime.subscribe()` 的输入语义是“当前应生效的完整 symbol 集”；运行时必须把该全集实际 reconcile 到活跃会话，禁止仅在 Python 侧更新 tracked symbols 而不下发到 Rust 会话。
- - runtime diagnostics 应区分 `desired_symbols` 与 `applied_symbols`，`SubscriptionManager.subscribed_symbols` 只能反映已实际应用的集合。
+- `L0QuoteRuntime.subscribe()` 的输入语义是“当前应生效的完整 symbol 集”；运行时必须把该全集实际 reconcile 到活跃会话，禁止仅在 Python 侧更新 tracked symbols 而不下发到 Rust 会话。
+- runtime diagnostics 应区分 `desired_symbols` 与 `applied_symbols`，`SubscriptionManager.subscribed_symbols` 只能反映已实际应用的集合。
+- `SPY.US` 必须始终属于正式 live subscribe 集合，不能只存在于 startup probe 或运行中的 REST 补刷；顶层 `spot` owner 必须来自 live `SPY.US` depth top-of-book midpoint，而不是周期性 pull quote 或 `last_done` 兜底。
 3. `ChainStateStore` 聚合并提供 `fetch_snapshot()` 快照。
 4. L0 flow 字段所有权约束（ActiveOptions 关键）:
  - `DEPTH` 事件只允许更新价位簿价格（bid/ask），不得写入 `volume/current_volume/turnover`。
@@ -57,24 +58,31 @@ flowchart LR
    - Rust hot path 只写 `${shm_path}_arrow` 共享段，批次合同由 Rust `ARROW_IPC_SCHEMA` 定义；legacy ring buffer 双写已退出热路径；
    - Arrow IPC signal 合同固定为 `L0_IPC_SIGNAL_NAME`；默认值跟随 Arrow 段名，即 `${shm_path}_arrow_signal`；
    - Rust `windows_signal.rs` 与 Python `shared/system/ipc_signal.py` 必须按 create-or-open 语义对齐同一个 Windows named event；
- - Python `shared/system/ipc_reader.py` 在 Windows 上必须附着已有 named mapping 并读取长度前缀 Arrow payload，禁止再把 live attach 建立在 legacy ring buffer 或历史事件轮询之上；
+- Arrow IPC transport 必须是多槽有序队列，不得再使用“单槽 latest-message 覆盖”语义；writer 必须按单调 `batch_id` 追加，reader 必须按序 drain 未读批次，禁止用覆盖式 shared-memory payload 静默丢批次。
+- transport diagnostics 必须至少暴露：`writer_batch_id`、`reader_last_batch_id`、`queued_batch_count`、`dropped_batch_count`、`reader_gap_count`；`queued_batch_count > 0` 或 `dropped_batch_count > 0` 视为 transport 退化证据。
 - `shared/services/l0_runtime/source/runtime/ipc.py` 的 `ArrowIpcReader` 现为 live neutral surface；其 Rust owner 位于 `l0_ingest/l0_rust/src/ipc_runtime.rs`，并直接消费 `NativeArrowIpcReader`；
+- `NativeArrowIpcReader.close()` 必须是可中断的不可变关闭语义：shutdown/restart 时允许与正在进行的 `read_next_payload()` 并存，并通过 named event 唤醒阻塞 wait；禁止再依赖 `&mut self` 关闭导致 PyO3 `Already borrowed` 终止 restart 路径。
 - `shared/system/rust_shm_bridge.py` 与 `l1_compute/rust_bridge.py` 已退役并删除；旧 ring-buffer SHM 读取路径不再作为正式运行面，禁止恢复；
 - `shared/services/l0_runtime/services/runtime/builder.py`（`OptionChainBuilder` owner）必须通过 `ArrowIpcReader` 消费 Arrow batch；Python event-queue fallback 已退出正式运行链；
   - Arrow 启动门禁为硬约束：必须先由 `SubscriptionManager` 完成首个有效订阅并创建 writer，再连接 `ArrowIpcReader`；
   - 若 `longport_subscription_ready_timeout_sec`（默认 60 秒）内仍未形成有效订阅，启动必须 fail-fast 中止，禁止继续进入读端重试循环；
 - `shared/services/l0_runtime/normalize/bridges/__init__.py` 是 bridge 合同统一入口；market event parse、depth side shaping、trade payload direction 语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_market_bridge.rs`；
+- `shared/services/l0_runtime/services/runtime/arrow_events.py` 是 Arrow live event owner；Arrow 批次中的 `SPY.US` depth 必须先以 bid/ask midpoint 直写 `ChainStateStore.update_spot()`，再处理 option/depth/trade 分发，禁止再让快路径绕过 spot owner；
 - trade callback payload 合同必须透传 `trade_type` 与 `trade_session`（来自 LongPort 推送），不得在 bridge 层硬编码为常量；
 - trade callback 在 `price == midpoint` 场景必须执行 tick-rule（`prev_price` + `prev_direction`）判定方向，禁止输出模糊方向；
 - `shared/services/l0_runtime/normalize/pipeline/__init__.py` 是清洗合同统一入口；QUOTE/DEPTH 基础清洗、IV/OI 归一化、crossed quote 防御与 top-of-book depth 提取语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_sanitization.rs`；
-- `shared/services/l0_runtime/normalize/events/__init__.py` 是 event processor 合同统一入口；SPY spot quote 提取与 trade payload 归一化语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_event_support.rs`；
+- `shared/services/l0_runtime/normalize/events/__init__.py` 是 event processor 合同统一入口；SPY spot depth-midpoint 提取与 trade payload 归一化语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_event_support.rs`；
 - `shared/services/l0_runtime/state/runtime/__init__.py` 是 state owner 合同统一入口；entry 初始化、WS/REST flow owner merge、depth merge 语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_state_support.rs`；
+- `ChainStateStore` 必须同步维护 quote-lane cadence diagnostics：`last_source_timestamp_utc` / `last_source_gap_ms` / `source_event_count_1s/5s` 表示原始 `SPY.US` depth arrival cadence；`last_distinct_spot_timestamp_utc` / `last_distinct_spot_gap_ms` / `distinct_spot_count_1s/5s` 表示 midpoint 真变化 cadence。禁止再把“无新价变化”误判成“无 source event”。
+- `l0_ingest/l0_rust/src/gateway_core.rs` 与 `l0_ingest/l0_rust/src/gateway_push_diag.rs` 必须暴露 `SPY.US` raw push telemetry：`raw_quote_event_count_1s/5s`、`raw_depth_event_count_1s/5s`、`last_raw_quote_gap_ms`、`last_raw_depth_gap_ms`。这些字段用于把“Longbridge 原始推送 cadence”与“Python spot owner 接受 cadence”拆开；禁止再用 Python 侧 `source_*` 指标冒充 gateway 原始到达频率。
 - `shared/services/l0_runtime/projection/snapshot/__init__.py` 是 snapshot owner 合同统一入口；fallback snapshot、runtime-status、governor telemetry 与 fetch payload compose 语义 source-of-truth 位于 `l0_ingest/l0_rust/src/l0_projection.rs`；
-   - `fetch_snapshot().shm_stats.head/tail` 在 Arrow 路径下保持原键名，但语义切换为“最近消费到的 Arrow `batch_id`”，用于维持 L0→L4 诊断链连续；
+   - `fetch_snapshot().shm_stats.head/tail` 在 Arrow 路径下保持原键名，但语义切换为 `writer_batch_id/reader_last_batch_id`，用于维持 L0→L4 诊断链连续并直接暴露读写差距；
    - `shared/system/rust_shm_bridge.py` 与 `shared/services/l0_runtime/normalize/bridges/rust_event_bridge.py` 现仅保留 deprecated compatibility wrapper；`rust_only` live path 不得再依赖它们；
    - `tests/l0_runtime/test_arrow_roundtrip.py` 必须覆盖 Rust producer -> Python `ArrowIpcReader` 的 batch roundtrip，验证 `batch_id`/`arrival_mono_ns`/schema 合同；
    - `SubFlags` 必须显式收敛到 `QUOTE|DEPTH|TRADE`，禁止使用 `SubFlags::all()` 引入无消费价值的额外流量。
- - Arrow IPC writer 必须保持 safe-Rust 边界：批次构建与 `StreamWriter` 路径禁止出现 `unsafe`；必要的共享内存原始写入应封装在独立 transport 模块而非 writer 本体。
+- Arrow IPC writer 必须保持 safe-Rust 边界：批次构建与 `StreamWriter` 路径禁止出现 `unsafe`；必要的共享内存原始写入应封装在独立 transport 模块而非 writer 本体。
+- 单个 Arrow slot 内的发布协议仍必须为原子可见序列：`len=0 -> payload bytes -> publish seq/len`；禁止先发布最终长度再写 payload（会导致读侧截断帧）。
+- `OptionChainBuilder` 在 Arrow 读路径遇到可识别坏帧（`payload_empty/decode_failed/no_batch`）时必须走受控重连并保持消费循环存活，禁止单帧坏数据直接把 transport 永久锁死在全链路冻结状态。
 
 ### 3.3 IVBaselineSync 模块边界（P1 去混乱）
 
@@ -134,12 +142,15 @@ flowchart LR
 - `shared/services/l0_runtime/source/runtime/__init__.py` 是 source/runtime 根稳定 API 面；consumer 应通过该入口导入 `APIRateLimiter`、`RuntimeBundle`、`build_runtime_bundle`、`L0QuoteRuntime`、`RustQuoteRuntime` 与 `_startup_connectivity_probe`，不得再导入已删除的 `rate_limiter.py` / `runtime_bundle.py` / `sdk_bootstrap.py`。
 - `shared/services/l0_runtime/source/runtime/_native_helpers.py` 是 quote profile + quote REST contract native helper 统一 owner，替代 `_native_quote_api_support.py` / `_native_quote_profile_support.py`。
 - `shared/services/l0_runtime/source/runtime/quote_runtime/{__init__.py,helpers.py}` 是 quote runtime owner surface；`contracts.py` / `shared.py` / `rust_runtime.py` 已退出正式运行树，禁止恢复分散 owner。
+- `RustQuoteRuntime` 对单个 `RustIngestGateway` 拥有唯一并发所有权：所有 `start/stop/subscribe/unsubscribe/rest_*` 调用必须在 runtime owner 内串行化后再进入 PyO3/native gateway；禁止把同一个 gateway 当成可并发 `asyncio.to_thread(...)` 资源，否则会触发 PyO3 `Already borrowed`。
+- `RustQuoteRuntime.diagnostics()` 不得直接读取 live `RustIngestGateway`；诊断面必须通过独立的 borrow-free diagnostics handle / cached snapshot 提供，避免诊断读与 live gateway owner 竞争，且避免因长耗时 native 调用而阻塞排障视图。
 
 ### 3.4 Metadata / Normalization Single Source
 
 - `SanitizationPipeline` 是 L0 字段规范化唯一 source-of-truth：IV 百分比/小数归一、OI 数值清洗、REST/WS 价量字段清洗必须从同一实现导出。
 - `SanitizationPipeline` 的 live parse owner 已迁入 Rust native exports；Python 侧只允许保留 dataclass/result facade，不得重新复制 quote/depth 清洗分支。
-- `ChainEventProcessor` / `StateEventProcessor` 的 SPY spot quote 提取与 trade callback payload 归一化已迁入 Rust native exports；Python 侧只允许保留 store/depth callback 编排，不得重新定义 trade direction/volume/timestamp 归一化逻辑。
+- `ChainEventProcessor` / `StateEventProcessor` 的 SPY spot depth-midpoint 提取与 trade callback payload 归一化已迁入 Rust native exports；Python 侧只允许保留 store/depth callback 编排，不得重新定义 trade direction/volume/timestamp 归一化逻辑。
+- `shared/services/l0_runtime/source/runtime/quote_runtime/__init__.py` 的 `RustQuoteRuntime.subscribe()` 必须把 live symbol 集合真实 reconcile 到 Rust gateway；禁止保留“只在 Python 侧更新 tracked symbols”但不下发新增/删除订阅的伪同步路径。
 - `ChainStateStore` 的 entry default、WS/REST owner merge、depth merge 语义已迁入 Rust native exports；Python 侧只允许保留版本号、日志、datetime 打点和公开对象 API，不得重新复制 flow ownership 判定分支。
 - Tier1 warm-up、Tier2/Tier3 poller、startup OI preload、price repair 回填不得各自复制 IV/OI 解析逻辑；兼容 wrapper 只能委托到统一规范化实现。
 - 到期日扫描与 `symbol -> strike/standard` metadata 构建必须走共享 resolver，禁止 `SubscriptionManager`、Tier2、Tier3 各自维护独立扫描逻辑。
@@ -157,10 +168,10 @@ flowchart LR
 
 - 同时兼容 `LONGPORT_*` 与 `LONGBRIDGE_*` 两套环境变量名作为配置输入。
 - 正式运行链不再依赖 Python env bridge；配置必须直接进入 Rust runtime owner。
-- Rust runtime 必须维护端点候选序列（primary -> fallback），默认顺序：`longportapp -> longbridge`。
-- 当 `socket/token` 建连出现 `client error (Connect)` 等网络类错误时，允许切换后备端点并重试一次。
-- 若故障发生在运行中（WS 会话已建立），允许执行 `stop -> 切端点 -> 重建 gateway -> 用 tracked_symbols 重订阅` 的自愈流程；单次操作最多一次切端点与一次重试，禁止无限切换循环。
-- `RustQuoteRuntime.diagnostics()` 必须持续提供 `failover_count`、`last_failover_error`、`last_failover_at_utc` 供 `/debug/persistence_status` 透出。
+- Rust runtime 可以维护端点候选序列用于配置，但运行态禁止自动切端点/重试；active profile 固定为当前配置项，连接失败必须显式抛错。
+- 当 `socket/token` 建连出现 `client error (Connect)` 等网络类错误时，禁止 runtime 内部 failover；故障由启动门禁或上层编排显式处理。
+- 若故障发生在运行中（WS 会话已建立），禁止执行 `stop -> 切端点 -> 重建 gateway -> 重订阅` 自愈链；必须保留失败现场并上抛。
+- `RustQuoteRuntime.diagnostics()` 保留 `endpoint_profile`、`endpoint_http_url` 等当前端点信息；`failover_count`、`last_failover_error`、`last_failover_at_utc` 已退出合同。
 - `QuoteContext` 生命周期、订阅以及 callback fan-in 必须全部由 Rust owner 负责；Python 不得再持有 `QuoteContext` 或 callback queue owner。
 - Python 对生成扩展的消费必须直连 `shared.services.l0_runtime._native_generated.l0_rust`；`shared/services/l0_runtime/l0_rust.py` shim 已退出主路径。
 - `shared.contracts.*` Python contract wrappers 已退出仓库；中立 contract import 面现统一为 `shared_rust.contracts`，contract source-of-truth 位于 `shared_rust/src/*`。
@@ -178,11 +189,14 @@ flowchart LR
 
 ## 4. Hard-Fail Startup Contract
 
-- 启动阶段必须执行 `quote(["SPY.US"])` 连通性预检；两端点均失败时必须 fail-fast 中止启动。
+- 启动阶段必须执行 `quote(["SPY.US"])` 连通性预检，并将返回的首个有效 `last_done` 作为首轮订阅建图的 bootstrap spot；该 probe 只用于启动门禁和首轮订阅，不得充当运行时 spot owner。
 - `longport_startup_strict_connectivity=false` 为禁用配置：必须直接抛错并阻止进程启动。
 - 禁止 degraded 启动与 fallback 广播；连接失败时不进入运行态。
 - Rust REST pull 路径必须支持 `QuoteContext` 懒初始化（不依赖先 `start/subscribe`），
   防止冷启动阶段出现 `spot -> subscribe -> quote_ctx` 的闭环阻塞。
+- `FeedOrchestrator` 禁止继续用 `quote(["SPY.US"])` 作为运行中的 spot 刷新兜底；若 live spot 缺失，必须显式等待已订阅的 `SPY.US` depth midpoint，而不是退回周期性 REST spot owner。
+- `FeedOrchestrator` 的 live spot freshness gate 必须以 raw `SPY.US` source arrival 时间为准（`quote_lane.last_source_timestamp_utc`），不得以“midpoint 是否变化”或 `last_spot_update` 判 stale；flat-price 连续 raw tick 仍视为 fresh。
+- 当 raw source age 超过 `10s` 时，`FeedOrchestrator` 必须显式进入 stale fast-fail：记录诊断日志，并跳过 header volatility aux refresh、strike subscription refresh 与 15-minute volume research；禁止继续拿缓存旧 `spot` 推进这些调度。
 
 ## 5. Output Contract (to L1)
 
@@ -278,9 +292,9 @@ Raw + Normalized 规则：
 - `[RustQuoteRuntime]`
 - `[OptionChainBuilder]`
 - `[IVSync]`
-- `Switching endpoint profile to '<name>' (http=<url>)`
 - `Startup connectivity probe passed|failed ... profile=<name> endpoint=<url>`
-- `Spot REST fallback failed ... endpoint_profile=<...> failover_count=<...> last_failover_at_utc=<...>`
+- `RustQuoteRuntime <op> failed on endpoint profile '<name>' (http=<url>): <error>`
+- `FeedOrchestrator Spot refresh returned no rows/non-positive price ...`（硬失败）
 
 关键指标:
 
@@ -313,7 +327,7 @@ Raw + Normalized 规则：
   - 并发请求不得超过 `5`（运行时 limiter 自动钳制配置）。
   - 同时订阅 symbol 不得超过 `500`（订阅池强制裁剪）。
   - 默认速率配置与官方上限对齐：`longport_api_rate_limit=10`、`longport_api_max_concurrent=5`、`subscription_max=500`。
-- SHM 不可用: `rust_active=false` 并保留 fallback
+- SHM 不可用: `rust_active=false` 并输出 error/uninitialized snapshot（禁止静默降级）
 - 重复计算治理:
   - 禁止 `compute_loop` 与 `housekeeping_loop` 在同一 L0 `version` 上重复触发 legacy Greeks
   - 兼容 legacy 路径应提供按 `snapshot_version/caller` 的审计计数，便于定位重复算力消耗
@@ -331,7 +345,7 @@ Raw + Normalized 规则：
 
 ## 9. Verification
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests
-powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 scripts/test/test_l0_l4_pipeline.py
+```bash
+python manage.py run-pytest l0_ingest/tests
+python manage.py run-pytest scripts/test/test_l0_l4_pipeline.py
 ```

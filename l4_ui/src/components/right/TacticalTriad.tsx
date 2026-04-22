@@ -29,10 +29,10 @@ export const TacticalTriad: React.FC<Props> = memo(({ uiState: propState, prefer
                 {/* VRP */}
                 <div className="flex flex-col items-center">
                     <div className={`w-full border ${vrp.border_class} ${vrp.bg_class} rounded flex flex-col items-center justify-center ${vrp.shadow_class} mb-1.5`} style={{ paddingBlock: 'var(--l4-card-pad)' }}>
-                        <span className={`${vrp.color_class} ${vrp.animation} font-bold leading-none mb-0.5`} style={{ fontSize: 'var(--l4-font-12)' }}>$</span>
-                        <span className={`${vrp.color_class} ${vrp.animation} font-bold leading-tight`} style={{ fontSize: 'var(--l4-triad-value-font)' }}>{vrp.value}</span>
-                        <span className={`${vrp.color_class} ${vrp.animation} font-bold leading-tight`} style={{ fontSize: 'var(--l4-font-9)' }}>{vrp.state_label}</span>
-                        <span className={`${vrp.color_class} ${vrp.animation} font-bold leading-tight mt-[1px]`} style={{ fontSize: 'var(--l4-font-9)' }}>VRP</span>
+                        <span className={`${vrp.color_class} font-bold leading-none mb-0.5`} style={{ fontSize: 'var(--l4-font-12)' }}>$</span>
+                        <span className={`${vrp.color_class} font-bold leading-tight`} style={{ fontSize: 'var(--l4-triad-value-font)' }}>{vrp.value}</span>
+                        <span className={`${vrp.color_class} font-bold leading-tight`} style={{ fontSize: 'var(--l4-font-9)' }}>{vrp.state_label}</span>
+                        <span className={`${vrp.color_class} font-bold leading-tight mt-[1px]`} style={{ fontSize: 'var(--l4-font-9)' }}>VRP</span>
                     </div>
                     <div className="flex items-center gap-1 text-text-muted mb-0.5"><Activity size={10} /><span className="font-bold tracking-wider" style={{ fontSize: 'var(--l4-font-10)' }}>{vrp.sub_intensity}</span></div>
                     <span className="font-bold tracking-wider text-text-primary" style={{ fontSize: 'var(--l4-font-10)' }}>{vrp.sub_label}</span>
@@ -56,10 +56,10 @@ export const TacticalTriad: React.FC<Props> = memo(({ uiState: propState, prefer
                 {/* S-VOL */}
                 <div className="flex flex-col items-center">
                     <div className={`w-full border ${svol.border_class} ${svol.bg_class} rounded flex flex-col items-center justify-center ${svol.shadow_class} mb-1.5`} style={{ paddingBlock: 'var(--l4-card-pad)' }}>
-                        <Pulse size={10} className={`${svol.color_class} ${svol.animation} mb-0.5`} />
-                        <span className={`${svol.color_class} ${svol.animation} font-bold leading-tight`} style={{ fontSize: 'var(--l4-triad-value-font)' }}>{svol.value}</span>
-                        <span className={`${svol.color_class} ${svol.animation} font-bold leading-tight`} style={{ fontSize: 'var(--l4-font-9)' }}>{svol.state_label}</span>
-                        <span className={`${svol.color_class} ${svol.animation} font-bold leading-tight mt-[1px]`} style={{ fontSize: 'var(--l4-font-9)' }}>S-VOL</span>
+                        <Pulse size={10} className={`${svol.color_class} mb-0.5`} />
+                        <span className={`${svol.color_class} font-bold leading-tight`} style={{ fontSize: 'var(--l4-triad-value-font)' }}>{svol.value}</span>
+                        <span className={`${svol.color_class} font-bold leading-tight`} style={{ fontSize: 'var(--l4-font-9)' }}>{svol.state_label}</span>
+                        <span className={`${svol.color_class} font-bold leading-tight mt-[1px]`} style={{ fontSize: 'var(--l4-font-9)' }}>S-VOL</span>
                     </div>
                     <div className="flex items-center gap-1 text-text-muted mb-0.5"><Triangle size={10} /><span className="font-bold tracking-wider" style={{ fontSize: 'var(--l4-font-10)' }}>{svol.sub_intensity}</span></div>
                     <span className="font-bold tracking-wider text-text-primary" style={{ fontSize: 'var(--l4-font-10)' }}>{svol.sub_label}</span>

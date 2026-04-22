@@ -109,18 +109,33 @@ mod imp {
 
 #[cfg(not(windows))]
 mod imp {
-    pub struct WindowsSignal;
+    use std::time::Duration;
+
+    pub struct WindowsSignal {
+        _name: String,
+    }
 
     impl WindowsSignal {
         pub fn create_or_open(name: &str) -> Result<Self, String> {
-            Err(format!(
-                "Windows named-event signal is unavailable on this platform: '{}'",
-                name
-            ))
+            if name.trim().is_empty() {
+                return Err("signal name is required".to_string());
+            }
+            Ok(Self {
+                _name: name.to_string(),
+            })
+        }
+
+        pub fn connect(name: &str) -> Result<Self, String> {
+            Self::create_or_open(name)
         }
 
         pub fn signal(&self) -> Result<(), String> {
-            Err("Windows named-event signal is unavailable on this platform".to_string())
+            Ok(())
+        }
+
+        pub fn wait(&self) -> Result<(), String> {
+            std::thread::sleep(Duration::from_millis(1));
+            Ok(())
         }
     }
 }

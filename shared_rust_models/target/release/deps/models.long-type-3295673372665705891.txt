@@ -1,1 +1,0 @@
-<<T as PyClassImpl>::BaseType as PyClassBaseType>::Initializer == PyNativeTypeInitializer<<T as PyClassImpl>::BaseType>

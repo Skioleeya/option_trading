@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import date, datetime, timezone
+import threading
+from datetime import date
 from pathlib import Path
-from typing import Any, Iterable, Protocol
+from typing import Any, Callable, Iterable, Protocol
 
 from longport.openapi import Config, SubType
 
@@ -83,6 +84,10 @@ class RustQuoteRuntime:
         gateway_config: dict[str, Any] | None = None,
     ) -> None:
         self._gateway: Any | None = None
+        self._gateway_diag_handle: Any | None = None
+        self._gateway_diag_snapshot: dict[str, Any] = {}
+        self._gateway_state_lock = asyncio.Lock()
+        self._gateway_call_lock = threading.Lock()
         self._connected = False
         self._started = False
         self._symbols: set[str] = set()
@@ -92,9 +97,6 @@ class RustQuoteRuntime:
         self._endpoint_profiles = normalize_endpoint_profiles(endpoint_profiles)
         self._gateway_config = dict(gateway_config or {})
         self._active_endpoint_profile_idx = 0
-        self._failover_count = 0
-        self._last_failover_error: str | None = None
-        self._last_failover_at_utc: str | None = None
 
     def _active_endpoint_profile(self) -> dict[str, str] | None:
         return active_endpoint_profile(self._endpoint_profiles, self._active_endpoint_profile_idx)
@@ -110,10 +112,6 @@ class RustQuoteRuntime:
             data["trade_ws_url"] = profile.get("trade_ws_url")
         return data
 
-    @staticmethod
-    def _utc_now_iso() -> str:
-        return datetime.now(timezone.utc).isoformat()
-
     def _start_kwargs(self) -> dict[str, Any]:
         return {
             "batch_interval_ms": max(1, int(getattr(settings, "l0_batch_interval_ms", DEFAULT_L0_BATCH_INTERVAL_MS))),
@@ -124,72 +122,6 @@ class RustQuoteRuntime:
                 env={"L0_IPC_SIGNAL_NAME": str(getattr(settings, "l0_ipc_signal_name", "") or "")},
             ),
         }
-
-    async def _reset_gateway(self, *, clear_symbols: bool = True) -> None:
-        if self._gateway and self._started:
-            try:
-                await asyncio.to_thread(self._gateway.stop)
-            except Exception as exc:
-                logger.warning("[RustQuoteRuntime] Gateway stop during reset failed: %s", exc)
-        self._gateway = None
-        self._connected = False
-        self._started = False
-        if clear_symbols:
-            self._symbols.clear()
-
-    @staticmethod
-    def _is_connectivity_error(exc: Exception) -> bool:
-        text = str(exc).lower()
-        return any(
-            token in text
-            for token in (
-                "socket/token",
-                "client error (connect)",
-                "failed to connect",
-                "connection refused",
-                "connection reset",
-                "dns",
-                "timed out",
-            )
-        )
-
-    async def _switch_to_next_endpoint_profile(self) -> bool:
-        if not self._endpoint_profiles:
-            return False
-        next_idx = self._active_endpoint_profile_idx + 1
-        if next_idx >= len(self._endpoint_profiles):
-            return False
-        tracked_symbols = set(self._symbols)
-        was_started = self._started
-        self._active_endpoint_profile_idx = next_idx
-        await self._reset_gateway(clear_symbols=False)
-        active = self._active_endpoint_profile()
-        if was_started and tracked_symbols:
-            await self._ensure_gateway()
-            start_kwargs = self._start_kwargs()
-            await asyncio.to_thread(
-                self._gateway.start,
-                sorted(tracked_symbols),
-                self._shm_path,
-                self._cpu_id,
-                start_kwargs["batch_interval_ms"],
-                start_kwargs["batch_max_rows"],
-                start_kwargs["shm_capacity_bytes"],
-                start_kwargs["signal_name"],
-            )
-            self._started = True
-            self._symbols = tracked_symbols
-            self._connected = True
-            logger.warning(
-                "[RustQuoteRuntime] Runtime failover restored Rust session: %d tracked symbol(s)",
-                len(self._symbols),
-            )
-        logger.warning(
-            "[RustQuoteRuntime] Switching endpoint profile to '%s' (http=%s)",
-            (active or {}).get("name"),
-            (active or {}).get("http_url"),
-        )
-        return True
 
     @property
     def event_queue(self) -> asyncio.Queue[Any]:
@@ -214,51 +146,83 @@ class RustQuoteRuntime:
             "signal_name": self.arrow_signal_name,
         }
 
-    async def _ensure_gateway(self) -> None:
+    def _ensure_gateway_unlocked(self) -> None:
         if self._gateway is None:
             self._gateway = l0_rust.RustIngestGateway()
             gateway_args = gateway_ctor_args(self._gateway_kwargs())
             if gateway_args[0] and hasattr(self._gateway, "configure"):
                 self._gateway.configure(*gateway_args)
+            self._gateway_diag_handle = self._build_gateway_diag_handle(self._gateway)
+            self._refresh_gateway_diag_snapshot()
 
-    async def _execute_with_failover(self, op_name: str, operation: Any) -> Any:
-        await self._ensure_gateway()
+    @staticmethod
+    def _build_gateway_diag_handle(gateway: Any) -> Any | None:
+        diag_handle_fn = getattr(gateway, "diagnostics_handle", None)
+        if not callable(diag_handle_fn):
+            return None
+        return diag_handle_fn()
+
+    @staticmethod
+    def _normalize_gateway_diag_snapshot(payload: Any) -> dict[str, Any]:
+        if not isinstance(payload, dict):
+            return {}
+        return dict(payload)
+
+    def _refresh_gateway_diag_snapshot(self) -> None:
+        if self._gateway_diag_handle is None:
+            self._gateway_diag_snapshot = {}
+            return
+        snapshot_fn = getattr(self._gateway_diag_handle, "snapshot", None)
+        if not callable(snapshot_fn):
+            self._gateway_diag_snapshot = {}
+            return
+        payload = snapshot_fn() or {}
+        self._gateway_diag_snapshot = self._normalize_gateway_diag_snapshot(payload)
+
+    def _call_gateway_serialized(self, operation: Callable[[Any], Any], gateway: Any) -> Any:
+        with self._gateway_call_lock:
+            return operation(gateway)
+
+    async def _execute(self, op_name: str, operation: Callable[[Any], Any]) -> Any:
+        async with self._gateway_state_lock:
+            self._ensure_gateway_unlocked()
+            gateway = self._gateway
+        if gateway is None:
+            raise RuntimeError("RustIngestGateway is unavailable")
         try:
-            result = await asyncio.to_thread(operation)
-            self._connected = True
-            return result
+            result = await asyncio.to_thread(self._call_gateway_serialized, operation, gateway)
         except Exception as exc:
-            if not self._is_connectivity_error(exc):
-                raise
-            failed_profile = (self._active_endpoint_profile() or {}).get("name")
-            if not await self._switch_to_next_endpoint_profile():
-                raise
-            self._failover_count += 1
-            self._last_failover_error = str(exc)
-            self._last_failover_at_utc = self._utc_now_iso()
+            active = self._active_endpoint_profile() or {}
             logger.warning(
-                "[RustQuoteRuntime] %s connectivity failure on endpoint profile '%s' -> failover_count=%d error=%s",
+                "[RustQuoteRuntime] %s failed on endpoint profile '%s' (http=%s): %s",
                 op_name,
-                failed_profile,
-                self._failover_count,
+                active.get("name"),
+                active.get("http_url"),
                 exc,
             )
-            await self._ensure_gateway()
-            result = await asyncio.to_thread(operation)
-            self._connected = True
-            return result
+            raise
+        self._connected = True
+        self._refresh_gateway_diag_snapshot()
+        return result
 
     async def connect(self) -> None:
-        await self._ensure_gateway()
-        self._connected = True
+        async with self._gateway_state_lock:
+            self._ensure_gateway_unlocked()
+            self._connected = True
+            self._refresh_gateway_diag_snapshot()
 
     async def disconnect(self) -> None:
-        if self._gateway and self._started:
-            await asyncio.to_thread(self._gateway.stop)
-        self._gateway = None
-        self._connected = False
-        self._started = False
-        self._symbols.clear()
+        async with self._gateway_state_lock:
+            gateway = self._gateway
+            started = self._started
+            self._gateway = None
+            self._gateway_diag_handle = None
+            self._gateway_diag_snapshot = {}
+            self._connected = False
+            self._started = False
+            self._symbols.clear()
+        if gateway and started:
+            await asyncio.to_thread(self._call_gateway_serialized, lambda owned_gateway: owned_gateway.stop(), gateway)
 
     async def subscribe(
         self,
@@ -272,9 +236,9 @@ class RustQuoteRuntime:
             return
         if not self._started:
             start_kwargs = self._start_kwargs()
-            await self._execute_with_failover(
+            await self._execute(
                 "start",
-                lambda: self._gateway.start(
+                lambda gateway: gateway.start(
                     sorted(wanted),
                     self._shm_path,
                     self._cpu_id,
@@ -287,48 +251,55 @@ class RustQuoteRuntime:
             self._started = True
             self._symbols = set(wanted)
             return
+        to_add = sorted(wanted - self._symbols)
+        to_remove = sorted(self._symbols - wanted)
+        if to_add:
+            await self._execute("subscribe", lambda gateway: gateway.subscribe(to_add))
+        if to_remove:
+            await self._execute("unsubscribe", lambda gateway: gateway.unsubscribe(to_remove))
         self._symbols = set(wanted)
         logger.info(
-            "[RustQuoteRuntime] Subscription update tracked in Python only (existing Rust session reused): %d symbols",
+            "[RustQuoteRuntime] Subscription set reconciled: total=%d add=%d remove=%d",
             len(self._symbols),
+            len(to_add),
+            len(to_remove),
         )
 
     async def quote(self, symbols: list[str]) -> list[Any]:
-        rows = await self._execute_with_failover("rest_quote", lambda: rest_quote_rows_native(self._gateway, symbols))
+        rows = await self._execute("rest_quote", lambda gateway: rest_quote_rows_native(gateway, symbols))
         return rows_to_objects(list(rows))
 
     async def option_quote(self, symbols: list[str]) -> list[Any]:
-        rows = await self._execute_with_failover(
+        rows = await self._execute(
             "rest_option_quote",
-            lambda: rest_option_quote_contracts_native(self._gateway, symbols),
+            lambda gateway: rest_option_quote_contracts_native(gateway, symbols),
         )
         return rows_to_objects(list(rows))
 
     async def option_chain_info_by_date(self, symbol: str, expiry: date) -> list[Any]:
-        rows = await self._execute_with_failover(
+        rows = await self._execute(
             "rest_option_chain_info_by_date",
-            lambda: rest_option_chain_info_by_date_contracts_native(self._gateway, symbol, expiry.isoformat()),
+            lambda gateway: rest_option_chain_info_by_date_contracts_native(gateway, symbol, expiry.isoformat()),
         )
         return rows_to_objects(list(rows))
 
     async def calc_indexes(self, symbols: list[str], indexes: list[Any]) -> list[Any]:
-        rows = await self._execute_with_failover(
+        rows = await self._execute(
             "rest_calc_indexes",
-            lambda: rest_calc_indexes_contracts_native(self._gateway, symbols, [index_name(v) for v in indexes]),
+            lambda gateway: rest_calc_indexes_contracts_native(gateway, symbols, [index_name(v) for v in indexes]),
         )
         return rows_to_objects(list(rows))
 
     def diagnostics(self) -> dict[str, Any]:
         active_profile = self._active_endpoint_profile()
+        self._refresh_gateway_diag_snapshot()
         return {
             "connected": self._connected,
             "rust_started": self._started,
             "tracked_symbols": len(self._symbols),
             "endpoint_profile": (active_profile or {}).get("name"),
             "endpoint_http_url": (active_profile or {}).get("http_url"),
-            "failover_count": self._failover_count,
-            "last_failover_error": self._last_failover_error,
-            "last_failover_at_utc": self._last_failover_at_utc,
+            **self._gateway_diag_snapshot,
         }
 
 

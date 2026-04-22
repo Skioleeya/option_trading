@@ -1,0 +1,41 @@
+session_id: "2026-04-21/fix-rds-down-indicator"
+title: "fix-rds-down-indicator"
+scope: "frontend runtime endpoint hotfix + startup-doc update + real-host review"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-21 09:40:28 -04:00"
+updated_at_et: "2026-04-21 09:53:45 -04:00"
+parent_session: null
+
+branch: "fix/frontend-data-zero-fallback"
+base_commit: "3ff3ba1"
+head_commit: "3ff3ba1"
+
+files_changed:
+  - l4_ui/src/config/runtime.ts
+  - l4_ui/src/config/__tests__/runtime.test.ts
+  - docs/SOP/L4_FRONTEND.md
+  - 最新的启动步骤文档.md
+  - notes/sessions/2026-04-21/fix-rds-down-indicator/project_state.md
+  - notes/sessions/2026-04-21/fix-rds-down-indicator/open_tasks.md
+  - notes/sessions/2026-04-21/fix-rds-down-indicator/handoff.md
+  - notes/sessions/2026-04-21/fix-rds-down-indicator/meta.yaml
+commands:
+  - curl -sS http://127.0.0.1:8001/health
+  - curl -sS http://127.0.0.1:8001/debug/persistence_status
+  - tail -n 120 logs/backend_runtime.current.log
+  - .venv/bin/python manage.py start-backend
+  - npm --prefix l4_ui run test -- src/config/__tests__/runtime.test.ts
+  - .venv/bin/python manage.py start-all --verify-only
+  - tail -n 80 logs/backend_runtime.current.log | rg "L3 Governor|clients="
+  - python3 manage.py validate-session --strict
+
+tests_passed:
+  - npm --prefix l4_ui run test -- src/config/__tests__/runtime.test.ts
+  - .venv/bin/python manage.py start-all --verify-only
+tests_failed: []
+blockers: []
+notes:
+  - "Real-host review passed: Redis/Backend/Frontend listening; backend /health OK; diagnostics healthy."
+  - "WS clients observed in backend logs: L3 Governor clients=1."
+  - "Startup steps doc updated with probe-first, Redis LOADING handling, and RDS DOWN troubleshooting."

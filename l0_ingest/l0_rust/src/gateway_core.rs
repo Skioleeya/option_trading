@@ -1,4 +1,5 @@
 use crate::gateway_event_map::{depth_event, l0_subscription_flags, quote_event, trade_event};
+use crate::gateway_push_diag::{self, GatewayPushDiagnosticsHandle, RawSpyPushDiagnostics};
 use crate::gateway_stress::run_stress_test;
 use crate::helpers::now_unix_nanos;
 use crate::ipc_writer::{ArrowBatchWriter, ArrowWriterConfig};
@@ -11,7 +12,7 @@ use longport::{
 };
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tokio::sync::{broadcast, mpsc};
 use tokio::time::{self, Duration};
 #[pyclass]
@@ -20,6 +21,7 @@ pub struct RustIngestGateway {
     pub runtime: tokio::runtime::Runtime,
     pub shutdown_tx: Option<broadcast::Sender<()>>,
     pub quote_ctx: Option<QuoteContext>,
+    pub spy_push_diag: Arc<Mutex<RawSpyPushDiagnostics>>,
 }
 impl RustIngestGateway {
     fn configured_arc(&self) -> PyResult<Arc<Config>> {
@@ -44,6 +46,32 @@ impl RustIngestGateway {
             .clone()
             .ok_or_else(|| PyRuntimeError::new_err("quote context unavailable"))
     }
+
+    fn update_subscription(
+        &mut self,
+        symbols: Vec<String>,
+        subscribe: bool,
+    ) -> PyResult<()> {
+        if symbols.is_empty() {
+            return Ok(());
+        }
+        self.ensure_quote_ctx()?;
+        let ctx = self.clone_quote_ctx()?;
+        let flags = l0_subscription_flags();
+        self.runtime
+            .block_on(async move {
+                if subscribe {
+                    ctx.subscribe(symbols, flags, false).await
+                } else {
+                    ctx.unsubscribe(symbols, flags).await
+                }
+            })
+            .map_err(|e| {
+                let op = if subscribe { "subscribe" } else { "unsubscribe" };
+                PyRuntimeError::new_err(format!("{op} failed: {e}"))
+            })?;
+        Ok(())
+    }
 }
 
 #[pymethods]
@@ -59,6 +87,7 @@ impl RustIngestGateway {
             runtime,
             shutdown_tx: None,
             quote_ctx: None,
+            spy_push_diag: gateway_push_diag::new_shared_diag(),
         })
     }
     #[pyo3(signature = (app_key, app_secret, access_token, http_url=None, quote_ws_url=None, trade_ws_url=None, language=None, enable_overnight=false))]
@@ -124,6 +153,8 @@ impl RustIngestGateway {
             .block_on(ctx.subscribe(symbols, l0_subscription_flags(), true))
             .map_err(|e| PyRuntimeError::new_err(format!("subscribe failed: {e}")))?;
         self.quote_ctx = Some(ctx.clone());
+        gateway_push_diag::reset(&self.spy_push_diag);
+        let spy_push_diag = Arc::clone(&self.spy_push_diag);
         let (event_tx, event_rx) = mpsc::unbounded_channel::<ArrowMarketEvent>();
         let (tx, _) = broadcast::channel(1);
         self.shutdown_tx = Some(tx);
@@ -150,6 +181,7 @@ impl RustIngestGateway {
                         let mono_ns = now_unix_nanos();
                         let mapped = match event.detail {
                             PushEventDetail::Quote(quote) => {
+                                gateway_push_diag::record_quote(&spy_push_diag, &event.symbol);
                                 Some(quote_event(event.symbol, mono_ns, seq_no, quote))
                             }
                             PushEventDetail::Trade(trades) => {
@@ -161,6 +193,7 @@ impl RustIngestGateway {
                                 None
                             }
                             PushEventDetail::Depth(depth) => {
+                                gateway_push_diag::record_depth(&spy_push_diag, &event.symbol);
                                 Some(depth_event(&event.symbol, mono_ns, seq_no, depth, &mut threat_engine))
                             }
                             _ => None,
@@ -246,6 +279,18 @@ impl RustIngestGateway {
     }
     fn rest_calc_indexes(&mut self, symbols: Vec<String>, indexes: Vec<String>) -> PyResult<String> {
         self.rest_calc_indexes_impl(symbols, indexes)
+    }
+    fn subscribe(&mut self, symbols: Vec<String>) -> PyResult<()> {
+        self.update_subscription(symbols, true)
+    }
+    fn unsubscribe(&mut self, symbols: Vec<String>) -> PyResult<()> {
+        self.update_subscription(symbols, false)
+    }
+    fn diagnostics(&self, py: Python<'_>) -> PyResult<PyObject> {
+        gateway_push_diag::snapshot_to_pyobject(py, &self.spy_push_diag)
+    }
+    fn diagnostics_handle(&self) -> GatewayPushDiagnosticsHandle {
+        GatewayPushDiagnosticsHandle::new(Arc::clone(&self.spy_push_diag))
     }
     fn stop(&mut self) -> PyResult<()> {
         if let Some(tx) = self.shutdown_tx.take() {

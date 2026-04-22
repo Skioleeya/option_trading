@@ -85,6 +85,20 @@ describe('ActiveOptions render contracts', () => {
 
         expect(symbolCells.slice(0, 3)).toEqual(['LOW', 'HIGH', 'MID'])
     })
+
+    it('renders IMP with compact numeric units only', () => {
+        render(
+            <ActiveOptions
+                options={[
+                    row(1, { impact_index: 88_123.4 }),
+                ]}
+            />
+        )
+
+        expect(screen.getByText('88.1K')).toBeInTheDocument()
+        expect(screen.queryByText('88123.40')).not.toBeInTheDocument()
+    })
+
     it('renders negative FLOW with backend bearish green class', () => {
         const { container } = render(
             <ActiveOptions

@@ -86,7 +86,7 @@ L0 目录治理补充：
 ### 3.2 Enforcement
 
 - Policy: `scripts/policy/layer_boundary_rules.json`
-- Gate: `scripts/validate_session.ps1 -Strict`
+- Gate: `python manage.py validate-session --strict`
 - P0 审计要求: 必须支持全仓扫描，不仅扫描 `files_changed`
 
 ## 4. Contracts Across Layers
@@ -154,6 +154,8 @@ sequenceDiagram
 - 禁止 degraded/retry 启动分支；所有启动入口必须 strict-only。
 - lifespan 启动期的 bootstrap/repair 门槛必须先将初始 `spot` 归一为非负浮点；当 `fetch_snapshot().spot` 缺失或为 `null` 时，必须按 `0.0` 处理并继续 strict 启动路径校验，禁止在 near-ATM repair gate 上因 `None` 比较直接抛错。
 - 运维启动必须遵循 probe-first：先检查 `/health`、`5173`、`6380`，仅对 DOWN 组件执行启动，避免重复启动导致 `WinError 10048`。
+- Redis 持久化目录 owner 必须固定在 Windows 本地固定盘 NTFS 路径（当前合同：仓库内 `./var/redis`）；UNC/network 路径、可移动盘、以及非 NTFS 文件系统都必须在 `start-all` 启动前 fast-fail。
+- Redis 冷启动 AOF 体量必须受严格门槛治理；若 multipart AOF 总量超过 `2 GiB`，`start-all` 必须拒绝继续启动 backend/frontend，并输出 base/incr/total 诊断。
 - 当 `8001` 端口冲突时，先以 `/health` 判定是否已有健康实例在跑；仅在需要替换实例时才释放端口占用进程。
 - LongPort Quote API 配额守卫必须持续生效:
   - 同时订阅 symbols <= 500（超限自动裁剪）
@@ -193,7 +195,7 @@ sequenceDiagram
 
 ### 7.1 Test Entry
 
-- 所有 pytest 必须通过 `scripts/test/run_pytest.ps1`
+- 所有 pytest 必须通过 `python manage.py run-pytest`
 - 缓存目录必须是 `tmp/pytest_cache`
 - 禁止管理员上下文混跑
 
@@ -201,7 +203,7 @@ sequenceDiagram
 
 - `scripts/test/test_l0_l4_pipeline.py`
 - 层间契约与 Presenter 相关回归
-- 会话结束前 `scripts/validate_session.ps1 -Strict`
+- 会话结束前 `python manage.py validate-session --strict`
 
 ## 8. SOP Pack
 
@@ -215,31 +217,30 @@ sequenceDiagram
 
 ## 9. Runtime Commands
 
-```powershell
+```bash
 # probe first (do not blindly restart)
-try { (Invoke-WebRequest http://127.0.0.1:8001/health -UseBasicParsing -TimeoutSec 3).StatusCode } catch {}
-try { (Invoke-WebRequest http://127.0.0.1:5173 -UseBasicParsing -TimeoutSec 3).StatusCode } catch {}
-Get-NetTCPConnection -LocalPort 6380 -State Listen -ErrorAction SilentlyContinue
+curl.exe -fsS http://127.0.0.1:8001/health
+curl.exe -fsS http://127.0.0.1:5173
+powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 6380 -State Listen"
 
 # backend strict (default)
-.\scripts\ops\start_backend.ps1
+python manage.py start-backend
 
 # degraded mode is forbidden by policy
-# .\scripts\ops\start_backend.ps1 -Degraded  # DO NOT USE
+# python manage.py start-backend --degraded  # DO NOT USE
 
 # backend log tail (latest)
-Get-Content .\logs\backend_runtime.current.log -Tail 400
+powershell -NoProfile -Command "Get-Content logs/backend_runtime.current.log -Tail 400"
 
 # frontend
 npm --prefix l4_ui run dev -- --host 0.0.0.0 --port 5173
 
 # release 8001 only when replacement is required
-$pid8001 = (Get-NetTCPConnection -LocalPort 8001 -State Listen | Select-Object -First 1).OwningProcess
-Get-Process -Id $pid8001
-Stop-Process -Id $pid8001 -Force
+powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 8001 -State Listen"
+powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 8001 -State Listen | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }"
 
 # strict session gate
-powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict
+python manage.py validate-session --strict
 ```
 
 ## 10. Deliberately Retained shared/system Utilities (Sub-wave D)

@@ -29,14 +29,14 @@ export const ACTIVE_OPTIONS_FLOW_INTENSITY_SET = new Set<string>([
 
 export const ACTIVE_OPTIONS_FLOW_GLOW_BY_DIRECTION_AND_INTENSITY: Record<ActiveFlowDirection, Record<ActiveFlowIntensity, string>> = {
     BULLISH: {
-        EXTREME: 'shadow-[0_0_12px_rgba(255,77,79,0.6)] animate-pulse',
-        HIGH: 'shadow-[0_0_8px_rgba(255,77,79,0.35)]',
+        EXTREME: '',
+        HIGH: '',
         MODERATE: '',
         LOW: '',
     },
     BEARISH: {
-        EXTREME: 'shadow-[0_0_12px_rgba(16,185,129,0.6)] animate-pulse',
-        HIGH: 'shadow-[0_0_8px_rgba(16,185,129,0.35)]',
+        EXTREME: '',
+        HIGH: '',
         MODERATE: '',
         LOW: '',
     },
@@ -48,4 +48,4 @@ export const ACTIVE_OPTIONS_FLOW_GLOW_BY_DIRECTION_AND_INTENSITY: Record<ActiveF
     },
 }
 
-export const ACTIVE_OPTIONS_SWEEP_GLOW = 'shadow-[0_0_15px_rgba(255,255,255,0.7)] animate-pulse'
+export const ACTIVE_OPTIONS_SWEEP_GLOW = ''

@@ -1,3 +1,6 @@
+use crate::research_pending_labels::{
+    pending_key, recover_latest_feature_day, PendingOutcome,
+};
 use crate::research_store_support::{
     cleanup_tier_path, direction_to_code, ensure_dirs, et_date, gex_intensity_to_code, is_rth,
     iv_regime_to_code, l0_rust, parse_ts_any, parse_ts_text, project_allowed, settings_value,
@@ -8,19 +11,11 @@ use crate::research_store_io::{load_latest, load_range};
 use chrono::{DateTime, Utc};
 use chrono_tz::US::Eastern;
 use pyo3::{exceptions::PyValueError, prelude::*, types::{PyDict, PyList, PyModule}};
-use std::{collections::HashMap, env, fs, path::PathBuf};
+use std::{collections::HashMap, fs, path::PathBuf};
 use uuid::Uuid;
-#[derive(Clone, Default)]
-struct PendingOutcome {
-    ts: DateTime<Utc>, l0_version: i64, symbol: String, base_spot: f64, last_spot: f64,
-    min_ret: f64, log_returns: Vec<f64>, fwd_ret: HashMap<&'static str, Option<f64>>,
-}
 #[derive(Clone)]
 struct ExportJob {
     status: String, path: String, format: String, error: Option<String>,
-}
-fn horizons() -> HashMap<&'static str, Option<f64>> {
-    HashMap::from([("1m", None), ("5m", None), ("15m", None), ("60m", None)])
 }
 #[pyclass(module = "shared_rust.services", unsendable)]
 pub struct ResearchFeatureStore {
@@ -50,18 +45,11 @@ impl ResearchFeatureStore {
     #[pyo3(signature = (*, root_dir=None, raw_retention_days=None, feature_retention_days=None, label_retention_days=None))]
     fn new(py: Python<'_>, root_dir: Option<String>, raw_retention_days: Option<i64>, feature_retention_days: Option<i64>, label_retention_days: Option<i64>) -> PyResult<Self> {
         let requested_root = PathBuf::from(root_dir.clone().unwrap_or(settings_value(py, "research_store_root", String::from("tmp/research_store"))?));
-        let (root, raw_dir, feature_dir, label_dir, export_dir) = match ensure_dirs(&requested_root) {
-            Ok((raw_dir, feature_dir, label_dir, export_dir)) => (requested_root, raw_dir, feature_dir, label_dir, export_dir),
-            Err(_) if root_dir.is_none() => {
-                let fallback_root = env::temp_dir().join("option_v3_research_store");
-                let (raw_dir, feature_dir, label_dir, export_dir) =
-                    ensure_dirs(&fallback_root).map_err(|err| PyValueError::new_err(err.to_string()))?;
-                (fallback_root, raw_dir, feature_dir, label_dir, export_dir)
-            }
-            Err(err) => return Err(PyValueError::new_err(err.to_string())),
-        };
-        Ok(Self {
-            root,
+        let (raw_dir, feature_dir, label_dir, export_dir) =
+            ensure_dirs(&requested_root).map_err(|err| PyValueError::new_err(err.to_string()))?;
+        let recovery = recover_latest_feature_day(py, &feature_dir, &label_dir)?;
+        let store = Self {
+            root: requested_root,
             raw_dir,
             feature_dir,
             label_dir,
@@ -71,7 +59,7 @@ impl ResearchFeatureStore {
             label_retention_days: label_retention_days.unwrap_or(settings_value(py, "research_label_retention_days", 20_i64)?),
             max_fields_per_query: settings_value(py, "history_max_fields_per_query", 64_usize)?,
             max_points_per_query: settings_value(py, "history_max_points_per_query", 1024_usize)?,
-            pending_labels: HashMap::new(),
+            pending_labels: recovery.pending_labels,
             jobs: HashMap::new(),
             last_cleanup_date: None,
             last_persist_second: None,
@@ -80,7 +68,15 @@ impl ResearchFeatureStore {
             non_rth_ticks_skipped: 0,
             write_failures: 0,
             last_persist_et: None,
-        })
+        };
+        if !recovery.recovered_rows.is_empty() {
+            let replay_date = recovery
+                .replay_date
+                .ok_or_else(|| PyValueError::new_err("feature replay date missing for recovered label rows"))?;
+            let rows = PyList::new(py, recovery.recovered_rows.iter())?;
+            store.append_rows(py, &store.label_dir, "label", &replay_date, &rows)?;
+        }
+        Ok(store)
     }
     #[getter(_raw_dir)]
     fn raw_dir(&self, py: Python<'_>) -> PyResult<Py<PyAny>> { path_obj(py, &self.raw_dir) }
@@ -208,7 +204,10 @@ impl ResearchFeatureStore {
         self.rth_rows_persisted = self.rth_rows_persisted.saturating_add(1);
         self.last_persist_et = Some(ts.with_timezone(&Eastern).to_rfc3339());
         self.update_pending_labels(py, ts, spot)?;
-        self.pending_labels.entry(format!("{}|{}|SPY", ts.to_rfc3339(), l0_version)).or_insert_with(|| PendingOutcome { ts, l0_version, symbol: "SPY".into(), base_spot: spot, last_spot: spot, min_ret: 0.0, log_returns: Vec::new(), fwd_ret: horizons() });
+        let key = pending_key(ts, l0_version, "SPY");
+        self.pending_labels
+            .entry(key)
+            .or_insert_with(|| PendingOutcome::new(ts, l0_version, "SPY".into(), spot));
         Ok(())
     }
     #[pyo3(signature = (*, start, end, view="feature", fields=None, interval="1s", fmt="jsonl"))]
@@ -351,16 +350,10 @@ impl ResearchFeatureStore {
         let mut done = Vec::new();
         let mut rows = Vec::new();
         for (key, state) in self.pending_labels.iter_mut() {
-            let elapsed = (ts - state.ts).num_seconds().max(0) as f64;
-            let current_ret = (spot / state.base_spot) - 1.0;
-            state.min_ret = state.min_ret.min(current_ret);
-            if state.last_spot > 0.0 && spot > 0.0 { state.log_returns.push((spot / state.last_spot).ln()); }
-            state.last_spot = spot;
-            for (horizon, sec) in [("1m", 60.0), ("5m", 300.0), ("15m", 900.0), ("60m", 3600.0)] {
-                if state.fwd_ret[horizon].is_none() && elapsed >= sec { state.fwd_ret.insert(horizon, Some(current_ret)); }
-            }
-            if elapsed >= 3600.0 {
-                rows.push(native.call_method1("service_research_label_row", (utc_iso(state.ts), state.l0_version, state.symbol.clone(), utc_iso(Utc::now()), state.fwd_ret["1m"], state.fwd_ret["5m"], state.fwd_ret["15m"], state.fwd_ret["60m"], state.min_ret, safe_std(&state.log_returns), elapsed))?.unbind());
+            state.advance(ts, spot);
+            let elapsed = state.elapsed_seconds(ts);
+            if state.matured(ts) {
+                rows.push(native.call_method1("service_research_label_row", (utc_iso(state.ts), state.l0_version, state.symbol.clone(), utc_iso(Utc::now()), state.label_value("1m"), state.label_value("5m"), state.label_value("15m"), state.label_value("60m"), state.min_ret, safe_std(&state.log_returns), elapsed))?.unbind());
                 done.push(key.clone());
             }
         }

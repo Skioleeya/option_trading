@@ -1,6 +1,6 @@
-import React, { memo } from 'react'
-import { useDashboardStore, selectPayload } from '../../store/dashboardStore'
-import { deriveMmFlowMetrics, deriveMmFlowView, type MmFlowMetrics } from './mmFlowModel'
+import React, { memo, useMemo } from 'react'
+import { useDashboardStore } from '../../store/dashboardStore'
+import { deriveMmFlowMetricsFromCandidate, deriveMmFlowView, readMmFlowCandidate, type MmFlowMetrics } from './mmFlowModel'
 
 interface Props {
     metrics?: MmFlowMetrics | null
@@ -14,8 +14,8 @@ function directionClass(state: 'SUPPRESSIVE' | 'EXPANSIVE' | 'BALANCED'): string
 }
 
 export const MmFlowCard: React.FC<Props> = memo(({ metrics: propMetrics, preferProp = false }) => {
-    const payload = useDashboardStore(selectPayload)
-    const storeMetrics = deriveMmFlowMetrics(payload)
+    const mmFlowCandidate = useDashboardStore((state) => readMmFlowCandidate(state.payload))
+    const storeMetrics = useMemo(() => deriveMmFlowMetricsFromCandidate(mmFlowCandidate), [mmFlowCandidate])
     const metrics = preferProp ? (propMetrics ?? storeMetrics) : (storeMetrics ?? propMetrics)
     const view = deriveMmFlowView(metrics ?? null)
 

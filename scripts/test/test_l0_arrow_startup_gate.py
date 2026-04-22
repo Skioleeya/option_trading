@@ -60,3 +60,17 @@ async def test_builder_await_arrow_writer_ready_surfaces_subscription_timeout() 
 
     with pytest.raises(RuntimeError, match="writer_not_ready_timeout"):
         await builder._await_arrow_writer_ready_or_fail(timeout_sec=0.01)
+
+
+def test_builder_marks_arrow_decode_failures_as_transient() -> None:
+    assert OptionChainBuilder._is_arrow_transient_error(
+        RuntimeError("arrow_ipc_payload_decode_failed: Expected to be able to read 3520 bytes")
+    )
+    assert OptionChainBuilder._is_arrow_transient_error(RuntimeError("arrow_ipc_payload_empty"))
+    assert OptionChainBuilder._is_arrow_transient_error(
+        RuntimeError("Arrow IPC stream contained no record batch")
+    )
+
+
+def test_builder_keeps_non_transient_errors_as_hard_failures() -> None:
+    assert not OptionChainBuilder._is_arrow_transient_error(RuntimeError("writer_not_ready_timeout"))

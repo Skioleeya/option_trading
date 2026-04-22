@@ -127,6 +127,40 @@ export const DebugOverlay: React.FC<Props> = memo(({ open, onClose }) => {
                         </div>
                     </div>
 
+                    <div className="grid grid-cols-4 gap-2 mb-6">
+                        <div className="bg-[#101014] border border-[#27272a] rounded px-3 py-2">
+                            <div className="text-[9px] text-[#52525b] font-bold">QUOTE MODE</div>
+                            <div className="text-[12px] font-bold text-[#a1a1aa] mt-0.5">{raw.quoteMode}</div>
+                        </div>
+                        <div className="bg-[#101014] border border-[#27272a] rounded px-3 py-2">
+                            <div className="text-[9px] text-[#52525b] font-bold">SOURCE GAP MS</div>
+                            <div className="text-[12px] font-bold text-[#a1a1aa] mt-0.5">{raw.sourceGapMs}</div>
+                        </div>
+                        <div className="bg-[#101014] border border-[#27272a] rounded px-3 py-2">
+                            <div className="text-[9px] text-[#52525b] font-bold">RAW / DISTINCT 1S</div>
+                            <div className="text-[12px] font-bold text-[#e4e4e7] mt-0.5">{raw.sourceEvents1s} / {raw.distinctSpots1s}</div>
+                        </div>
+                        <div className="bg-[#101014] border border-[#27272a] rounded px-3 py-2">
+                            <div className="text-[9px] text-[#52525b] font-bold">SOURCE→PAINT MS</div>
+                            <div className="text-[12px] font-bold text-[#e4e4e7] mt-0.5">{raw.sourceToPaintMs}</div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 mb-6">
+                        <div className="bg-[#101014] border border-[#27272a] rounded px-3 py-2">
+                            <div className="text-[9px] text-[#52525b] font-bold">WIRE LAG MS</div>
+                            <div className="text-[12px] font-bold text-[#a1a1aa] mt-0.5">{raw.wireLagMs}</div>
+                        </div>
+                        <div className="bg-[#101014] border border-[#27272a] rounded px-3 py-2">
+                            <div className="text-[9px] text-[#52525b] font-bold">MSG→STORE MS</div>
+                            <div className="text-[12px] font-bold text-[#a1a1aa] mt-0.5">{raw.msgToStoreMs}</div>
+                        </div>
+                        <div className="bg-[#101014] border border-[#27272a] rounded px-3 py-2">
+                            <div className="text-[9px] text-[#52525b] font-bold">STORE→PAINT MS</div>
+                            <div className="text-[12px] font-bold text-[#a1a1aa] mt-0.5">{raw.storeToPaintMs}</div>
+                        </div>
+                    </div>
+
                     {/* Matrix Stream Log */}
                     <div className="border border-[#27272a] rounded bg-black h-[400px] p-0 flex flex-col">
                         <div className="px-3 py-1.5 border-b border-[#27272a] text-[#52525b] font-bold bg-[#09090b] sticky top-0">
@@ -151,7 +185,15 @@ export const DebugOverlay: React.FC<Props> = memo(({ open, onClose }) => {
                                 <span className="text-[#3b82f6]">"shm_head"</span><span className="text-[#e4e4e7]">: {raw.shmHead},</span>
                                 <span className="text-[#3b82f6]">"shm_tail"</span><span className="text-[#e4e4e7]">: {raw.shmTail},</span>
                                 <span className="text-[#3b82f6]">"shm_lag"</span><span className="text-[#e4e4e7]">: {raw.shmLag},</span>
-                                <span className="text-[#3b82f6]">"shm_status"</span><span className="text-[#e4e4e7]">: "{raw.shmStatus}"</span>
+                                <span className="text-[#3b82f6]">"shm_status"</span><span className="text-[#e4e4e7]">: "{raw.shmStatus}",</span>
+                                <span className="text-[#3b82f6]">"quote_mode"</span><span className="text-[#e4e4e7]">: "{raw.quoteMode}",</span>
+                                <span className="text-[#3b82f6]">"source_gap_ms"</span><span className="text-[#e4e4e7]">: {raw.sourceGapMs},</span>
+                                <span className="text-[#3b82f6]">"source_events_1s"</span><span className="text-[#e4e4e7]">: {raw.sourceEvents1s},</span>
+                                <span className="text-[#3b82f6]">"distinct_spots_1s"</span><span className="text-[#e4e4e7]">: {raw.distinctSpots1s},</span>
+                                <span className="text-[#3b82f6]">"wire_lag_ms"</span><span className="text-[#e4e4e7]">: {raw.wireLagMs},</span>
+                                <span className="text-[#3b82f6]">"msg_to_store_ms"</span><span className="text-[#e4e4e7]">: {raw.msgToStoreMs},</span>
+                                <span className="text-[#3b82f6]">"store_to_paint_ms"</span><span className="text-[#e4e4e7]">: {raw.storeToPaintMs},</span>
+                                <span className="text-[#3b82f6]">"source_to_paint_ms"</span><span className="text-[#e4e4e7]">: {raw.sourceToPaintMs}</span>
                                 <span className="text-[#10b981]">{"}"}</span>
                                 {`
 --------------------------------------------------

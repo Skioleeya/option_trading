@@ -76,9 +76,9 @@ export const DecisionEngine: React.FC<Props> = memo(({ fused: propFused, netGex:
                 <span className="section-header text-text-muted" style={{ fontSize: 'var(--l4-font-10)' }}>FUSION</span>
             </div>
 
-            <div className={`flex items-center justify-between rounded border ${dirTheme.banner} transition-all duration-500`} style={{ padding: 'var(--l4-card-pad-tight) var(--l4-card-pad)' }}>
+            <div className={`flex items-center justify-between rounded border ${dirTheme.banner}`} style={{ padding: 'var(--l4-card-pad-tight) var(--l4-card-pad)' }}>
                 <div className="flex items-center gap-1.5">
-                    <div className={`w-2 h-2 rounded-full ${dirTheme.dot} transition-all duration-500`} />
+                    <div className={`w-2 h-2 rounded-full ${dirTheme.dot}`} />
                     <span className={`font-black tracking-widest ${dirTheme.text}`} style={{ fontSize: 'var(--l4-font-11)' }}>{dir}</span>
                 </div>
                 <span className={`mono font-bold ${dirTheme.text}`} style={{ fontSize: 'var(--l4-font-11)' }}>{conf}%</span>
@@ -116,7 +116,7 @@ export const DecisionEngine: React.FC<Props> = memo(({ fused: propFused, netGex:
                                     {q.label}
                                 </div>
                                 <div className="flex items-center gap-1">
-                                    <div className={`w-1.5 h-1.5 rounded-full ${qTheme.dot} transition-all duration-500`} />
+                                    <div className={`w-1.5 h-1.5 rounded-full ${qTheme.dot}`} />
                                     <span className={`mono font-bold ${qTheme.text}`} style={{ fontSize: 'var(--l4-font-9)' }}>{qWt}%</span>
                                 </div>
                             </div>

@@ -12,14 +12,26 @@ interface Props {
     preferProp?: boolean
 }
 
+function toPercent(value: number): number {
+    const pct = Math.round(value * 100)
+    if (pct < 0) return 0
+    if (pct > 100) return 100
+    return pct
+}
+
 export const MtfFlow: React.FC<Props> = memo(({ uiState: propState, preferProp = false }) => {
     const storeState = useDashboardStore(selectUiStateMtfFlow)
     const s = normalizeMtfFlowState(preferProp ? (propState ?? storeState) : (storeState ?? propState))
+    const consensusBarClass = s.consensusState === 1
+        ? 'bg-accent-red'
+        : s.consensusState === -1
+            ? 'bg-accent-green'
+            : 'bg-zinc-600'
 
     const timeframes = [
-        { label: '1M', data: s.m1 },
-        { label: '5M', data: s.m5 },
-        { label: '15M', data: s.m15 },
+        { key: 'm1', label: '1M', data: s.m1 },
+        { key: 'm5', label: '5M', data: s.m5 },
+        { key: 'm15', label: '15M', data: s.m15 },
     ]
 
     return (
@@ -30,26 +42,55 @@ export const MtfFlow: React.FC<Props> = memo(({ uiState: propState, preferProp =
             </div>
 
             <div className="grid grid-cols-3" style={{ gap: 'var(--l4-panel-gap)' }}>
-                {timeframes.map(({ label, data }) => (
+                {timeframes.map(({ key, label, data }) => {
+                    const kineticPercent = toPercent(data.kinetic_level)
+                    return (
                     <div key={label}
-                        className={`flex flex-col items-center gap-0.5 border rounded transition-all duration-500 bg-white/[0.03] ${data.tokens.borderColor}`}
+                        className={`flex flex-col items-center gap-0.5 border rounded bg-white/[0.03] ${data.tokens.borderColor}`}
                         style={{ padding: 'var(--l4-card-pad-tight) var(--l4-card-pad)' }}>
                         <div className="flex items-center gap-1">
                             <span className="mono font-bold text-text-secondary" style={{ fontSize: 'var(--l4-font-10)' }}>{label}</span>
-                            <div className={`w-2 h-2 rounded-full ${data.tokens.dotColor} ${data.tokens.shadowClass} ${data.tokens.animateClass} transition-all duration-500`} />
+                            <div className={`w-2 h-2 rounded-full ${data.tokens.dotColor}`} />
                         </div>
-                        <span className={`mono font-bold ${data.tokens.textColor}`} style={{ fontSize: 'var(--l4-font-8)' }}>
-                            {Math.round(data.kinetic_level * 100)}%
-                        </span>
+                        <div
+                            role="progressbar"
+                            aria-label={`${label} kinetic`}
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-valuenow={kineticPercent}
+                            data-testid={`mtf-${key}-bar`}
+                            className="relative w-full overflow-hidden rounded-full border border-white/10 bg-white/10"
+                            style={{ height: '6px' }}
+                        >
+                            <div
+                                className={`h-full rounded-full ${data.tokens.dotColor}`}
+                                style={{ width: `${kineticPercent}%` }}
+                            />
+                        </div>
                         <span className={`font-mono ${data.tokens.textColor} opacity-80`} style={{ fontSize: 'var(--l4-font-8)' }}>{data.tokens.regimeLabel}</span>
                     </div>
-                ))}
+                    )
+                })}
             </div>
 
-            <div className="mt-1.5 flex items-center gap-1.5">
+            <div className="mt-1.5 grid items-center" style={{ gridTemplateColumns: 'auto auto 1fr', gap: '6px' }}>
                 <span className="text-text-muted" style={{ fontSize: 'var(--l4-font-8)' }}>CONSENSUS</span>
                 <span className={`font-bold mono ${s.alignClass}`} style={{ fontSize: 'var(--l4-font-8)' }}>{s.consensusLabel}</span>
-                <span className="font-bold text-text-secondary mono" style={{ fontSize: 'var(--l4-font-8)' }}>{s.consensusPercent}%</span>
+                <div
+                    role="progressbar"
+                    aria-label="CONSENSUS kinetic"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={s.consensusPercent}
+                    data-testid="mtf-consensus-bar"
+                    className="relative w-full overflow-hidden rounded-full border border-white/10 bg-white/10"
+                    style={{ height: '6px' }}
+                >
+                    <div
+                        className={`h-full rounded-full ${consensusBarClass}`}
+                        style={{ width: `${s.consensusPercent}%` }}
+                    />
+                </div>
             </div>
         </div>
     )

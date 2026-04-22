@@ -61,7 +61,7 @@ CHILD_TASK_LINES = [
     "- [ ] 边界扫描（无跨层违规 import）",
     "- [ ] 魔法数治理（若本主题涉及）",
     "## Verification",
-    "- [ ] 相关测试通过（scripts/test/run_pytest.ps1）",
+    "- [ ] 相关测试通过（python manage.py run-pytest）",
     "- [ ] 指标达标（见量化门槛）",
     "- [ ] SOP 同步或写明 SOP-EXEMPT",
     "## DoD",
@@ -126,8 +126,28 @@ def require_file(root: Path, rel: str, violations: list[dict[str, Any]], reason:
 
 def require_task_template(text: str, required_lines: list[str], path: str, violations: list[dict[str, Any]]) -> None:
     normalized_text = re.sub(r"-\s*\[[xX ]\]\s*", "- [ ] ", text)
+    normalized_text = re.sub(
+        r"(scripts/test/run_pytest(?:\.[A-Za-z0-9_]+)?|python3 manage\.py run-pytest|python manage\.py run-pytest)",
+        "<pytest-entry>",
+        normalized_text,
+    )
+    normalized_text = re.sub(
+        r"(scripts/validate_session(?:\.[A-Za-z0-9_]+)? -Strict|python3 manage\.py validate-session --strict|python manage\.py validate-session --strict)",
+        "<strict-entry>",
+        normalized_text,
+    )
     for line in required_lines:
         normalized_line = re.sub(r"-\s*\[[xX ]\]\s*", "- [ ] ", line)
+        normalized_line = re.sub(
+            r"(scripts/test/run_pytest(?:\.[A-Za-z0-9_]+)?|python3 manage\.py run-pytest|python manage\.py run-pytest)",
+            "<pytest-entry>",
+            normalized_line,
+        )
+        normalized_line = re.sub(
+            r"(scripts/validate_session(?:\.[A-Za-z0-9_]+)? -Strict|python3 manage\.py validate-session --strict|python manage\.py validate-session --strict)",
+            "<strict-entry>",
+            normalized_line,
+        )
         if normalized_line not in normalized_text:
             violations.append(
                 {

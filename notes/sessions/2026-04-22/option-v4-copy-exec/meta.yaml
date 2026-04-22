@@ -1,0 +1,39 @@
+session_id: "2026-04-22/option-v4-copy-exec"
+title: "option-v4-copy-exec"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-22 10:40:31 -04:00"
+updated_at_et: "2026-04-22 10:45:53 -04:00"
+parent_session: "2026-04-22/option-v4-copy-checklist"
+
+branch: "fix/frontend-data-zero-fallback"
+base_commit: "9f5ad57"
+head_commit: "9f5ad57"
+
+files_changed:
+  - notes/context/handoff.md
+  - notes/context/open_tasks.md
+  - notes/context/project_state.md
+  - notes/sessions/2026-04-22/option-v4-copy-exec/handoff.md
+  - notes/sessions/2026-04-22/option-v4-copy-exec/meta.yaml
+  - notes/sessions/2026-04-22/option-v4-copy-exec/open_tasks.md
+  - notes/sessions/2026-04-22/option-v4-copy-exec/project_state.md
+commands:
+  - python3 manage.py new-session --task-id option-v4-copy-exec
+  - fuser -k 5173/tcp 8001/tcp 6380/tcp
+  - python3 manage.py start-all --verify-only
+  - mkdir -p /mnt/e/US.market/Option_v4
+  - rsync -a --delete --exclude='.git/' --exclude='.mypy_cache/' --filter=':- .gitignore' ./ /mnt/e/US.market/Option_v4/
+  - find /mnt/e/US.market/Option_v4 -maxdepth 3 \( -name '*.so' -o -name '*.pyd' \) -print
+  - python3 manage.py validate-session --strict
+tests_passed:
+  - host shutdown verification: Redis/backend/frontend all not listening after `fuser -k`
+  - source mirror created at `/mnt/e/US.market/Option_v4`
+  - target checks passed: required source files present; `.git`, `.venv`, `logs`, `data`, `var/redis` absent
+  - target native-module scan returned no `.so` / `.pyd`
+tests_failed: []
+blockers: []
+notes:
+  - The live stack was intentionally left stopped after the copy because the user asked to stop the system first.
+  - The mirror is source-only and must not be treated as a Windows runtime cutover.

@@ -1,0 +1,49 @@
+session_id: "2026-04-19/impl-governance-debt-wave1"
+title: "Governance debt wave1: boundary fallback + dashboardStore split"
+scope: "refactor"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-19 13:23:51 -04:00"
+updated_at_et: "2026-04-19 13:30:40 -04:00"
+parent_session: "2026-04-19/impl-linux-hardcut-python-cli"
+
+branch: "unknown"
+base_commit: "unknown"
+head_commit: "unknown"
+
+files_changed:
+  - "infra/ops_cli/layer_boundaries.py"
+  - "l4_ui/src/store/dashboardStore.ts"
+  - "l4_ui/src/store/dashboardStore.helpers.ts"
+  - "l4_ui/src/store/dashboardStore.merge.ts"
+  - "l4_ui/src/store/dashboardStore.selectors.ts"
+  - "notes/sessions/2026-04-19/impl-governance-debt-wave1/project_state.md"
+  - "notes/sessions/2026-04-19/impl-governance-debt-wave1/open_tasks.md"
+  - "notes/sessions/2026-04-19/impl-governance-debt-wave1/handoff.md"
+  - "notes/sessions/2026-04-19/impl-governance-debt-wave1/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+
+commands:
+  - "python3 manage.py new-session --task-id impl-governance-debt-wave1 --title \"Governance debt wave1: boundary fallback + dashboardStore split\" --scope \"refactor\" --owner \"Codex\" --parent-session \"2026-04-19/impl-linux-hardcut-python-cli\" --timezone \"America/New_York\" --update-pointer"
+  - "python3 manage.py check-layer-boundaries"
+  - "python3 -m py_compile infra/ops_cli/layer_boundaries.py"
+  - "npx --yes tsc -b (cwd=l4_ui)"
+  - "npm --prefix l4_ui run test -- dashboardStore"
+  - "python3 manage.py validate-session --strict"
+
+tests_passed:
+  - "python3 manage.py check-layer-boundaries -> [OK] Layer boundary scan passed (full repository)"
+  - "python3 -m py_compile infra/ops_cli/layer_boundaries.py"
+  - "npx --yes tsc -b (cwd=l4_ui)"
+  - "python3 manage.py validate-session --strict -> Session validation passed"
+
+tests_failed:
+  - "npm --prefix l4_ui run test -- dashboardStore -> Cannot find module '@rollup/rollup-linux-x64-gnu'"
+
+blockers:
+  - "l4_ui vitest runtime missing optional rollup dependency (@rollup/rollup-linux-x64-gnu)."
+
+notes:
+  - "This wave intentionally focused on governance tooling stabilization + one reviewed oversized file split."

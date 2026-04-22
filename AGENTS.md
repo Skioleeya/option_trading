@@ -184,8 +184,8 @@ Execution policy for this consistency unit:
 ## 5.3 Session Creation Rule
 
 - One substantive change set = one dedicated session folder.
-- Use `scripts/new_session.ps1` (default: create session without updating `notes/context/*` pointers).
-- If immediate pointer switch is needed, call `scripts/new_session.ps1 -UpdatePointer`.
+- Use `python manage.py new-session --task-id <task-id>` (default: create session without updating `notes/context/*` pointers).
+- If immediate pointer switch is needed, add `--update-pointer`.
 - Completed session folders are immutable; never repurpose old session history.
 
 ---
@@ -201,7 +201,7 @@ Context pointer sync is a handoff-gate action, not a mandatory per-step mutation
 
 ### 6.1 Test Entry and Cache Isolation
 
-- All pytest MUST run via: `scripts/test/run_pytest.ps1`
+- All pytest MUST run via: `python manage.py run-pytest`
 - Non-admin context only.
 - Cache directory MUST be `tmp/pytest_cache`.
 
@@ -211,7 +211,7 @@ Context pointer sync is a handoff-gate action, not a mandatory per-step mutation
 This section is a machine gate. Agent completion claim without these hooks is invalid.
 
 <MANDATORY_HOOK id="strict-validate-before-handoff">
-  <rule>Before declaring handoff complete, agent MUST execute: `powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict`.</rule>
+  <rule>Before declaring handoff complete, agent MUST execute: `python manage.py validate-session --strict`.</rule>
   <rule>Agent MUST provide terminal output summary of that exact command in handoff response.</rule>
 </MANDATORY_HOOK>
 
@@ -292,19 +292,28 @@ SLA:
 ---
 ## 11. Scripted Enforcement Summary
 
-- Bootstrap: `scripts/new_session.ps1`
+- Bootstrap: `python manage.py new-session --task-id <task-id>`
 - Live broker-dependent backend startup MUST run on the real host environment (outside sandbox); sandbox-local backend launches are invalid evidence for broker/runtime health.
-- Startup order MUST be: `powershell -ExecutionPolicy Bypass -File scripts/ops/start_backend.ps1`; only if the real-host strict launch fails on broker connectivity may agent retry `powershell -ExecutionPolicy Bypass -File scripts/ops/start_backend.ps1 -Degraded`.
-- Validation: `scripts/validate_session.ps1 -Strict`
+- Standard full-stack startup evidence MUST be: `python manage.py start-all`; degraded startup is forbidden.
+- `python manage.py start-backend` and direct frontend `npm run dev` are debug-only commands and MUST NOT be used as final full-stack health evidence.
+- Validation: `python manage.py validate-session --strict`
 - Architecture policy: `scripts/policy/layer_boundary_rules.json`
 - Quality thresholds: `scripts/policy/quality_thresholds.json`
 - Quality gate: `scripts/policy/check_quality_gates.py`
 - OpenSpec chain gate: `scripts/policy/check_openspec_chain.py`
-- Pytest entry: `scripts/test/run_pytest.ps1`
+- Pytest entry: `python manage.py run-pytest`
 - CI required check: `.github/workflows/session-validation.yml` (`validate-session` job)
 - Remote repo rule (ACTIVE): `refs/heads/master` MUST go through Pull Request; direct push is blocked; required status check `validate-session` MUST pass before merge.
 
 If any scripted gate fails, delivery is not complete.
+
+## 11.1 Windows Runtime Constraints (Binding)
+
+- Repository development and service startup MUST occur on Windows host local filesystem; UNC/network paths and removable drives are forbidden for runtime data ownership.
+- Windows browsers MUST access only the frontend origin (`http://localhost:5173` by default); browser-side API and WebSocket traffic MUST go through frontend same-origin `/api` and `/ws` routes.
+- Browser-side direct connections to backend addresses (`127.0.0.1:8001`, `::1`, or custom backend origins) are forbidden unless a repo contract explicitly replaces the frontend proxy in the same session.
+- Standard startup entrypoint MUST be `python manage.py start-all` (or the repo `.venv\\Scripts\\python.exe` equivalent). Direct manual `npm run dev` / `uvicorn` launches are non-standard and invalid as final health evidence.
+- Windows firewall, IPv4/IPv6 loopback behavior, and Windows-side file-watch/HMR limitations MUST be treated as hostile by default; implementation MUST rely on same-origin proxying rather than network-mode-specific browser routing assumptions.
 
 ---
 ## 12. Rust/Python Cutover Protocol (Binding Execution Contract)

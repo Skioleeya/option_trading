@@ -100,7 +100,7 @@ Run this minimum checklist for OpenSpec-only sessions:
 1. `Test-Path openspec/AGENTS.md`
 2. `openspec.cmd list`
 3. `rg -n "^## Purpose|^## Requirements|^#### Scenario:" openspec/changes/<change-id>/specs -g "spec.md"` (for changed deltas)
-4. `powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict`
+4. `python3 manage.py validate-session --strict`
 
 Handoff MUST include:
 

@@ -396,7 +396,7 @@ def test_low_quality_blocks_primary_classification():
     assert daily["quality"]["classification_blocked"] is True
 
 
-def test_primary_manifest_is_idempotent_and_by_regime_aligned():
+def test_published_day_fast_fails_on_rerun_and_by_regime_stays_aligned():
     mod = _load_module()
     root = _case_dir()
     data_root = root / "data"
@@ -421,11 +421,8 @@ def test_primary_manifest_is_idempotent_and_by_regime_aligned():
     ]
     assert mod.run_cli(argv) == 0
     first = json.loads((out_root / "daily" / date_str / "manifest.json").read_text(encoding="utf-8"))
-    assert mod.run_cli(argv) == 0
-    second = json.loads((out_root / "daily" / date_str / "manifest.json").read_text(encoding="utf-8"))
+    assert mod.run_cli(argv) == 1
 
-    assert first["primary_day_type"] == second["primary_day_type"]
-    assert first["source_files"] == second["source_files"]
     reg = out_root / "by_regime" / first["primary_day_type"] / date_str / "manifest.json"
     assert reg.exists()
     reg_payload = json.loads(reg.read_text(encoding="utf-8"))
@@ -435,6 +432,75 @@ def test_primary_manifest_is_idempotent_and_by_regime_aligned():
     assert "close_profile" in first
     assert "primary_tag" not in first
     assert "legacy_primary_tag" not in first
+
+
+def test_existing_by_regime_target_fails_before_any_publish() -> None:
+    mod = _load_module()
+    root = _case_dir()
+    data_root = root / "data"
+    out_root = root / "cold"
+    date_str = "20260311"
+    _make_day_files(data_root, date_str, rows=160, include_feature_label=True, include_walls=True, with_prev_day=True)
+
+    cfg = _default_cfg()
+    cfg_path = root / "cfg_regime_conflict.json"
+    _write_cfg(cfg_path, cfg)
+    for regime in [*cfg["primary_priority"], "INCOMPLETE_SOURCE"]:
+        conflict_dir = out_root / "by_regime" / regime / date_str
+        conflict_dir.mkdir(parents=True, exist_ok=True)
+        (conflict_dir / "manifest.json").write_text("{}", encoding="utf-8")
+
+    rc = mod.run_cli(
+        [
+            "--date",
+            date_str,
+            "--config",
+            str(cfg_path),
+            "--root",
+            str(data_root),
+            "--out-root",
+            str(out_root),
+            "--strict-quality",
+        ]
+    )
+
+    assert rc == 1
+    assert not (out_root / "daily" / date_str / "manifest.json").exists()
+    assert not (out_root / "reports" / f"{date_str}_quality.json").exists()
+
+
+def test_existing_report_target_fails_before_any_publish() -> None:
+    mod = _load_module()
+    root = _case_dir()
+    data_root = root / "data"
+    out_root = root / "cold"
+    date_str = "20260311"
+    _make_day_files(data_root, date_str, rows=160, include_feature_label=True, include_walls=True, with_prev_day=True)
+
+    cfg = _default_cfg()
+    cfg_path = root / "cfg_report_conflict.json"
+    _write_cfg(cfg_path, cfg)
+    final_report = out_root / "reports" / f"{date_str}_quality.json"
+    final_report.parent.mkdir(parents=True, exist_ok=True)
+    final_report.write_text("{}", encoding="utf-8")
+
+    rc = mod.run_cli(
+        [
+            "--date",
+            date_str,
+            "--config",
+            str(cfg_path),
+            "--root",
+            str(data_root),
+            "--out-root",
+            str(out_root),
+            "--strict-quality",
+        ]
+    )
+
+    assert rc == 1
+    assert not (out_root / "daily" / date_str / "manifest.json").exists()
+    assert not any((out_root / "by_regime").glob(f"*/{date_str}/manifest.json"))
 
 
 def test_non_trading_weekend_date_returns_1():
@@ -538,3 +604,35 @@ def test_manifest_uses_frozen_snapshot_paths_and_remains_sync_after_source_mutat
     result = sync_mod.check_manifest_sync(manifest_path)
     assert result["ok"] is True
     assert result["mismatches"] == []
+
+
+def test_corrupt_required_raw_fails_without_visible_publish() -> None:
+    mod = _load_module()
+    root = _case_dir()
+    data_root = root / "data"
+    out_root = root / "cold"
+    date_str = "20260311"
+    _make_day_files(data_root, date_str, rows=120, include_feature_label=True, include_walls=True, with_prev_day=True)
+    (data_root / "research/raw" / f"raw_{date_str}.parquet").write_bytes(b"PAR1")
+
+    cfg = _default_cfg()
+    cfg_path = root / "cfg_corrupt.json"
+    _write_cfg(cfg_path, cfg)
+
+    rc = mod.run_cli(
+        [
+            "--date",
+            date_str,
+            "--config",
+            str(cfg_path),
+            "--root",
+            str(data_root),
+            "--out-root",
+            str(out_root),
+            "--strict-quality",
+        ]
+    )
+    assert rc == 1
+    assert not (out_root / "daily" / date_str / "manifest.json").exists()
+    assert not any((out_root / "by_regime").glob(f"*/{date_str}/manifest.json"))
+    assert not (out_root / "reports" / f"{date_str}_quality.json").exists()

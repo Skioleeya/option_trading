@@ -52,7 +52,7 @@ function ratioPct(value: number): string {
     return `${(value * 100).toFixed(1)}%`
 }
 
-function readMmFlowCandidate(payload: DashboardPayload | null): Record<string, unknown> | null {
+export function readMmFlowCandidate(payload: DashboardPayload | null): Record<string, unknown> | null {
     const data = payload?.agent_g?.data as Record<string, unknown> | undefined
     if (!data) return null
     const explicit = data.mm_flow
@@ -67,8 +67,7 @@ function readMmFlowCandidate(payload: DashboardPayload | null): Record<string, u
     return null
 }
 
-export function deriveMmFlowMetrics(payload: DashboardPayload | null): MmFlowMetrics | null {
-    const raw = readMmFlowCandidate(payload)
+export function deriveMmFlowMetricsFromCandidate(raw: Record<string, unknown> | null): MmFlowMetrics | null {
     if (!raw) return null
     return {
         net_delta_exposure_live: finite(raw.net_delta_exposure_live, 0),
@@ -81,6 +80,11 @@ export function deriveMmFlowMetrics(payload: DashboardPayload | null): MmFlowMet
         condition_filtered_count: finite(raw.condition_filtered_count, 0),
         complex_spread_count: finite(raw.complex_spread_count, 0),
     }
+}
+
+
+export function deriveMmFlowMetrics(payload: DashboardPayload | null): MmFlowMetrics | null {
+    return deriveMmFlowMetricsFromCandidate(readMmFlowCandidate(payload))
 }
 
 export function deriveMmFlowView(metrics: MmFlowMetrics | null): MmFlowView | null {

@@ -9,6 +9,11 @@ from shared.services.l0_runtime.native_loader import l0_rust
 
 DEFAULT_SHM_BYTES = 8 * 1024 * 1024 + 4
 IPC_LENGTH_BYTES = 4
+TRANSIENT_ARROW_MARKERS = (
+    "Expected to be able to read",
+    "Invalid flatbuffers message",
+    "IPC message length is too large",
+)
 
 
 @dataclass
@@ -30,19 +35,45 @@ class ArrowIpcReader:
         )
 
     async def read_next_batch(self) -> pa.RecordBatch:
-        if self._native_reader is None:
+        native_reader = self._native_reader
+        if native_reader is None:
             raise RuntimeError("ArrowIpcReader is not connected")
-        payload = await asyncio.to_thread(self._native_reader.read_next_payload)
-        reader = pa.ipc.open_stream(payload)
+        payload = await asyncio.to_thread(native_reader.read_next_payload)
+        if not payload:
+            raise RuntimeError("arrow_ipc_payload_empty")
+        try:
+            reader = pa.ipc.open_stream(payload)
+        except Exception as exc:
+            message = str(exc)
+            if any(marker in message for marker in TRANSIENT_ARROW_MARKERS):
+                raise RuntimeError(f"arrow_ipc_payload_decode_failed: {message}") from exc
+            raise
         try:
             return reader.read_next_batch()
         except StopIteration as exc:
             raise RuntimeError("Arrow IPC stream contained no record batch") from exc
+        except Exception as exc:
+            message = str(exc)
+            if any(marker in message for marker in TRANSIENT_ARROW_MARKERS):
+                raise RuntimeError(f"arrow_ipc_payload_decode_failed: {message}") from exc
+            raise
+
+    def transport_diagnostics(self) -> dict[str, int]:
+        if self._native_reader is None:
+            return {}
+        diag_fn = getattr(self._native_reader, "diagnostics", None)
+        if not callable(diag_fn):
+            return {}
+        payload = diag_fn() or {}
+        if not isinstance(payload, dict):
+            return {}
+        return dict(payload)
 
     def close(self) -> None:
-        if self._native_reader is not None:
-            self._native_reader.close()
-            self._native_reader = None
+        native_reader = self._native_reader
+        self._native_reader = None
+        if native_reader is not None:
+            native_reader.close()
 
     async def __aenter__(self) -> "ArrowIpcReader":
         return self

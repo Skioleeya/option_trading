@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -76,6 +77,19 @@ def _workspace_store_root() -> str:
     return str(path)
 
 
+def _ts_et(hour: int, minute: int, second: int = 0) -> datetime:
+    et = datetime.now(ZoneInfo("America/New_York"))
+    return datetime(
+        et.year,
+        et.month,
+        et.day,
+        hour,
+        minute,
+        second,
+        tzinfo=ZoneInfo("America/New_York"),
+    ).astimezone(timezone.utc)
+
+
 def test_research_feature_schema_and_runtime_spec_include_mm_flow_fields() -> None:
     feature_fields = set(research_feature_fields())
     runtime_feature_fields = set(l0_rust.service_research_schema_spec()["feature_fields"])
@@ -119,3 +133,65 @@ def test_research_store_rejects_missing_mm_flow_payload() -> None:
             snapshot=_snapshot(version=2),
             payload=_payload(ts_utc=ts_utc, mm_flow=None),
         )
+
+
+def test_research_store_fails_fast_when_root_is_not_directory(tmp_path: Path) -> None:
+    invalid_root = tmp_path / "research-root-file"
+    invalid_root.write_text("not-a-directory", encoding="utf-8")
+    with pytest.raises(ValueError):
+        ResearchFeatureStore(root_dir=str(invalid_root))
+
+
+def test_research_store_recovers_pending_labels_after_restart() -> None:
+    root_dir = _workspace_store_root()
+    store = ResearchFeatureStore(root_dir=root_dir)
+    store.append_tick(
+        decision=_decision(),
+        snapshot=_snapshot(version=1, spot=510.0),
+        payload=_payload(ts_utc=_ts_et(10, 27), mm_flow={key: 1.0 for key in _MM_FLOW_KEYS}),
+    )
+    store.append_tick(
+        decision=_decision(),
+        snapshot=_snapshot(version=2, spot=511.0),
+        payload=_payload(ts_utc=_ts_et(10, 28), mm_flow={key: 2.0 for key in _MM_FLOW_KEYS}),
+    )
+
+    restarted = ResearchFeatureStore(root_dir=root_dir)
+    assert restarted.diagnostics()["pending_labels"] == 2
+
+    restarted.append_tick(
+        decision=_decision(),
+        snapshot=_snapshot(version=3, spot=512.0),
+        payload=_payload(ts_utc=_ts_et(11, 28), mm_flow={key: 3.0 for key in _MM_FLOW_KEYS}),
+    )
+
+    label_path = Path(root_dir) / "label" / f"label_{_ts_et(11, 28).astimezone(ZoneInfo('America/New_York')).strftime('%Y%m%d')}.parquet"
+    rows = l0_rust.service_research_read_parquet_rows(str(label_path))
+    assert len(rows) == 2
+    assert {row["l0_version"] for row in rows} == {1, 2}
+
+
+def test_research_store_startup_replays_latest_feature_day_into_missing_labels() -> None:
+    root_dir = _workspace_store_root()
+    store = ResearchFeatureStore(root_dir=root_dir)
+    ticks = [
+        (_ts_et(10, 27), 10, 510.0),
+        (_ts_et(10, 28), 20, 511.0),
+        (_ts_et(11, 28), 30, 512.0),
+    ]
+    for ts_utc, version, spot in ticks:
+        store.append_tick(
+            decision=_decision(),
+            snapshot=_snapshot(version=version, spot=spot),
+            payload=_payload(ts_utc=ts_utc, mm_flow={key: float(version) for key in _MM_FLOW_KEYS}),
+        )
+
+    day_str = ticks[-1][0].astimezone(ZoneInfo("America/New_York")).strftime("%Y%m%d")
+    label_path = Path(root_dir) / "label" / f"label_{day_str}.parquet"
+    label_path.unlink()
+
+    recovered = ResearchFeatureStore(root_dir=root_dir)
+    rows = l0_rust.service_research_read_parquet_rows(str(label_path))
+    assert len(rows) == 2
+    assert {row["l0_version"] for row in rows} == {10, 20}
+    assert recovered.diagnostics()["pending_labels"] == 1

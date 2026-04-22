@@ -2,8 +2,10 @@ use pyo3::prelude::*;
 
 mod contract_metrics;
 mod contract_option_chain;
+mod arrow_ipc;
 mod gateway_core;
 mod gateway_event_map;
+mod gateway_push_diag;
 mod gateway_rest;
 mod gateway_stress;
 mod helpers;
@@ -54,6 +56,7 @@ fn l0_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     l0_subscription_support::register(m)?;
     quote_contract_support::register(m)?;
     quote_profile_support::register(m)?;
+    gateway_push_diag::register(m)?;
     gateway_rest::register(m)?;
     model_contracts::register(m)?;
     research_store_runtime::register(m)?;
@@ -79,3 +82,6 @@ mod tests {
         assert_eq!(non_negative_volume_to_u64(123_456), 123_456);
     }
 }
+
+#[cfg(test)]
+mod arrow_ipc_tests;

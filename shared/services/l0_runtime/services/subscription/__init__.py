@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 CALL_WINDOW = 25.0
 PUT_WINDOW = 35.0
 LONGPORT_MAX_SUBSCRIPTIONS = 500
+UNDERLYING_SPOT_SYMBOL = "SPY.US"
 
 
 class OptionSubscriptionManager:
@@ -154,6 +155,7 @@ class OptionSubscriptionManager:
         target_set = await self._collect_core_symbols(spot)
         if mandatory_symbols:
             target_set.update(mandatory_symbols)
+        target_set.add(UNDERLYING_SPOT_SYMBOL)
         target_set = self._enforce_subscription_cap(
             target_set,
             mandatory_symbols=mandatory_symbols,
@@ -198,6 +200,7 @@ class OptionSubscriptionManager:
         if len(target_set) <= self._subscription_cap:
             return target_set
         mandatory = set(mandatory_symbols or set())
+        mandatory.add(UNDERLYING_SPOT_SYMBOL)
         if len(mandatory) > self._subscription_cap:
             logger.warning(
                 "[SubscriptionManager] Mandatory symbols exceed cap: kept %d of %d",

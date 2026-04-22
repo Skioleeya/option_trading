@@ -51,6 +51,10 @@ from shared_rust.services import HeaderVolatilityContextService, ResearchFeature
 logger = logging.getLogger(__name__)
 
 
+class ResearchPersistenceFatalError(RuntimeError):
+    """Raised when research persistence fails and runtime must hard-stop."""
+
+
 class L3AssemblyReactor:
     """L3 Output Assembly Reactor — main orchestrator.
 
@@ -80,6 +84,7 @@ class L3AssemblyReactor:
 
         self._total_ticks = 0
         self._failed_ticks = 0
+        self._research_persistence_fatal: str | None = None
 
     async def tick(
         self,
@@ -120,16 +125,20 @@ class L3AssemblyReactor:
 
             with self.instrumentation.span_timeseries():
                 await self.store.write(payload)
-                try:
-                    self.research_store.append_tick(decision=decision, snapshot=snapshot, payload=payload)
-                except Exception as exc:
-                    logger.error("[L3 Reactor] research_store append failed (non-fatal): %s", exc)
+                self._append_research_tick(
+                    decision=decision,
+                    snapshot=snapshot,
+                    payload=payload,
+                )
 
             assemble_ms = (time.monotonic() - start) * 1000
             self.instrumentation.record_assembly_latency(assemble_ms)
             self.instrumentation.set_hot_size(self.store.hot_size())
 
             return payload
+        except ResearchPersistenceFatalError:
+            self._failed_ticks += 1
+            raise
 
         except Exception as exc:
             self._failed_ticks += 1
@@ -152,6 +161,10 @@ class L3AssemblyReactor:
             },
             "l3_store": store_diag,
             "research_store": self.research_store.diagnostics(),
+            "research_persistence": {
+                "healthy": self._research_persistence_fatal is None,
+                "fatal_error": self._research_persistence_fatal,
+            },
         }
 
     def bind_redis(self, redis: Any) -> None:
@@ -189,4 +202,27 @@ class L3AssemblyReactor:
             ui_state=UIState.zero_state(),
             atm=None,
         )
+
+    def _append_research_tick(
+        self,
+        *,
+        decision: Any,
+        snapshot: Any,
+        payload: FrozenPayload,
+    ) -> None:
+        if self._research_persistence_fatal is not None:
+            raise ResearchPersistenceFatalError(self._research_persistence_fatal)
+        try:
+            self.research_store.append_tick(
+                decision=decision,
+                snapshot=snapshot,
+                payload=payload,
+            )
+        except Exception as exc:
+            self._research_persistence_fatal = f"{type(exc).__name__}: {exc}"
+            logger.critical(
+                "[L3 Reactor] research_store append failed (fatal): %s",
+                self._research_persistence_fatal,
+            )
+            raise ResearchPersistenceFatalError(self._research_persistence_fatal) from exc
 

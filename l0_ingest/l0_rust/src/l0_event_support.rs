@@ -95,16 +95,30 @@ fn direction_sign(raw_dir: &Bound<'_, PyAny>) -> i64 {
     0
 }
 
+fn extract_depth_midpoint(payload: &Bound<'_, PyAny>) -> Option<f64> {
+    let bids = mapping_or_attr(payload, "bids")
+        .or_else(|| mapping_or_attr(payload, "bid"))?;
+    let asks = mapping_or_attr(payload, "asks")
+        .or_else(|| mapping_or_attr(payload, "ask"))?;
+    let bid_level = bids.get_item(0).ok()?;
+    let ask_level = asks.get_item(0).ok()?;
+    let bid = safe_float(mapping_or_attr(&bid_level, "price"), 0.0);
+    let ask = safe_float(mapping_or_attr(&ask_level, "price"), 0.0);
+    if bid <= 0.0 || ask <= 0.0 || ask < bid {
+        return None;
+    }
+    Some((bid + ask) * 0.5)
+}
+
 #[pyfunction]
 fn l0_event_extract_spy_spot_price(raw_event: Bound<'_, PyAny>) -> PyResult<Option<f64>> {
     let symbol = raw_event.getattr("symbol")?.extract::<String>()?;
     let event_type = extract_event_type(&raw_event);
-    if symbol != "SPY.US" || event_type != 1 {
+    if symbol != "SPY.US" || event_type != 2 {
         return Ok(None);
     }
     let payload = raw_event.getattr("payload")?;
-    let price = safe_float(mapping_or_attr(&payload, "last_done"), 0.0);
-    Ok((price > 0.0).then_some(price))
+    Ok(extract_depth_midpoint(&payload))
 }
 
 #[pyfunction]

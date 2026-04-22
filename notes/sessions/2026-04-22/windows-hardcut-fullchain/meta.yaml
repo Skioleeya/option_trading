@@ -1,0 +1,58 @@
+session_id: "2026-04-22/windows-hardcut-fullchain"
+title: "Windows hard-cut fullchain"
+scope: "feature"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-22 11:16:11 -04:00"
+updated_at_et: "2026-04-22 11:29:07 -04:00"
+parent_session: "2026-04-22/option-v4-copy-exec"
+
+branch: "unknown"
+base_commit: "unknown"
+head_commit: "unknown"
+
+files_changed:
+  - AGENTS.md
+  - manage.py
+  - scripts/README.md
+  - docs/SOP/SYSTEM_OVERVIEW.md
+  - docs/SOP/L0_DATA_FEED.md
+  - docs/SOP/L1_LOCAL_COMPUTATION.md
+  - docs/SOP/L2_DECISION_ANALYSIS.md
+  - docs/SOP/L3_OUTPUT_ASSEMBLY.md
+  - docs/SOP/L4_FRONTEND.md
+  - infra/ops_cli/start_backend.py
+  - infra/ops_cli/start_all.py
+  - infra/ops_cli/redis_preflight.py
+  - infra/ops_cli/eod.py
+  - infra/ops_cli/validate_session.py
+  - infra/ops_cli/pin_processes.py
+  - infra/ops_cli/test_start_all.py
+  - scripts/policy/check_openspec_chain.py
+  - notes/sessions/2026-04-22/windows-hardcut-fullchain/project_state.md
+  - notes/sessions/2026-04-22/windows-hardcut-fullchain/open_tasks.md
+  - notes/sessions/2026-04-22/windows-hardcut-fullchain/handoff.md
+  - notes/sessions/2026-04-22/windows-hardcut-fullchain/meta.yaml
+  - notes/context/project_state.md
+  - notes/context/handoff.md
+
+commands:
+  - python manage.py new-session --task-id windows-hardcut-fullchain --title "Windows hard-cut fullchain" --scope "feature" --owner "Codex" --parent-session "2026-04-22/option-v4-copy-exec" --timezone "America/New_York" --update-pointer
+  - python manage.py start-backend --dry-run
+  - python manage.py register-eod-bucket-task --output-dir tmp/schtasks
+  - python manage.py check-layer-boundaries
+  - python manage.py run-pytest infra/ops_cli/test_start_all.py -q
+  - python manage.py validate-session --strict
+
+tests_passed:
+  - python manage.py start-backend --dry-run
+  - python manage.py register-eod-bucket-task --output-dir tmp/schtasks
+  - python manage.py check-layer-boundaries
+  - python manage.py validate-session --strict
+tests_failed:
+  - python manage.py run-pytest infra/ops_cli/test_start_all.py -q -> PermissionError [WinError 5] during pytest tmp_path setup
+blockers:
+  - Host ACL denies pytest temporary directory creation (`pytest-of-Lenovo`), blocking tmp_path-based test execution.
+notes:
+  - Source-only mirror workspace has no `.git`; branch/commit metadata remains `unknown`.
+  - Hard cut intentionally removed Linux/WSL active-path assumptions and switched to Windows-only runtime contract.

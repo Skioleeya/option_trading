@@ -271,6 +271,7 @@ async def run_housekeeping_loop(ctr: 'AppContainer', state: SharedLoopState) -> 
     last_source_version: int | None = None
 
     while True:
+        state.raise_if_fatal()
         last_source_version = await _run_housekeeping_tick_safe(
             ctr,
             state,

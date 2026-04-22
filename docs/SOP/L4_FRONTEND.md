@@ -1,6 +1,6 @@
 # L4 SOP — FRONTEND
 
-> Version: 2026-04-16
+> Version: 2026-04-21
 > Layer: L4 UI Runtime
 
 ## 1. Responsibility
@@ -24,8 +24,13 @@ flowchart LR
 - 协议层和渲染层解耦
 - Store 是前端状态单一事实源
 - 组件通过 selector 精准订阅
-- 连接与历史端点必须由环境变量驱动（`VITE_L4_WS_URL`、`VITE_L4_API_BASE`），禁止在入口硬编码地址
-- 模块切换必须由显式开关控制（`VITE_L4_ENABLE_CENTER_V2`、`VITE_L4_ENABLE_RIGHT_V2`、`VITE_L4_ENABLE_LEFT_V2`），并保留稳定回退路径
+- 连接与历史端点必须由单一环境变量 `VITE_BACKEND_ORIGIN` 驱动（示例：`http://127.0.0.1:8001`）；该变量用于 Vite `/api` 与 `/ws` 代理上游
+- 浏览器运行态必须使用同源端点：`apiBase=''`（请求 `/api/...`）与 `ws(s)://<current-frontend-host>/ws/dashboard`；禁止浏览器直连 `VITE_BACKEND_ORIGIN`
+- `VITE_BACKEND_ORIGIN` 缺失或非法（非 http/https、包含 path/query/hash）时，前端启动必须 fast-fail；禁止 `window.location` 推导、`localhost` 默认值或任何 fallback
+- `Vite serve` 是唯一允许依赖 `VITE_BACKEND_ORIGIN` 的前端启动面；`vite build` 不得因该变量缺失而阻断编译
+- `l4_ui/scripts/dev-strict.mjs` 必须直接通过 Vite JS API 创建 dev server，禁止再外壳到 `vite` CLI；Windows 受限上下文下需要绕开 CLI config-loader 对 `esbuild` 原生子进程的额外依赖
+- `VITE_L4_WS_URL` 与 `VITE_L4_API_BASE` 已退出运行合同；若仍被设置，运行时必须抛错并阻断启动
+- 模块切换必须由显式开关控制（`VITE_L4_ENABLE_CENTER_V2`、`VITE_L4_ENABLE_RIGHT_V2`、`VITE_L4_ENABLE_LEFT_V2`）
 - 全局布局必须使用单一路径的布局令牌缩放：固定设计基准 `1920x1080`，按 `min(width_ratio,height_ratio)` 同步窗口/浏览器缩放，并限制在 `50%~125%`
 - 禁止对整棵应用 DOM 使用 `transform: scale(...)` + 反向 `width/height` 补偿；缩放只允许通过布局变量驱动左右栏宽度、关键浮层宽度和定位偏移
 - L4 不得尝试按“物理主屏/副屏设备身份”分支；浏览器运行时唯一允许的定向优化依据是当前窗口 viewport 尺寸
@@ -50,6 +55,7 @@ flowchart LR
 
 - `payload.timestamp/data_timestamp` 按 L0 数据时间解释
 - `heartbeat_timestamp` 按链路心跳解释
+- Header `SPY` 只能消费顶层 `payload.spot`；当 backend 进入 live spot fast lane 后，L4 必须接受一秒内多次 `spot/version/data_timestamp` 更新，禁止再假设 `SPY` 只会按 1Hz 变化
 - 右栏模型必须先 normalize 再渲染
 - Right Panel 诊断型数值卡片（如 raw Greek）应优先从 `agent_g.data.micro_structure.micro_structure_state.*` 派生，避免扩大 `ui_state` presenter 合同
 - Right Panel `MM FLOW` 卡片必须优先消费 `agent_g.data.mm_flow`，仅在缺失时回退 `agent_g.data.fused_signal.mm_flow`；L4 仅负责展示映射，不得在组件层重算 Delta/Gamma/OI 指标
@@ -63,6 +69,7 @@ flowchart LR
 - `ActiveOptions` model 层必须执行硬校验：`flow` 符号与 `flow_direction` 一致；`flow_color` 与 `flow_direction` 一致；不一致直接抛错并中断该帧消费
 - `ActiveOptions` 合同中 `flow_score` 是 DEG 分数，不参与 `FLOW` 配色；配色只跟随 `flow`（USD signed amount）与其显示文本
 - `ActiveOptions` 的 `FLOW` 展示文本必须与标准化后的 `flow` 数值同号；`flow=0` 时必须展示中性 `$0`，禁止出现 `-$0/+ $0` 等 signed-zero 文本
+- `ActiveOptions` 的 `IMP` 展示必须使用前端紧凑数字单位（`K/M/B/T`）且不得带 `$` 前缀；固定两位小数显示禁止恢复
 - `ActiveOptions` 必须消费后端 `flow_glow` 字段（允许空字符串）；前端不得本地派生/回退 glow token
 - `ActiveOptions` 必须始终渲染固定 5 行；当后端异常少发时仅允许补齐标准占位行（`is_placeholder=true`），禁止伪造真实合约行
 - `ActiveOptions` 协议消费允许 `ui_state.active_options` 返回 `0..5` 行；`0` 行在盘前/无合格流窗口属于合法状态，L4 必须通过 model 层补齐到固定 5 行展示
@@ -80,7 +87,8 @@ flowchart LR
 - `ActiveOptions` 若接收到重复/越界 `slot_index`，model 层必须在保持后端行顺序前提下执行 1..5 去重补位，保证 DOM key 唯一且始终覆盖完整槽位集合
 - `DecisionEngine` 禁止渲染 `fused_signal.explanation` 文案（包括 tooltip/title）；guard 说明仅保留在后端审计与诊断链路，不在前端主视图展示
 - `DecisionEngine` 的 GEX badge 必须与 `ui_state.micro_stats.net_gex` 同源（label+badge）；仅当该字段缺失时允许回退 `fused_signal.gex_intensity`
-- `DecisionEngine` 与 `MtfFlow` 右栏进攻区禁止使用横向进度/状态条；状态强弱只能通过文字、数值、badge、dot 和颜色表达，避免在紧凑档浪费垂直/横向空间
+- `DecisionEngine` 右栏进攻区禁止使用横向进度/状态条；状态强弱通过文字、数值、badge、dot 和颜色表达
+- `MtfFlow` 的 kinetic/contraction 强度展示必须使用紧凑滚动条（scrollbar/gauge）可视化；不得只显示百分比数字
 - `MtfFlow` 必须仅消费纯状态字段（`state=-1|0|1` + 物理标量），不得消费后端样式字段
 - `MtfFlow` 的颜色/边框/动画必须由前端白名单 `Record<FlowState, VisualTokenSet>` 本地映射生成
 - 对脏 payload 中的 `color/red/green/dot_color/text_color/border/animate/align_color` 必须忽略，禁止视觉状态倒灌
@@ -94,12 +102,17 @@ flowchart LR
 - `AtmDecayChart` 聚焦态禁止通过加粗线宽制造强调；强调仅允许通过非焦点去强调（隐藏或降权视觉）实现
 - `AtmDecayChart` 在 `data=[]` 或过滤后无可渲染点（如跨日切换后仅剩非交易时段数据）时，必须同步清空 hover 焦点并重置初始化标记，避免下一批数据复用旧焦点状态
 - `AtmDecayChart` 在 `init/update/interaction/resize` 任一阶段发生图表引擎异常时，必须进入显式 degraded 模式并执行 chart runtime teardown；degraded 后禁止继续执行图表副作用，但不得阻断 L4 其余模块渲染与广播消费链路
+- `AtmDecayChart` 在 `document.visibilityState='hidden'` 时可以暂停同步，但 `visibilitychange -> visible` 必须重放当前 store 最新 ATM 状态；禁止依赖“下一笔 live tick”才能补图
 - 冷启动历史拉取 `/api/atm-decay/history` 必须使用字段投影（最小集：`timestamp,straddle_pct,call_pct,put_pct,strike_changed`），禁止传输完整行字段到浏览器
 - 历史接口默认以 `schema=v2`（columnar-json）消费；`schema=v1` 仅用于兼容/回放验证
+- 冷启动 history 请求非 2xx、响应解码失败或空历史在 strict 模式下必须显式报错并可见告警；禁止静默吞错或假数据补齐
 - `/api/atm-decay/history` 视为后端已净化的单调序列：前端不得自行容忍 future/out-of-order ATM points 来“修图”，若出现逆序或未来点应视为后端违约并回查 storage sanitizer
 - 盘后 ATM replay 验证必须继续复用同一个 `/api/atm-decay/history` + `/ws/dashboard` 消费路径，前端不得引入 replay-only 分支；若 history 存在且曲线非平台化，TradingView 应在 cold boot 后恢复显示而不是长期 `-- PENDING`
 - 前端对 columnar 包络仅负责解码为对象行，不得改变既有图表/store 业务语义
 - `dashboardStore` 的 sticky merge 与 `atmHistory` 必须按 ET 交易日隔离；跨日不得保留旧帧或旧日历史点。
+- `dashboardStore` 对 live `atmHistory` 的交易日隔离必须使用显式 `atmHistoryTradeDateKey/atmHistoryLastTimestamp` 常量时间维护；禁止在 `applyFullUpdate/applyMergedPayload` 热路径上对整段 history 反复执行 ET 日期解析或 `filter()`。
+- `dashboardStore` 对 live ATM 去重必须覆盖当前交易日整段 active history，而不是只比较 tail timestamp；重连/init snapshot 重发旧点时不得把旧 timestamp 追加回图表序列
+- 浏览器性能采样不得依赖渲染 DebugOverlay 本身；L4 profiling 必须支持无界面开关（例如 `l4:set_profiling_enabled` / `mockL4.setProfiling()`），避免测量链路污染被测 CPU。
 - 即使 compute loop 因重复 `snapshot_version` 跳过 L1/L2，前端也应继续通过既有 `atm` payload 消费到新的 live ATM sample；若 `dashboard_delta` 长期不含 `changes.atm`，应优先排查后端 dedup/live continuity，而不是在 L4 伪造中间点
 - `dashboard_delta` 仅含 `heartbeat_timestamp` 时，前端必须将其解释为 transport liveness；禁止把 heartbeat-only 帧误判为指标刷新
 - `dashboardStore.smartMergeUiState` 对 `wall_migration/depth_profile` 必须采用“空数组显式清空”语义；仅 `null/undefined`（字段缺失）允许 sticky 兜底，避免与 `GexStatusBar` 同 tick 口径漂移。
@@ -132,6 +145,7 @@ flowchart LR
 - `STALLED` 不等同 `DISCONNECTED`
 - DebugOverlay 必须展示 `shm_stats` 关键键
 - ProtocolAdapter 必须记录消息处理链路 RUM：`markMsgReceived`、`markMsgProcessed`、`recordReconnect`
+- DebugOverlay 还必须展示 quote-lane 诊断链路：`governor_telemetry.quote_lane.mode`、`last_source_gap_ms`、`source_event_count_1s`、`last_distinct_spot_gap_ms`、`distinct_spot_count_1s`，以及前端 RUM 的 `wire lag / msg->store / store->paint / source->paint`；其中 `source_*` 是 raw depth arrival cadence，`distinct_*` 是 midpoint 真变化 cadence；这些字段只用于观测，不得反向参与业务渲染逻辑
 
 ## 6. Boundary Rules
 
@@ -140,7 +154,9 @@ flowchart LR
 
 ## 7. Verification
 
-```powershell
+```bash
 npm --prefix l4_ui run test
-npm --prefix l4_ui run dev -- --host 0.0.0.0 --port 5173
+$env:VITE_BACKEND_ORIGIN='http://127.0.0.1:8001'; npm --prefix l4_ui run dev -- --host 0.0.0.0 --port 5173
 ```
+
+上述 `npm run dev` 仅用于前端局部调试，不构成系统整体健康证据；完整启动与最终复核必须通过 `.venv\Scripts\python.exe manage.py start-all` 完成。

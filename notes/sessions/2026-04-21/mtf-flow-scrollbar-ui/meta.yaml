@@ -1,0 +1,20 @@
+session_id: "2026-04-21/mtf-flow-scrollbar-ui"
+title: "mtf-flow-scrollbar-ui"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-21 09:59:49 -04:00"
+updated_at_et: "2026-04-21 09:59:49 -04:00"
+parent_session: null
+
+branch: "fix/frontend-data-zero-fallback"
+base_commit: "3ff3ba1"
+head_commit: "3ff3ba1"
+
+files_changed: []
+commands: []
+tests_passed: []
+tests_failed: []
+blockers: []
+notes: []
+

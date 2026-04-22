@@ -1,4 +1,4 @@
-use crate::ipc_legacy::{ArrowIpcSegment, DEFAULT_ARROW_IPC_BYTES};
+use crate::arrow_ipc::{ArrowIpcSegment, DEFAULT_ARROW_IPC_BYTES};
 use crate::schema::{ArrowMarketEvent, ARROW_IPC_SCHEMA};
 use crate::transport_contract::{
     resolve_arrow_signal_name, DEFAULT_L0_IPC_SHM_BYTES,

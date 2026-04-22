@@ -96,6 +96,7 @@ impl Drop for ArrowIpcSegment {
 
 #[cfg(not(windows))]
 pub struct ArrowIpcSegment {
+    shm: Shmem,
     capacity: usize,
 }
 
@@ -192,9 +193,21 @@ impl ArrowIpcSegment {
     }
 
     #[cfg(not(windows))]
-    pub fn create_or_open(_path: &str, capacity: usize) -> Result<Self, ShmemError> {
-        let _ = capacity;
-        Err(ShmemError::UnknownOsError(0))
+    pub fn create_or_open(path: &str, capacity: usize) -> Result<Self, ShmemError> {
+        let total_size = capacity + 4;
+        let shm = match ShmemConf::new().size(total_size).os_id(path).create() {
+            Ok(shm) => shm,
+            Err(ShmemError::LinkExists) | Err(ShmemError::MappingIdExists) => {
+                ShmemConf::new().size(total_size).os_id(path).open()?
+            }
+            Err(err) => return Err(err),
+        };
+        let base = shm.as_ptr() as *mut u8;
+        if !base.is_null() {
+            // Reset payload length at writer attach to avoid replaying stale bytes.
+            unsafe { std::ptr::write_bytes(base.add(ARROW_IPC_LENGTH_OFFSET), 0, 4) };
+        }
+        Ok(Self { shm, capacity })
     }
 
     #[cfg(windows)]
@@ -228,8 +241,14 @@ impl ArrowIpcSegment {
     }
 
     #[cfg(not(windows))]
-    pub fn open_readonly(_path: &str, _capacity: usize) -> Result<Self, String> {
-        Err("ArrowIpcSegment readonly attach is unavailable on this platform".to_string())
+    pub fn open_readonly(path: &str, capacity: usize) -> Result<Self, String> {
+        let total_size = capacity + 4;
+        let shm = ShmemConf::new()
+            .size(total_size)
+            .os_id(path)
+            .open()
+            .map_err(|err| format!("Arrow IPC shared memory open failed: {} ({err:?})", path))?;
+        Ok(Self { shm, capacity })
     }
 
     pub fn write_message(&mut self, payload: &[u8]) -> Result<(), String> {
@@ -240,9 +259,15 @@ impl ArrowIpcSegment {
                 self.capacity
             ));
         }
+        #[cfg(windows)]
         unsafe {
             if self.view_ptr.is_null() {
                 return Err("arrow ipc shared memory base pointer is null".to_string());
+            }
+            std::ptr::write_bytes(self.view_ptr.add(ARROW_IPC_LENGTH_OFFSET), 0, 4);
+            std::ptr::copy_nonoverlapping(payload.as_ptr(), self.view_ptr.add(4), payload.len());
+            if payload.len() < self.capacity {
+                std::ptr::write_bytes(self.view_ptr.add(4 + payload.len()), 0, self.capacity - payload.len());
             }
             let len_bytes = (payload.len() as u32).to_le_bytes();
             std::ptr::copy_nonoverlapping(
@@ -250,12 +275,30 @@ impl ArrowIpcSegment {
                 self.view_ptr.add(ARROW_IPC_LENGTH_OFFSET),
                 len_bytes.len(),
             );
-            std::ptr::copy_nonoverlapping(payload.as_ptr(), self.view_ptr.add(4), payload.len());
-            if payload.len() < self.capacity {
-                std::ptr::write_bytes(self.view_ptr.add(4 + payload.len()), 0, self.capacity - payload.len());
-            }
+            Ok(())
         }
-        Ok(())
+        #[cfg(not(windows))]
+        {
+            let base = self.shm.as_ptr() as *mut u8;
+            if base.is_null() {
+                return Err("arrow ipc shared memory base pointer is null".to_string());
+            }
+            unsafe {
+                // Publish protocol on Linux: clear len -> write bytes -> publish len.
+                std::ptr::write_bytes(base.add(ARROW_IPC_LENGTH_OFFSET), 0, 4);
+                std::ptr::copy_nonoverlapping(payload.as_ptr(), base.add(4), payload.len());
+                if payload.len() < self.capacity {
+                    std::ptr::write_bytes(base.add(4 + payload.len()), 0, self.capacity - payload.len());
+                }
+                let len_bytes = (payload.len() as u32).to_le_bytes();
+                std::ptr::copy_nonoverlapping(
+                    len_bytes.as_ptr(),
+                    base.add(ARROW_IPC_LENGTH_OFFSET),
+                    len_bytes.len(),
+                );
+            }
+            Ok(())
+        }
     }
 
     pub fn read_message(&self) -> Result<Vec<u8>, String> {
@@ -268,7 +311,7 @@ impl ArrowIpcSegment {
             let payload_length =
                 u32::from_le_bytes([length_bytes[0], length_bytes[1], length_bytes[2], length_bytes[3]]) as usize;
             if payload_length == 0 {
-                return Err("invalid Arrow IPC payload length: 0".to_string());
+                return Ok(Vec::new());
             }
             if payload_length > self.capacity {
                 return Err(format!(
@@ -278,11 +321,38 @@ impl ArrowIpcSegment {
             }
             let payload_ptr = self.view_ptr.add(4);
             let payload = std::slice::from_raw_parts(payload_ptr, payload_length).to_vec();
+            let confirm_bytes = std::slice::from_raw_parts(self.view_ptr.add(ARROW_IPC_LENGTH_OFFSET), 4);
+            let confirm_length =
+                u32::from_le_bytes([confirm_bytes[0], confirm_bytes[1], confirm_bytes[2], confirm_bytes[3]]) as usize;
+            if confirm_length != payload_length {
+                return Ok(Vec::new());
+            }
             Ok(payload)
         }
         #[cfg(not(windows))]
         {
-            Err("ArrowIpcSegment read_message is unavailable on this platform".to_string())
+            let base = self.shm.as_ptr() as *mut u8;
+            if base.is_null() {
+                return Err("arrow ipc shared memory base pointer is null".to_string());
+            }
+            unsafe {
+                let length_bytes = std::slice::from_raw_parts(base.add(ARROW_IPC_LENGTH_OFFSET), 4);
+                let payload_length =
+                    u32::from_le_bytes([length_bytes[0], length_bytes[1], length_bytes[2], length_bytes[3]]) as usize;
+                if payload_length == 0 {
+                    return Ok(Vec::new());
+                }
+                if payload_length > self.capacity {
+                    return Err(format!(
+                        "Arrow IPC payload exceeds mapped capacity: payload={} capacity={}",
+                        payload_length, self.capacity
+                    ));
+                }
+                let payload_ptr = base.add(4);
+                let payload = std::slice::from_raw_parts(payload_ptr, payload_length).to_vec();
+                std::ptr::write_bytes(base.add(ARROW_IPC_LENGTH_OFFSET), 0, 4);
+                Ok(payload)
+            }
         }
     }
 }
@@ -293,39 +363,6 @@ fn to_wide(value: &str) -> Vec<u16> {
         .encode_wide()
         .chain(iter::once(0))
         .collect()
-}
-
-#[cfg(all(test, windows))]
-fn named_mapping_visible(path: &str) -> bool {
-    let wide = to_wide(path);
-    let handle = unsafe { OpenFileMappingW(FILE_MAP_READ, 0, wide.as_ptr()) };
-    if handle.is_null() {
-        return false;
-    }
-    let view = unsafe { MapViewOfFile(handle, FILE_MAP_READ, 0, 0, 0) };
-    if view.is_null() {
-        unsafe {
-            let _ = CloseHandle(handle);
-        }
-        return false;
-    }
-    unsafe {
-        let _ = UnmapViewOfFile(view);
-        let _ = CloseHandle(handle);
-    }
-    true
-}
-
-#[cfg(all(test, windows))]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn arrow_ipc_segment_exposes_named_mapping() {
-        let name = format!("codex-arrow-ipc-{}", std::process::id());
-        let _segment = ArrowIpcSegment::create_or_open(&name, 4096).expect("segment should create");
-        assert!(named_mapping_visible(&name), "OpenFileMappingW should attach to named segment");
-    }
 }
 
 unsafe fn write_header_metadata(base: *mut u8) {

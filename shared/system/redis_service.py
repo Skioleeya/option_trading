@@ -6,9 +6,8 @@ a thread-safe client for the application.
 
 import asyncio
 import logging
-import os
 import subprocess
-import time
+from pathlib import Path
 from typing import Any, Optional
 
 import redis.asyncio as redis
@@ -22,35 +21,34 @@ class RedisService:
     def __init__(self) -> None:
         self.client: Optional[redis.Redis] = None
         self._process: Optional[subprocess.Popen] = None
-        
-        # Paths (Corrected for project root)
-        self.root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-        self.bin_path = os.path.join(self.root_dir, "infra/bin/redis-server.exe")
-        self.conf_path = os.path.join(self.root_dir, "infra/redis/redis.conf.local")
-        self.data_dir = os.path.join(self.root_dir, "infra/redis/data")
+
+        root_dir = Path(__file__).resolve().parents[2]
+        self.root_dir = str(root_dir)
+        self.bin_path = str(root_dir / "infra/bin/redis-server.exe")
+        self.conf_path = str(root_dir / "infra/redis/redis.conf.local")
+        self.data_dir = str(root_dir / "var/redis")
 
     async def start(self) -> None:
         """Starts the local Redis server and connects the client."""
         port_open = await self._is_port_open(settings.redis_host, settings.redis_port)
         
         if not port_open:
-            if not os.path.exists(self.bin_path):
+            if not Path(self.bin_path).exists():
                 logger.error(f"Redis binary not found at {self.bin_path} and port {settings.redis_port} is closed.")
                 return
 
             logger.info(f"Starting Redis server on port {settings.redis_port}...")
-            
-            # Ensure data dir exists
-            os.makedirs(self.data_dir, exist_ok=True)
+
+            Path(self.data_dir).mkdir(parents=True, exist_ok=True)
             
             try:
                 # Run in background
                 self._process = subprocess.Popen(
                     [self.bin_path, self.conf_path],
-                    cwd=os.path.join(self.root_dir, "infra/redis"),
+                    cwd=self.root_dir,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
-                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                 )
                 
                 # Wait for startup

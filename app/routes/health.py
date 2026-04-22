@@ -6,6 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter, Request
 from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 
 router = APIRouter()
 
@@ -129,9 +130,24 @@ def _is_sparse_active_options_window(
 
 
 @router.get("/health")
-async def health():
+async def health(request: Request):
     """Health check endpoint."""
-    return {"status": "ok", "timestamp": datetime.now().isoformat()}
+    state = request.app.state.state
+    container = request.app.state.container
+    runner_stats = state.get_diagnostics()
+    l3_diag = container.l3_reactor.get_diagnostics() if container.l3_reactor else {}
+    fatal = runner_stats.get("fatal_runtime_error")
+    research_persistence = l3_diag.get("research_persistence", {})
+    healthy = fatal is None and bool(research_persistence.get("healthy", True))
+    body = {
+        "status": "ok" if healthy else "error",
+        "timestamp": datetime.now().isoformat(),
+        "fatal_runtime_error": fatal,
+        "research_persistence": research_persistence,
+    }
+    if healthy:
+        return body
+    return JSONResponse(status_code=503, content=body)
 
 @router.get("/debug/persistence_status")
 async def persistence_status(request: Request):
@@ -156,6 +172,9 @@ async def persistence_status(request: Request):
         "quote_hub": {
             "active": quote_hub_active,
             "ready_event_set": quote_hub_active,
+        },
+        "runtime_health": {
+            "fatal_runtime_error": runner_stats.get("fatal_runtime_error"),
         },
         "l1_runtime": l1_diag,
         "agent_runner": {

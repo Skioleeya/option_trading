@@ -8,6 +8,7 @@ import pytest
 
 from app.loops.compute_loop import run_compute_loop
 from app.loops.shared_state import SharedLoopState
+from l3_assembly.reactor import ResearchPersistenceFatalError
 from shared.config import settings
 
 
@@ -160,6 +161,12 @@ class _FakeContainer:
         self.active_options_service = _FakeActiveOptionsService()
 
 
+class _FatalL3Reactor:
+    async def tick(self, **kwargs: Any) -> _FakeFrozen:
+        del kwargs
+        raise ResearchPersistenceFatalError("PyValueError: corrupt raw parquet")
+
+
 def _snapshot(version: int) -> dict[str, Any]:
     return {
         "spot": 560.0,
@@ -226,3 +233,21 @@ async def test_compute_loop_prefers_chain_arrow_when_available(monkeypatch: pyte
     assert active_input_diag["updates"] == 1
     assert active_input_diag["valid"] is True
     assert ctr.active_options_service.get_diagnostics()["latest_source_version"] == 201
+
+
+@pytest.mark.asyncio
+async def test_compute_loop_stops_on_research_persistence_fatal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "websocket_update_interval", 0.001, raising=False)
+
+    ctr = _FakeContainer([_snapshot(301)])
+    ctr.l3_reactor = _FatalL3Reactor()
+    state = SharedLoopState()
+
+    with pytest.raises(ResearchPersistenceFatalError):
+        await run_compute_loop(ctr, state)
+
+    fatal = state.get_diagnostics()["fatal_runtime_error"]
+    assert fatal["source"] == "research_persistence"
+    assert "corrupt raw parquet" in fatal["message"]

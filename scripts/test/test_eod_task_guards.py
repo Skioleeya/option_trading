@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import shutil
 import subprocess
 import sys
 import uuid
@@ -151,9 +150,6 @@ def test_check_manifest_sync_reports_row_hash_and_size_mismatch():
 
 
 def test_runner_continues_archive_when_settle_guard_times_out():
-    if shutil.which("powershell") is None:
-        pytest.skip("powershell is required for run_eod_bucket.ps1 integration test")
-
     base_dir = Path("tmp/pytest_cache/test_eod_task_guards")
     base_dir.mkdir(parents=True, exist_ok=True)
     tmp_path = base_dir / f"runner_case_{uuid.uuid4().hex[:8]}"
@@ -173,27 +169,24 @@ def test_runner_continues_archive_when_settle_guard_times_out():
         path.write_text('{"ok": true}\n', encoding="utf-8")
 
     cmd = [
-        "powershell",
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        "scripts/ops/run_eod_bucket.ps1",
-        "-Date",
+        sys.executable,
+        "manage.py",
+        "run-eod-bucket",
+        "--date",
         date_str,
-        "-DataRoot",
+        "--data-root",
         str(data_root),
-        "-OutRoot",
+        "--out-root",
         str(out_root),
-        "-SettleStableWindowSeconds",
+        "--settle-stable-window-seconds",
         "1",
-        "-SettleTimeoutSeconds",
+        "--settle-timeout-seconds",
         "0.2",
-        "-SettlePollSeconds",
+        "--settle-poll-seconds",
         "0.1",
-        "-MaxAttempts",
+        "--max-attempts",
         "1",
-        "-RunLabel",
+        "--run-label",
         "pytest",
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, check=False)

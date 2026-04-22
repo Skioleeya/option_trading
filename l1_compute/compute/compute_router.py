@@ -1,4 +1,4 @@
-"""Compute Router — GPU-first routing with explicit blocked fallback."""
+"""Compute Router — GPU-first routing with Rust CPU fallback."""
 
 from __future__ import annotations
 
@@ -27,12 +27,12 @@ class ComputeDecision:
 
 
 class ComputeRouter:
-    """Adaptive compute router with institutional GPU-only discipline."""
+    """Adaptive compute router with deterministic Rust fallback when GPU is unavailable."""
 
     def __init__(self, force_tier: Optional[ComputeTier] = None) -> None:
         self._kernel = GPUGreeksKernel()
         self._force = force_tier
-        self._gpu_only_blocked_logged = False
+        self._cpu_fallback_logged = False
 
     @property
     def gpu_available(self) -> bool:
@@ -54,30 +54,45 @@ class ComputeRouter:
         tier, reason = self._decide(n)
         decision = ComputeDecision(tier=tier, reason=reason, chain_size=n)
 
-        if tier == ComputeTier.GPU_ONLY_BLOCKED:
-            matrix = self._blocked_matrix(ivs)
-            self._log_gpu_only_blocked_once("gpu_unavailable_cpu_recompute_forbidden")
+        if tier == ComputeTier.NUMPY:
+            matrix = self._execute_cpu_fallback(
+                spots=spots, strikes=strikes, ivs=ivs, t_years=t_years, is_call=is_call, r=r, q=q, ois=ois, mults=mults
+            )
             return matrix, decision
 
         try:
-            matrix = self._execute_gpu(spots, strikes, ivs, t_years, is_call, r, q, ois, mults)
+            matrix = self._execute_batch(
+                spots=spots,
+                strikes=strikes,
+                ivs=ivs,
+                t_years=t_years,
+                is_call=is_call,
+                r=r,
+                q=q,
+                ois=ois,
+                mults=mults,
+                prefer_gpu=True,
+                allow_cpu_fallback=False,
+            )
             return matrix, decision
         except GPUComputationUnavailableError as exc:
-            blocked = self._blocked_matrix(ivs)
-            blocked_decision = ComputeDecision(
-                tier=ComputeTier.GPU_ONLY_BLOCKED,
-                reason=f"gpu_runtime_failed:{exc}",
+            matrix = self._execute_cpu_fallback(
+                spots=spots, strikes=strikes, ivs=ivs, t_years=t_years, is_call=is_call, r=r, q=q, ois=ois, mults=mults
+            )
+            self._log_cpu_fallback_once(str(exc))
+            fallback_decision = ComputeDecision(
+                tier=ComputeTier.NUMPY,
+                reason=f"gpu_runtime_failed_rust_cpu_fallback:{exc}",
                 chain_size=n,
             )
-            self._log_gpu_only_blocked_once(str(exc))
-            return blocked, blocked_decision
+            return matrix, fallback_decision
 
     def _decide(self, _: int) -> tuple[ComputeTier, str]:
         if self._force is not None:
             return self._force, f"forced:{self._force.value}"
         if self._kernel.gpu_available:
             return ComputeTier.GPU, "gpu_mandate_active"
-        return ComputeTier.GPU_ONLY_BLOCKED, "gpu_unavailable_cpu_recompute_forbidden"
+        return ComputeTier.NUMPY, "gpu_unavailable_rust_cpu_fallback"
 
     @staticmethod
     def _zero_like(values: Any) -> Any:
@@ -94,7 +109,7 @@ class ComputeRouter:
         except (TypeError, AttributeError, ValueError):
             return [constant for _ in range(len(values))]
 
-    def _execute_gpu(
+    def _execute_batch(
         self,
         spots: Any,
         strikes: Any,
@@ -105,6 +120,9 @@ class ComputeRouter:
         q: float,
         ois: Any | None,
         mults: Any | None,
+        *,
+        prefer_gpu: bool,
+        allow_cpu_fallback: bool,
     ) -> GreeksMatrix:
         _ois = ois if ois is not None else self._zero_like(spots)
         _mults = mults if mults is not None else self._constant_like(spots, 100.0)
@@ -118,26 +136,38 @@ class ComputeRouter:
             float(q),
             _ois,
             _mults,
-            prefer_gpu=True,
-            allow_cpu_fallback=False,
+            prefer_gpu=prefer_gpu,
+            allow_cpu_fallback=allow_cpu_fallback,
         )
 
-    def _blocked_matrix(self, ivs: Any) -> GreeksMatrix:
-        zeros = self._zero_like(ivs)
-        return GreeksMatrix(
-            delta=zeros,
-            gamma=zeros,
-            vega=zeros,
-            vanna=zeros,
-            charm=zeros,
-            theta=zeros,
-            gex_per_contract=zeros,
-            call_gex=zeros,
-            put_gex=zeros,
-            iv_used=ivs * 1.0,
+    def _execute_cpu_fallback(
+        self,
+        *,
+        spots: Any,
+        strikes: Any,
+        ivs: Any,
+        t_years: float,
+        is_call: Any,
+        r: float,
+        q: float,
+        ois: Any | None,
+        mults: Any | None,
+    ) -> GreeksMatrix:
+        return self._execute_batch(
+            spots=spots,
+            strikes=strikes,
+            ivs=ivs,
+            t_years=t_years,
+            is_call=is_call,
+            r=r,
+            q=q,
+            ois=ois,
+            mults=mults,
+            prefer_gpu=False,
+            allow_cpu_fallback=True,
         )
 
-    def _log_gpu_only_blocked_once(self, reason: str) -> None:
-        if not self._gpu_only_blocked_logged:
-            logger.error("[ComputeRouter] GPU-only mode blocked CPU recomputation: %s", reason)
-            self._gpu_only_blocked_logged = True
+    def _log_cpu_fallback_once(self, reason: str) -> None:
+        if not self._cpu_fallback_logged:
+            logger.warning("[ComputeRouter] GPU failed, switched to Rust CPU fallback: %s", reason)
+            self._cpu_fallback_logged = True

@@ -30,6 +30,23 @@ export function fmtVolume(val: number | null | undefined): string {
     return `${val}`
 }
 
+function trimTrailingZero(text: string): string {
+    return text.replace(/\.0$/, '')
+}
+
+export function fmtImpact(val: number | null | undefined): string {
+    if (val == null) return '—'
+    const abs = Math.abs(val)
+    const sign = val < 0 ? '-' : ''
+    if (abs >= 1_000_000_000_000) return `${sign}${trimTrailingZero((abs / 1_000_000_000_000).toFixed(1))}T`
+    if (abs >= 1_000_000_000) return `${sign}${trimTrailingZero((abs / 1_000_000_000).toFixed(1))}B`
+    if (abs >= 1_000_000) return `${sign}${trimTrailingZero((abs / 1_000_000).toFixed(1))}M`
+    if (abs >= 1_000) return `${sign}${trimTrailingZero((abs / 1_000).toFixed(1))}K`
+    if (abs >= 100) return `${sign}${trimTrailingZero(abs.toFixed(0))}`
+    if (abs >= 10) return `${sign}${trimTrailingZero(abs.toFixed(1))}`
+    return `${sign}${trimTrailingZero(abs.toFixed(2))}`
+}
+
 export function fmtFlow(val: number | null | undefined): string {
     if (val == null) return '—'
     const abs = Math.abs(val)

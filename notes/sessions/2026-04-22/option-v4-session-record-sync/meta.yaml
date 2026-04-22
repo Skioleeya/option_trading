@@ -1,0 +1,20 @@
+session_id: "2026-04-22/option-v4-session-record-sync"
+title: "option-v4-session-record-sync"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-22 10:49:55 -04:00"
+updated_at_et: "2026-04-22 10:49:55 -04:00"
+parent_session: null
+
+branch: "fix/frontend-data-zero-fallback"
+base_commit: "9f5ad57"
+head_commit: "9f5ad57"
+
+files_changed: []
+commands: []
+tests_passed: []
+tests_failed: []
+blockers: []
+notes: []
+

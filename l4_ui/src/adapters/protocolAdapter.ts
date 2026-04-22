@@ -203,7 +203,7 @@ export class ProtocolAdapter {
 
             if (result.ok) {
                 this.store.applyMergedPayload(result.value)
-                L4Rum.markMsgProcessed()
+                L4Rum.markMsgProcessed(result.value)
             } else {
                 console.error(
                     '[L4 ProtocolAdapter] Failed to apply delta:',
@@ -222,7 +222,7 @@ export class ProtocolAdapter {
             return
         }
         this.store.applyFullUpdate(validated.value)
-        L4Rum.markMsgProcessed()
+        L4Rum.markMsgProcessed(validated.value)
         ConnectionMonitor.onFullPayload()
     }
 

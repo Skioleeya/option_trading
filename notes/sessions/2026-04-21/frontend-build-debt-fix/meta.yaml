@@ -1,0 +1,35 @@
+session_id: "2026-04-21/frontend-build-debt-fix"
+title: "frontend-build-debt-fix"
+scope: "l4_ui build/test debt repair"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-21 16:42:20 -04:00"
+updated_at_et: "2026-04-21 16:47:42 -04:00"
+parent_session: "2026-04-21/frontend-cpu-fps-rootfix"
+
+branch: "fix/frontend-data-zero-fallback"
+base_commit: "3ff3ba1"
+head_commit: "3ff3ba1"
+
+files_changed:
+  - "l4_ui/src/__tests__/setup.ts"
+  - "l4_ui/src/components/__tests__/smallWindowGuardrails.test.tsx"
+  - "l4_ui/src/components/__tests__/tacticalTriad.model.test.ts"
+  - "l4_ui/src/components/left/__tests__/microStatsModel.test.ts"
+  - "l4_ui/src/components/center/__tests__/atmDecayChartData.test.ts"
+  - "l4_ui/src/observability/__tests__/l4_rum.test.ts"
+  - "l4_ui/src/main.tsx"
+commands:
+  - "npm --prefix l4_ui run build"
+  - "VITE_BACKEND_ORIGIN=http://127.0.0.1:8001 npm --prefix l4_ui run build"
+  - "npm --prefix l4_ui run test -- src/components/__tests__/smallWindowGuardrails.test.tsx src/components/__tests__/tacticalTriad.model.test.ts src/components/left/__tests__/microStatsModel.test.ts src/components/center/__tests__/atmDecayChartData.test.ts src/observability/__tests__/l4_rum.test.ts"
+  - "python3 manage.py validate-session --strict"
+tests_passed:
+  - "VITE_BACKEND_ORIGIN=http://127.0.0.1:8001 npm --prefix l4_ui run build"
+  - "vitest targeted suites (20 tests)"
+  - "python3 manage.py validate-session --strict (first run surfaced metadata-only gate failures)"
+tests_failed: []
+blockers: []
+notes:
+  - "Strict vite config still requires VITE_BACKEND_ORIGIN; plain build without it is expected to fail."
+  - "Session changed only L4 build/test debt; no SOP update required."

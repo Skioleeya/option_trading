@@ -1,0 +1,42 @@
+session_id: "2026-04-21/frontend-review-rootfix"
+title: "frontend-review-rootfix"
+scope: "l4 frontend review regression root-fix"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-21 18:51:52 -04:00"
+updated_at_et: "2026-04-21 19:01:59 -04:00"
+parent_session: null
+
+branch: "fix/frontend-data-zero-fallback"
+base_commit: "3ff3ba1"
+head_commit: "3ff3ba1"
+
+files_changed:
+  - "l4_ui/vite.config.ts"
+  - "l4_ui/src/store/dashboardStore.ts"
+  - "l4_ui/src/components/center/AtmDecayChart.tsx"
+  - "l4_ui/src/store/__tests__/dashboardStore.test.ts"
+  - "l4_ui/src/components/center/__tests__/atmDecayChart.degrade.test.tsx"
+  - "docs/SOP/L4_FRONTEND.md"
+commands:
+  - "npm --prefix l4_ui run test -- src/store/__tests__/dashboardStore.test.ts src/components/center/__tests__/atmDecayChart.degrade.test.tsx src/config/__tests__/runtime.test.ts"
+  - "cd l4_ui && npm run build"
+  - "python3 manage.py validate-session --strict"
+  - "python3 manage.py start-all"
+  - "python3 manage.py start-all --verify-only"
+  - "curl -sS -i http://127.0.0.1:8001/health"
+  - "curl -sS -i http://127.0.0.1:5173/"
+tests_passed:
+  - "runtime.test.ts (5 passed)"
+  - "dashboardStore.test.ts (22 passed)"
+  - "atmDecayChart.degrade.test.tsx (2 passed)"
+  - "vite build"
+  - "validate-session --strict"
+  - "real-host start-all"
+  - "real-host /health 200"
+  - "real-host frontend / 200"
+tests_failed: []
+blockers: []
+notes:
+  - "Review regression root fixes only; no compatibility/fallback paths added."
+  - "OpenSpec exempted in handoff because this session closes review regressions without introducing new contract surfaces."

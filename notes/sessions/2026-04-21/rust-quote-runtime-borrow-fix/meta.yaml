@@ -1,0 +1,44 @@
+session_id: "2026-04-21/rust-quote-runtime-borrow-fix"
+title: "rust-quote-runtime-borrow-fix"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-21 18:14:44 -04:00"
+updated_at_et: "2026-04-21 18:21:51 -04:00"
+parent_session: "2026-04-21/arrow-ipc-close-borrow-fix"
+
+branch: "fix/frontend-data-zero-fallback"
+base_commit: "3ff3ba1"
+head_commit: "3ff3ba1"
+
+files_changed:
+  - "shared/services/l0_runtime/source/runtime/quote_runtime/__init__.py"
+  - "shared/services/l0_runtime/source/runtime/test_quote_runtime.py"
+  - "docs/SOP/L0_DATA_FEED.md"
+  - "notes/sessions/2026-04-21/rust-quote-runtime-borrow-fix/project_state.md"
+  - "notes/sessions/2026-04-21/rust-quote-runtime-borrow-fix/open_tasks.md"
+  - "notes/sessions/2026-04-21/rust-quote-runtime-borrow-fix/handoff.md"
+  - "notes/sessions/2026-04-21/rust-quote-runtime-borrow-fix/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+commands:
+  - ".venv/bin/python manage.py run-pytest shared/services/l0_runtime/source/runtime/test_quote_runtime.py::test_rust_quote_runtime_reconciles_symbol_deltas -vv"
+  - ".venv/bin/python manage.py run-pytest shared/services/l0_runtime/source/runtime/test_quote_runtime.py -vv"
+  - ".venv/bin/python manage.py run-pytest shared/services/l0_runtime/source/runtime/test_quote_runtime.py shared/services/l0_runtime/source/runtime/test_bootstrap.py app/tests/test_lifespan_startup.py"
+  - "python3 manage.py start-all"
+  - "python3 manage.py start-all --verify-only"
+  - "python3 - <<'PY' ... count new warning lines ... PY"
+  - "ss -ltnp '( sport = :8001 )'"
+  - "python3 manage.py validate-session --strict"
+tests_passed:
+  - ".venv/bin/python manage.py run-pytest shared/services/l0_runtime/source/runtime/test_quote_runtime.py shared/services/l0_runtime/source/runtime/test_bootstrap.py app/tests/test_lifespan_startup.py (7 passed)"
+  - "real-host python3 manage.py start-all completed successfully after the fix"
+  - "real-host python3 manage.py start-all --verify-only reported Redis/Backend/Frontend all True"
+  - "post-restart warning counts from log line 8517923 were all zero for borrow/rest/shutdown needles"
+  - "real-host ss -ltnp confirmed backend listener python pid 28883 on 0.0.0.0:8001"
+  - "python3 manage.py validate-session --strict"
+tests_failed: []
+blockers: []
+notes:
+  - "Root cause proved by code: multiple async service owners shared one PyO3 RustIngestGateway while native methods are exposed as &mut RustIngestGateway."

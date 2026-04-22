@@ -63,7 +63,7 @@ export const THEME = {
         },
         microStats: {
             panelBg: '#0a0c10',
-            cardBorder: '#1e2025',
+            cardBorder: '#222222',
             cardBg: '#111318',
             cardHoverBg: '#15181e',
             title: '#8f939c',

@@ -1,0 +1,39 @@
+session_id: "2026-04-21/research-label-pending-hardcut"
+title: "research-label-pending-hardcut"
+scope: "research pending-label continuity hard-cut"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-21 17:47:17 -04:00"
+updated_at_et: "2026-04-21 17:57:10 -04:00"
+parent_session: "2026-04-21/research-persistence-hardcut"
+
+branch: "fix/frontend-data-zero-fallback"
+base_commit: "3ff3ba1"
+head_commit: "3ff3ba1"
+
+files_changed:
+  - "shared_rust_services/src/research_pending_labels.rs"
+  - "shared_rust_services/src/research_store.rs"
+  - "shared_rust_services/src/lib.rs"
+  - "app/loops/tests/test_research_store_mm_flow_persistence.py"
+  - "docs/SOP/L3_OUTPUT_ASSEMBLY.md"
+commands:
+  - "cargo build --release --manifest-path shared_rust_services/Cargo.toml --target-dir tmp/cargo_target_runtime"
+  - "cp tmp/cargo_target_runtime/release/libservices.so shared_rust/services.so"
+  - ".venv/bin/python manage.py run-pytest app/loops/tests/test_research_store_mm_flow_persistence.py"
+  - "python3 manage.py start-all"
+  - ".venv/bin/python manage.py run-eod-bucket --date 20260421 --python-exe .venv/bin/python --repo-root /home/lenovo/projects/Option_v3 --config-path scripts/diagnostics/config/eod_bucket_thresholds.json --data-root data --out-root data/cold --run-label label-recovery"
+  - "python3 manage.py validate-session --strict"
+tests_passed:
+  - "cargo build --release --manifest-path shared_rust_services/Cargo.toml"
+  - "run-pytest app/loops/tests/test_research_store_mm_flow_persistence.py (6 passed)"
+  - "real-host startup replay recovered label_20260421 from 3265 rows to 14386 rows"
+  - "run-eod-bucket 20260421 rerun published quality=PASS, primary_day_type=balance_day, sync_check ok=true"
+  - "python3 manage.py validate-session --strict (pass after session metadata sync)"
+tests_failed:
+  - "python3 manage.py start-all --verify-only remained red for backend because the restart path hit the pre-existing ArrowIpcReader.close() Already borrowed bug"
+blockers:
+  - "Unrelated existing shutdown-path bug: ArrowIpcReader.close(): Already borrowed"
+notes:
+  - "This session intentionally avoided introducing a new sidecar pending-state file; recovery replays persisted feature/label tiers directly."
+  - "The 20260421 quality gate is now green after label recovery."

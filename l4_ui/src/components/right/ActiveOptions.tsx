@@ -3,7 +3,7 @@
  * DOM/CSS/Layout: UNCHANGED
  */
 import React, { memo } from 'react'
-import { fmtVolume, fmtFlow } from '../../lib/utils'
+import { fmtVolume, fmtFlow, fmtImpact } from '../../lib/utils'
 import type { ActiveOption } from '../../types/dashboard'
 import { useDashboardStore, selectUiStateActiveOptions } from '../../store/dashboardStore'
 import { normalizeActiveOptions } from './activeOptionsModel'
@@ -51,14 +51,13 @@ export const ActiveOptions: React.FC<Props> = memo(({ options: propOptions, pref
                         const isPlaceholder = Boolean(opt.is_placeholder)
                         const isCall = !isPlaceholder && opt.option_type === 'CALL'
                         const impactValue = typeof opt.impact_index === 'number' ? opt.impact_index : 0
-                        const rowGlow = isPlaceholder ? '' : opt.flow_glow
                         const slot = opt.slot_index && opt.slot_index > 0 ? opt.slot_index : (i + 1)
 
                         return (
                             <tr key={`slot-${slot}`}
                                 data-slot={slot}
                                 data-placeholder={isPlaceholder ? 'true' : 'false'}
-                                className={`border-b border-bg-border/50 hover:bg-bg-card transition-colors ${rowGlow}`}>
+                                className="border-b border-bg-border/50 hover:bg-bg-card">
                                 <td className="py-0.5 relative whitespace-nowrap">
                                     {!isPlaceholder && (
                                         <div className={`absolute left-0 top-[20%] bottom-[20%] rounded-r-sm ${isCall ? 'bg-accent-red' : 'bg-accent-green'}`} style={{ width: 'var(--l4-row-accent-w)' }} />
@@ -71,14 +70,14 @@ export const ActiveOptions: React.FC<Props> = memo(({ options: propOptions, pref
                                 </td>
                                 <td className="py-0.5 text-right text-text-primary font-bold whitespace-nowrap">{isPlaceholder ? '—' : opt.strike.toFixed(2)}</td>
                                 <td className="py-0.5 text-right font-bold text-white/90 whitespace-nowrap">
-                                    {isPlaceholder ? '—' : impactValue.toFixed(2)}
+                                    {isPlaceholder ? '—' : fmtImpact(impactValue)}
                                 </td>
                                 <td className="py-0.5 text-right whitespace-nowrap">
                                     <span className="px-1 py-0.5 rounded-[4px] font-bold bg-white/5 border border-white/10" style={{ fontSize: 'var(--l4-font-9)' }}>
                                         {isPlaceholder ? '—' : (opt.flow_volume_label || fmtVolume(opt.volume))}
                                     </span>
                                 </td>
-                                <td className={`py-0.5 text-right font-bold transition-all duration-500 pr-1 whitespace-nowrap ${isPlaceholder ? 'text-text-secondary' : opt.flow_color}`}>
+                                <td className={`py-0.5 text-right font-bold pr-1 whitespace-nowrap ${isPlaceholder ? 'text-text-secondary' : opt.flow_color}`}>
                                     {isPlaceholder ? '—' : (opt.flow_deg_formatted || fmtFlow(opt.flow))}
                                 </td>
                             </tr>
@@ -91,4 +90,3 @@ export const ActiveOptions: React.FC<Props> = memo(({ options: propOptions, pref
 })
 
 ActiveOptions.displayName = 'ActiveOptions'
-

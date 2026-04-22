@@ -90,8 +90,13 @@ flowchart LR
 - `shared/services/research_feature_store.py`、`shared/services/research_feature_store_io.py`、`shared/services/header_volatility_context.py` 已退役，不得再恢复 Python compat owner
 - `/api/research/features`、`/api/research/exports/*` 现直接调用 `shared_rust.services.ResearchFeatureStore` 的同步接口；路由层不再保留这组 root owner 的 async Python 壳
 - 研究表主键必须包含 `data_timestamp + l0_version`，用于跨层 join 对齐
+- `ResearchFeatureStore` 的 parquet 持久化必须采用 same-directory `temp file -> fsync -> rename -> fsync parent dir` 原子提交；禁止恢复同路径整文件覆盖写入。
+- `ResearchFeatureStore` 初始化必须直接绑定配置的 `research_store_root`；root 不可写或不是目录时必须立即失败，禁止回退到临时目录。
 - `ResearchFeatureStore` 的 label pending queue 只能在 raw/feature 成功写入后注册；禁止出现未落 raw/feature 的 label-only 样本。
+- `ResearchFeatureStore` 的 label continuity owner 不得依赖纯内存 `pending_labels`。backend 启动时必须基于最新 `feature_<date>.parquet` 与 `label_<date>.parquet` 重放恢复未成熟队列，并补齐缺失但已成熟的 label；禁止因重启把 60 分钟标签窗口直接清零。
+- `research_store.append_tick()` 失败是 fatal runtime 事件：L3 不得吞错，不得继续 broadcast 旧 payload，不得以 neutral payload 掩盖 research persistence 破坏。
 - EOD 归档质量闸门触发时必须阻断主日型分类并标记 `primary_day_type=INCOMPLETE_SOURCE`，禁止在低质量样本上输出 `balance_day` 等交易日型结论。
+- EOD archive 必须先在 staging 树下完成 source freeze、指标计算、manifest/report 生成，再一次性 publish；已存在最终产物时必须 fast-fail，禁止覆盖或边写边发布。
 - `ResearchFeatureStore` 采样必须限制为 RTH (`09:30-16:00 ET`) 且固定 1s 频率（同一秒最多一行）；禁止事件触发扩采样导致样本间隔不稳定。
 - 研究存储契约采用最小字段集：`feature/compact` 仅保留编码字段 `direction_code/iv_regime_code/gex_intensity_code`，禁止在落盘层重复写入同义字符串状态。
 - `feature` tier 必须持久化 MM FLOW 9 字段：`net_delta_exposure_live/net_gamma_exposure_live/residual_delta_after_netting/oi_participation_ratio_live/flow_suppression_bias/flow_dominance_ratio/midpoint_tickrule_count/condition_filtered_count/complex_spread_count`；`append_tick` 遇到缺失或非数值必须显式报错，禁止 fallback。
@@ -109,8 +114,14 @@ flowchart LR
 - 高频循环优先发送 patch/delta
 - 周期性全量刷新用于纠偏
 - 精度收敛与窗口裁剪防止带宽放大
+- `app/loops/broadcast_loop.py` 不得再以与 compute loop 无关的独立轮询节拍等待最新 payload；新 payload 必须在发布后立即触发 broadcast，空窗期才允许按 `ws_broadcast_interval` 执行 heartbeat 重发
+- `app/loops/compute_loop.py` 与 `app/loops/broadcast_loop.py` 的调度关系必须避免“双 1Hz 未锁相定时器”带来的额外整周期等待；若 wire 可见延迟退化到接近一个 broadcast 周期，视为广播调度缺陷而非可接受行为
 - 当 payload 业务字段未变化时，`dashboard_delta` 允许仅携带 `heartbeat_timestamp`；这表示链路存活，不表示指标重算
 - 当业务字段发生变化时，`dashboard_delta.changes` 必须透传顶层契约字段变更（包括 `version/data_timestamp/broadcast_timestamp/drift_ms/drift_warning/is_stale/rust_active/shm_stats`）
+- `SPY` 顶层 `spot` 不得再被 `app/loops/compute_loop.py` 的 1Hz cadence 绑死；live `SPY.US` spot 必须通过独立 fast lane 直接覆盖当前 wire payload，并立即触发 `dashboard_delta`
+- `spot` fast lane 与 full compute lane 必须共享单一单调 `payload.version` 语义，但 compute-owned 分析子树（如 ActiveOptions / ATM / Tactical panels）仍保留原 compute source version，不得因 live spot overlay 被伪装成已重算
+- `governor_telemetry.quote_lane` 是 quote-lane 观测字段的唯一聚合面；L3 必须把 L0 raw depth cadence（如 `last_source_gap_ms/source_event_count_1s`）、distinct midpoint cadence（如 `last_distinct_spot_gap_ms/distinct_spot_count_1s`）与当前 wire 发送信息（如 `wire_emit_timestamp_utc/wire_emit_lag_ms`）一起挂到该节点，禁止再散落到自定义顶层字段。
+- raw source arrival 即使没有带来新的 distinct midpoint，也必须通过 telemetry-only overlay bump payload epoch，把新的 `governor_telemetry.quote_lane` 推到 wire；该路径不得改写顶层 `spot/version`。
 
 ## 6. Observability
 
@@ -138,8 +149,8 @@ flowchart LR
 
 ## 7. Verification
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l3_assembly/tests
-powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 scripts/test/test_l0_l4_pipeline.py
+```bash
+python manage.py run-pytest l3_assembly/tests
+python manage.py run-pytest scripts/test/test_l0_l4_pipeline.py
 ```
 

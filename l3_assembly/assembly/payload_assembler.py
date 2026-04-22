@@ -79,6 +79,7 @@ class PayloadAssemblerV2:
             broadcast_timestamp=now_iso,
             spot=snap_data.spot,
             version=signal.version,
+            analytics_version=signal.version,
             drift_ms=drift_ms,
             drift_warning=drift_warning,
             signal=signal,

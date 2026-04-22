@@ -19,6 +19,7 @@ from app.loops.compute_probe import (
     _get_iv_sync_context,
 )
 from app.loops.shared_state import ActiveOptionsInputSnapshot, SharedLoopState
+from l3_assembly.reactor import ResearchPersistenceFatalError
 from shared.config import settings
 from shared_rust.services import (
     ActiveOptionsInputSnapshotData,
@@ -348,6 +349,11 @@ async def _run_compute_tick_safe(
         )
     except asyncio.CancelledError:
         raise
+    except ResearchPersistenceFatalError as exc:
+        state.record_failure()
+        state.set_fatal_runtime_error(source="research_persistence", message=str(exc))
+        logger.critical("[AgentRunner] Fatal research persistence failure: %s", exc)
+        raise
     except Exception as exc:
         state.record_failure()
         logger.exception("[AgentRunner] Error in compute loop: %s", exc)
@@ -356,6 +362,8 @@ async def _run_compute_tick_safe(
 
 async def run_compute_loop(ctr: "AppContainer", state: SharedLoopState) -> None:
     """Compute loop: fetch data -> run agents -> build payload -> save state."""
+    ctr.option_chain_builder.on_spot = state.publish_live_spot
+    ctr.option_chain_builder.on_quote_lane = state.publish_quote_lane_telemetry
     next_tick = time.monotonic()
     tick_id = 0
     compute_id = 0
@@ -371,6 +379,7 @@ async def run_compute_loop(ctr: "AppContainer", state: SharedLoopState) -> None:
     )
 
     while True:
+        state.raise_if_fatal()
         compute_interval = settings.websocket_update_interval
         state.current_compute_interval = compute_interval
         tick_id += 1

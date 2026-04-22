@@ -7,7 +7,19 @@ vi.mock('../../hooks/useDashboardWS', () => ({
 }))
 
 vi.mock('../../observability/l4_rum', () => ({
-    L4Rum: { markFmp: vi.fn() },
+    L4Rum: {
+        markFmp: vi.fn(),
+        setProfilingEnabled: vi.fn(),
+        snapshot: vi.fn(() => ({
+            fps: 60,
+            memoryMb: 64,
+            reconnectCount: 0,
+            lastMsgLatencyMs: null,
+            lastStoreToPaintMs: null,
+            lastWireLagMs: null,
+            lastSourceToPaintObservedMs: null,
+        })),
+    },
 }))
 
 vi.mock('../../alerts/alertEngine', () => ({
@@ -45,12 +57,14 @@ beforeEach(() => {
         writable: true,
         value: 864,
     })
-    vi.stubGlobal(
-        'fetch',
-        vi.fn().mockResolvedValue({
-            json: async () => ({ history: [] }),
-        })
-    )
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockResolvedValue({
+                ok: true,
+                text: async () => '',
+                json: async () => ({ history: [] }),
+            })
+        )
 })
 
 afterEach(() => {

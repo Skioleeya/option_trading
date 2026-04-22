@@ -175,7 +175,7 @@ describe('Right panel typed contract integration', () => {
                 turnover: 10000000,
                 flow: 1250000,
                 flow_score: -0.9,
-                impact_index: 88.1234,
+                impact_index: 88_123.4,
                 is_sweep: true,
                 flow_deg_formatted: '$1.25M',
                 flow_volume_label: '50K',
@@ -203,7 +203,9 @@ describe('Right panel typed contract integration', () => {
         expect(screen.getByText('SPECULATIVE')).toBeInTheDocument()
         expect(screen.getByText('2.4')).toBeInTheDocument()
         expect(screen.getByText('SPLIT')).toBeInTheDocument()
-        expect(screen.getByText('88.12')).toBeInTheDocument()
+        expect(screen.getAllByRole('progressbar')).toHaveLength(4)
+        expect(screen.queryByText('80%')).not.toBeInTheDocument()
+        expect(screen.getByText('88.1K')).toBeInTheDocument()
         expect(screen.getByText('$1.25M')).toBeInTheDocument()
         expect(screen.getByText('50K')).toBeInTheDocument()
     })

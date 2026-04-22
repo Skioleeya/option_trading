@@ -3,7 +3,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from fastapi import FastAPI
-from fastapi.testclient import TestClient
+import httpx
+import pytest
 
 from app.routes import health
 
@@ -12,11 +13,25 @@ class _DummyOptionChainBuilder:
     @staticmethod
     def get_diagnostics() -> dict[str, object]:
         return {
-            "store": {"chain_size": 12},
+            "store": {
+                "chain_size": 12,
+                "quote_lane": {
+                    "last_source_timestamp_utc": "2026-03-19T15:40:00+00:00",
+                    "last_source_gap_ms": 125.0,
+                    "source_event_count_1s": 6,
+                    "source_event_count_5s": 22,
+                    "distinct_spot_count_1s": 4,
+                    "distinct_spot_count_5s": 11,
+                },
+            },
             "gateway": {
                 "endpoint_profile": "official_longbridge",
-                "failover_count": 1,
-                "last_failover_at_utc": "2026-03-19T14:31:00+00:00",
+                "raw_quote_event_count_1s": 14,
+                "raw_quote_event_count_5s": 61,
+                "raw_depth_event_count_1s": 2,
+                "raw_depth_event_count_5s": 7,
+                "last_raw_quote_gap_ms": 92.5,
+                "last_raw_depth_gap_ms": 1510.0,
             },
         }
 
@@ -159,17 +174,43 @@ class _DummyContainer:
         self.active_options_service = _DummyActiveOptionsService()
 
 
-def _client() -> TestClient:
+class _DummyL3Reactor:
+    @staticmethod
+    def get_diagnostics() -> dict[str, object]:
+        return {
+            "research_persistence": {
+                "healthy": True,
+                "fatal_error": None,
+            }
+        }
+
+
+def _client(*, fatal_runtime_error: dict[str, object] | None = None) -> httpx.AsyncClient:
     app = FastAPI()
     app.include_router(health.router)
-    app.state.container = _DummyContainer()
-    app.state.state = _DummyState()
-    return TestClient(app)
+    container = _DummyContainer()
+    container.l3_reactor = _DummyL3Reactor()
+    app.state.container = container
+    if fatal_runtime_error is not None:
+        class _FatalState(_DummyState):
+            @staticmethod
+            def get_diagnostics() -> dict[str, object]:
+                base = dict(_DummyState.get_diagnostics())
+                base["fatal_runtime_error"] = fatal_runtime_error
+                return base
+        app.state.state = _FatalState()
+    else:
+        app.state.state = _DummyState()
+    return httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    )
 
 
-def test_persistence_status_includes_active_options_and_failover_contracts() -> None:
-    with _client() as client:
-        resp = client.get("/debug/persistence_status")
+@pytest.mark.asyncio
+async def test_persistence_status_includes_active_options_and_gateway_contracts() -> None:
+    async with _client() as client:
+        resp = await client.get("/debug/persistence_status")
     assert resp.status_code == 200
     body = resp.json()
 
@@ -191,7 +232,12 @@ def test_persistence_status_includes_active_options_and_failover_contracts() -> 
 
     assert "stores" in body
     assert body["stores"]["gateway"]["endpoint_profile"] == "official_longbridge"
-    assert body["stores"]["gateway"]["failover_count"] == 1
+    assert body["stores"]["gateway"]["raw_quote_event_count_1s"] == 14
+    assert body["stores"]["gateway"]["raw_depth_event_count_1s"] == 2
+    assert body["stores"]["gateway"]["last_raw_quote_gap_ms"] == 92.5
+    assert body["stores"]["gateway"]["last_raw_depth_gap_ms"] == 1510.0
+    assert body["stores"]["store"]["quote_lane"]["source_event_count_1s"] == 6
+    assert body["stores"]["store"]["quote_lane"]["distinct_spot_count_1s"] == 4
     assert body["l1_runtime"]["version"] == 777
     assert body["l1_runtime"]["atm_iv_context"]["atm_symbol"] == "SPY260325C653000.US"
     assert body["l1_runtime"]["iv_resolution"]["rest"] == 8
@@ -203,9 +249,10 @@ def test_persistence_status_includes_active_options_and_failover_contracts() -> 
     assert body["header_volatility"]["l1_aux"]["vix_symbol"] == ".VIX.US"
 
 
-def test_active_options_capture_exposes_same_version_input_and_payload() -> None:
-    with _client() as client:
-        resp = client.get("/debug/active_options_capture")
+@pytest.mark.asyncio
+async def test_active_options_capture_exposes_same_version_input_and_payload() -> None:
+    async with _client() as client:
+        resp = await client.get("/debug/active_options_capture")
     assert resp.status_code == 200
     body = resp.json()
 
@@ -219,3 +266,18 @@ def test_active_options_capture_exposes_same_version_input_and_payload() -> None
     assert body["displayed_payload"]["rows"][0]["slot_index"] == 1
     assert body["active_options_diagnostics"]["filtered_candidates_count"] == 2
     assert body["sparse_window"]["is_sparse_window"] is True
+
+
+@pytest.mark.asyncio
+async def test_health_returns_503_when_runtime_is_fatal() -> None:
+    fatal = {
+        "source": "research_persistence",
+        "message": "PyValueError: corrupt raw parquet",
+        "timestamp": "2026-04-21T19:38:07+00:00",
+    }
+    async with _client(fatal_runtime_error=fatal) as client:
+        resp = await client.get("/health")
+    assert resp.status_code == 503
+    body = resp.json()
+    assert body["status"] == "error"
+    assert body["fatal_runtime_error"]["source"] == "research_persistence"

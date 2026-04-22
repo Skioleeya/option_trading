@@ -69,6 +69,8 @@ class FeedOrchestrator:
         self._header_volatility_aux_synced_at_utc: str | None = None
         self._header_volatility_aux_last_mono = 0.0
         self._header_volatility_aux_ttl_sec = 60.0
+        self._spot_stale_after_sec = 10.0
+        self._source_stale = False
 
     async def run(self) -> None:
         self._running = True
@@ -154,23 +156,45 @@ class FeedOrchestrator:
             warming_up=self._iv_sync.warming_up,
             stable_for_sec=self._research_startup_stable_sec,
         )
-        spot = await self._refresh_spot_if_needed(spot, now)
+        if spot is None or spot <= 0.0:
+            logger.warning(
+                "[FeedOrchestrator] Live spot missing; waiting for subscribed %s quote.",
+                "SPY.US",
+            )
+            return
+        quote_lane = self._store.diagnostics().get("quote_lane", {})
+        source_timestamp_utc = self._source_timestamp_utc(quote_lane)
+        allow_bootstrap_refresh = self._allow_bootstrap_refresh(source_timestamp_utc)
+        is_source_fresh, source_age_sec = self._source_freshness(now, source_timestamp_utc)
+        if not is_source_fresh:
+            if allow_bootstrap_refresh:
+                logger.info(
+                    "[FeedOrchestrator] bootstrap refresh path active: startup spot present but raw source not observed yet; permitting initial subscription refresh only."
+                )
+                await self._refresh_subscriptions(spot=spot, now_mono=now_mono)
+                return
+            if not self._source_stale:
+                logger.warning(
+                    "[FeedOrchestrator] source stale gate active: age=%.3fs threshold=%.1fs last_source=%s; skipping header aux, subscription refresh, and research.",
+                    source_age_sec or -1.0,
+                    self._spot_stale_after_sec,
+                    source_timestamp_utc,
+                )
+            self._source_stale = True
+            return
+        if self._source_stale:
+            logger.info(
+                "[FeedOrchestrator] source stale gate cleared: age=%.3fs last_source=%s",
+                source_age_sec or 0.0,
+                source_timestamp_utc,
+            )
+        self._source_stale = False
         await self._refresh_header_volatility_aux(
             spot=spot,
             now_mono=now_mono,
             trade_day=now.date(),
         )
-        if spot and self._subscription_refresh_due(now_mono):
-            prev_symbols = set(self._sub_mgr.subscribed_symbols)
-            target_set = await self._sub_mgr.refresh(spot, mandatory_symbols=self._mandatory_symbols)
-            self._last_refresh_mono = now_mono
-            new_symbols = target_set - prev_symbols
-            if new_symbols:
-                logger.info(
-                    "[FeedOrchestrator] %d new symbols detected — queued for IV warm-up.",
-                    len(new_symbols),
-                )
-                self._queue_warmup_symbols(new_symbols, now_mono)
+        await self._refresh_subscriptions(spot=spot, now_mono=now_mono)
         await self._repair_mandatory_prices(now_mono)
         await self._flush_warmup_if_due(now_mono)
         can_run_research = self._iv_sync.bootstrap_warmup_done and not self._iv_sync.warming_up
@@ -180,6 +204,48 @@ class FeedOrchestrator:
         ) and startup_stable:
             await self._run_volume_research(today, spot)
             self._last_research = now
+
+    async def _refresh_subscriptions(self, *, spot: float, now_mono: float) -> None:
+        if not self._subscription_refresh_due(now_mono):
+            return
+        prev_symbols = set(self._sub_mgr.subscribed_symbols)
+        target_set = await self._sub_mgr.refresh(spot, mandatory_symbols=self._mandatory_symbols)
+        self._last_refresh_mono = now_mono
+        new_symbols = target_set - prev_symbols
+        if new_symbols:
+            logger.info(
+                "[FeedOrchestrator] %d new symbols detected — queued for IV warm-up.",
+                len(new_symbols),
+            )
+            self._queue_warmup_symbols(new_symbols, now_mono)
+
+    @staticmethod
+    def _source_timestamp_utc(quote_lane: dict[str, Any]) -> str | None:
+        source_timestamp_utc = quote_lane.get("last_source_timestamp_utc")
+        if not isinstance(source_timestamp_utc, str) or not source_timestamp_utc:
+            return None
+        return source_timestamp_utc
+
+    def _allow_bootstrap_refresh(self, source_timestamp_utc: str | None) -> bool:
+        return source_timestamp_utc is None and not self._sub_mgr.writer_ready
+
+    def _source_freshness(
+        self,
+        now: datetime,
+        source_timestamp_utc: str | None,
+    ) -> tuple[bool, float | None]:
+        if source_timestamp_utc is None:
+            return False, None
+        try:
+            source_dt = datetime.fromisoformat(source_timestamp_utc)
+        except ValueError:
+            return False, None
+        if source_dt.tzinfo is None:
+            source_dt = source_dt.replace(tzinfo=timezone.utc)
+        else:
+            source_dt = source_dt.astimezone(timezone.utc)
+        age_sec = max(0.0, (now.astimezone(timezone.utc) - source_dt).total_seconds())
+        return age_sec <= self._spot_stale_after_sec, age_sec
 
     async def _repair_mandatory_prices(self, now_mono: float) -> None:
         if not self._mandatory_symbols or not self._on_price_repair_update or not self._needs_price_repair:
@@ -216,40 +282,6 @@ class FeedOrchestrator:
             limiter=self._limiter,
             on_update=self._on_price_repair_update,
             log_prefix=log_prefix,
-        )
-
-    async def _refresh_spot_if_needed(self, spot: float | None, now: datetime) -> float | None:
-        last_spot_update = self._store.last_spot_update
-        needs_refresh = spot is None or (
-            last_spot_update and (now - last_spot_update).total_seconds() > 10.0
-        )
-        if not needs_refresh:
-            return spot
-        async with self._limiter.acquire(weight=1):
-            try:
-                quotes = await self._quote_runtime.quote(["SPY.US"])
-                if quotes:
-                    price = float(getattr(quotes[0], "last_done", 0.0) or 0.0)
-                    if price > 0:
-                        self._store.update_spot(price)
-                        return price
-            except Exception as exc:
-                self._log_spot_fallback_failure(exc)
-        return spot
-
-    def _log_spot_fallback_failure(self, exc: Exception) -> None:
-        diagnostics = {}
-        try:
-            diagnostics = self._quote_runtime.diagnostics() or {}
-        except Exception as diag_exc:
-            logger.debug("[FeedOrchestrator] diagnostics() read failed: %s", diag_exc)
-        logger.warning(
-            "[FeedOrchestrator] Spot REST fallback failed: %s | endpoint_profile=%s endpoint=%s failover_count=%s last_failover_at_utc=%s",
-            exc,
-            diagnostics.get("endpoint_profile"),
-            diagnostics.get("endpoint_http_url"),
-            diagnostics.get("failover_count"),
-            diagnostics.get("last_failover_at_utc"),
         )
 
     async def _run_volume_research(self, today_str: str, spot: float) -> None:
@@ -315,15 +347,9 @@ class FeedOrchestrator:
         try:
             value = float(raw)
         except (TypeError, ValueError):
-            raw_fallback = getattr(quote, "historical_volatility", None)
-            try:
-                value = float(raw_fallback)
-            except (TypeError, ValueError):
-                return None
+            return None
         if not math.isfinite(value) or value <= 0.0:
             return None
-        if value > 1.0:
-            value = value / 100.0
         if value <= 0.0 or value > 3.0:
             return None
         return value

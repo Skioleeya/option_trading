@@ -89,7 +89,7 @@ export const WallMigration: React.FC<Props> = memo(({ rows: propRows, preferProp
                             </span>
                         </div>
 
-                        <div className="min-w-0 flex items-center justify-center relative overflow-hidden rounded-[2px] transition-colors duration-300"
+                        <div className="min-w-0 flex items-center justify-center relative overflow-hidden rounded-[2px]"
                             style={{
                                 height: 'var(--l4-wall-row-h)',
                                 border: `1px solid ${tokens.currentBorder}`,
@@ -108,7 +108,7 @@ export const WallMigration: React.FC<Props> = memo(({ rows: propRows, preferProp
                         </div>
 
                         <div className="min-w-0 flex items-center justify-end pl-1">
-                            <span className={`font-mono font-bold tracking-wider truncate ${(tokens.isBreached || tokens.isCollapsing) ? 'animate-pulse' : ''}`}
+                            <span className="font-mono font-bold tracking-wider truncate"
                                 style={{
                                     fontSize: 'var(--l4-font-9)',
                                     color: tokens.badgeColor,

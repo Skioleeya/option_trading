@@ -28,5 +28,5 @@ Define mandatory parent-child governance for TradingView hard-cut delivery so ph
 父提案 SHALL 仅在全部子提案完成且 strict 验证证据齐全时关闭。
 
 #### Scenario: Missing Strict Evidence
-- **WHEN** 任一子提案 handoff 缺少 `scripts/validate_session.ps1 -Strict` 通过证据
+- **WHEN** 任一子提案 handoff 缺少 `python3 manage.py validate-session --strict` 通过证据
 - **THEN** 父提案 MUST 保持打开状态。

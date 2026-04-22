@@ -32,6 +32,43 @@ from l3_assembly.assembly.delta_encoder import FieldDeltaEncoder
 logger = logging.getLogger(__name__)
 
 
+def _quote_lane_emit_patch(payload: FrozenPayload, *, heartbeat: str) -> dict[str, Any] | None:
+    telemetry = dict(payload.governor_telemetry or {})
+    quote_lane = telemetry.get("quote_lane")
+    if not isinstance(quote_lane, dict):
+        return None
+    patch = dict(quote_lane)
+    patch["wire_emit_timestamp_utc"] = heartbeat
+    patch["wire_emit_lag_ms"] = _wire_emit_lag_ms(
+        patch.get("source_data_timestamp_utc"),
+        heartbeat,
+    )
+    return {"quote_lane": patch}
+
+
+def _wire_emit_lag_ms(source_ts: Any, heartbeat: str) -> float | None:
+    source_dt = _coerce_utc_dt(source_ts)
+    emit_dt = _coerce_utc_dt(heartbeat)
+    if source_dt is None or emit_dt is None:
+        return None
+    return max(0.0, (emit_dt - source_dt).total_seconds() * 1000.0)
+
+
+def _coerce_utc_dt(raw: Any) -> datetime | None:
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    text = raw.strip()
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+    try:
+        dt = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
 @dataclass
 class BroadcastReport:
     """Diagnostics from one BroadcastGovernor cycle."""
@@ -95,7 +132,9 @@ class BroadcastGovernor:
 
         # ── 2. Encode (full or delta) ──────────────────────────────────────
         delta_msg = self._encoder.encode(
-            current=payload,
+            current=payload.with_governor_telemetry(
+                _quote_lane_emit_patch(payload, heartbeat=heartbeat)
+            ),
             heartbeat_timestamp=heartbeat,
             is_stale=is_stale,
         )
@@ -158,6 +197,9 @@ class BroadcastGovernor:
             heartbeat_timestamp=heartbeat,
             is_stale=False,
             msg_type="dashboard_init",
+        )
+        stamped = stamped.with_governor_telemetry(
+            _quote_lane_emit_patch(stamped, heartbeat=heartbeat)
         )
         msg = {**stamped.to_dict(), "type": DeltaType.INIT.value}
         serialized = json.dumps(msg, default=str)

@@ -5,10 +5,12 @@ port 6380
 bind 127.0.0.1
 
 # Persistence
-dir ./data
+dir ./var/redis
 dbfilename dump.rdb
 appendonly yes
 appendfilename "appendonly.aof"
+auto-aof-rewrite-percentage 20
+auto-aof-rewrite-min-size 64mb
 
 # Memory
 maxmemory 256mb

@@ -1,7 +1,9 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyModule};
-use std::fs;
-use std::path::Path;
+use std::fs::{self, File, OpenOptions};
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 fn pyarrow_modules<'py>(py: Python<'py>) -> PyResult<(Bound<'py, PyModule>, Bound<'py, PyModule>)> {
     let pa = py.import("pyarrow")?;
@@ -9,24 +11,82 @@ fn pyarrow_modules<'py>(py: Python<'py>) -> PyResult<(Bound<'py, PyModule>, Boun
     Ok((pa, pq))
 }
 
+fn parquet_write_kwargs(py: Python<'_>) -> Bound<'_, PyDict> {
+    let kwargs = PyDict::new(py);
+    let _ = kwargs.set_item("compression", "zstd");
+    let _ = kwargs.set_item("compression_level", 19);
+    let _ = kwargs.set_item("use_dictionary", true);
+    let _ = kwargs.set_item("write_statistics", false);
+    kwargs
+}
+
+fn table_to_bytes(
+    py: Python<'_>,
+    pa: &Bound<'_, PyModule>,
+    pq: &Bound<'_, PyModule>,
+    table: &Bound<'_, PyAny>,
+) -> PyResult<Vec<u8>> {
+    let sink = pa.getattr("BufferOutputStream")?.call0()?;
+    pq.call_method("write_table", (table, &sink), Some(&parquet_write_kwargs(py)))?;
+    let buffer = sink.call_method0("getvalue")?;
+    buffer.call_method0("to_pybytes")?.extract::<Vec<u8>>()
+}
+
+fn temp_path_for(target: &Path) -> PyResult<PathBuf> {
+    let parent = target
+        .parent()
+        .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyValueError, _>("parquet target has no parent directory"))?;
+    let file_name = target
+        .file_name()
+        .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyValueError, _>("parquet target has no file name"))?
+        .to_string_lossy();
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|err| PyErr::new::<pyo3::exceptions::PyOSError, _>(err.to_string()))?
+        .as_nanos();
+    Ok(parent.join(format!(".{file_name}.tmp-{}-{nonce}", std::process::id())))
+}
+
+fn sync_parent_dir(parent: &Path) -> PyResult<()> {
+    let dir = File::open(parent)
+        .map_err(|err| PyErr::new::<pyo3::exceptions::PyOSError, _>(err.to_string()))?;
+    dir.sync_all()
+        .map_err(|err| PyErr::new::<pyo3::exceptions::PyOSError, _>(err.to_string()))
+}
+
+fn atomic_write_bytes(path: &Path, payload: &[u8]) -> PyResult<()> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyValueError, _>("parquet target has no parent directory"))?;
+    fs::create_dir_all(parent)
+        .map_err(|err| PyErr::new::<pyo3::exceptions::PyOSError, _>(err.to_string()))?;
+    let temp_path = temp_path_for(path)?;
+    let result = (|| -> PyResult<()> {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp_path)
+            .map_err(|err| PyErr::new::<pyo3::exceptions::PyOSError, _>(err.to_string()))?;
+        file.write_all(payload)
+            .map_err(|err| PyErr::new::<pyo3::exceptions::PyOSError, _>(err.to_string()))?;
+        file.sync_all()
+            .map_err(|err| PyErr::new::<pyo3::exceptions::PyOSError, _>(err.to_string()))?;
+        fs::rename(&temp_path, path)
+            .map_err(|err| PyErr::new::<pyo3::exceptions::PyOSError, _>(err.to_string()))?;
+        sync_parent_dir(parent)
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temp_path);
+    }
+    result
+}
+
 #[pyfunction]
 fn service_research_records_to_parquet(py: Python<'_>, records: Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
     let (pa, pq) = pyarrow_modules(py)?;
     let table_type = pa.getattr("Table")?;
     let table = table_type.call_method1("from_pylist", (records,))?;
-    let sink = pa.getattr("BufferOutputStream")?.call0()?;
-    let kwargs = PyDict::new(py);
-    kwargs.set_item("compression", "zstd")?;
-    kwargs.set_item("compression_level", 19)?;
-    kwargs.set_item("use_dictionary", true)?;
-    kwargs.set_item("write_statistics", false)?;
-    pq.call_method(
-        "write_table",
-        (table, &sink),
-        Some(&kwargs),
-    )?;
-    let buffer = sink.call_method0("getvalue")?;
-    buffer.call_method0("to_pybytes")?.extract::<Vec<u8>>()
+    table_to_bytes(py, &pa, &pq, &table)
 }
 
 #[pyfunction]
@@ -65,17 +125,8 @@ fn service_research_append_parquet_rows(
     } else {
         table_new
     };
-    let write_kwargs = PyDict::new(py);
-    write_kwargs.set_item("compression", "zstd")?;
-    write_kwargs.set_item("compression_level", 19)?;
-    write_kwargs.set_item("use_dictionary", true)?;
-    write_kwargs.set_item("write_statistics", false)?;
-    pq.call_method(
-        "write_table",
-        (final_table, path),
-        Some(&write_kwargs),
-    )?;
-    Ok(())
+    let bytes = table_to_bytes(py, &pa, &pq, &final_table)?;
+    atomic_write_bytes(Path::new(&path), &bytes)
 }
 
 #[pyfunction]

@@ -88,6 +88,9 @@ impl ActiveOptionsInputSnapshotData {
 fn clone_chain(py: Python<'_>, rows: Option<&Bound<'_, PyAny>>) -> PyResult<Py<PyList>> {
     let list = PyList::empty(py);
     if let Some(value) = rows {
+        if value.is_none() {
+            return Ok(list.unbind());
+        }
         let rows_list = if let Ok(py_list) = as_list(value) {
             py_list.into_any()
         } else if value.hasattr("to_pylist")? {

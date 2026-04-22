@@ -280,6 +280,7 @@ export interface DashboardPayload {
     atm?: AtmDecay | null
     rust_active?: boolean
     shm_stats?: Record<string, unknown> | null
+    governor_telemetry?: Record<string, unknown> | null
 }
 
 // ATM Decay

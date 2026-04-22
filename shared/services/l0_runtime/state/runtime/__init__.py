@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
 from shared.services.l0_runtime.native_loader import load_l0_rust
@@ -16,6 +17,7 @@ from shared.services.l0_runtime.normalize.pipeline import (
     EventType,
     SanitizationPipeline,
 )
+from .spot_diagnostics import SpotCadenceDiagnostics
 
 logger = logging.getLogger(__name__)
 MAX_WS_FLOW_VOLUME = 1_000_000_000.0
@@ -29,12 +31,8 @@ _L0_RUST = load_l0_rust(
     ],
     module_suffix="l0_rust_wave5_state",
 )
-
-
 def _default_entry(*, symbol: str, strike: float, opt_type: str) -> dict[str, Any]:
     return dict(_L0_RUST.l0_state_default_entry(symbol, float(strike), str(opt_type)))
-
-
 def _apply_quote_patch(
     *,
     entry: dict[str, Any],
@@ -57,13 +55,9 @@ def _apply_quote_patch(
             bool(ws_turnover_seen),
             float(max_ws_flow_volume),
         )
-    )
-
-
+)
 def _apply_depth_patch(*, entry: dict[str, Any], event: Any) -> dict[str, Any]:
     return dict(_L0_RUST.l0_state_apply_depth(entry, event))
-
-
 class ChainStateStore:
     """Sole owner of the in-memory option chain."""
 
@@ -72,6 +66,7 @@ class ChainStateStore:
         self._last_seq: dict[str, int] = {}
         self._spot: float | None = None
         self._last_spot_update: datetime | None = None
+        self._spot_diag = SpotCadenceDiagnostics()
         self._oi_smooth: dict[str, float] = {}
         self._volume_map: dict[float, int] = {}
         self._version: int = 0
@@ -81,32 +76,81 @@ class ChainStateStore:
         self._ws_turnover_seen: set[str] = set()
         self._ws_volume_dropped: int = 0
         self._ws_current_volume_dropped: int = 0
-
+        self._spot_listeners: list[Callable[[float, int, str], None]] = []
+        self._quote_lane_listener: Callable[[dict[str, Any]], None] | None = None
     @property
     def spot(self) -> float | None:
         return self._spot
-
     @property
     def last_spot_update(self) -> "datetime | None":
         """Timestamp of the most recent spot price update (public access for FeedOrchestrator)."""
         return self._last_spot_update
-
     @property
     def version(self) -> int:
         return self._version
-
+    def update_spot_from_source(self, price: float) -> None:
+        """Record one raw SPY source arrival and update spot if the midpoint changed."""
+        timestamp_utc = datetime.now(ZoneInfo("UTC")).isoformat()
+        now_monotonic = time.monotonic()
+        if not self._is_valid_spot(price):
+            return
+        self._spot_diag.record_source_arrival(
+            spot=float(price),
+            now_monotonic=now_monotonic,
+            timestamp_utc=timestamp_utc,
+        )
+        self._emit_quote_lane_update()
+        self._apply_spot_update(
+            price=float(price),
+            timestamp_utc=timestamp_utc,
+            now_monotonic=now_monotonic,
+            record_distinct=False,
+        )
     def update_spot(self, price: float) -> None:
         """Update the SPY spot price."""
+        timestamp_utc = datetime.now(ZoneInfo("UTC")).isoformat()
+        self._apply_spot_update(
+            price=float(price),
+            timestamp_utc=timestamp_utc,
+            now_monotonic=time.monotonic(),
+            record_distinct=True,
+        )
+    def add_spot_listener(self, listener: Callable[[float, int, str], None]) -> None:
+        if listener in self._spot_listeners:
+            return
+        self._spot_listeners.append(listener)
+    def set_quote_lane_listener(self, listener: Callable[[dict[str, Any]], None] | None) -> None:
+        self._quote_lane_listener = listener
+    @staticmethod
+    def _is_valid_spot(price: float) -> bool:
         import math
-
-        if not math.isfinite(price) or price <= 0:
+        return math.isfinite(price) and price > 0
+    def _apply_spot_update(
+        self,
+        *,
+        price: float,
+        timestamp_utc: str,
+        now_monotonic: float,
+        record_distinct: bool,
+    ) -> None:
+        if not self._is_valid_spot(price):
             return
         if self._spot == price:
             return
         self._spot = price
-        self._last_spot_update = datetime.now(ZoneInfo("US/Eastern"))
+        if record_distinct:
+            self._spot_diag.record_distinct_update(
+                spot=price,
+                now_monotonic=now_monotonic,
+                timestamp_utc=timestamp_utc,
+            )
+        timestamp_dt = datetime.fromisoformat(timestamp_utc)
+        self._last_spot_update = timestamp_dt.astimezone(ZoneInfo("US/Eastern"))
         self._bump_version()
-
+        self._emit_spot_update()
+    def remove_spot_listener(self, listener: Callable[[float, int, str], None]) -> None:
+        if listener in self._spot_listeners:
+            self._spot_listeners.remove(listener)
     def apply_event(self, event: CleanQuoteEvent) -> bool:
         """Write a sanitized quote event into the store."""
         symbol = event.symbol
@@ -117,16 +161,13 @@ class ChainStateStore:
 
         entry, created = self._ensure_entry(symbol, event)
         changed = False
-
         def _set(key: str, val: Any) -> None:
             nonlocal changed
             if val is not None and entry.get(key) != val:
                 entry[key] = val
                 changed = True
-
         self._apply_price_and_flow_fields(symbol, event, is_rest=is_rest, setter=_set)
         self._apply_iv_and_greeks(event, setter=_set)
-
         entry["last_update"] = datetime.now(ZoneInfo("US/Eastern"))
         self._last_seq[symbol] = event.seq_no
         if created or changed:
@@ -308,11 +349,13 @@ class ChainStateStore:
         return snapshot
 
     def diagnostics(self) -> dict[str, Any]:
+        spot_diag = self._spot_diag.snapshot(now_monotonic=time.monotonic())
         return {
             "chain_size": len(self._chain),
             "version": self._version,
             "spot": self._spot,
             "last_spot_update": self._last_spot_update.isoformat() if self._last_spot_update else None,
+            "quote_lane": spot_diag,
             "volume_map_size": len(self._volume_map),
             "oi_smooth_entries": len(self._oi_smooth),
             "ws_price_seen": len(self._ws_price_seen),
@@ -326,7 +369,23 @@ class ChainStateStore:
     def _bump_version(self) -> None:
         self._version += 1
 
-
+    def _emit_spot_update(self) -> None:
+        if self._spot is None or self._last_spot_update is None:
+            return
+        timestamp_utc = self._last_spot_update.astimezone(ZoneInfo("UTC")).isoformat()
+        for listener in tuple(self._spot_listeners):
+            try:
+                listener(float(self._spot), int(self._version), timestamp_utc)
+            except Exception as exc:
+                logger.error("[ChainStateStore] spot listener failed: %s", exc)
+    def _emit_quote_lane_update(self) -> None:
+        listener = self._quote_lane_listener
+        if not callable(listener):
+            return
+        try:
+            listener(dict(self._spot_diag.snapshot(now_monotonic=time.monotonic())))
+        except Exception as exc:
+            logger.error("[ChainStateStore] quote-lane listener failed: %s", exc)
 @dataclass
 class LiveState:
     store: ChainStateStore = field(default_factory=ChainStateStore)
@@ -334,6 +393,4 @@ class LiveState:
 
     def snapshot_rows(self, target_symbols: set[str] | None = None) -> list[dict[str, Any]]:
         return self.store.get_snapshot(target_symbols)
-
-
 __all__ = ["ChainStateStore", "LiveState"]

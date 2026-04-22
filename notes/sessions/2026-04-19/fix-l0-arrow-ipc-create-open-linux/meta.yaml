@@ -1,0 +1,45 @@
+session_id: "2026-04-19/fix-l0-arrow-ipc-create-open-linux"
+title: "Fix L0 Arrow IPC create_or_open failure on Linux"
+scope: "runtime"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-19 15:37:39 -04:00"
+updated_at_et: "2026-04-19 16:18:00 -04:00"
+parent_session: "2026-04-19/impl-l0-strict-no-fallback-hardcut"
+
+branch: "unknown"
+base_commit: "unknown"
+head_commit: "unknown"
+
+files_changed:
+  - "l0_ingest/l0_rust/src/ipc_legacy.rs"
+  - "l0_ingest/l0_rust/src/ipc_runtime.rs"
+  - "l0_ingest/l0_rust/src/windows_signal.rs"
+  - "shared/services/l0_runtime/_native_generated/l0_rust.so"
+  - "shared/services/l0_runtime/_native_generated/wave10/l0_rust.so"
+  - "notes/sessions/2026-04-19/fix-l0-arrow-ipc-create-open-linux/project_state.md"
+  - "notes/sessions/2026-04-19/fix-l0-arrow-ipc-create-open-linux/open_tasks.md"
+  - "notes/sessions/2026-04-19/fix-l0-arrow-ipc-create-open-linux/handoff.md"
+  - "notes/sessions/2026-04-19/fix-l0-arrow-ipc-create-open-linux/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+commands:
+  - "cargo build --release --manifest-path l0_ingest/l0_rust/Cargo.toml"
+  - "install -m 755 l0_ingest/l0_rust/target/release/libl0_rust.so shared/services/l0_runtime/_native_generated/l0_rust.so"
+  - "install -m 755 l0_ingest/l0_rust/target/release/libl0_rust.so shared/services/l0_runtime/_native_generated/wave10/l0_rust.so"
+  - "python3 manage.py start-all"
+  - "npm --prefix l4_ui ci"
+  - "python3 manage.py start-all --verify-only"
+  - "python3 manage.py validate-session --strict"
+tests_passed:
+  - "python3 manage.py start-all (Redis/Backend/Frontend all listening)"
+  - "python3 manage.py start-all --verify-only (Redis/Backend/Frontend=True)"
+  - "python3 manage.py validate-session --strict (PASS)"
+  - "Python probe: RustIngestGateway.start no longer fails at arrow writer init"
+tests_failed:
+  - "python3 manage.py validate-session --strict (first run failed due session record template placeholders)"
+blockers: []
+notes:
+  - "Root cause included stale deployed l0_rust.so mismatch vs latest cargo artifact."
+  - "Frontend dependency tree had broken caniuse-lite extraction; fixed via clean npm ci."

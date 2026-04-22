@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any
 
 from l3_assembly.events.payload_ui_state import (
@@ -102,6 +103,7 @@ class FrozenPayload:
     signal: SignalData
     ui_state: UIState
     atm: dict[str, Any] | None
+    analytics_version: int = 0
     atm_iv: float = 0.0
     net_gex: float = 0.0
     gamma_walls: dict[str, float | None] = field(
@@ -121,6 +123,7 @@ class FrozenPayload:
 
     def to_dict(self) -> dict[str, Any]:
         mm_flow_payload = self._resolve_mm_flow_payload()
+        analytics_version = self.analytics_version if self.analytics_version > 0 else self.version
         return {
             "type": self.type,
             "version": self.version,
@@ -139,7 +142,7 @@ class FrozenPayload:
                     **self.signal.to_dict(),
                     "spy_atm_iv": round(self.atm_iv, 4),
                     "as_of": self.signal.computed_at,
-                    "version": self.version,
+                    "version": analytics_version,
                     "net_gex": round(self.net_gex, 2),
                     "gamma_walls": {
                         key: round(value, 2) if value is not None else None
@@ -184,4 +187,57 @@ class FrozenPayload:
             heartbeat_timestamp=heartbeat_timestamp,
             is_stale=is_stale,
             type=msg_type,
+        )
+
+    def with_governor_telemetry(self, patch: dict[str, Any] | None) -> "FrozenPayload":
+        import dataclasses
+
+        if not patch:
+            return self
+        merged = dict(self.governor_telemetry)
+        for key, value in patch.items():
+            if (
+                key == "quote_lane"
+                and isinstance(value, dict)
+                and isinstance(merged.get(key), dict)
+            ):
+                nested = dict(merged[key])
+                nested.update(value)
+                merged[key] = nested
+                continue
+            merged[key] = value
+        return dataclasses.replace(self, governor_telemetry=merged)
+
+    def with_live_spot(
+        self,
+        *,
+        spot: float,
+        version: int,
+        data_timestamp: str,
+        broadcast_timestamp: str | None = None,
+        quote_lane: dict[str, Any] | None = None,
+    ) -> "FrozenPayload":
+        import dataclasses
+
+        next_broadcast_ts = (
+            broadcast_timestamp
+            if broadcast_timestamp is not None
+            else datetime.now(timezone.utc).isoformat()
+        )
+        merged_governor = dict(self.governor_telemetry)
+        if quote_lane:
+            existing_quote_lane = merged_governor.get("quote_lane")
+            if isinstance(existing_quote_lane, dict):
+                nested = dict(existing_quote_lane)
+                nested.update(quote_lane)
+                merged_governor["quote_lane"] = nested
+            else:
+                merged_governor["quote_lane"] = dict(quote_lane)
+        return dataclasses.replace(
+            self,
+            spot=spot,
+            version=version,
+            data_timestamp=data_timestamp,
+            broadcast_timestamp=next_broadcast_ts,
+            governor_telemetry=merged_governor,
         )

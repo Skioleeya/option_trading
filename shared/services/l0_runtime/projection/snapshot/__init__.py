@@ -87,6 +87,14 @@ def build_governor_telemetry(
     )
 
 
+def _normalize_quote_lane_telemetry(quote_lane: dict[str, Any]) -> dict[str, Any]:
+    telemetry = dict(quote_lane)
+    telemetry["mode"] = "source_cadence"
+    if not telemetry.get("source_data_timestamp_utc"):
+        telemetry["source_data_timestamp_utc"] = telemetry.get("last_source_timestamp_utc")
+    return telemetry
+
+
 def aggregate_store_snapshot(
     *,
     store: Any,
@@ -177,6 +185,9 @@ def build_snapshot_payload(
         rate_limiter=rate_limiter,
         orchestrator=services.orchestrator,
         sub_mgr=services.sub_mgr,
+    )
+    governor_telemetry["quote_lane"] = _normalize_quote_lane_telemetry(
+        state.store.diagnostics().get("quote_lane", {})
     )
     payload = compose_fetch_chain_payload(
         spot=state.store.spot,

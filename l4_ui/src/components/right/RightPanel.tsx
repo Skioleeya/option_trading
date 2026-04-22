@@ -6,39 +6,45 @@ import { MtfFlow } from './MtfFlow'
 import { MmFlowCard } from './MmFlowCard'
 import { SkewDynamics } from './SkewDynamics'
 import { TacticalTriad } from './TacticalTriad'
-import { deriveRightPanelContracts, type RightPanelContracts } from './rightPanelModel'
+import { deriveRightPanelContracts } from './rightPanelModel'
 
 export interface RightPanelProps {
     mode: 'v2' | 'stable'
 }
 
-export const RightPanel: React.FC<RightPanelProps> = memo(({ mode }) => {
-    const payload = useDashboardStore(selectPayload)
-    const stableContracts: RightPanelContracts = deriveRightPanelContracts(payload)
+const RightPanelLive: React.FC = memo(() => (
+    <>
+        <DecisionEngine />
+        <MmFlowCard />
+        <TacticalTriad />
+        <SkewDynamics />
+        <div className="border-t border-bg-border flex-1"><ActiveOptions /></div>
+        <MtfFlow />
+    </>
+))
 
-    if (mode === 'stable') {
-        return (
-            <>
-                <DecisionEngine fused={stableContracts.fused} netGex={stableContracts.netGex} preferProp />
-                <MmFlowCard metrics={stableContracts.mmFlow} preferProp />
-                <TacticalTriad uiState={stableContracts.tacticalTriad} preferProp />
-                <SkewDynamics uiState={stableContracts.skewDynamics} preferProp />
-                <div className="border-t border-bg-border flex-1"><ActiveOptions options={stableContracts.activeOptions} preferProp /></div>
-                <MtfFlow uiState={stableContracts.mtfFlow} preferProp />
-            </>
-        )
-    }
+RightPanelLive.displayName = 'RightPanelLive'
+
+const RightPanelStable: React.FC = memo(() => {
+    const payload = useDashboardStore(selectPayload)
+    const stableContracts = deriveRightPanelContracts(payload)
 
     return (
         <>
-            <DecisionEngine />
-            <MmFlowCard />
-            <TacticalTriad />
-            <SkewDynamics />
-            <div className="border-t border-bg-border flex-1"><ActiveOptions /></div>
-            <MtfFlow />
+            <DecisionEngine fused={stableContracts.fused} netGex={stableContracts.netGex} preferProp />
+            <MmFlowCard metrics={stableContracts.mmFlow} preferProp />
+            <TacticalTriad uiState={stableContracts.tacticalTriad} preferProp />
+            <SkewDynamics uiState={stableContracts.skewDynamics} preferProp />
+            <div className="border-t border-bg-border flex-1"><ActiveOptions options={stableContracts.activeOptions} preferProp /></div>
+            <MtfFlow uiState={stableContracts.mtfFlow} preferProp />
         </>
     )
+})
+
+RightPanelStable.displayName = 'RightPanelStable'
+
+export const RightPanel: React.FC<RightPanelProps> = memo(({ mode }) => {
+    return mode === 'stable' ? <RightPanelStable /> : <RightPanelLive />
 })
 
 RightPanel.displayName = 'RightPanel'

@@ -1,70 +1,65 @@
 param(
-    [string]$PythonExe = "python",
-    [string]$RepoRoot = "",
-    [string]$Date = "",
     [string]$ConfigPath = "scripts/diagnostics/config/eod_bucket_thresholds.json",
     [string]$DataRoot = "data",
     [string]$OutRoot = "data/cold",
-    [string]$RunLabel = "manual",
     [double]$SettleStableWindowSeconds = 30,
     [double]$SettleTimeoutSeconds = 900,
     [double]$SettlePollSeconds = 5,
-    [int]$MaxAttempts = 2
+    [int]$MaxAttempts = 2,
+    [string]$RunLabel = "Manual"
 )
 
+Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-if ([string]::IsNullOrWhiteSpace($RepoRoot)) {
-    $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+function Write-TaskLog {
+    param([string]$Message)
+    Write-Host "[EODBucketTaskWin] $Message"
 }
 
-$waitScript = Join-Path $RepoRoot "scripts/diagnostics/wait_for_eod_sources_settle.py"
-$verifyScript = Join-Path $RepoRoot "scripts/diagnostics/check_eod_manifest_sync.py"
-if (-not (Test-Path $waitScript)) {
-    throw "Settle guard script not found: $waitScript"
-}
-if (-not (Test-Path $verifyScript)) {
-    throw "Manifest sync script not found: $verifyScript"
+function Resolve-RepositoryRoot {
+    param([string]$ScriptPath)
+
+    $scriptDir = Split-Path -Parent $ScriptPath
+    $repoCandidate = Join-Path $scriptDir "..\.."
+    return (Resolve-Path -Path $repoCandidate).Path
 }
 
-Set-Location $RepoRoot
-if ([string]::IsNullOrWhiteSpace($Date)) {
-    $Date = (& $PythonExe "-c" "from datetime import datetime; from zoneinfo import ZoneInfo; print(datetime.now(ZoneInfo('America/New_York')).strftime('%Y%m%d'))").Trim()
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($Date)) {
-        throw "Failed to determine ET trade date for EOD bucket run."
-    }
-}
+try {
+    $repoRoot = Resolve-RepositoryRoot -ScriptPath $PSCommandPath
+    Set-Location -Path $repoRoot
+    Write-TaskLog "repo_root=$repoRoot"
 
-$finalExit = 1
-for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
-    Write-Host "[EODBucketRunner][$RunLabel] attempt=$attempt date=$Date settle_guard=start"
-    & $PythonExe $waitScript --date $Date --root $DataRoot --stable-window-seconds $SettleStableWindowSeconds --timeout-seconds $SettleTimeoutSeconds --poll-seconds $SettlePollSeconds
-    $settleExit = $LASTEXITCODE
-    if ($settleExit -eq 0) {
-        Write-Host "[EODBucketRunner][$RunLabel] attempt=$attempt settle_guard=passed"
-    } elseif ($settleExit -eq 2) {
-        Write-Warning "[EODBucketRunner][$RunLabel] attempt=$attempt settle_guard=timeout exit=2; continuing archive for INCOMPLETE_SOURCE evidence."
-    } else {
-        Write-Host "[EODBucketRunner][$RunLabel] attempt=$attempt settle_guard=error exit=$settleExit"
-        exit $settleExit
+    $pythonCommand = Get-Command python -ErrorAction SilentlyContinue
+    if ($null -eq $pythonCommand) {
+        throw "python executable not found in PATH."
     }
 
-    Write-Host "[EODBucketRunner][$RunLabel] attempt=$attempt archive=start"
-    & $PythonExe "scripts/diagnostics/eod_bucket_archive.py" --date $Date --config $ConfigPath --root $DataRoot --out-root $OutRoot --strict-quality
-    $archiveExit = $LASTEXITCODE
-    Write-Host "[EODBucketRunner][$RunLabel] attempt=$attempt archive=done exit=$archiveExit"
+    $pythonExe = $pythonCommand.Source
+    Write-TaskLog "python=$pythonExe"
 
-    Write-Host "[EODBucketRunner][$RunLabel] attempt=$attempt sync_check=start"
-    & $PythonExe $verifyScript --date $Date --out-root $OutRoot
-    $syncExit = $LASTEXITCODE
-    Write-Host "[EODBucketRunner][$RunLabel] attempt=$attempt sync_check=done exit=$syncExit"
+    $args = @(
+        "manage.py",
+        "run-eod-bucket",
+        "--python-exe", "python",
+        "--repo-root", $repoRoot,
+        "--config-path", $ConfigPath,
+        "--data-root", $DataRoot,
+        "--out-root", $OutRoot,
+        "--run-label", $RunLabel,
+        "--settle-stable-window-seconds", $SettleStableWindowSeconds.ToString([System.Globalization.CultureInfo]::InvariantCulture),
+        "--settle-timeout-seconds", $SettleTimeoutSeconds.ToString([System.Globalization.CultureInfo]::InvariantCulture),
+        "--settle-poll-seconds", $SettlePollSeconds.ToString([System.Globalization.CultureInfo]::InvariantCulture),
+        "--max-attempts", $MaxAttempts.ToString([System.Globalization.CultureInfo]::InvariantCulture)
+    )
 
-    if ($syncExit -eq 0 -and ($archiveExit -eq 0 -or $archiveExit -eq 2)) {
-        exit $archiveExit
-    }
-
-    $finalExit = if ($archiveExit -ne 0) { $archiveExit } else { $syncExit }
-    Write-Warning "[EODBucketRunner][$RunLabel] attempt=$attempt incomplete (archive_exit=$archiveExit sync_exit=$syncExit); retrying if attempts remain."
+    Write-TaskLog "exec=$pythonExe $($args -join ' ')"
+    & $pythonExe @args
+    $exitCode = $LASTEXITCODE
+    Write-TaskLog "exit_code=$exitCode"
+    exit $exitCode
 }
-
-exit $finalExit
+catch {
+    Write-Error "[EODBucketTaskWin] fatal=$($_.Exception.Message)"
+    exit 1
+}

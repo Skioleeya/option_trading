@@ -107,9 +107,9 @@ flowchart LR
 
 ## 8. Verification
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l2_decision/tests
-powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 scripts/test/test_l0_l4_pipeline.py
+```bash
+python manage.py run-pytest l2_decision/tests
+python manage.py run-pytest scripts/test/test_l0_l4_pipeline.py
 ```
 
 ## 9. Offline Threshold Calibration (Decoupled Tooling)

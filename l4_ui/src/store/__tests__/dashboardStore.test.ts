@@ -94,6 +94,8 @@ describe('DashboardStore', () => {
             ivPct: null,
             atm: null,
             atmHistory: [],
+            atmHistoryTradeDateKey: null,
+            atmHistoryLastTimestamp: null,
             version: 0,
         })
     })
@@ -187,6 +189,60 @@ describe('DashboardStore', () => {
         expect(history).toHaveLength(2)
         expect(history[0].timestamp).toBe('2026-01-01T09:30:00Z')
         expect(history[1].timestamp).toBe('2026-01-01T09:30:05Z')
+    })
+
+    it('applyMergedPayload does not re-append an older hydrated ATM timestamp', () => {
+        useDashboardStore.getState().applyFullUpdate(makePayload({
+            timestamp: '2026-01-01T09:30:10Z',
+            data_timestamp: '2026-01-01T09:30:10Z',
+        }))
+
+        useDashboardStore.getState().hydrateAtmHistory([
+            {
+                strike: 560,
+                locked_at: '2026-01-01T09:30:00Z',
+                straddle_pct: 0.02,
+                call_pct: 0.01,
+                put_pct: 0.01,
+                timestamp: '2026-01-01T09:30:00Z',
+            },
+            {
+                strike: 560,
+                locked_at: '2026-01-01T09:30:05Z',
+                straddle_pct: 0.021,
+                call_pct: 0.011,
+                put_pct: 0.01,
+                timestamp: '2026-01-01T09:30:05Z',
+            },
+            {
+                strike: 560,
+                locked_at: '2026-01-01T09:30:10Z',
+                straddle_pct: 0.022,
+                call_pct: 0.012,
+                put_pct: 0.01,
+                timestamp: '2026-01-01T09:30:10Z',
+            },
+        ])
+
+        useDashboardStore.getState().applyMergedPayload(makePayload({
+            timestamp: '2026-01-01T09:30:06Z',
+            data_timestamp: '2026-01-01T09:30:06Z',
+            atm: {
+                strike: 560,
+                locked_at: '2026-01-01T09:30:00Z',
+                straddle_pct: 0.021,
+                call_pct: 0.011,
+                put_pct: 0.01,
+                timestamp: '2026-01-01T09:30:05Z',
+            },
+        }))
+
+        const history = useDashboardStore.getState().atmHistory
+        expect(history.map((tick) => tick.timestamp)).toEqual([
+            '2026-01-01T09:30:00Z',
+            '2026-01-01T09:30:05Z',
+            '2026-01-01T09:30:10Z',
+        ])
     })
 
     it('appendAtmHistory accumulates unique ticks and deduplicates', () => {

@@ -1,0 +1,56 @@
+session_id: "2026-04-19/impl-l0-strict-no-fallback-hardcut"
+title: "L0 runtime hardcut: remove endpoint failover and spot/HV fallback"
+scope: "runtime"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-19 15:01:42 -04:00"
+updated_at_et: "2026-04-19 15:15:52 -04:00"
+parent_session: "2026-04-19/impl-governance-debt-wave1"
+
+branch: "unknown"
+base_commit: "unknown"
+head_commit: "unknown"
+
+files_changed:
+  - "shared/services/l0_runtime/source/runtime/quote_runtime/__init__.py"
+  - "shared/services/l0_runtime/services/orchestration/feed_orchestrator.py"
+  - "app/tests/test_health_route_diagnostics.py"
+  - "app/tests/test_history_routes_v2.py"
+  - "docs/SOP/L0_DATA_FEED.md"
+  - "notes/sessions/2026-04-19/impl-l0-strict-no-fallback-hardcut/project_state.md"
+  - "notes/sessions/2026-04-19/impl-l0-strict-no-fallback-hardcut/open_tasks.md"
+  - "notes/sessions/2026-04-19/impl-l0-strict-no-fallback-hardcut/handoff.md"
+  - "notes/sessions/2026-04-19/impl-l0-strict-no-fallback-hardcut/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+
+commands:
+  - "python3 manage.py new-session --task-id impl-l0-strict-no-fallback-hardcut --title \"L0 runtime hardcut: remove endpoint failover and spot/HV fallback\" --scope \"runtime\" --owner \"Codex\" --parent-session \"2026-04-19/impl-governance-debt-wave1\" --timezone \"America/New_York\" --update-pointer"
+  - "python3 -m py_compile shared/services/l0_runtime/source/runtime/quote_runtime/__init__.py shared/services/l0_runtime/services/orchestration/feed_orchestrator.py app/tests/test_health_route_diagnostics.py"
+  - "python3 manage.py run-pytest app/tests/test_health_route_diagnostics.py"
+  - ".venv/bin/pip install pytest-asyncio"
+  - ".venv/bin/pip install httpx"
+  - "timeout 90s python3 manage.py run-pytest app/tests/test_health_route_diagnostics.py -q"
+  - "python3 -m py_compile app/tests/test_health_route_diagnostics.py app/tests/test_history_routes_v2.py"
+  - "python3 manage.py run-pytest app/tests/test_health_route_diagnostics.py -q"
+  - "python3 manage.py run-pytest app/tests/test_history_routes_v2.py -q"
+  - "python3 manage.py run-pytest app/tests -q"
+  - "python3 manage.py validate-session --strict"
+
+tests_passed:
+  - "python3 -m py_compile shared/services/l0_runtime/source/runtime/quote_runtime/__init__.py shared/services/l0_runtime/services/orchestration/feed_orchestrator.py app/tests/test_health_route_diagnostics.py"
+  - "python3 -m py_compile app/tests/test_health_route_diagnostics.py app/tests/test_history_routes_v2.py"
+  - "python3 manage.py run-pytest app/tests/test_health_route_diagnostics.py -q -> 2 passed"
+  - "python3 manage.py run-pytest app/tests/test_history_routes_v2.py -q -> 7 passed"
+  - "python3 manage.py run-pytest app/tests -q -> 42 passed"
+  - "python3 manage.py validate-session --strict -> Session validation passed"
+
+tests_failed:
+  - "historical: timeout 90s python3 manage.py run-pytest app/tests/test_health_route_diagnostics.py -q -> EXIT:124 (closed by TestClient->ASGITransport rootfix)"
+
+blockers: []
+
+notes:
+  - "Strict hardcut policy applied: no endpoint failover, no spot fallback, no HV legacy fallback."
+  - "Closed remaining governance debt by replacing hanging TestClient path with ASGITransport in app route tests."

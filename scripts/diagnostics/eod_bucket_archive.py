@@ -30,6 +30,16 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from eod_bucket_metrics import key_null_pct, read_raw_metrics
+from eod_bucket_publish import (
+    cleanup_stage_root,
+    make_stage_root,
+    publish_stage_file,
+    publish_stage_tree,
+    stage_daily_dir,
+    stage_regime_dir,
+    stage_report_path,
+    write_stage_text,
+)
 from eod_bucket_rules import classify_metrics
 
 DEFAULT_CONFIG = Path("scripts/diagnostics/config/eod_bucket_thresholds.json")
@@ -104,8 +114,8 @@ def _read_rows(path: Path) -> int:
     return pq.read_table(path).num_rows
 
 
-def _freeze_source_file(*, src: SourceEntry, out_root: Path, date_str: str) -> Path:
-    frozen_dir = out_root / "daily" / date_str / "sources" / src.role
+def _freeze_source_file(*, src: SourceEntry, frozen_root: Path) -> Path:
+    frozen_dir = frozen_root / "sources" / src.role
     frozen_dir.mkdir(parents=True, exist_ok=True)
     frozen_path = frozen_dir / src.path.name
     shutil.copy2(src.path, frozen_path)
@@ -166,6 +176,13 @@ def _classify_metrics(metrics: dict[str, Any], thresholds: dict[str, Any], prima
     return classify_metrics(metrics, thresholds, primary_priority)
 
 
+def _assert_publish_targets_absent(targets: list[Path]) -> None:
+    conflicts = [path.as_posix() for path in targets if path.exists()]
+    if conflicts:
+        joined = ", ".join(conflicts)
+        raise FileExistsError(f"final publish target already exists: {joined}")
+
+
 def run_archive(
     *,
     date_str: str,
@@ -180,110 +197,112 @@ def run_archive(
     quality_gate = thresholds["quality_gate"]
     primary_priority = list(cfg["primary_priority"])
     classification_mode = str(cfg.get("classification_mode", "primary_plus_context_v1"))
+    final_daily_dir = out_root / "daily" / date_str
+    final_report = out_root / "reports" / f"{date_str}_quality.json"
 
     if classification_mode != "primary_plus_context_v1":
         raise ValueError("Only classification_mode=primary_plus_context_v1 is supported.")
 
+    stage_root = make_stage_root(out_root=out_root, date_str=date_str)
     source_files: list[dict[str, Any]] = []
     quality_reasons: list[str] = []
     rows_by_role: dict[str, int] = {}
     required_missing = 0
 
-    for src in _collect_sources(root=root, date_str=date_str):
-        if not src.path.exists():
-            if src.required:
-                required_missing += 1
-                quality_reasons.append(f"missing required source: {src.role}")
-            continue
-        frozen_path = _freeze_source_file(src=src, out_root=out_root, date_str=date_str)
-        source_files.append(
-            {
-                "role": src.role,
-                "path": frozen_path.as_posix(),
-                "source_path": src.path.as_posix(),
-                "size_bytes": frozen_path.stat().st_size,
-                "sha256": _sha256(frozen_path),
-            }
-        )
-        if frozen_path.suffix == ".parquet":
-            rows_by_role[src.role] = _read_rows(frozen_path)
+    try:
+        staged_daily_dir = stage_daily_dir(stage_root=stage_root, date_str=date_str)
+        for src in _collect_sources(root=root, date_str=date_str):
+            if not src.path.exists():
+                if src.required:
+                    required_missing += 1
+                    quality_reasons.append(f"missing required source: {src.role}")
+                continue
+            frozen_path = _freeze_source_file(src=src, frozen_root=staged_daily_dir)
+            source_files.append(
+                {
+                    "role": src.role,
+                    "path": (final_daily_dir / "sources" / src.role / src.path.name).as_posix(),
+                    "source_path": src.path.as_posix(),
+                    "size_bytes": frozen_path.stat().st_size,
+                    "sha256": _sha256(frozen_path),
+                }
+            )
+            if frozen_path.suffix == ".parquet":
+                rows_by_role[src.role] = _read_rows(frozen_path)
 
-    raw_path = root / "research" / "raw" / f"raw_{date_str}.parquet"
-    key_nulls: dict[str, float | str] = {}
-    if raw_path.exists():
-        prev_close_spot, prev_day = _find_prev_close_spot(root, date_str)
-        raw_metrics = read_raw_metrics(raw_path, thresholds, prev_close_spot)
-        raw_metrics["prev_trade_day"] = prev_day or ""
-        key_nulls = key_null_pct(raw_path, ["data_timestamp", "spot", "atm_iv", "net_gex"])
-    else:
-        raw_metrics = _empty_raw_metrics()
+        raw_path = root / "research" / "raw" / f"raw_{date_str}.parquet"
+        key_nulls: dict[str, float | str] = {}
+        if raw_path.exists():
+            prev_close_spot, prev_day = _find_prev_close_spot(root, date_str)
+            raw_metrics = read_raw_metrics(raw_path, thresholds, prev_close_spot)
+            raw_metrics["prev_trade_day"] = prev_day or ""
+            key_nulls = key_null_pct(raw_path, ["data_timestamp", "spot", "atm_iv", "net_gex"])
+        else:
+            raw_metrics = _empty_raw_metrics()
 
-    for role, key in (
-        ("research_raw", "min_rows_raw"),
-        ("research_feature", "min_rows_feature"),
-        ("research_label", "min_rows_label"),
-    ):
-        minimum = int(quality_gate[key])
-        if rows_by_role.get(role, 0) < minimum:
-            short_role = role.replace("research_", "")
-            quality_reasons.append(f"{short_role} rows below minimum: {rows_by_role.get(role, 0)} < {minimum}")
+        for role, key in (
+            ("research_raw", "min_rows_raw"),
+            ("research_feature", "min_rows_feature"),
+            ("research_label", "min_rows_label"),
+        ):
+            minimum = int(quality_gate[key])
+            if rows_by_role.get(role, 0) < minimum:
+                short_role = role.replace("research_", "")
+                quality_reasons.append(f"{short_role} rows below minimum: {rows_by_role.get(role, 0)} < {minimum}")
 
-    max_null_pct = float(quality_gate.get("max_null_pct", 0.05))
-    for col, pct in key_nulls.items():
-        if pct == "missing":
-            quality_reasons.append(f"raw key column missing: {col}")
-        elif float(pct) > max_null_pct:
-            quality_reasons.append(f"raw key column null ratio too high: {col}={float(pct):.4f}")
+        max_null_pct = float(quality_gate.get("max_null_pct", 0.05))
+        for col, pct in key_nulls.items():
+            if pct == "missing":
+                quality_reasons.append(f"raw key column missing: {col}")
+            elif float(pct) > max_null_pct:
+                quality_reasons.append(f"raw key column null ratio too high: {col}={float(pct):.4f}")
 
-    quality_failed = required_missing > 0 or bool(quality_reasons)
-    quality_status = "LOW_QUALITY_DAY" if quality_failed else "PASS"
-    if quality_failed:
-        primary_day_type = "INCOMPLETE_SOURCE"
-        context_modifiers = []
-        close_profile = "UNKNOWN"
-        rule_hits = [f"classification_blocked:{reason}" for reason in quality_reasons] or ["classification_blocked:missing_required_source"]
-    else:
-        classification = _classify_metrics(raw_metrics, thresholds, primary_priority)
-        primary_day_type = str(classification["primary_day_type"])
-        context_modifiers = list(classification["context_modifiers"])
-        close_profile = str(classification["close_profile"])
-        rule_hits = list(classification["rule_hits"])
+        quality_failed = required_missing > 0 or bool(quality_reasons)
+        quality_status = "LOW_QUALITY_DAY" if quality_failed else "PASS"
+        if quality_failed:
+            primary_day_type = "INCOMPLETE_SOURCE"
+            context_modifiers = []
+            close_profile = "UNKNOWN"
+            rule_hits = [f"classification_blocked:{reason}" for reason in quality_reasons] or ["classification_blocked:missing_required_source"]
+        else:
+            classification = _classify_metrics(raw_metrics, thresholds, primary_priority)
+            primary_day_type = str(classification["primary_day_type"])
+            context_modifiers = list(classification["context_modifiers"])
+            close_profile = str(classification["close_profile"])
+            rule_hits = list(classification["rule_hits"])
 
-    manifest = {
-        "version": VERSION,
-        "classification_mode": classification_mode,
-        "date": date_str,
-        "primary_day_type": primary_day_type,
-        "context_modifiers": context_modifiers,
-        "close_profile": close_profile,
-        "source_files": source_files,
-        "metrics": {"rows": rows_by_role, "raw_day": raw_metrics, "source_count": len(source_files)},
-        "quality": {
-            "status": quality_status,
-            "reasons": quality_reasons,
-            "classification_blocked": quality_failed,
-            "min_rows": {
-                "raw": int(quality_gate["min_rows_raw"]),
-                "feature": int(quality_gate["min_rows_feature"]),
-                "label": int(quality_gate["min_rows_label"]),
+        manifest = {
+            "version": VERSION,
+            "classification_mode": classification_mode,
+            "date": date_str,
+            "primary_day_type": primary_day_type,
+            "context_modifiers": context_modifiers,
+            "close_profile": close_profile,
+            "source_files": source_files,
+            "metrics": {"rows": rows_by_role, "raw_day": raw_metrics, "source_count": len(source_files)},
+            "quality": {
+                "status": quality_status,
+                "reasons": quality_reasons,
+                "classification_blocked": quality_failed,
+                "min_rows": {
+                    "raw": int(quality_gate["min_rows_raw"]),
+                    "feature": int(quality_gate["min_rows_feature"]),
+                    "label": int(quality_gate["min_rows_label"]),
+                },
+                "key_null_pct": key_nulls,
             },
-            "key_null_pct": key_nulls,
-        },
-        "rule_hits": rule_hits,
-        "generated_at_utc": _utc_iso(),
-    }
+            "rule_hits": rule_hits,
+            "generated_at_utc": _utc_iso(),
+        }
 
-    daily_manifest = out_root / "daily" / date_str / "manifest.json"
-    quality_report = out_root / "reports" / f"{date_str}_quality.json"
-    by_regime_manifest = out_root / "by_regime" / primary_day_type / date_str / "manifest.json"
-    for path in (daily_manifest, quality_report, by_regime_manifest):
-        path.parent.mkdir(parents=True, exist_ok=True)
-
-    payload = json.dumps(manifest, indent=2, ensure_ascii=True)
-    daily_manifest.write_text(payload, encoding="utf-8")
-    by_regime_manifest.write_text(payload, encoding="utf-8")
-    quality_report.write_text(
-        json.dumps(
+        staged_report = stage_report_path(stage_root=stage_root, date_str=date_str)
+        staged_regime_dir = stage_regime_dir(
+            stage_root=stage_root,
+            date_str=date_str,
+            primary_day_type=primary_day_type,
+        )
+        manifest_payload = json.dumps(manifest, indent=2, ensure_ascii=True)
+        quality_payload = json.dumps(
             {
                 "date": date_str,
                 "classification_mode": classification_mode,
@@ -299,21 +318,30 @@ def run_archive(
             },
             indent=2,
             ensure_ascii=True,
-        ),
-        encoding="utf-8",
-    )
+        )
+        write_stage_text(staged_daily_dir / "manifest.json", manifest_payload)
+        write_stage_text(staged_regime_dir / "manifest.json", manifest_payload)
+        write_stage_text(staged_report, quality_payload)
 
-    print(
-        f"[EODBucket] date={date_str} primary_day_type={primary_day_type} "
-        f"modifiers={','.join(context_modifiers) if context_modifiers else 'none'} "
-        f"close_profile={close_profile} "
-        f"quality={quality_status} sources={len(source_files)}"
-    )
-    print(f"[EODBucket] daily_manifest={daily_manifest.as_posix()}")
-    print(f"[EODBucket] by_regime_manifest={by_regime_manifest.as_posix()}")
-    print(f"[EODBucket] quality_report={quality_report.as_posix()}")
+        final_regime_dir = out_root / "by_regime" / primary_day_type / date_str
+        _assert_publish_targets_absent([final_daily_dir, final_regime_dir, final_report])
+        publish_stage_tree(staged=staged_daily_dir, final=final_daily_dir)
+        publish_stage_tree(staged=staged_regime_dir, final=final_regime_dir)
+        publish_stage_file(staged=staged_report, final=final_report)
 
-    return 2 if quality_status == "LOW_QUALITY_DAY" and strict_quality else 0
+        print(
+            f"[EODBucket] date={date_str} primary_day_type={primary_day_type} "
+            f"modifiers={','.join(context_modifiers) if context_modifiers else 'none'} "
+            f"close_profile={close_profile} "
+            f"quality={quality_status} sources={len(source_files)}"
+        )
+        print(f"[EODBucket] daily_manifest={(final_daily_dir / 'manifest.json').as_posix()}")
+        print(f"[EODBucket] by_regime_manifest={(final_regime_dir / 'manifest.json').as_posix()}")
+        print(f"[EODBucket] quality_report={final_report.as_posix()}")
+
+        return 2 if quality_status == "LOW_QUALITY_DAY" and strict_quality else 0
+    finally:
+        cleanup_stage_root(stage_root)
 
 
 def build_parser() -> argparse.ArgumentParser:

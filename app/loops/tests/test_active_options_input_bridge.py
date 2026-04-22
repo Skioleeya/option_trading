@@ -32,6 +32,15 @@ class _L1Snapshot:
         self.version = 1485
 
 
+class _EmptyL1Snapshot:
+    def __init__(self) -> None:
+        self.chain = None
+        self.spot = 655.83
+        self.aggregates = _Agg(atm_iv=0.1458)
+        self.ttm_seconds = 3600.0
+        self.version = 1485
+
+
 def _l0_snapshot() -> dict[str, object]:
     return {
         "version": 1485,
@@ -87,3 +96,14 @@ def test_publish_active_options_input_accepts_dict_chain_elements_contract() -> 
     assert row["vanna"] == pytest.approx(0.654)
     assert row["implied_volatility"] == pytest.approx(0.211)
     assert row["delta"] == pytest.approx(0.25)
+
+
+def test_publish_active_options_input_treats_none_chain_as_empty_input() -> None:
+    snap = _publish_active_options_input(
+        l0_snapshot=_l0_snapshot(),
+        l1_snapshot=_EmptyL1Snapshot(),
+    )
+    assert snap.valid is True
+    assert snap.source_version == 1485
+    assert snap.atm_iv == pytest.approx(0.1458)
+    assert len(snap.chain) == 1
