@@ -4,17 +4,51 @@ scope: "infra"
 owner: "Codex"
 timezone: "America/New_York"
 started_at_et: "2026-04-22 17:19:50 -04:00"
-updated_at_et: "2026-04-22 17:19:50 -04:00"
+updated_at_et: "2026-04-22 17:46:17 -04:00"
 parent_session: "2026-04-22/git-origin-ssh-link"
 
-branch: "chore/sync-all-local-changes-20260313"
-base_commit: "5583a97"
-head_commit: "5583a97"
+branch: "master"
+base_commit: "f8a9b52"
+head_commit: "c5bae60ecd5bf6b237ff7959938074ea9970cdad"
 
-files_changed: []
-commands: []
-tests_passed: []
+files_changed:
+  - ".gitignore"
+  - "manage.py"
+  - "infra/ops_cli/"
+  - "infra/redis/redis.conf.local"
+  - "docs/SOP/"
+  - "l0_ingest/l0_rust/src/"
+  - "shared/services/l0_runtime/"
+  - "shared_rust/"
+  - "shared_rust_models/"
+  - "shared_rust_services/"
+  - "l4_ui/"
+  - "notes/context/"
+  - "notes/sessions/2026-04-22/master-sync-clean/"
+  - "data/"
+  - "tmp/"
+  - ".playwright-mcp/"
+  - "l2_decision/.audit_logs/"
+  - "l2_decision/audit/"
+commands:
+  - ".\\.venv\\Scripts\\python.exe manage.py new-session --task-id master-sync-clean --title \"master sync clean\" --scope \"infra\" --owner \"Codex\" --parent-session \"2026-04-22/git-origin-ssh-link\" --timezone \"America/New_York\" --update-pointer"
+  - "git fetch --all --prune"
+  - "git rm --cached -r -- .playwright-mcp data l2_decision/.audit_logs shared_rust/target shared_rust_services/target tmp/session_validation_diag"
+  - "git rm --cached -- l2_decision/audit/l2_audit_20260304_100943.parquet l2_decision/audit/l2_audit_20260304_101025.parquet l2_decision/audit/l2_audit_20260304_101139.parquet l2_decision/audit/l2_audit_20260304_101211.parquet l2_decision/audit/l2_audit_20260304_101323.parquet l2_decision/audit/l2_audit_20260304_101828.parquet l2_decision/audit/l2_audit_20260304_101858.parquet l4_ui/tsconfig.tsbuildinfo shared_rust/contracts.pyd shared_rust/models.pyd"
+  - "git rm --cached -r -- shared_rust_models/target tmp/fetch_chain_live_smoke_20260313_003112.json"
+  - "git add -A"
+  - "git commit -m \"chore: sync source-only workspace state\""
+  - "git switch master"
+  - "git merge --ff-only chore/sync-all-local-changes-20260313"
+  - "git push origin master"
+  - ".\\.venv\\Scripts\\python.exe manage.py validate-session --strict"
+tests_passed:
+  - "git status --short -> clean working tree on master"
+  - "git ls-files --others --exclude-standard -> no output"
+  - "git check-ignore -v .cargo/config.toml -> .gitignore:84:.cargo/config.toml"
+  - ".\\.venv\\Scripts\\python.exe manage.py validate-session --strict -> Session validation passed."
 tests_failed: []
 blockers: []
-notes: []
+notes:
+  - "Direct push to origin/master is blocked by repository rules; use a review branch + PR after strict validation."
 
