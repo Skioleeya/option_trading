@@ -3,7 +3,7 @@
 ## Session Summary
 - DateTime (ET): 2026-04-22 17:30:48 -04:00
 - Goal: audit the copied Windows `Option_v4` repository, keep only source/docs/config in Git, update ignore rules, and land the result onto local `master` without leaking machine-local files.
-- Outcome: local `master` now contains a source-only snapshot (`c5bae60`), tracked runtime artifacts were retired from Git, and direct push to `origin/master` was blocked by repository policy requiring a pull request plus `validate-session`.
+- Outcome: local `master` now contains a source-only snapshot (`c5bae60` plus session-sync follow-up `5253536`), tracked runtime artifacts were retired from Git, direct push to `origin/master` was blocked by policy, and the validated snapshot was published to `origin/chore/master-sync-clean-20260422` for PR flow.
 
 ## What Changed
 - Code / Docs Files:
@@ -33,6 +33,7 @@
   - `git merge --ff-only chore/sync-all-local-changes-20260313`
   - `git push origin master`
   - `.\.venv\Scripts\python.exe manage.py validate-session --strict`
+  - `git push origin HEAD:refs/heads/chore/master-sync-clean-20260422`
 
 ## Verification
 - Passed:
@@ -40,20 +41,23 @@
   - `git ls-files --others --exclude-standard` returned no output.
   - `git check-ignore -v .cargo/config.toml` resolved to `.gitignore:84:.cargo/config.toml`.
   - `.\.venv\Scripts\python.exe manage.py validate-session --strict` returned `Session validation passed.`
+  - `git push origin HEAD:refs/heads/chore/master-sync-clean-20260422` succeeded and GitHub returned `https://github.com/Skioleeya/option_trading/pull/new/chore/master-sync-clean-20260422`.
 - Failed / Not Run:
   - `git push origin master` failed with `GH013`: `refs/heads/master` requires a pull request and the required status check `validate-session`.
 
 ## Pending
 - Must Do Next:
-  - Push the same snapshot to a non-protected review branch and open a PR into `master`.
+  - Open the PR from `chore/master-sync-clean-20260422` into `master` and let the required remote `validate-session` status check complete.
 - Nice to Have:
   - Decide whether the two GitHub >50 MB warnings warrant Git LFS or history cleanup in a follow-up maintenance session.
 
 ## Debt Record (Mandatory)
 - DEBT-EXEMPT: direct `master` publication is blocked by repository policy; this session stops at a clean local `master` plus review-branch handoff preparation.
+- DEBT-EXEMPT: direct `master` publication is blocked by repository policy; this session ends with a pushed review branch and PR-ready handoff rather than a protected-branch bypass.
 - DEBT-OWNER: Codex
 - DEBT-DUE: 2026-04-23
 - DEBT-RISK: without a review branch and CI run, the cleaned snapshot exists only locally.
+- DEBT-RISK: until the PR is opened and remote CI completes, the change is present on the review branch but not merged into protected `master`.
 - DEBT-NEW: 0
 - DEBT-CLOSED: 1
 - DEBT-DELTA: -1
@@ -62,5 +66,5 @@
 
 ## How To Continue
 - Start Command: `git switch master`
-- Key Logs: GitHub push rejection `GH013` on `git push origin master`; local hygiene checks above.
+- Key Logs: GitHub push rejection `GH013` on `git push origin master`; successful review-branch publish to `origin/chore/master-sync-clean-20260422`; local hygiene checks above.
 - First File To Read: `notes/sessions/2026-04-22/master-sync-clean/handoff.md`

@@ -6,7 +6,7 @@
 
 ## Latest Outcome
 - Session: 2026-04-22/master-sync-clean
-- Summary: Local `master` now points at the cleaned source-only snapshot, tracked runtime artifacts were retired from Git, and local strict validation passed; `origin/master` still rejects direct push with `GH013`, so publication must continue through a review branch + PR.
+- Summary: Local `master` now points at the cleaned source-only snapshot, tracked runtime artifacts were retired from Git, strict validation passed locally, and the same state was published to `origin/chore/master-sync-clean-20260422`; only the PR merge into protected `master` remains.
 
 ## Next Session Bootstrap
 1. Read this file.

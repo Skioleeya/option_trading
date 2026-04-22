@@ -4,7 +4,7 @@
 - Path: notes/sessions/2026-04-22/master-sync-clean/open_tasks.md
 
 ## Global Backlog (Cross-Session)
-- [ ] Publish the cleaned and validated `master` snapshot through a review branch because direct `origin/master` pushes are blocked by repository rules.
+- [ ] Open and merge a PR from `chore/master-sync-clean-20260422` into `master` because direct `origin/master` pushes are blocked by repository rules.
 - [x] Link local `Option_v4` origin to the provided GitHub SSH remote URL. (2026-04-22 17:09 ET)
 - [x] Restore local Git provenance in `Option_v4` so branch/head/origin are no longer `unknown`. (2026-04-22 16:58 ET)
 - [x] Remove sandbox-local frontend `spawn EPERM` by hard-cutting the strict dev launcher to the Vite JS API path. (2026-04-22 17:09 ET)

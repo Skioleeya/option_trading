@@ -24,6 +24,6 @@
 - Risk 2: the push also emitted large-file warnings for historical blobs already in local branch history; they are below the hard 100 MB reject threshold but should be monitored.
 
 ## Next Action
-- Immediate Next Step: publish the validated snapshot to a review branch and open a PR into `master`.
+- Immediate Next Step: open a PR from `chore/master-sync-clean-20260422` into `master` and let the required remote `validate-session` check complete.
 - Owner: Codex
 

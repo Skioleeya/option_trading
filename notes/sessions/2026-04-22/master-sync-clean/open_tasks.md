@@ -15,3 +15,4 @@
 - [x] Verified local hygiene: clean `git status`, no untracked files, and `.cargo/config.toml` ignored by `.gitignore`. (2026-04-22 17:31 ET)
 - [x] Confirmed that direct `git push origin master` is blocked by GitHub repository rules and moved the publication follow-up to `notes/context/open_tasks.md`. (2026-04-22 17:39 ET)
 - [x] Ran `.\.venv\Scripts\python.exe manage.py validate-session --strict` and received `Session validation passed.` (2026-04-22 17:46 ET)
+- [x] Published the validated snapshot to `origin/chore/master-sync-clean-20260422`; GitHub returned a PR creation URL. (2026-04-22 17:58 ET)
