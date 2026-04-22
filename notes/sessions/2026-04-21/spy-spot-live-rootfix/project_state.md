@@ -1,0 +1,213 @@
+# Project State
+
+## Snapshot
+- DateTime (ET): 2026-04-21 15:52:00 -04:00
+- Branch: `fix/frontend-data-zero-fallback`
+- Last Commit: `3ff3ba1`
+- Environment:
+  - Market: `OPEN`
+  - Data Feed: `OK`
+  - L0-L4 Pipeline: `OK`
+
+## Current Focus
+- Primary Goal: 修复 Arrow IPC 单槽覆盖导致的 `SPY.US` depth transport 丢批次，把 raw `DEPTH` cadence 无损送到 Python `update_spot_from_source()`。
+- Scope In:
+  - `app/loops/shared_state.py`
+  - `app/loops/compute_loop.py`
+  - `app/loops/broadcast_loop.py`
+  - `app/loops/tests/test_broadcast_loop_phase_lock.py`
+  - `app/loops/tests/test_shared_state_live_spot.py`
+  - `l3_assembly/events/payload_events.py`
+  - `l3_assembly/assembly/payload_assembler.py`
+  - `l3_assembly/broadcast/broadcast_governor.py`
+  - `shared/services/l0_runtime/state/runtime/__init__.py`
+  - `shared/services/l0_runtime/state/runtime/spot_diagnostics.py`
+  - `shared/services/l0_runtime/state/test_runtime_state.py`
+  - `shared/services/l0_runtime/projection/snapshot/__init__.py`
+  - `shared/services/l0_runtime/services/runtime/arrow_events.py`
+  - `shared/services/l0_runtime/normalize/events/__init__.py` 的 Rust owner `l0_ingest/l0_rust/src/l0_event_support.rs`
+  - `shared/services/l0_runtime/source/runtime/quote_runtime/__init__.py`
+  - `shared/services/l0_runtime/source/runtime/ipc.py`
+  - `l0_ingest/l0_rust/src/gateway_push_diag.rs`
+  - `l0_ingest/l0_rust/src/lib.rs`
+  - `l0_ingest/l0_rust/src/gateway_core.rs`
+  - `l0_ingest/l0_rust/src/arrow_ipc.rs`
+  - `l0_ingest/l0_rust/src/arrow_ipc_tests.rs`
+  - `l0_ingest/l0_rust/src/ipc_runtime.rs`
+  - `l0_ingest/l0_rust/src/ipc_writer.rs`
+  - `shared/services/l0_runtime/services/subscription/__init__.py`
+  - `shared/services/l0_runtime/services/orchestration/feed_orchestrator.py`
+  - `shared/services/l0_runtime/source/runtime/bootstrap.py`
+  - `l4_ui/src/observability/l4_rum.ts`
+  - `l4_ui/src/adapters/protocolAdapter.ts`
+  - `l4_ui/src/types/dashboard.ts`
+  - `l4_ui/src/components/debugOverlayModel.ts`
+  - `l4_ui/src/components/DebugOverlay.tsx`
+  - `l4_ui/src/components/__tests__/debugOverlayModel.test.ts`
+  - `app/tests/test_health_route_diagnostics.py`
+  - `docs/SOP/L0_DATA_FEED.md`
+  - `docs/SOP/L3_OUTPUT_ASSEMBLY.md`
+  - `docs/SOP/L4_FRONTEND.md`
+- Scope Out:
+  - 不改前端 Header 数据源；仍只消费顶层 `payload.spot`
+  - 不把 L1/L2/L3 重计算提速到 spot cadence
+  - 不引入 REST runtime spot fallback 或前端补价
+
+## What Changed (Latest Session)
+- Files:
+  - `app/loops/compute_loop.py`
+  - `app/loops/shared_state.py`
+  - `app/loops/broadcast_loop.py`
+  - `app/loops/tests/test_broadcast_loop_phase_lock.py`
+  - `app/loops/tests/test_shared_state_live_spot.py`
+  - `app/tests/test_health_route_diagnostics.py`
+  - `l3_assembly/assembly/payload_assembler.py`
+  - `l3_assembly/broadcast/broadcast_governor.py`
+  - `l3_assembly/events/payload_events.py`
+  - `shared/services/l0_runtime/projection/snapshot/__init__.py`
+  - `shared/services/l0_runtime/state/runtime/__init__.py`
+  - `shared/services/l0_runtime/state/runtime/spot_diagnostics.py`
+  - `shared/services/l0_runtime/state/test_runtime_state.py`
+  - `shared/services/l0_runtime/services/runtime/arrow_events.py`
+  - `shared/services/l0_runtime/services/runtime/test_arrow_events.py`
+  - `shared/services/l0_runtime/services/subscription/__init__.py`
+  - `shared/services/l0_runtime/services/orchestration/feed_orchestrator.py`
+  - `shared/services/l0_runtime/source/runtime/bootstrap.py`
+  - `shared/services/l0_runtime/source/runtime/quote_runtime/__init__.py`
+  - `shared/services/l0_runtime/source/runtime/test_bootstrap.py`
+  - `shared/services/l0_runtime/source/runtime/test_quote_runtime.py`
+  - `shared/services/l0_runtime/services/test_subscription_manager.py`
+  - `l0_ingest/l0_rust/src/l0_event_support.rs`
+  - `l0_ingest/l0_rust/src/gateway_push_diag.rs`
+  - `l0_ingest/l0_rust/src/lib.rs`
+  - `l0_ingest/l0_rust/src/gateway_core.rs`
+  - `l4_ui/src/adapters/protocolAdapter.ts`
+  - `l4_ui/src/components/DebugOverlay.tsx`
+  - `l4_ui/src/components/__tests__/debugOverlayModel.test.ts`
+  - `l4_ui/src/components/debugOverlayModel.ts`
+  - `l4_ui/src/observability/l4_rum.ts`
+  - `l4_ui/src/types/dashboard.ts`
+  - `docs/SOP/L0_DATA_FEED.md`
+  - `docs/SOP/L3_OUTPUT_ASSEMBLY.md`
+  - `docs/SOP/L4_FRONTEND.md`
+- Behavior:
+  - startup probe 仍使用 `quote(["SPY.US"])` 的首个有效 `last_done`，但仅用于 bootstrap，不再参与 runtime owner。
+  - `SPY.US` 被强制纳入正式 live subscribe 集合，cap trim 不得裁掉。
+  - runtime spot owner 已改为 live `SPY.US` depth top-of-book midpoint；`last_done` 不再作为 live owner。
+  - `FeedOrchestrator` 删除了运行中 REST spot 补刷路径，spot 缺失时显式等待 live depth。
+  - `RustQuoteRuntime.subscribe()` 现在会真实 reconcile add/remove 到 Rust gateway，不再只在 Python 侧更新 `_symbols`。
+  - Rust gateway 暴露了真实 `subscribe/unsubscribe`，二次 refresh 不再是假订阅。
+  - real-host 上 `dashboard_delta` 已重新携带顶层 `spot` 变化到 L4 websocket。
+  - broadcast loop 已改为“新 payload 立即触发发送，空窗期 heartbeat 重发”；不再依赖与 compute loop 无关的独立 1Hz 下一拍。
+  - `SharedLoopState` 现维护 `latest_live_spot`，live `SPY` tick 会直接 overlay 当前 wire payload，立即递增 `payload_epoch` 并触发 broadcast。
+  - full compute payload 在写入 shared state 时会与 `latest_live_spot` 做对账；如果 compute snapshot 落后于更新过的 live spot，不允许回退顶层 `spot/version`。
+  - `FrozenPayload` 新增 `analytics_version` 内部字段：top-level `payload.version` 允许跟随 live spot 前进，而 `agent_g.data.version` 继续表示 compute-owned 分析版本，避免 ActiveOptions/version diagnostics 被伪装成已重算。
+  - `ChainStateStore` 新增 quote-lane cadence diagnostics：`last_source_gap_ms`、`source_event_count_1s/5s`、`distinct_spot_count_1s/5s`，用于直接观测 L0 source 是否有新价。
+  - `shared/services/l0_runtime/projection/snapshot` 会把 L0 quote-lane diagnostics 挂到 `governor_telemetry.quote_lane`，L3 `BroadcastGovernor` 再补上 `wire_emit_timestamp_utc` 和 `wire_emit_lag_ms`。
+  - `ProtocolAdapter` 现在把 full/delta payload 传给 `L4Rum.markMsgProcessed(...)`，前端可测 `wire lag`、`msg->store`、`store->paint`、`source->paint`。
+  - `DebugOverlay` 现直接展示 quote lane mode/source gap/source events/distinct spots，以及前端 receive/store/paint 延迟，便于把 source cadence 与 render 延迟拆开。
+  - Rust gateway 现新增 `SPY.US` raw push telemetry，并通过 `RustQuoteRuntime.diagnostics()` 直接透传到 `/debug/persistence_status -> stores.gateway`：`raw_quote_event_count_1s/5s`、`raw_depth_event_count_1s/5s`、`last_raw_quote_gap_ms`、`last_raw_depth_gap_ms`。
+  - Arrow IPC transport 已从单槽 latest-message 覆盖改为多槽有序队列；reader 现按本地 cursor 顺序 drain backlog，不再通过清零共享长度来“消费”唯一 payload。
+  - `ArrowIpcReader` 现暴露 transport diagnostics：`writer_batch_id`、`reader_last_batch_id`、`queued_batch_count`、`dropped_batch_count`、`reader_gap_count`；backend `/debug/persistence_status` 会把这些字段挂到 `stores.transport`，`shm_stats.head/tail` 分别对齐 writer/reader batch id。
+- Runtime Artifact:
+  - 已重编 `l0_ingest/l0_rust` 并替换：
+    - `shared/services/l0_runtime/_native_generated/l0_rust.so`
+    - `shared/services/l0_runtime/_native_generated/wave10/l0_rust.so`
+
+## Verification
+- Python targeted tests:
+  - `.venv/bin/python manage.py run-pytest shared/services/l0_runtime/state/test_runtime_state.py app/tests/test_health_route_diagnostics.py app/loops/tests/test_shared_state_live_spot.py app/loops/tests/test_broadcast_loop_phase_lock.py app/loops/tests/test_compute_loop_gpu_dedup.py app/loops/tests/test_compute_loop_atm_live_continuity.py`
+  - `.venv/bin/python manage.py run-pytest shared/services/l0_runtime/state/test_runtime_state.py app/loops/tests/test_shared_state_live_spot.py app/loops/tests/test_broadcast_loop_phase_lock.py app/loops/tests/test_compute_loop_gpu_dedup.py app/loops/tests/test_compute_loop_atm_live_continuity.py`
+  - `.venv/bin/python manage.py run-pytest app/loops/tests/test_broadcast_loop_phase_lock.py app/loops/tests/test_compute_loop_gpu_dedup.py app/loops/tests/test_compute_loop_atm_live_continuity.py`
+  - `.venv/bin/python manage.py run-pytest shared/services/l0_runtime/services/runtime/test_arrow_events.py shared/services/l0_runtime/source/runtime/test_bootstrap.py shared/services/l0_runtime/services/test_subscription_manager.py shared/services/l0_runtime/source/runtime/test_quote_runtime.py`
+- Frontend targeted tests:
+  - `npm --prefix l4_ui run test -- src/components/__tests__/debugOverlayModel.test.ts src/adapters/__tests__/protocolAdapter.test.ts`
+- Rust:
+  - `cargo test --manifest-path l0_ingest/l0_rust/Cargo.toml`
+  - `cargo build --release --manifest-path l0_ingest/l0_rust/Cargo.toml --target-dir tmp/cargo_target_runtime_l0`
+- Real host:
+  - `python3 manage.py start-all`
+  - `python3 - <<'PY' ... urllib.request.urlopen('http://127.0.0.1:8001/debug/persistence_status') ... PY`
+  - `.venv/bin/python - <<'PY' ... websockets.connect('ws://127.0.0.1:8001/ws/dashboard') ... PY`
+
+## Live Evidence
+- `start-all` 后 `6380/8001/5173` 全 listening，backend `/health=200`。
+- `/debug/persistence_status` 显示：
+  - `stores.gateway.connected=True`
+  - `stores.gateway.rust_started=True`
+  - `stores.transport.status=OK`
+  - `stores.store.spot` 与 `stores.store.last_spot_update` 持续推进
+- 20s real-host 对齐采样：
+  - L0 `store.spot` 变化 `7` 次
+  - L4 websocket `spot` 帧 `9` 次，包含 `dashboard_delta`
+  - 说明 `spot` 已重新从 L0 推到 L4，而不是只停在 backend store
+- 10s 高频短窗：
+  - L0 `store.spot` 变化 `7` 次
+  - L4 websocket `spot` 帧 `5` 次
+  - `spot` 变化现在可持续到前端 wire，但 distinct spot cadence 仍低于 `1Hz`
+- 15s `L3 Assembler` vs websocket 同窗对齐：
+  - websocket 上每个有效 `spot/version` 都能在 `L3 Assembler` 找到同版本精确匹配
+  - `ws` 没有丢失 `spot` 或错发旧版本；剩余延迟来自调度相位而不是序列化/传输丢失
+  - `app/loops/compute_loop.py` 与 `app/loops/broadcast_loop.py` 都以 `1.0s` 独立定时运行，且未做相位锁定，broadcast 最坏情况会额外多等接近一个周期
+- 调度修复后的 real-host 日志：
+  - `broadcast cycle: ... trigger=payload`
+  - `dashboard_delta: ... age=0ms`
+  - 说明新 payload 已经不再等待独立 broadcast 下一拍；整秒级相位等待已被切掉
+- 最新 real-host `start-all` 复核再次通过：
+  - `Redis 6380 True`
+  - `Backend 8001 True`
+  - `Frontend 5173 True`
+  - frontend 重启时严格注入 `VITE_BACKEND_ORIGIN=http://127.0.0.1:8001`
+- 最新真实浏览器 CDP 样本：
+  - 第一次样本暴露问题：`wire_emit_lag_ms=2448.891`、`msg->store=17.2ms`、`store->paint=195.1ms`、`source->paint=2661.191ms`，但 `sourceGapMs/sourceEvents1s/distinctSpots1s` 为 `N/A`
+  - 修复 `quote_lane` merge 后的第二次样本：
+    - `connectionStatus=connected`
+    - `spot=705.08`
+    - `payloadVersion=764`
+    - `quoteLane.last_source_gap_ms=3680.168`
+    - `quoteLane.source_event_count_1s=0`
+    - `quoteLane.distinct_spot_count_1s=0`
+    - `quoteLane.wire_emit_lag_ms=2440.1`
+    - `L4Rum.lastMsgLatencyMs=18.5ms`
+    - `L4Rum.lastStoreToPaintMs=175.8ms`
+    - `L4Rum.lastSourceToPaintObservedMs=2634.4ms`
+    - `DebugOverlay` 已完整显示 `source gap / events / distinct / wire lag / msg->store / store->paint / source->paint`
+- 新的 raw-vs-distinct live 样本（修复口径后）：
+  - backend `/debug/persistence_status`:
+    - `last_source_gap_ms=1504.681`
+    - `source_event_count_1s=1`
+    - `distinct_spot_count_1s=1`
+  - real browser:
+    - `wire_emit_lag_ms=18.91`
+    - `msg->store=16.1ms`
+    - `store->paint=164.6ms`
+    - `source->paint=199.61ms`
+  - 说明当 L0 确实收到新 source tick 时，L3/L4 已经是低延迟对齐；当前剩余瓶颈是 source cadence 本身约 `1.5s`
+- 新的 raw gateway vs Python source 样本（Rust telemetry 上线后）：
+  - `/debug/persistence_status -> stores.gateway`
+    - `raw_quote_event_count_1s=2-3`
+    - `raw_depth_event_count_1s=3-4`
+    - `last_raw_quote_gap_ms≈294-306ms`
+    - `last_raw_depth_gap_ms≈288-477ms`
+  - `/debug/persistence_status -> stores.store.quote_lane`
+    - `source_event_count_1s=0-1`
+    - `distinct_spot_count_1s=0-1`
+    - `last_source_gap_ms≈1368-3030ms`
+  - 结论：Longbridge raw `DEPTH` push 并不稀疏；当前主差距不是 broker 原始推送频率，而是 raw depth push 进入 Python midpoint owner 的接受率。现阶段最可信解释是大量 raw depth push 不形成可接受的双边 midpoint，因此不会推进 `update_spot_from_source()`
+- transport root-fix 后 real-host 六个连续样本：
+  - `raw_depth_event_count_1s = 3-4`
+  - `source_event_count_1s = 3-4`
+  - `writer_batch_id == reader_last_batch_id`
+  - `queued_batch_count = 0`
+  - `dropped_batch_count = 0`
+  - `reader_gap_count = 0`
+  - 结论：根因已确认并切掉；之前的 source 丢失来自 Arrow IPC 单槽覆盖，不是 midpoint 校验、不是 Arrow 字段缺失、也不是 broker source 稀疏。
+
+## Risks / Constraints
+- Risk 1: transport root cause已修复，但 distinct spot cadence 仍取决于真实 midpoint 变化本身；这已不再是 transport 缺陷。
+- Risk 2: 这次切的是 wire `spot` cadence，不是 full compute cadence；其余分析字段仍按原 1Hz 更新。
+- Risk 3: 当前 transport diagnostics 样本为零积压零丢批；后续若再出现 source 掉速，应优先看 distinct midpoint 自身而不是 Arrow transport。
+
+## Next Action
+- Immediate Next Step: 无强制后续修复；若要继续，只需在真实市场波动更高窗口复采 distinct midpoint cadence，确认业务上的“实时感”是否已满足。
+- Owner: Codex

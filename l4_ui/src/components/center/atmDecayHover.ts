@@ -48,6 +48,10 @@ function hexToRgba(hex: string, alpha: number): string {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
+function deemphasizedColor(baseColor: string, layer: SeriesLayer): string {
+    return layer === 'raw' ? hexToRgba(baseColor, 0.12) : hexToRgba(baseColor, 0.2)
+}
+
 export function resolveHoveredFamily({
     event,
     seriesFamilyByApi,
@@ -113,8 +117,8 @@ export function buildSeriesVisualState({
             color = displayMode === 'both' ? hexToRgba(baseColor, 0.82) : baseColor
         } else if (isDeemphasized) {
             return {
-                visible: false,
-                color,
+                visible: true,
+                color: deemphasizedColor(baseColor, 'raw'),
                 lineWidth,
                 priceLineVisible: false,
                 lastValueVisible: false,
@@ -161,8 +165,8 @@ export function buildSeriesVisualState({
         crosshairMarkerVisible = true
     } else if (isDeemphasized) {
         return {
-            visible: false,
-            color,
+            visible: true,
+            color: deemphasizedColor(baseColor, 'smooth'),
             lineWidth,
             priceLineVisible: false,
             lastValueVisible: false,

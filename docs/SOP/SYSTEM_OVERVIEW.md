@@ -9,7 +9,7 @@
 
 - 低延迟: L0 到 L4 连续链路稳定
 - 强契约: 跨层字段与语义一致
-- 可降级: 外部依赖失效时服务不中断
+- 硬失败: 外部依赖失效时立即 fail-fast，不允许降级运行
 - 可审计: 每层有明确日志、指标和回归门禁
 
 ## 2. Runtime Architecture
@@ -17,15 +17,15 @@
 ```mermaid
 flowchart LR
   subgraph L0["L0 Data Ingest"]
-    L0A[LongPort WS/REST]
-    L0B[Rust Ingest Gateway]
-    L0C[RustQuoteRuntime]
-    L0D[ChainStateStore]
-    L0E[IV/Tier2/Tier3 Pollers]
+    L0A[v2/source/runtime]
+    L0B[v2/normalize]
+    L0C[v2/state/runtime]
+    L0D[v2/services/*]
+    L0E[v2/projection/snapshot]
   end
 
   subgraph L1["L1 Local Computation"]
-    L1A[RustBridge SHM/Arrow]
+    L1A[Arrow IPC RecordBatch]
     L1B[L1ComputeReactor]
     L1C[Greeks + Trackers]
     L1D[EnrichedSnapshot]
@@ -66,6 +66,11 @@ flowchart LR
   SHARED -. reusable contracts/services .-> L3
 ```
 
+L0 目录治理补充：
+
+- `l0_ingest/v2` 是 L0 唯一正式业务树；旧 `feeds` 平铺结构已退场。
+- L0 包内新增业务代码必须落入分层子包，禁止在 `l0_ingest/` 顶层或单一 `feeds/` 目录平铺堆放。
+
 ## 3. Hard Dependency Law
 
 只允许单向依赖: `L0 -> L1 -> L2 -> L3 -> L4`。
@@ -81,7 +86,7 @@ flowchart LR
 ### 3.2 Enforcement
 
 - Policy: `scripts/policy/layer_boundary_rules.json`
-- Gate: `scripts/validate_session.ps1 -Strict`
+- Gate: `python manage.py validate-session --strict`
 - P0 审计要求: 必须支持全仓扫描，不仅扫描 `files_changed`
 
 ## 4. Contracts Across Layers
@@ -92,6 +97,7 @@ flowchart LR
 
 - `spot`
 - `chain`
+- `chain_arrow` (optional, in-process fast path only)
 - `version` (单调递增)
 - `as_of_utc` (L0 数据源时间)
 - `rust_active`
@@ -119,9 +125,10 @@ Payload 核心语义:
 - `timestamp/data_timestamp`: L0 源数据时间
 - `broadcast_timestamp/heartbeat_timestamp`: L3 广播时钟
 - `ui_state`: 前端唯一消费状态源
+- `agent_g.data.header_volatility`: 标题栏动态波动上下文，固定包含 `IVR/IVP`、`term_structure`、`iv_price_relation`
 - `rust_active/shm_stats`: 诊断链路连续透传
 
-## 5. Startup and Degraded Mode
+## 5. Startup Hard-Fail Mode
 
 ```mermaid
 sequenceDiagram
@@ -142,11 +149,13 @@ sequenceDiagram
 
 关键要求:
 
-- 默认 `longport_startup_strict_connectivity=true`：启动必须通过最小连通性预检，否则 fail-fast 终止进程启动。
-- 当显式关闭 strict 开关时，Runtime 建连失败可降级运行，但必须输出结构化诊断日志。
-- Runtime 建连失败需有限次退避重试后再判定失败（避免瞬时网络抖动直接进入长时间降级）。
-- 降级模式必须有明确日志。
+- 启动必须执行最小连通性预检（`quote(["SPY.US"])`）；失败即 fail-fast 终止进程。
+- 禁止关闭 strict 连接门禁；`strict_connectivity=false` 视为配置违规并直接抛错。
+- 禁止 degraded/retry 启动分支；所有启动入口必须 strict-only。
+- lifespan 启动期的 bootstrap/repair 门槛必须先将初始 `spot` 归一为非负浮点；当 `fetch_snapshot().spot` 缺失或为 `null` 时，必须按 `0.0` 处理并继续 strict 启动路径校验，禁止在 near-ATM repair gate 上因 `None` 比较直接抛错。
 - 运维启动必须遵循 probe-first：先检查 `/health`、`5173`、`6380`，仅对 DOWN 组件执行启动，避免重复启动导致 `WinError 10048`。
+- Redis 持久化目录 owner 必须固定在 Windows 本地固定盘 NTFS 路径（当前合同：仓库内 `./var/redis`）；UNC/network 路径、可移动盘、以及非 NTFS 文件系统都必须在 `start-all` 启动前 fast-fail。
+- Redis 冷启动 AOF 体量必须受严格门槛治理；若 multipart AOF 总量超过 `2 GiB`，`start-all` 必须拒绝继续启动 backend/frontend，并输出 base/incr/total 诊断。
 - 当 `8001` 端口冲突时，先以 `/health` 判定是否已有健康实例在跑；仅在需要替换实例时才释放端口占用进程。
 - LongPort Quote API 配额守卫必须持续生效:
   - 同时订阅 symbols <= 500（超限自动裁剪）
@@ -169,14 +178,24 @@ sequenceDiagram
 
 - `/health`
 - `/debug/persistence_status`
+- `/debug/active_options_capture`：必须返回同一服务端版本下的 ActiveOptions 原始输入链、显示 Top5、版本对齐状态，以及 `sparse_window` 判定，便于区分“候选池不稀疏”与“显示面/输入面版本错位”
+- 标题栏波动上下文必须固定口径：
+  - `IVR/IVP` 基于最近 `20` 个已完成交易日的收盘 ATM IV
+  - `term_structure.primary` 基于 `0DTE ATM IV / 1DTE ATM IV`
+  - `term_structure.secondary` 基于 `0DTE ATM IV / .VIX.US`
+  - `iv_price_relation` 基于 `120s` rolling `ΔIV / ΔPrice`
+- ATM decay live continuity 必须允许“L1/L2 dedup、ATM 续推”并存：重复 `snapshot_version` 不得重跑 GPU/L2，但若 tracker 产生新 ATM sample，L3/L4 仍必须收到新的 `atm` payload
+- ATM decay history restore/API 暴露必须经过 timestamp sanitizer，避免同日 future/out-of-order 样本污染 cold boot 与增量图表
 - `snapshot_version_iv_probe` 告警阈值必须由配置驱动（`snapshot_iv_probe_*`），禁止在探针逻辑中写死 tick/秒阈值
 - 漂移告警启用推荐为“时间阈值 + 连续tick阈值”联合触发，避免 IV 平台期造成噪声误报
+- `snapshot_version_iv_probe` 必须读取 `l1_runtime.atm_iv_context.iv_source`；当当前 ATM IV 来源为慢 cadence baseline（当前为 `rest`）时，禁止仅因 `snapshot_version` 前进而累计 drift
+- `snapshot_version_iv_probe` 比较基线必须与观测对象绑定；若 `atm_symbol` 或 `iv_source` 发生切换，必须重置 probe 计数，禁止跨 ATM 合约或跨 source 串联 drift
 
 ## 7. Verification Standard
 
 ### 7.1 Test Entry
 
-- 所有 pytest 必须通过 `scripts/test/run_pytest.ps1`
+- 所有 pytest 必须通过 `python manage.py run-pytest`
 - 缓存目录必须是 `tmp/pytest_cache`
 - 禁止管理员上下文混跑
 
@@ -184,7 +203,7 @@ sequenceDiagram
 
 - `scripts/test/test_l0_l4_pipeline.py`
 - 层间契约与 Presenter 相关回归
-- 会话结束前 `scripts/validate_session.ps1 -Strict`
+- 会话结束前 `python manage.py validate-session --strict`
 
 ## 8. SOP Pack
 
@@ -198,30 +217,65 @@ sequenceDiagram
 
 ## 9. Runtime Commands
 
-```powershell
+```bash
 # probe first (do not blindly restart)
-try { (Invoke-WebRequest http://127.0.0.1:8001/health -UseBasicParsing -TimeoutSec 3).StatusCode } catch {}
-try { (Invoke-WebRequest http://127.0.0.1:5173 -UseBasicParsing -TimeoutSec 3).StatusCode } catch {}
-Get-NetTCPConnection -LocalPort 6380 -State Listen -ErrorAction SilentlyContinue
+curl.exe -fsS http://127.0.0.1:8001/health
+curl.exe -fsS http://127.0.0.1:5173
+powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 6380 -State Listen"
 
 # backend strict (default)
-$env:PYTHONPATH='.'
-python -m uvicorn main:app --host 0.0.0.0 --port 8001
+python manage.py start-backend
 
-# backend degraded (only when startup connectivity fails)
-$env:PYTHONPATH='.'
-$env:LONGPORT_STARTUP_STRICT_CONNECTIVITY='false'
-$env:LONGBRIDGE_STARTUP_STRICT_CONNECTIVITY='false'
-python -m uvicorn main:app --host 0.0.0.0 --port 8001
+# degraded mode is forbidden by policy
+# python manage.py start-backend --degraded  # DO NOT USE
+
+# backend log tail (latest)
+powershell -NoProfile -Command "Get-Content logs/backend_runtime.current.log -Tail 400"
 
 # frontend
 npm --prefix l4_ui run dev -- --host 0.0.0.0 --port 5173
 
 # release 8001 only when replacement is required
-$pid8001 = (Get-NetTCPConnection -LocalPort 8001 -State Listen | Select-Object -First 1).OwningProcess
-Get-Process -Id $pid8001
-Stop-Process -Id $pid8001 -Force
+powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 8001 -State Listen"
+powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 8001 -State Listen | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }"
 
 # strict session gate
-powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict
+python manage.py validate-session --strict
 ```
+
+## 10. Deliberately Retained shared/system Utilities (Sub-wave D)
+
+### 10.1 `shared/system/redis_service.py`
+
+- Current consumers:
+  - `app/container.py`
+  - `app/lifespan.py`
+  - `app/routes/health.py` (via container diagnostics)
+  - `shared/system/historical_store.py`
+- Retention reason:
+  - This is app-process orchestration (local subprocess lifecycle + host diagnostics), not a cross-layer compute hot path.
+- Migration trigger:
+  - Move Redis process ownership to external supervisor/service manager and define infra parity contract for startup/diagnostics.
+
+### 10.2 `shared/system/historical_store.py`
+
+- Current consumers:
+  - `app/container.py`
+  - `app/routes/history.py` fallback path
+- Retention reason:
+  - Module is currently compatibility fallback plumbing while L3 store/research path is primary.
+- Migration trigger:
+  - Remove `/history` fallback to `container.historical_store` and validate L3 store-only route parity.
+
+### 10.3 `shared/system/tactical_triad_logic.py`
+
+- Current consumers:
+  - `l2_decision/agents/agent_g.py`
+  - `l2_decision/feature_store/extractors_registry.py`
+  - `l2_decision/feature_store/extractors_volatility.py`
+  - `l2_decision/guards/rail_engine.py`
+  - `l3_assembly/assembly/ui_state_tracker.py`
+- Retention reason:
+  - File is already Rust-backed neutral wrapper; it centralizes tactical normalization semantics for L2/L3 without duplicating rust-call glue.
+- Migration trigger:
+  - After `shared_rust.services` namespace collapse provides direct tactical exports, retarget all consumers in one bounded session and delete wrapper atomically.

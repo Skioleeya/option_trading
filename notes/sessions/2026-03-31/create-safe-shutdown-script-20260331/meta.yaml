@@ -1,0 +1,35 @@
+session_id: "2026-03-31/create-safe-shutdown-script-20260331"
+title: "Create safe shutdown script"
+scope: "implementation"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-31 09:49:16 -04:00"
+updated_at_et: "2026-03-31 10:39:37 -04:00"
+parent_session: null
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "790471c"
+head_commit: "790471c"
+
+files_changed:
+  - "safe_shutdown.ps1"
+  - "notes/context/handoff.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/project_state.md"
+  - "notes/sessions/2026-03-31/create-safe-shutdown-script-20260331/project_state.md"
+  - "notes/sessions/2026-03-31/create-safe-shutdown-script-20260331/open_tasks.md"
+  - "notes/sessions/2026-03-31/create-safe-shutdown-script-20260331/handoff.md"
+  - "notes/sessions/2026-03-31/create-safe-shutdown-script-20260331/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId create-safe-shutdown-script-20260331 -Title \"Create safe shutdown script\" -Scope implementation -UpdatePointer"
+  - "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$ast=$null; $errors=$null; [System.Management.Automation.Language.Parser]::ParseFile('E:\\US.market\\Option_v3\\safe_shutdown.ps1',[ref]$ast,[ref]$errors) | Out-Null; if ($errors.Count -gt 0) { $errors | ForEach-Object { Write-Output $_.Message }; exit 1 } else { Write-Output 'Parse OK' }\""
+  - "powershell -ExecutionPolicy Bypass -File .\\safe_shutdown.ps1 -SkipPrompt -DelaySeconds 30 -WhatIf"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "powershell parse: safe_shutdown.ps1 returned Parse OK"
+  - "whatif dry-run: safe_shutdown.ps1 printed shutdown preview without executing shutdown"
+  - "strict validation: powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_failed: []
+blockers: []
+notes:
+  - "The script is designed to be safe-by-default: explicit confirmation, delayed shutdown, and no force-close flag."

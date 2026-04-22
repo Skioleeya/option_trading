@@ -1,5 +1,16 @@
 from pydantic import AliasChoices, Field
 from shared.config._base import BaseConfig
+from shared_rust.contracts import (
+    DEFAULT_L0_BATCH_INTERVAL_MS,
+    DEFAULT_L0_BATCH_MAX_ROWS,
+    DEFAULT_L0_IPC_SHM_BYTES,
+    DEFAULT_LONGPORT_CONNECT_RETRIES,
+    DEFAULT_LONGPORT_CONNECT_RETRY_BASE_SEC,
+    L0_BATCH_INTERVAL_ENV_KEY,
+    L0_BATCH_MAX_ROWS_ENV_KEY,
+    L0_IPC_SHM_BYTES_ENV_KEY,
+    L0_IPC_SIGNAL_ENV_KEY,
+)
 
 class APICredentialsConfig(BaseConfig):
     # LongPort / Longbridge credentials (dual env alias for compatibility)
@@ -44,6 +55,30 @@ class APICredentialsConfig(BaseConfig):
             "LONGBRIDGE_STARTUP_STRICT_CONNECTIVITY",
         ),
     )
+    longport_connect_retries: int = Field(
+        default=DEFAULT_LONGPORT_CONNECT_RETRIES,
+        validation_alias=AliasChoices("LONGPORT_CONNECT_RETRIES"),
+    )
+    longport_connect_retry_base_sec: float = Field(
+        default=DEFAULT_LONGPORT_CONNECT_RETRY_BASE_SEC,
+        validation_alias=AliasChoices("LONGPORT_CONNECT_RETRY_BASE_SEC"),
+    )
+    l0_ipc_signal_name: str = Field(
+        default="",
+        validation_alias=AliasChoices(L0_IPC_SIGNAL_ENV_KEY),
+    )
+    l0_batch_interval_ms: int = Field(
+        default=DEFAULT_L0_BATCH_INTERVAL_MS,
+        validation_alias=AliasChoices(L0_BATCH_INTERVAL_ENV_KEY),
+    )
+    l0_batch_max_rows: int = Field(
+        default=DEFAULT_L0_BATCH_MAX_ROWS,
+        validation_alias=AliasChoices(L0_BATCH_MAX_ROWS_ENV_KEY),
+    )
+    l0_ipc_shm_bytes: int = Field(
+        default=DEFAULT_L0_IPC_SHM_BYTES,
+        validation_alias=AliasChoices(L0_IPC_SHM_BYTES_ENV_KEY),
+    )
 
     # Longport API Flow Control (Hard Limits: 10 calls/s, 5 concurrent, 500 subs)
     longport_api_rate_limit: float = Field(default=10.0)       # Official cap: <=10 req/s
@@ -59,10 +94,10 @@ class APICredentialsConfig(BaseConfig):
     longport_metadata_ttl_sec: int = Field(default=30)
     longport_warmup_merge_window_sec: int = Field(default=20)
     longport_research_startup_stable_sec: int = Field(default=120)
+    longport_subscription_ready_timeout_sec: int = Field(default=60)
 
     # System Control
     log_level: str = Field(default="INFO")
     enable_tier2_polling: bool = Field(default=True)
     enable_tier3_polling: bool = Field(default=True)
     subscription_max: int = Field(default=500)                 # Hard-clamped to official cap(500) at runtime
-    longport_runtime_mode: str = Field(default="rust_only")    # rust_only | python_fallback

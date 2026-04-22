@@ -1,0 +1,34 @@
+session_id: "2026-04-01/rust-migration-docs"
+title: "Rust migration detailed docs"
+scope: "documentation"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-01 10:11:17 -04:00"
+updated_at_et: "2026-04-01 10:50:00 -04:00"
+parent_session: null
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "790471c"
+head_commit: "790471c"
+
+files_changed:
+  - "openspec/changes/refactor-governance-20260401-rust-runtime-migration-chain/tasks.md"
+  - "openspec/changes/refactor-dependency-20260401-rust-contract-freeze-single-source/design.md"
+  - "openspec/changes/refactor-dependency-20260401-rust-contract-freeze-single-source/tasks.md"
+  - "openspec/changes/refactor-dependency-20260401-rust-contract-freeze-single-source/specs/dependency/spec.md"
+commands:
+  - "PowerShell child completeness and normative review"
+  - "PowerShell parent-child cross-validation review"
+  - "python scripts/policy/check_openspec_chain.py --repo-root . --meta-file notes/sessions/2026-04-01/rust-migration-docs/meta.yaml --handoff-file notes/sessions/2026-04-01/rust-migration-docs/handoff.md"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "Child completeness review"
+  - "Child normative review"
+  - "Parent-child cross-validation review"
+  - "OpenSpec chain gate"
+tests_failed: []
+blockers: []
+notes:
+  - "Fixed parent child-gate ordering so it matches dependency order."
+  - "Added explicit high-cohesion / low-coupling controls to the dependency child proposal set."
+  - "Strict validation re-run pending after metadata command evidence update."

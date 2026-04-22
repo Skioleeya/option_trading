@@ -111,6 +111,10 @@ class TimeSeriesStoreV2:
             "redis_connected": self._redis is not None,
         }
 
+    def bind_redis(self, redis_client: Any) -> None:
+        """Bind or replace the warm-tier Redis client at runtime."""
+        self._redis = redis_client
+
     # ── Warm tier ─────────────────────────────────────────────────────────
 
     async def _write_warm(self, payload: FrozenPayload) -> None:
@@ -130,9 +134,8 @@ class TimeSeriesStoreV2:
         Returns raw dicts (as stored). Used by /history endpoint.
         """
         if self._redis is None:
-            # Fallback to hot-layer if Redis unavailable
-            hot = self.get_latest(count)
-            return [p.to_dict() for p in reversed(hot)]
+            logger.error("[L3 TimeSeries] Warm read skipped: Redis client not bound.")
+            return []
 
         try:
             raw_list = await self._redis.lrange(self._redis_key, 0, count - 1)

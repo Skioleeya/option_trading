@@ -1,0 +1,42 @@
+session_id: "2026-04-02/wave15-l0-support-governor-observability-cutover"
+title: "l0_support governor and observability to shared_rust"
+scope: "feature"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-02 03:11:49 -04:00"
+updated_at_et: "2026-04-02 03:40:00 -04:00"
+parent_session: "2026-04-01/wave14-shared-services-l0-support-cutover"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "7fb0f53"
+head_commit: "7fb0f53"
+
+files_changed:
+  - "shared_rust_l0_support/src/lib.rs"
+  - "shared_rust_l0_support/src/governor.rs"
+  - "shared_rust_l0_support/src/observability.rs"
+  - "tests/l0_support/test_adaptive_governor.py"
+  - "docs/SOP/L0_DATA_FEED.md"
+  - "openspec/changes/refactor-bloat-20260401-rust-shared-l0-migration-boundary/artifacts/shared-l0-boundary-evidence.md"
+  - "shared/services/l0_support/rate_governor/__init__.py"
+  - "shared/services/l0_support/rate_governor/adaptive_governor.py"
+  - "shared/services/l0_support/rate_governor/priority_queue.py"
+  - "shared/services/l0_support/observability/__init__.py"
+  - "shared/services/l0_support/observability/l0_instrumentation.py"
+  - "shared/services/l0_support/__init__.py"
+commands:
+  - "cargo build --release --target-dir C:\\Users\\Lenovo\\.codex\\memories\\cargo_target\\shared_rust_l0_support"
+  - "cargo test --target-dir C:\\Users\\Lenovo\\.codex\\memories\\cargo_target\\shared_rust_l0_support"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 tests/l0_support/test_adaptive_governor.py"
+  - "python scripts/policy/check_openspec_chain.py --repo-root . --meta-file notes/sessions/2026-04-02/wave15-l0-support-governor-observability-cutover/meta.yaml --handoff-file notes/sessions/2026-04-02/wave15-l0-support-governor-observability-cutover/handoff.md"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "cargo build --release --target-dir C:\\Users\\Lenovo\\.codex\\memories\\cargo_target\\shared_rust_l0_support"
+  - "cargo test --target-dir C:\\Users\\Lenovo\\.codex\\memories\\cargo_target\\shared_rust_l0_support"
+  - "scripts/test/run_pytest.ps1 tests/l0_support/test_adaptive_governor.py"
+  - "scripts/policy/check_openspec_chain.py"
+tests_failed: []
+blockers: []
+notes:
+  - "Removed the remaining Python governor and observability owners under shared/services/l0_support."
+  - "shared_rust.services_l0_support is now the only live import surface for these support utilities."

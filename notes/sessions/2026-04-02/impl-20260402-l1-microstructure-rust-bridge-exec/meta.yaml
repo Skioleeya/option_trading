@@ -1,0 +1,44 @@
+session_id: "2026-04-02/impl-20260402-l1-microstructure-rust-bridge-exec"
+title: "impl-20260402-l1-microstructure-rust-bridge-exec"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-02 16:55:44 -04:00"
+updated_at_et: "2026-04-02 17:18:20 -04:00"
+parent_session: "2026-04-02/impl-20260402-l1-rust-only-no-fallback"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "65dbc0f"
+head_commit: "65dbc0f"
+
+files_changed:
+  - "shared_rust_services/src/microstructure.rs"
+  - "shared_rust_services/src/lib.rs"
+  - "l1_compute/microstructure/vpin_v2.py"
+  - "l1_compute/microstructure/vol_accel_v2.py"
+  - "l1_compute/analysis/entropy_filter.py"
+  - "l1_compute/tests/test_microstructure_rust_parity.py"
+  - "openspec/changes/impl-20260402-l1-microstructure-rust-bridge/tasks.md"
+  - "notes/sessions/2026-04-02/impl-20260402-l1-microstructure-rust-bridge-exec/project_state.md"
+  - "notes/sessions/2026-04-02/impl-20260402-l1-microstructure-rust-bridge-exec/open_tasks.md"
+  - "notes/sessions/2026-04-02/impl-20260402-l1-microstructure-rust-bridge-exec/handoff.md"
+  - "notes/sessions/2026-04-02/impl-20260402-l1-microstructure-rust-bridge-exec/meta.yaml"
+
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId impl-20260402-l1-microstructure-rust-bridge-exec"
+  - "cargo build --release --target-dir C:\\Users\\Lenovo\\.codex\\memories\\cargo_target\\shared_rust_services"
+  - "Copy-Item C:\\Users\\Lenovo\\.codex\\memories\\cargo_target\\shared_rust_services\\release\\services.dll E:\\US.market\\Option_v3\\shared_rust\\services.pyd -Force"
+  - "python -c \"from shared_rust.services import compute_vpin_regime, compute_vol_accel_entropy, compute_entropy_gate; print('micro-ok')\""
+  - "powershell -ExecutionPolicy Bypass -File scripts/policy/check_layer_boundaries.ps1"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+
+tests_passed:
+  - "Rust microstructure smoke import passed"
+  - "scripts/policy/check_layer_boundaries.ps1 => PASS"
+  - "scripts/test/run_pytest.ps1 l1_compute/tests/ => 60 passed, 1 warning"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict => PASS (2026-04-02 17:18:20 -04:00)"
+tests_failed: []
+blockers: []
+notes:
+  - "Rust-only fail-fast policy enforced for microstructure bridge paths."

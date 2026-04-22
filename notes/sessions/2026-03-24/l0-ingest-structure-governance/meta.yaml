@@ -1,0 +1,35 @@
+session_id: "2026-03-24/l0-ingest-structure-governance"
+title: "L0 ingest structure governance"
+scope: "refactor"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-24 12:43:32 -04:00"
+updated_at_et: "2026-03-24 13:09:47 -04:00"
+parent_session: null
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "21b928c"
+head_commit: "21b928c"
+
+files_changed:
+  - "l0_ingest/v2/*"
+  - "l0_ingest/tests/v2/*"
+  - "l0_ingest/README.md"
+  - "docs/SOP/L0_DATA_FEED.md"
+  - "docs/SOP/SYSTEM_OVERVIEW.md"
+  - "openspec/changes/refactor-governance-20260324-l0-ingest-structure-governance/*"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId l0-ingest-structure-governance -Title \"L0 ingest structure governance\" -Scope \"refactor\" -Owner \"Codex\" -Timezone \"America/New_York\" -UpdatePointer"
+  - "python -m compileall l0_ingest/v2 l0_ingest/tests/v2 app shared"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/v2 app/loops/tests/test_compute_loop_gpu_dedup.py app/loops/tests/test_housekeeping_gpu_dedup.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "python -m compileall l0_ingest/v2 l0_ingest/tests/v2 app shared"
+  - "scripts/test/run_pytest.ps1 l0_ingest/tests/v2 app/loops/tests/test_compute_loop_gpu_dedup.py app/loops/tests/test_housekeeping_gpu_dedup.py -> 77 passed"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict -> PASS"
+tests_failed: []
+blockers: []
+notes:
+  - "Legacy flat `l0_ingest/feeds/*` package has been deleted and its runtime modules moved under hierarchical `l0_ingest/v2/*` subpackages."
+  - "Package __init__ exports were lightened to avoid circular imports when tests import deep `l0_ingest.v2.*` modules."
+  - "Tracked `l0_rust-0.1.0.dist-info` was removed from the source tree."

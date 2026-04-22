@@ -1,0 +1,39 @@
+﻿session_id: "2026-03-25/atm-decay-capture-stall-diagnostics-20260325"
+title: "ATM decay capture stall diagnostics"
+scope: "ops"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-25 11:49:10 -04:00"
+updated_at_et: "2026-03-25 11:57:09 -04:00"
+parent_session: "2026-03-25/atm-decay-fresh-capture-relock-fix-20260325"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "70cc81b"
+head_commit: "70cc81b"
+
+files_changed:
+  - "l1_compute/analysis/atm_decay/models.py"
+  - "l1_compute/analysis/atm_decay/anchor.py"
+  - "l1_compute/analysis/atm_decay/runtime.py"
+  - "l1_compute/analysis/atm_decay/tracker.py"
+  - "l1_compute/tests/test_atm_decay_tracker.py"
+  - "docs/SOP/L1_LOCAL_COMPUTATION.md"
+  - "openspec/changes/refactor-dependency-20260325-atm-decay-capture-stall-diagnostics/proposal.md"
+  - "openspec/changes/refactor-dependency-20260325-atm-decay-capture-stall-diagnostics/design.md"
+  - "openspec/changes/refactor-dependency-20260325-atm-decay-capture-stall-diagnostics/tasks.md"
+  - "openspec/changes/refactor-dependency-20260325-atm-decay-capture-stall-diagnostics/specs/dependency/spec.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_atm_decay_tracker.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_atm_decay_modular.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "l1_compute/tests/test_atm_decay_tracker.py"
+  - "l1_compute/tests/test_atm_decay_modular.py"
+tests_failed: []
+blockers:
+  - "Online verification still pending: first valid post-lock ATM decay sample has not entered /api/atm-decay/history."
+notes:
+  - "Observability-only session: added throttled capture stall diagnostics and lifecycle resets for the capture failure streak."
+  - "Strict validation passed at 2026-03-25 11:56 ET."
+
+

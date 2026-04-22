@@ -1,15 +1,29 @@
 import type { DashboardPayload, ConnectionStatus } from '../types/dashboard'
+import { L4Rum } from '../observability/l4_rum'
 
 export interface DebugOverlayModel {
     vpin: string
     bbo: string
     volAccel: string
     asOf: string
+    payloadVersion: string
+    broadcastTs: string
+    driftMs: string
+    driftWarning: string
+    isStale: string
     connStatus: string
     shmStatus: string
     shmHead: string
     shmTail: string
     shmLag: string
+    quoteMode: string
+    sourceGapMs: string
+    sourceEvents1s: string
+    distinctSpots1s: string
+    wireLagMs: string
+    msgToStoreMs: string
+    storeToPaintMs: string
+    sourceToPaintMs: string
 }
 
 function toNumber(v: unknown): number | null {
@@ -32,6 +46,11 @@ function formatRawValue(v: unknown): string {
 
 function formatPointer(v: number | null): string {
     return v == null ? 'N/A' : String(Math.trunc(v))
+}
+
+function formatBoolean(v: unknown): string {
+    if (typeof v !== 'boolean') return 'N/A'
+    return v ? 'true' : 'false'
 }
 
 function parseShm(payload: DashboardPayload | null): {
@@ -62,16 +81,33 @@ export function buildDebugOverlayModel(
 ): DebugOverlayModel {
     const fused = payload?.agent_g?.data?.fused_signal
     const shm = parseShm(payload)
+    const quoteLane = payload?.governor_telemetry && typeof payload.governor_telemetry === 'object'
+        ? (payload.governor_telemetry as Record<string, unknown>).quote_lane as Record<string, unknown> | undefined
+        : undefined
+    const rum = L4Rum.snapshot()
 
     return {
         vpin: formatRawValue(fused?.raw_vpin),
         bbo: formatRawValue(fused?.raw_bbo_imb),
         volAccel: formatRawValue(fused?.raw_vol_accel),
         asOf: payload?.timestamp ?? 'Syncing...',
+        payloadVersion: formatRawValue(payload?.version),
+        broadcastTs: typeof payload?.broadcast_timestamp === 'string' ? payload.broadcast_timestamp : 'N/A',
+        driftMs: formatRawValue(payload?.drift_ms),
+        driftWarning: formatBoolean(payload?.drift_warning),
+        isStale: formatBoolean(payload?.is_stale),
         connStatus: connStatus.toUpperCase(),
         shmStatus: shm.status,
         shmHead: formatPointer(shm.head),
         shmTail: formatPointer(shm.tail),
         shmLag: formatPointer(shm.lag),
+        quoteMode: formatRawValue(quoteLane?.mode),
+        sourceGapMs: formatRawValue(quoteLane?.last_source_gap_ms),
+        sourceEvents1s: formatRawValue(quoteLane?.source_event_count_1s),
+        distinctSpots1s: formatRawValue(quoteLane?.distinct_spot_count_1s),
+        wireLagMs: formatRawValue(rum.lastWireLagMs),
+        msgToStoreMs: formatRawValue(rum.lastMsgLatencyMs),
+        storeToPaintMs: formatRawValue(rum.lastStoreToPaintMs),
+        sourceToPaintMs: formatRawValue(rum.lastSourceToPaintObservedMs),
     }
 }

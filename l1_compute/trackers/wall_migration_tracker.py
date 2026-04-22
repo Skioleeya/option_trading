@@ -15,7 +15,7 @@ from typing import Any, NamedTuple
 from zoneinfo import ZoneInfo
 
 from shared.config import settings
-from shared.models.microstructure import (
+from shared_rust.models import (
     WallMigrationCallState,
     WallMigrationPutState,
     WallMigrationResult,

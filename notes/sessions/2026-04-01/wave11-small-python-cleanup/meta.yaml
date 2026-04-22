@@ -1,0 +1,39 @@
+session_id: "2026-04-01/wave11-small-python-cleanup"
+title: "Wave 11 small Python cleanup"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-01 17:00:23 -04:00"
+updated_at_et: "2026-04-01 17:00:23 -04:00"
+parent_session: "2026-04-01/wave10-l0-poller-helper-cluster"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "790471c"
+head_commit: "790471c"
+
+files_changed:
+  - "shared/services/l0_runtime/services/native_support.py"
+  - "shared/services/l0_runtime/services/subscription/manager.py"
+  - "shared/services/l0_runtime/services/orchestration/support.py"
+  - "shared/services/l0_runtime/services/orchestration/header_volatility_support.py"
+  - "shared/services/l0_runtime/services/pollers/tier2_poller.py"
+  - "shared/services/l0_runtime/services/pollers/tier3_poller.py"
+  - "shared/services/l0_runtime/services/pollers/__init__.py"
+  - "shared/services/l0_runtime/services/runtime/services.py"
+  - "tests/l0_runtime/test_poller_support.py"
+  - "docs/SOP/L0_DATA_FEED.md"
+  - "openspec/changes/refactor-bloat-20260401-rust-shared-l0-migration-boundary/artifacts/shared-l0-boundary-evidence.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 tests/l0_runtime/test_poller_support.py tests/l0_runtime/test_subscription_pool_guard.py tests/l0_runtime/test_header_volatility_support.py tests/l0_runtime/test_builder_orchestration_support.py tests/l0_runtime/test_iv_baseline_sync_support.py tests/l0_runtime/test_feed_orchestrator_startup_stagger.py"
+  - "cargo test"
+  - "python scripts/policy/check_openspec_chain.py --repo-root . --meta-file notes/sessions/2026-04-01/wave11-small-python-cleanup/meta.yaml --handoff-file notes/sessions/2026-04-01/wave11-small-python-cleanup/handoff.md"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "targeted pytest -> 22 passed"
+  - "cargo test -> 3 passed"
+tests_failed: []
+blockers:
+  - "default shared/services/l0_runtime/_native_generated/l0_rust.pyd remains lock-prone; wave-specific artifact paths still required"
+notes:
+  - "Deleted five thin Python wrapper files whose business logic was already Rust-owned."
+  - "Centralized services-layer native facade imports into shared/services/l0_runtime/services/native_support.py."

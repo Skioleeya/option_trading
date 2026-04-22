@@ -1,2 +1,0 @@
-"""Shared neutral service modules."""
-

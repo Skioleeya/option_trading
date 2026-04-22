@@ -13,7 +13,6 @@ import {
     normalizeDecisionTone,
     resolveDirectionClasses,
     resolveGexIntensityBadgeClass,
-    resolveWeightBarWidth,
     resolveWeightPercent,
 } from './decisionEngineModel'
 import type { NetGexBadgeState } from './rightPanelModel'
@@ -71,61 +70,57 @@ export const DecisionEngine: React.FC<Props> = memo(({ fused: propFused, netGex:
 
 
     return (
-        <div className="p-2 space-y-1.5">
+        <div className="space-y-1.5" style={{ padding: 'var(--l4-panel-pad)' }}>
             <div className="flex items-center justify-between">
-                <span className="section-header text-[10px]">DECISION ENGINE</span>
-                <span className="section-header text-text-muted text-[10px]">FUSION</span>
+                <span className="section-header" style={{ fontSize: 'var(--l4-font-10)' }}>DECISION ENGINE</span>
+                <span className="section-header text-text-muted" style={{ fontSize: 'var(--l4-font-10)' }}>FUSION</span>
             </div>
 
-            <div className={`flex items-center justify-between px-2 py-1 rounded border ${dirTheme.banner} transition-all duration-500`}>
+            <div className={`flex items-center justify-between rounded border ${dirTheme.banner}`} style={{ padding: 'var(--l4-card-pad-tight) var(--l4-card-pad)' }}>
                 <div className="flex items-center gap-1.5">
-                    <div className={`w-2 h-2 rounded-full ${dirTheme.dot} transition-all duration-500`} />
-                    <span className={`text-[11px] font-black tracking-widest ${dirTheme.text}`}>{dir}</span>
+                    <div className={`w-2 h-2 rounded-full ${dirTheme.dot}`} />
+                    <span className={`font-black tracking-widest ${dirTheme.text}`} style={{ fontSize: 'var(--l4-font-11)' }}>{dir}</span>
                 </div>
-                <span className={`mono text-[11px] font-bold ${dirTheme.text}`}>{conf}%</span>
-            </div>
-
-            <div className="h-[2px] w-full bg-white/5 rounded-full overflow-hidden">
-                <div className={`h-full rounded-full transition-all duration-700 ${dirTheme.bar}`} style={{ width: `${conf}%` }} />
+                <span className={`mono font-bold ${dirTheme.text}`} style={{ fontSize: 'var(--l4-font-11)' }}>{conf}%</span>
             </div>
 
             {(regime || gexLabel) && (
                 <div className="flex gap-1 flex-wrap">
-                    {regime && <span className="badge badge-neutral text-[7px] py-0 px-1">{formatRegimeLabel(regime)}</span>}
+                    {regime && <span className="badge badge-neutral py-0 px-1" style={{ fontSize: 'var(--l4-font-7)' }}>{formatRegimeLabel(regime)}</span>}
                     {gexLabel && (
-                        <span className={`badge text-[7px] py-0 px-1 ${gexBadgeClass}`}>
+                        <span className={`badge py-0 px-1 ${gexBadgeClass}`} style={{ fontSize: 'var(--l4-font-7)' }}>
                             {gexLabel}
                         </span>
                     )}
                 </div>
             )}
 
-            <div className="grid grid-cols-2 gap-1">
+            <div className="grid grid-cols-2" style={{ gap: 'var(--l4-panel-gap)' }}>
                 {quadrants.map((q, idx) => {
                     const comp = comps[q.key]
                     const qDir = normalizeDecisionTone(comp?.direction)
                     const qConf = confidenceToPercent(comp?.confidence)
                     const qWt = resolveWeightPercent(fused, q.key)
                     const qTheme = resolveDirectionClasses(qDir)
-                    const qBarWidth = resolveWeightBarWidth(qWt)
                     const isFullWidth = quadrants.length % 2 !== 0 && idx === quadrants.length - 1
 
                     return (
-                        <div key={q.key} className={`bg-bg-card rounded p-1 border border-bg-border ${isFullWidth ? 'col-span-2' : ''}`}>
+                        <div
+                            key={q.key}
+                            className={`bg-bg-card border border-bg-border ${isFullWidth ? 'col-span-2' : ''}`}
+                            style={{ borderRadius: 'var(--l4-card-radius)', padding: 'var(--l4-card-pad-tight)' }}
+                        >
                             <div className="flex items-center justify-between mb-0.5">
-                                <div className="flex items-center gap-1 section-header text-[8px]">
+                                <div className="flex items-center gap-1 section-header" style={{ fontSize: 'var(--l4-font-8)' }}>
                                     {React.cloneElement(q.icon as React.ReactElement, { size: 8, className: 'text-text-secondary' })}
                                     {q.label}
                                 </div>
                                 <div className="flex items-center gap-1">
-                                    <div className={`w-1.5 h-1.5 rounded-full ${qTheme.dot} transition-all duration-500`} />
-                                    <span className={`mono text-[9px] font-bold ${qTheme.text}`}>{qWt}%</span>
+                                    <div className={`w-1.5 h-1.5 rounded-full ${qTheme.dot}`} />
+                                    <span className={`mono font-bold ${qTheme.text}`} style={{ fontSize: 'var(--l4-font-9)' }}>{qWt}%</span>
                                 </div>
                             </div>
-                            <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
-                                <div className={`h-full rounded-full transition-all duration-500 ${qTheme.bar}`} style={{ width: `${qBarWidth}%` }} />
-                            </div>
-                            <div className={`text-[7px] mono mt-0.5 ${qTheme.text} opacity-60 flex justify-between`}>
+                            <div className={`mono mt-0.5 ${qTheme.text} opacity-60 flex justify-between`} style={{ fontSize: 'var(--l4-font-7)' }}>
                                 <span>conf {qConf}%</span>
                                 {q.key === 'micro_flow' && fused && (fused.raw_vpin !== undefined || fused.raw_bbo_imb !== undefined) && (
                                     <span className="select-text text-text-secondary/70">V:{typeof fused.raw_vpin === 'number' ? (fused.raw_vpin as number).toFixed(4) : fused.raw_vpin ?? '-'} BBO:{typeof fused.raw_bbo_imb === 'number' ? (fused.raw_bbo_imb as number).toFixed(4) : fused.raw_bbo_imb ?? '-'}</span>

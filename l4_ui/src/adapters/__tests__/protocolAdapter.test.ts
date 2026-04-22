@@ -50,9 +50,18 @@ vi.stubGlobal('WebSocket', MockWebSocket)
 
 const FULL_PAYLOAD: DashboardPayload = {
     type: 'dashboard_update',
+    version: 10,
+    data_timestamp: '2026-01-01T09:30:00Z',
+    broadcast_timestamp: '2026-01-01T09:30:00Z',
     timestamp: '2026-01-01T09:30:00Z',
+    heartbeat_timestamp: '2026-01-01T09:30:00Z',
     spot: 560.0,
+    drift_ms: 0,
+    drift_warning: false,
+    is_stale: false,
     agent_g: null,
+    rust_active: true,
+    shm_stats: { status: 'OK', head: 1, tail: 1 },
 }
 
 function makeStore() {
@@ -89,6 +98,13 @@ describe('ProtocolAdapter message routing', () => {
         MockWebSocket.instance!.simulateMessage(JSON.stringify(FULL_PAYLOAD))
         expect(store.applyFullUpdate).toHaveBeenCalledOnce()
         expect(store.applyFullUpdate).toHaveBeenCalledWith(expect.objectContaining({ spot: 560.0 }))
+    })
+
+    it('rejects malformed full payload when strict fields are missing', () => {
+        const malformed = { ...FULL_PAYLOAD } as Record<string, unknown>
+        delete malformed['version']
+        MockWebSocket.instance!.simulateMessage(JSON.stringify(malformed))
+        expect(store.applyFullUpdate).not.toHaveBeenCalled()
     })
 
     it('delta messages call applyMergedPayload with patched result', () => {

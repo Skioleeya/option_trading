@@ -1,0 +1,39 @@
+session_id: "2026-04-01/wave8-l0-runtime-subscription-manager"
+title: "wave8-l0-runtime-subscription-manager"
+scope: "bounded Rust-backed owner cutover"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-01 16:56:00 -04:00"
+updated_at_et: "2026-04-01 17:05:00 -04:00"
+parent_session: "2026-04-01/wave7-l0-runtime-services-cluster"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "790471c"
+head_commit: "790471c"
+
+files_changed:
+  - "l0_ingest/l0_rust/src/l0_subscription_support.rs"
+  - "l0_ingest/l0_rust/src/lib.rs"
+  - "shared/services/l0_runtime/_native_generated/__init__.py"
+  - "shared/services/l0_runtime/services/subscription/_native_subscription_support.py"
+  - "shared/services/l0_runtime/services/subscription/manager.py"
+  - "docs/SOP/L0_DATA_FEED.md"
+  - "openspec/changes/refactor-bloat-20260401-rust-shared-l0-migration-boundary/artifacts/shared-l0-boundary-evidence.md"
+commands:
+  - "cargo test"
+  - "maturin build --release -o dist"
+  - "extract built l0_rust.pyd from wheel into shared/services/l0_runtime/_native_generated/wave8/l0_rust.pyd"
+  - "probe Wave 8 native subscription exports via python"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 tests/l0_runtime/test_subscription_pool_guard.py tests/l0_runtime/test_subscription_metadata_cache.py tests/l0_runtime/test_feed_orchestrator_startup_stagger.py"
+  - "python scripts/policy/check_openspec_chain.py --repo-root . --meta-file notes/sessions/2026-04-01/wave8-l0-runtime-subscription-manager/meta.yaml --handoff-file notes/sessions/2026-04-01/wave8-l0-runtime-subscription-manager/handoff.md"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "cargo test -> 3 passed"
+  - "targeted pytest suite -> 9 passed"
+  - "native export probe -> wave8 pyd loaded with l0_subscription_* exports"
+  - "OpenSpec chain gate -> PASS"
+tests_failed: []
+blockers:
+  - "Default generated extension path remains lock-prone; this slice uses the versioned wave8 artifact path."
+notes:
+  - "Wave 8 keeps metadata TTL cache and runtime subscribe orchestration in Python while moving stable subscription selection semantics into Rust native exports."

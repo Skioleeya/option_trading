@@ -1,0 +1,36 @@
+session_id: "2026-04-21/wsl-localhost-forwarding-rootfix"
+title: "wsl-localhost-forwarding-rootfix"
+scope: "wsl windows localhost owner root-fix"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-21 19:14:07 -04:00"
+updated_at_et: "2026-04-21 19:27:56 -04:00"
+parent_session: null
+
+branch: "fix/frontend-data-zero-fallback"
+base_commit: "3ff3ba1"
+head_commit: "3ff3ba1"
+
+files_changed:
+  - "最新的启动步骤文档.md"
+commands:
+  - "wsl.exe -l -v"
+  - "python3 manage.py start-all"
+  - "python3 manage.py start-all --verify-only"
+  - "powershell.exe -ExecutionPolicy Bypass -NoProfile -Command Invoke-WebRequest http://localhost:5173/"
+  - "powershell.exe -ExecutionPolicy Bypass -NoProfile -Command Invoke-WebRequest http://127.0.0.1:5173/"
+  - "powershell.exe -ExecutionPolicy Bypass -NoProfile -Command Invoke-WebRequest http://172.18.106.33:5173/"
+  - "powershell.exe -ExecutionPolicy Bypass -NoProfile -Command Invoke-WebRequest http://172.18.106.33:8001/health"
+  - "curl -sS -i http://127.0.0.1:8001/health"
+  - "python3 manage.py validate-session --strict"
+tests_passed:
+  - "Windows localhost:5173 returned 200 after reboot"
+  - "Windows 127.0.0.1:5173 returned 200 after reboot"
+  - "Windows 172.18.106.33:5173 returned 200"
+  - "WSL-local backend /health returned 200"
+  - "start-all verification summary passed"
+tests_failed: []
+blockers: []
+notes:
+  - "Root cause was host-level WSL localhost forwarding owner state, not frontend code or service health."
+  - "Default WSL distro owner is now Ubuntu."

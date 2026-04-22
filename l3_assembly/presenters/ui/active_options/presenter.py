@@ -3,7 +3,7 @@
 Kept at legacy path to avoid broad call-site churn during decoupling.
 """
 
-from shared.services.active_options.runtime_service import ActiveOptionsRuntimeService
+from shared.services.active_options_runtime import ActiveOptionsRuntimeService
 
 
 class ActiveOptionsPresenter(ActiveOptionsRuntimeService):

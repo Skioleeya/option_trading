@@ -22,9 +22,9 @@ class AgentBConfig(BaseConfig):
     mtf_weight_5min: float = Field(default=0.3)
     mtf_weight_15min: float = Field(default=0.2)
 
-    # Skew Thresholds
-    skew_speculative_max: float = Field(default=-0.10)
-    skew_defensive_min: float = Field(default=0.15)
+    # Canonical RR25 thresholds (rr25_call_minus_put = call_iv - put_iv)
+    skew_rr25_defensive_max: float = Field(default=-0.03)
+    skew_rr25_speculative_min: float = Field(default=0.02)
 
     # Practice 3: Squeeze Threshold
     vol_accel_squeeze_threshold: float = Field(default=2.5)

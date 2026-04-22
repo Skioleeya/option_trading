@@ -1,0 +1,42 @@
+session_id: "2026-03-17/apply-refactor-bloat-20260317-active-options-runtime-service-module-split"
+title: "Apply refactor bloat 20260317 active options runtime service module split"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-17 17:30:54 -04:00"
+updated_at_et: "2026-03-17 18:10:00 -04:00"
+parent_session: null
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "7438767"
+head_commit: "7438767"
+
+files_changed:
+  - "shared/services/active_options/runtime_service.py"
+  - "shared/services/active_options/runtime_service_support.py"
+  - "openspec/changes/refactor-bloat-20260317-active-options-runtime-service-module-split/tasks.md"
+  - "openspec/changes/refactor-bloat-20260317-active-options-runtime-service-module-split/phase1-baseline.md"
+  - "openspec/changes/refactor-bloat-20260317-active-options-runtime-service-module-split/phase2-8-execution.md"
+  - "openspec/changes/refactor-governance-20260317-active-options-arrow-volume-contract-chain/tasks.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-17/apply-refactor-bloat-20260317-active-options-runtime-service-module-split/project_state.md"
+  - "notes/sessions/2026-03-17/apply-refactor-bloat-20260317-active-options-runtime-service-module-split/open_tasks.md"
+  - "notes/sessions/2026-03-17/apply-refactor-bloat-20260317-active-options-runtime-service-module-split/handoff.md"
+  - "notes/sessions/2026-03-17/apply-refactor-bloat-20260317-active-options-runtime-service-module-split/meta.yaml"
+commands:
+  - "./scripts/test/run_pytest.ps1 shared/services/active_options/test_runtime_service.py app/loops/tests/test_housekeeping_gpu_dedup.py app/loops/tests/test_compute_loop_gpu_dedup.py"
+  - "./scripts/policy/check_layer_boundaries.ps1"
+  - "python ./scripts/policy/check_quality_gates.py --repo-root . --config scripts/policy/quality_thresholds.json --meta-file tmp/session_validation_diag/bloat_quality_meta.yaml --output tmp/session_validation_diag/bloat_quality_gate.json"
+  - "python - <<'PY' (active_options local dependency cycle check)"
+  - "./scripts/validate_session.ps1 -Strict (passed)"
+tests_passed:
+  - "pytest targeted: 19 passed"
+  - "layer boundary scan: pass"
+  - "quality gate: pass"
+  - "validate_session -Strict: pass"
+tests_failed: []
+blockers: []
+notes:
+  - "Runtime service split completed with API compatibility wrappers retained."

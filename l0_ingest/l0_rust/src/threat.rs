@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use crate::schema::InstitutionalMarketEvent;
 
 pub struct ThreatEngine {
     last_bid_vol: HashMap<String, u64>,

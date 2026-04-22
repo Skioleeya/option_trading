@@ -1,0 +1,47 @@
+session_id: "2026-04-22/pyd-cargo-workspace-config"
+title: "pyd cargo workspace config"
+scope: "feature"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-22 11:33:05 -04:00"
+updated_at_et: "2026-04-22 11:37:52 -04:00"
+parent_session: "2026-04-22/windows-hardcut-fullchain"
+
+branch: "unknown"
+base_commit: "unknown"
+head_commit: "unknown"
+
+files_changed:
+  - .cargo/config.toml
+  - .gitignore
+  - infra/ops_cli/build_pyd.py
+  - manage.py
+  - scripts/README.md
+  - notes/sessions/2026-04-22/pyd-cargo-workspace-config/project_state.md
+  - notes/sessions/2026-04-22/pyd-cargo-workspace-config/open_tasks.md
+  - notes/sessions/2026-04-22/pyd-cargo-workspace-config/handoff.md
+  - notes/sessions/2026-04-22/pyd-cargo-workspace-config/meta.yaml
+  - notes/context/project_state.md
+  - notes/context/open_tasks.md
+  - notes/context/handoff.md
+
+commands:
+  - python manage.py new-session --task-id pyd-cargo-workspace-config --title "pyd cargo workspace config" --scope "feature" --owner "Codex" --parent-session "2026-04-22/windows-hardcut-fullchain" --timezone "America/New_York" --update-pointer
+  - python manage.py --help
+  - python manage.py build-pyd --check --stop-on-error
+  - python manage.py build-pyd --check --crate rust_kernel --stop-on-error
+  - python manage.py check-layer-boundaries
+  - python manage.py validate-session --strict
+
+tests_passed:
+  - python manage.py --help
+  - python manage.py check-layer-boundaries
+  - python manage.py validate-session --strict
+tests_failed:
+  - python manage.py build-pyd --check --stop-on-error -> crates.io TLS credential error SEC_E_NO_CREDENTIALS
+  - python manage.py build-pyd --check --crate rust_kernel --stop-on-error -> crates.io TLS credential error SEC_E_NO_CREDENTIALS
+blockers:
+  - Host TLS credential chain prevents cargo from fetching crates.io index (https://index.crates.io/config.json).
+notes:
+  - Workspace cargo dirs are enforced via CLI and `.cargo/config.toml`.
+  - Source-only mirror workspace has no `.git`; branch/commit metadata remains `unknown`.

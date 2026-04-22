@@ -1,0 +1,40 @@
+session_id: "2026-04-02/impl-20260402-subwave-b-shm-bridge-cutover"
+title: "Sub-wave B SHM bridge audit and cutover"
+scope: "feature"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-02 13:27:21 -04:00"
+updated_at_et: "2026-04-02 13:34:10 -04:00"
+parent_session: "2026-04-02/impl-20260402-shared-system-rust-cutover"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "c7caea9"
+head_commit: "c7caea9"
+
+files_changed:
+  - "shared/system/rust_shm_bridge.py"
+  - "l1_compute/rust_bridge.py"
+  - "docs/SOP/L0_DATA_FEED.md"
+  - "openspec/changes/impl-20260402-shared-system-rust-cutover/tasks.md"
+  - "openspec/changes/impl-20260402-shared-system-rust-cutover/assessment-2026-04-02-subwave-bcd.md"
+  - "notes/sessions/2026-04-02/impl-20260402-subwave-b-shm-bridge-cutover/project_state.md"
+  - "notes/sessions/2026-04-02/impl-20260402-subwave-b-shm-bridge-cutover/open_tasks.md"
+  - "notes/sessions/2026-04-02/impl-20260402-subwave-b-shm-bridge-cutover/handoff.md"
+  - "notes/sessions/2026-04-02/impl-20260402-subwave-b-shm-bridge-cutover/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+commands:
+  - "rg -n \"shared\\.system\\.rust_shm_bridge|rust_shm_bridge\" -S app l1_compute shared l0_ingest -g '!*.md'"
+  - "rg -n \"RustBridge\\(|EventLayoutRegistry|RUST_EVENT_ARROW_SCHEMA|to_arrow_batch|connect\\(\" -S app l1_compute shared l0_ingest"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/tests/test_lifespan_startup.py -q"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "consumer scan found zero runtime import sites"
+  - "scripts/test/run_pytest.ps1 app/tests/test_lifespan_startup.py -q (1 passed)"
+  - "scripts/validate_session.ps1 -Strict (Session validation passed)"
+tests_failed: []
+blockers: []
+notes:
+  - "Sub-wave B completed by deleting dead bridge files; live path remains Rust-backed through ArrowIpcReader."
+

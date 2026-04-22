@@ -1,0 +1,40 @@
+session_id: "2026-04-20/frontend-missing-data-fix"
+title: "frontend-missing-data-fix"
+scope: "runtime hotfix"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-20 10:05:31 -04:00"
+updated_at_et: "2026-04-20 10:37:32 -04:00"
+parent_session: null
+
+branch: "fix/frontend-data-zero-fallback"
+base_commit: "c61f06c"
+head_commit: "c61f06c"
+
+files_changed:
+  - l0_ingest/l0_rust/src/ipc_legacy.rs
+  - shared/services/l0_runtime/source/runtime/ipc.py
+  - shared/services/l0_runtime/services/runtime/builder.py
+  - scripts/test/test_l0_arrow_startup_gate.py
+  - docs/SOP/L0_DATA_FEED.md
+  - notes/sessions/2026-04-20/frontend-missing-data-fix/project_state.md
+  - notes/sessions/2026-04-20/frontend-missing-data-fix/open_tasks.md
+  - notes/sessions/2026-04-20/frontend-missing-data-fix/handoff.md
+  - notes/sessions/2026-04-20/frontend-missing-data-fix/meta.yaml
+commands:
+  - .venv/bin/python manage.py run-pytest scripts/test/test_l0_arrow_startup_gate.py
+  - .venv/bin/python manage.py run-pytest scripts/test/test_active_options_freeze_rootcause.py
+  - cargo check (workdir: l0_ingest/l0_rust)
+  - python3 manage.py validate-session --strict
+
+tests_passed:
+  - scripts/test/test_l0_arrow_startup_gate.py
+  - scripts/test/test_active_options_freeze_rootcause.py
+  - cargo check (l0_rust)
+  - python3 manage.py validate-session --strict
+tests_failed: []
+blockers:
+  - "需要真实主机盘前窗口复核 WS 连续性证据"
+notes:
+  - "Root cause: Arrow IPC frame publication race could expose truncated payload to reader, freezing downstream version progression."
+  - "Fix: publish protocol hardening + transient decode recovery in OptionChainBuilder consumer loop."

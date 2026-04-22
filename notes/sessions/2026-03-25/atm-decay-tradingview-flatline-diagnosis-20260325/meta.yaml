@@ -1,0 +1,21 @@
+﻿session_id: "2026-03-25/atm-decay-tradingview-flatline-diagnosis-20260325"
+title: "ATM decay TradingView flatline diagnosis"
+scope: "ops"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-25 10:29:40 -04:00"
+updated_at_et: "2026-03-25 10:29:40 -04:00"
+parent_session: "2026-03-25/atm-decay-live-continuity-repair-20260325"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "70cc81b"
+head_commit: "70cc81b"
+
+files_changed: []
+commands: []
+tests_passed: []
+tests_failed: []
+blockers: []
+notes: []
+
+

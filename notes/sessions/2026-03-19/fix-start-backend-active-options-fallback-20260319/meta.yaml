@@ -1,0 +1,43 @@
+session_id: "2026-03-19/fix-start-backend-active-options-fallback-20260319"
+title: "Fix start backend foreground and active options fallback"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-19 11:11:42 -04:00"
+updated_at_et: "2026-03-19 11:18:54 -04:00"
+parent_session: "2026-03-19/implement-active-options-self-heal-20260319"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "d64eb98"
+head_commit: "d64eb98"
+
+files_changed:
+  - "scripts/ops/start_backend.ps1"
+  - "shared/services/active_options/runtime_service.py"
+  - "shared/services/active_options/runtime_service_support.py"
+  - "shared/services/active_options/test_runtime_service.py"
+  - "notes/sessions/2026-03-19/fix-start-backend-active-options-fallback-20260319/project_state.md"
+  - "notes/sessions/2026-03-19/fix-start-backend-active-options-fallback-20260319/open_tasks.md"
+  - "notes/sessions/2026-03-19/fix-start-backend-active-options-fallback-20260319/handoff.md"
+  - "notes/sessions/2026-03-19/fix-start-backend-active-options-fallback-20260319/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+commands:
+  - "python -m py_compile shared/services/active_options/runtime_service.py shared/services/active_options/runtime_service_support.py shared/services/active_options/test_runtime_service.py"
+  - "./scripts/test/run_pytest.ps1 shared/services/active_options/test_runtime_service.py -q"
+  - "./scripts/ops/start_backend.ps1 -Foreground -HotfixActiveOptions -HotfixMinVolume 10 -DryRun"
+  - "./scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "py_compile active-options changed python files: pass"
+  - "shared/services/active_options/test_runtime_service.py: 18 passed"
+  - "start_backend hotfix dry-run: pass"
+  - "validate_session.ps1 -Strict: pass"
+tests_failed: []
+blockers:
+  - "Live verification depends on host networking/gateway reachability; current environment has intermittent WinError 10106 symptoms."
+notes:
+  - "Foreground startup now uses cmd wrapper to prevent uvicorn stderr from surfacing as PowerShell NativeCommandError."
+  - "ActiveOptions now has alias normalization plus hard fallback to guarantee non-placeholder continuity when chain is non-empty."
+
+

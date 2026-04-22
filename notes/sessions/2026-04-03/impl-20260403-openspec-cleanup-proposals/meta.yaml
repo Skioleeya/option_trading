@@ -1,0 +1,54 @@
+﻿session_id: "2026-04-03/impl-20260403-openspec-cleanup-proposals"
+title: "impl-20260403-openspec-cleanup-proposals"
+scope: "openspec proposal authoring for cleanup backlog"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-03 08:28:33 -04:00"
+updated_at_et: "2026-04-03 08:36:35 -04:00"
+parent_session: "2026-04-03/impl-20260403-openspec-agents-targeted-supplement"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "aa3efd7"
+head_commit: "aa3efd7"
+
+files_changed:
+  - "openspec/changes/impl-20260403-l1-streaming-aggregator-bridge-marshalling-audit/proposal.md"
+  - "openspec/changes/impl-20260403-l1-streaming-aggregator-bridge-marshalling-audit/design.md"
+  - "openspec/changes/impl-20260403-l1-streaming-aggregator-bridge-marshalling-audit/tasks.md"
+  - "openspec/changes/impl-20260403-l1-streaming-aggregator-bridge-marshalling-audit/specs/l1-streaming-aggregator-bridge-marshalling/spec.md"
+  - "openspec/changes/impl-20260403-l1-greeks-engine-bridge-marshalling-audit/proposal.md"
+  - "openspec/changes/impl-20260403-l1-greeks-engine-bridge-marshalling-audit/design.md"
+  - "openspec/changes/impl-20260403-l1-greeks-engine-bridge-marshalling-audit/tasks.md"
+  - "openspec/changes/impl-20260403-l1-greeks-engine-bridge-marshalling-audit/specs/l1-greeks-engine-bridge-marshalling/spec.md"
+  - "openspec/changes/impl-20260403-l2-attention-fusion-rust/proposal.md"
+  - "openspec/changes/impl-20260403-l2-attention-fusion-rust/design.md"
+  - "openspec/changes/impl-20260403-l2-attention-fusion-rust/tasks.md"
+  - "openspec/changes/impl-20260403-l2-attention-fusion-rust/specs/l2-attention-fusion-rust/spec.md"
+  - "openspec/changes/impl-20260403-l1-wall-context-rust/proposal.md"
+  - "openspec/changes/impl-20260403-l1-wall-context-rust/design.md"
+  - "openspec/changes/impl-20260403-l1-wall-context-rust/tasks.md"
+  - "openspec/changes/impl-20260403-l1-wall-context-rust/specs/l1-wall-context-rust/spec.md"
+  - "notes/sessions/2026-04-03/impl-20260403-openspec-cleanup-proposals/project_state.md"
+  - "notes/sessions/2026-04-03/impl-20260403-openspec-cleanup-proposals/open_tasks.md"
+  - "notes/sessions/2026-04-03/impl-20260403-openspec-cleanup-proposals/handoff.md"
+  - "notes/sessions/2026-04-03/impl-20260403-openspec-cleanup-proposals/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId impl-20260403-openspec-cleanup-proposals -Title \"impl-20260403-openspec-cleanup-proposals\" -Scope \"openspec proposal authoring for cleanup backlog\" -Owner Codex -ParentSession \"2026-04-03/impl-20260403-openspec-agents-targeted-supplement\" -Timezone America/New_York -UpdatePointer"
+  - "openspec.cmd list"
+  - "rg -n \"^## Purpose|^## Requirements|^#### Scenario:\" openspec/changes/impl-20260403-l1-streaming-aggregator-bridge-marshalling-audit/specs openspec/changes/impl-20260403-l1-greeks-engine-bridge-marshalling-audit/specs openspec/changes/impl-20260403-l2-attention-fusion-rust/specs openspec/changes/impl-20260403-l1-wall-context-rust/specs -g \"spec.md\""
+  - "rg -n \"^PARENT_CHANGE_ID:|^DEPENDENCY_ORDER:|^BLOCKED_BY:\" openspec/changes/impl-20260403-l1-streaming-aggregator-bridge-marshalling-audit/proposal.md openspec/changes/impl-20260403-l1-greeks-engine-bridge-marshalling-audit/proposal.md openspec/changes/impl-20260403-l2-attention-fusion-rust/proposal.md openspec/changes/impl-20260403-l1-wall-context-rust/proposal.md"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "openspec.cmd list executed successfully"
+  - "All four new spec delta files include Purpose/Requirements/Scenario sections"
+  - "Cross-proposal dependency headers present across the four new proposals"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict -> PASS"
+tests_failed: []
+blockers: []
+notes:
+  - "Cutover proposals are intentionally blocked on the two bridge-audit proposals to make the PyO3 marshalling convention explicit before new Rust owners are implemented."
+
+

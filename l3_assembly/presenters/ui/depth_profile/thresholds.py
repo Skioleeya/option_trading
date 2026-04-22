@@ -8,7 +8,7 @@ Controls how bar dominance and strike proximity are determined.
 GEX_DOMINANCE_RATIO: float = 0.222
 
 # Number of strikes to show in the window (total)
-STRIKE_COUNT: int = 14
+STRIKE_COUNT: int = 15
 
 # Maximum distance from spot/flip to still be highlighted (in strike points)
 STRIKE_PROXIMITY_THRESHOLD: float = 0.50

@@ -1,73 +1,38 @@
-"""Compute Router — Adaptive GPU/CPU tier selection.
-
-Routing decision rules (evaluated in order):
-    1. GPU available     → GPU (CuPy CUDA)       — Institutional mandate for all recomputations
-    2. GPU unavailable   → Numba JIT (if present)  — CPU-parallel fallback
-    3. Numba unavailable → NumPy vectorized         — guaranteed last resort
-
-Tier override: set `force_tier` to bypass auto-routing (useful for testing).
-
-All tiers return the same `GreeksMatrix` schema.
-"""
+"""Compute Router — GPU-first routing with Rust CPU fallback."""
 
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 
-import numpy as np
-
-from l1_compute.compute.gpu_greeks_kernel import GPUGreeksKernel, GreeksMatrix, _compute_numpy
+from l1_compute.compute.gpu_greeks_kernel import GPUGreeksKernel, GPUComputationUnavailableError, GreeksMatrix
 
 logger = logging.getLogger(__name__)
 
-# ── Numba availability probe ───────────────────────────────────────────────────
-try:
-    from l1_compute.analysis.bsm_fast import compute_greeks_batch as _numba_batch  # type: ignore
-    _NUMBA_AVAILABLE = True
-    logger.info("[ComputeRouter] Numba JIT tier available via bsm_fast.compute_greeks_batch.")
-except ImportError:
-    _NUMBA_AVAILABLE = False
-    logger.info("[ComputeRouter] Numba tier unavailable. NumPy fallback active.")
-
-# ── GPU routing threshold ─────────────────────────────────────────────────────
-_GPU_CHAIN_THRESHOLD: int = 100
-
 
 class ComputeTier(str, Enum):
-    GPU    = "gpu"
-    NUMBA  = "numba"
-    NUMPY  = "numpy"
+    GPU = "gpu"
+    GPU_ONLY_BLOCKED = "gpu_only_blocked"
+    NUMBA = "numba"
+    NUMPY = "numpy"
 
 
 @dataclass
 class ComputeDecision:
-    """Records the routing decision for observability / logging."""
     tier: ComputeTier
     reason: str
     chain_size: int
 
 
-from shared.config import settings
-
 class ComputeRouter:
-    """Adaptive compute tier router for BSM Greeks batch computation.
-
-    Usage::
-
-        router = ComputeRouter()
-        matrix, decision = router.compute(
-            spots, strikes, ivs, t_years, is_call,
-            r=0.05, q=0.0, ois=ois_arr, mults=mults_arr
-        )
-        print(decision.tier)  # ComputeTier.GPU / NUMBA / NUMPY
-    """
+    """Adaptive compute router with deterministic Rust fallback when GPU is unavailable."""
 
     def __init__(self, force_tier: Optional[ComputeTier] = None) -> None:
         self._kernel = GPUGreeksKernel()
         self._force = force_tier
+        self._cpu_fallback_logged = False
 
     @property
     def gpu_available(self) -> bool:
@@ -75,96 +40,134 @@ class ComputeRouter:
 
     def compute(
         self,
-        spots: np.ndarray,
-        strikes: np.ndarray,
-        ivs: np.ndarray,
+        spots: Any,
+        strikes: Any,
+        ivs: Any,
         t_years: float,
-        is_call: np.ndarray,
+        is_call: Any,
         r: float = 0.05,
         q: float = 0.0,
-        ois: Optional[np.ndarray] = None,
-        mults: Optional[np.ndarray] = None,
+        ois: Any | None = None,
+        mults: Any | None = None,
     ) -> tuple[GreeksMatrix, ComputeDecision]:
-        """Route and execute BSM batch computation.
-
-        Returns:
-            (GreeksMatrix, ComputeDecision) — Greeks arrays and routing metadata.
-        """
         n = len(spots)
         tier, reason = self._decide(n)
-
         decision = ComputeDecision(tier=tier, reason=reason, chain_size=n)
 
-        matrix = self._execute(tier, spots, strikes, ivs, t_years, is_call, r, q, ois, mults)
+        if tier == ComputeTier.NUMPY:
+            matrix = self._execute_cpu_fallback(
+                spots=spots, strikes=strikes, ivs=ivs, t_years=t_years, is_call=is_call, r=r, q=q, ois=ois, mults=mults
+            )
+            return matrix, decision
 
-        logger.debug(
-            "[ComputeRouter] tier=%s chain=%d reason=%s",
-            tier.value, n, reason,
-        )
-        return matrix, decision
+        try:
+            matrix = self._execute_batch(
+                spots=spots,
+                strikes=strikes,
+                ivs=ivs,
+                t_years=t_years,
+                is_call=is_call,
+                r=r,
+                q=q,
+                ois=ois,
+                mults=mults,
+                prefer_gpu=True,
+                allow_cpu_fallback=False,
+            )
+            return matrix, decision
+        except GPUComputationUnavailableError as exc:
+            matrix = self._execute_cpu_fallback(
+                spots=spots, strikes=strikes, ivs=ivs, t_years=t_years, is_call=is_call, r=r, q=q, ois=ois, mults=mults
+            )
+            self._log_cpu_fallback_once(str(exc))
+            fallback_decision = ComputeDecision(
+                tier=ComputeTier.NUMPY,
+                reason=f"gpu_runtime_failed_rust_cpu_fallback:{exc}",
+                chain_size=n,
+            )
+            return matrix, fallback_decision
 
-    # ── Private ───────────────────────────────────────────────────────────────
-
-    def _decide(self, chain_size: int) -> tuple[ComputeTier, str]:
-        """Pure routing logic — returns (tier, reason_string)."""
+    def _decide(self, _: int) -> tuple[ComputeTier, str]:
         if self._force is not None:
             return self._force, f"forced:{self._force.value}"
-
         if self._kernel.gpu_available:
-            return ComputeTier.GPU, "GPU mandate: all recomputations must offload to CUDA"
-        
-        # GPU physically unavailable — use Cascading Fallback (AGENTS.md 1.2)
-        if _NUMBA_AVAILABLE:
-            return ComputeTier.NUMBA, "gpu_unavailable, falling back to Numba"
-        return ComputeTier.NUMPY, "gpu_unavailable+numba_unavailable"
+            return ComputeTier.GPU, "gpu_mandate_active"
+        return ComputeTier.NUMPY, "gpu_unavailable_rust_cpu_fallback"
 
-    def _execute(
+    @staticmethod
+    def _zero_like(values: Any) -> Any:
+        try:
+            return values * 0.0
+        except (TypeError, AttributeError, ValueError):
+            return [0.0 for _ in range(len(values))]
+
+    @classmethod
+    def _constant_like(cls, values: Any, constant: float) -> Any:
+        base = cls._zero_like(values)
+        try:
+            return base + constant
+        except (TypeError, AttributeError, ValueError):
+            return [constant for _ in range(len(values))]
+
+    def _execute_batch(
         self,
-        tier: ComputeTier,
-        spots: np.ndarray,
-        strikes: np.ndarray,
-        ivs: np.ndarray,
+        spots: Any,
+        strikes: Any,
+        ivs: Any,
         t_years: float,
-        is_call: np.ndarray,
+        is_call: Any,
         r: float,
         q: float,
-        ois: Optional[np.ndarray],
-        mults: Optional[np.ndarray],
+        ois: Any | None,
+        mults: Any | None,
+        *,
+        prefer_gpu: bool,
+        allow_cpu_fallback: bool,
     ) -> GreeksMatrix:
-        n = len(spots)
-        _ois   = ois   if ois   is not None else np.zeros(n, dtype=np.float64)
-        _mults = mults if mults is not None else np.full(n, 100.0, dtype=np.float64)
+        _ois = ois if ois is not None else self._zero_like(spots)
+        _mults = mults if mults is not None else self._constant_like(spots, 100.0)
+        return self._kernel.compute_batch(
+            spots,
+            strikes,
+            ivs,
+            float(t_years),
+            is_call,
+            float(r),
+            float(q),
+            _ois,
+            _mults,
+            prefer_gpu=prefer_gpu,
+            allow_cpu_fallback=allow_cpu_fallback,
+        )
 
-        if tier == ComputeTier.GPU:
-            return self._kernel.compute_batch(
-                spots, strikes, ivs, t_years, is_call, r, q, _ois, _mults, prefer_gpu=True
-            )
+    def _execute_cpu_fallback(
+        self,
+        *,
+        spots: Any,
+        strikes: Any,
+        ivs: Any,
+        t_years: float,
+        is_call: Any,
+        r: float,
+        q: float,
+        ois: Any | None,
+        mults: Any | None,
+    ) -> GreeksMatrix:
+        return self._execute_batch(
+            spots=spots,
+            strikes=strikes,
+            ivs=ivs,
+            t_years=t_years,
+            is_call=is_call,
+            r=r,
+            q=q,
+            ois=ois,
+            mults=mults,
+            prefer_gpu=False,
+            allow_cpu_fallback=True,
+        )
 
-        if tier == ComputeTier.NUMBA:
-            try:
-                # Bridge to existing bsm_fast.compute_greeks_batch
-                batch, batch_agg = _numba_batch(
-                    spots, strikes, ivs, t_years, is_call, r=r, q=q,
-                    ois=_ois, mults=_mults,
-                )
-                gex_raw = (batch["gamma"] * _ois * _mults * spots ** 2 * 0.01 / 1_000_000.0)
-                logger.debug(
-                    "[ComputeRouter] legacy_batch aligned with mainline gex formula (gamma*OI*mult*S^2*0.01/1e6, MMUSD)"
-                )
-                return GreeksMatrix(
-                    delta=batch["delta"],
-                    gamma=batch["gamma"],
-                    vega=batch["vega"],
-                    vanna=batch["vanna"],
-                    charm=batch["charm"],
-                    theta=batch["theta"],
-                    gex_per_contract=gex_raw,
-                    call_gex=np.where(is_call, gex_raw, 0.0),
-                    put_gex=np.where(~is_call, gex_raw, 0.0),
-                    iv_used=ivs,
-                )
-            except Exception as exc:
-                logger.warning("[ComputeRouter] Numba tier failed (%s). Falling back to NumPy.", exc)
-
-        # NumPy fallback (always available)
-        return _compute_numpy(spots, strikes, ivs, t_years, is_call, r, q, _ois, _mults)
+    def _log_cpu_fallback_once(self, reason: str) -> None:
+        if not self._cpu_fallback_logged:
+            logger.warning("[ComputeRouter] GPU failed, switched to Rust CPU fallback: %s", reason)
+            self._cpu_fallback_logged = True

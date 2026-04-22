@@ -15,7 +15,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import Response
 
 from shared.config import settings
-from shared.services.history_columnar import build_columnar_payload
+from shared_rust.services import build_columnar_payload
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -277,7 +277,7 @@ async def get_research_features(
         raise HTTPException(status_code=503, detail="l3 reactor unavailable")
     schema_norm = _parse_schema(schema)
 
-    result = await container.l3_reactor.research_store.query(
+    result = container.l3_reactor.research_store.query(
         start=start,
         end=end,
         fields=_parse_fields(fields),
@@ -313,7 +313,7 @@ async def get_research_export_status(request: Request, job_id: str):
     container = request.app.state.container
     if not container.l3_reactor:
         raise HTTPException(status_code=503, detail="l3 reactor unavailable")
-    job = await container.l3_reactor.research_store.get_export_job(job_id)
+    job = container.l3_reactor.research_store.get_export_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="job not found")
     return {"job_id": job_id, **job}
@@ -324,7 +324,7 @@ async def download_research_export(request: Request, job_id: str):
     container = request.app.state.container
     if not container.l3_reactor:
         raise HTTPException(status_code=503, detail="l3 reactor unavailable")
-    payload = await container.l3_reactor.research_store.read_export(job_id)
+    payload = container.l3_reactor.research_store.read_export(job_id)
     if payload is None:
         raise HTTPException(status_code=404, detail="export not ready")
     content_type, data = payload

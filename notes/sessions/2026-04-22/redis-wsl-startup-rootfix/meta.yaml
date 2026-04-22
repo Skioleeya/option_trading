@@ -1,0 +1,54 @@
+session_id: "2026-04-22/redis-wsl-startup-rootfix"
+title: "redis-wsl-startup-rootfix"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-22 10:02:39 -04:00"
+updated_at_et: "2026-04-22 10:20:05 -04:00"
+parent_session: "2026-04-21/live-spot-eod-root-fix"
+
+branch: "fix/frontend-data-zero-fallback"
+base_commit: "9f5ad57"
+head_commit: "9f5ad57"
+
+files_changed:
+  - .gitignore
+  - docs/SOP/SYSTEM_OVERVIEW.md
+  - infra/ops_cli/redis_preflight.py
+  - infra/ops_cli/start_all.py
+  - infra/ops_cli/test_start_all.py
+  - infra/redis/redis.conf.local
+  - notes/context/handoff.md
+  - notes/context/open_tasks.md
+  - notes/context/project_state.md
+  - notes/sessions/2026-04-22/redis-wsl-startup-rootfix/handoff.md
+  - notes/sessions/2026-04-22/redis-wsl-startup-rootfix/meta.yaml
+  - notes/sessions/2026-04-22/redis-wsl-startup-rootfix/open_tasks.md
+  - notes/sessions/2026-04-22/redis-wsl-startup-rootfix/project_state.md
+  - shared/system/redis_service.py
+  - 最新的启动步骤文档.md
+commands:
+  - python3 manage.py new-session --task-id redis-wsl-startup-rootfix
+  - .venv/bin/python manage.py run-pytest infra/ops_cli/test_start_all.py -q
+  - mkdir -p var/redis && cp -a /mnt/e/US.market/Option_v3/data/. var/redis/
+  - fuser -k 5173/tcp 8001/tcp 6380/tcp
+  - redis-server infra/redis/redis.conf.local
+  - redis-cli -p 6380 CONFIG GET dir appendonly appendfilename auto-aof-rewrite-percentage auto-aof-rewrite-min-size
+  - redis-cli -p 6380 BGREWRITEAOF
+  - .venv/bin/python manage.py start-all
+  - cmd.exe /C curl.exe -I http://localhost:5173
+  - cmd.exe /C curl.exe http://localhost:5173/api/atm-decay/history?schema=v2
+  - python3 manage.py validate-session --strict
+tests_passed:
+  - .venv/bin/python manage.py run-pytest infra/ops_cli/test_start_all.py -q (5 passed)
+  - Redis ext4 cutover preflight: dir=/home/lenovo/projects/Option_v3/var/redis fs=ext4 aof_total=13.930MiB
+  - Host redis rewrite: base load 13.944s, incr load 2.484s, total 16.428s, background AOF rewrite success
+  - .venv/bin/python manage.py start-all (Redis/backend/frontend listening)
+  - cmd.exe /C curl.exe -I http://localhost:5173 (HTTP/1.1 200 OK)
+  - cmd.exe /C curl.exe http://localhost:5173/api/atm-decay/history?schema=v2 (columnar JSON returned)
+tests_failed: []
+blockers: []
+notes:
+  - Redis startup root cause was the combination of /mnt/e 9p storage ownership and a 3.47GiB multipart AOF that never hit the old 100% auto-rewrite threshold.
+  - `start-all` now fast-fails before launch if Redis resolves to `/mnt/*`, a non-ext4 filesystem, or an AOF total above 2GiB.
+  - One-time migration copied the dataset into `./var/redis` on ext4 and the first host boot immediately rewrote the old base/incr files into a compact `appendonly.aof.2.base.rdb`.

@@ -1,0 +1,85 @@
+session_id: "2026-04-21/spy-spot-live-rootfix"
+title: "spy-spot-live-rootfix"
+scope: "L0 spot owner hard-cut + quote telemetry + Arrow IPC transport root-fix"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-21 12:13:09 -04:00"
+updated_at_et: "2026-04-21 15:45:49 -04:00"
+parent_session: null
+
+branch: "fix/frontend-data-zero-fallback"
+base_commit: "3ff3ba1"
+head_commit: "3ff3ba1"
+
+files_changed:
+  - app/loops/compute_loop.py
+  - app/loops/shared_state.py
+  - app/loops/broadcast_loop.py
+  - app/loops/tests/test_broadcast_loop_phase_lock.py
+  - app/loops/tests/test_shared_state_live_spot.py
+  - app/tests/test_health_route_diagnostics.py
+  - l3_assembly/assembly/payload_assembler.py
+  - l3_assembly/broadcast/broadcast_governor.py
+  - l3_assembly/events/payload_events.py
+  - l4_ui/src/adapters/protocolAdapter.ts
+  - l4_ui/src/components/DebugOverlay.tsx
+  - l4_ui/src/components/__tests__/debugOverlayModel.test.ts
+  - l4_ui/src/components/debugOverlayModel.ts
+  - l4_ui/src/observability/l4_rum.ts
+  - l4_ui/src/types/dashboard.ts
+  - shared/services/l0_runtime/projection/snapshot/__init__.py
+  - shared/services/l0_runtime/state/runtime/__init__.py
+  - shared/services/l0_runtime/state/runtime/spot_diagnostics.py
+  - shared/services/l0_runtime/state/test_runtime_state.py
+  - shared/services/l0_runtime/services/runtime/arrow_events.py
+  - shared/services/l0_runtime/services/runtime/test_arrow_events.py
+  - shared/services/l0_runtime/services/runtime/builder.py
+  - shared/services/l0_runtime/services/subscription/__init__.py
+  - shared/services/l0_runtime/services/orchestration/feed_orchestrator.py
+  - shared/services/l0_runtime/source/runtime/bootstrap.py
+  - shared/services/l0_runtime/source/runtime/ipc.py
+  - shared/services/l0_runtime/source/runtime/quote_runtime/__init__.py
+  - shared/services/l0_runtime/source/runtime/test_bootstrap.py
+  - shared/services/l0_runtime/source/runtime/test_quote_runtime.py
+  - shared/services/l0_runtime/services/test_subscription_manager.py
+  - l0_ingest/l0_rust/src/l0_event_support.rs
+  - l0_ingest/l0_rust/src/gateway_push_diag.rs
+  - l0_ingest/l0_rust/src/gateway_core.rs
+  - l0_ingest/l0_rust/src/arrow_ipc.rs
+  - l0_ingest/l0_rust/src/arrow_ipc_tests.rs
+  - l0_ingest/l0_rust/src/ipc_runtime.rs
+  - l0_ingest/l0_rust/src/ipc_writer.rs
+  - l0_ingest/l0_rust/src/lib.rs
+  - docs/SOP/L0_DATA_FEED.md
+  - docs/SOP/L3_OUTPUT_ASSEMBLY.md
+  - docs/SOP/L4_FRONTEND.md
+  - notes/sessions/2026-04-21/spy-spot-live-rootfix/project_state.md
+  - notes/sessions/2026-04-21/spy-spot-live-rootfix/open_tasks.md
+  - notes/sessions/2026-04-21/spy-spot-live-rootfix/handoff.md
+  - notes/sessions/2026-04-21/spy-spot-live-rootfix/meta.yaml
+
+commands:
+  - cargo test --manifest-path l0_ingest/l0_rust/Cargo.toml
+  - .venv/bin/python manage.py run-pytest shared/services/l0_runtime/source/runtime/test_quote_runtime.py app/tests/test_health_route_diagnostics.py app/loops/tests/test_compute_loop_atm_live_continuity.py
+  - cargo build --release --manifest-path l0_ingest/l0_rust/Cargo.toml --target-dir tmp/cargo_target_runtime_l0
+  - cp tmp/cargo_target_runtime_l0/release/libl0_rust.so shared/services/l0_runtime/_native_generated/l0_rust.so
+  - cp tmp/cargo_target_runtime_l0/release/libl0_rust.so shared/services/l0_runtime/_native_generated/wave10/l0_rust.so
+  - python3 manage.py start-all
+  - .venv/bin/python - <<'PY' ... sample /debug/persistence_status six times and compare stores.gateway raw_* with stores.store.quote_lane and stores.transport ... PY
+  - python3 manage.py validate-session --strict
+
+tests_passed:
+  - cargo test --manifest-path l0_ingest/l0_rust/Cargo.toml
+  - .venv/bin/python manage.py run-pytest shared/services/l0_runtime/source/runtime/test_quote_runtime.py app/tests/test_health_route_diagnostics.py app/loops/tests/test_compute_loop_atm_live_continuity.py
+  - cargo build --release --manifest-path l0_ingest/l0_rust/Cargo.toml --target-dir tmp/cargo_target_runtime_l0
+  - python3 manage.py start-all
+  - real-host six-sample `/debug/persistence_status` alignment: raw_depth_1s ~= source_event_count_1s, writer_batch_id == reader_last_batch_id, queued=0, dropped=0, gaps=0
+  - python3 manage.py validate-session --strict
+
+tests_failed: []
+blockers: []
+notes:
+  - "Arrow IPC transport root cause is closed: the old single-slot latest-message overwrite has been replaced by a queued ordered transport."
+  - "Rust raw SPY depth ingress remains about 3-4 events/sec and now reaches Python source cadence at the same rate."
+  - "Transport diagnostics stay clean on real host: queued_batch_count=0, dropped_batch_count=0, reader_gap_count=0."
+  - "The brief post-cutover diagnostics failure (`Already mutably borrowed`) was fixed by moving the Rust reader cursor behind Mutex<ArrowIpcReadCursor>."

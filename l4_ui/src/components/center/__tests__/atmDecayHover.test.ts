@@ -54,7 +54,7 @@ describe('atmDecayHover', () => {
         expect(focused.crosshairMarkerVisible).toBe(true)
         expect(focused.lastValueVisible).toBe(true)
 
-        expect(deEmphasized.visible).toBe(false)
+        expect(deEmphasized.visible).toBe(true)
         expect(deEmphasized.crosshairMarkerVisible).toBe(false)
         expect(deEmphasized.lastValueVisible).toBe(false)
         expect(deEmphasized.priceLineVisible).toBe(false)
@@ -80,10 +80,15 @@ describe('atmDecayHover', () => {
                 })
                 const isFocus = family === hoveredFamily
 
-                expect(raw.visible).toBe(isFocus)
-                expect(smooth.visible).toBe(isFocus)
+                expect(raw.visible).toBe(true)
+                expect(smooth.visible).toBe(true)
                 expect(raw.lineWidth).toBe(1)
                 expect(smooth.lineWidth).toBe(2)
+                if (isFocus) {
+                    expect(smooth.color).toBe('#10b981')
+                } else {
+                    expect(smooth.color).toContain('rgba(')
+                }
             }
         }
     })

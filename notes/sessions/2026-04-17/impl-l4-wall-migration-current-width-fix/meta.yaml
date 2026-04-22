@@ -1,0 +1,46 @@
+session_id: "2026-04-17/impl-l4-wall-migration-current-width-fix"
+title: "L4 wall migration current width fix"
+scope: "bugfix"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-17 16:20:33 -04:00"
+updated_at_et: "2026-04-17 16:47:57 -04:00"
+parent_session: "2026-04-17/impl-l4-compressed-modules-scale-fix"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "c40af8f"
+head_commit: "c40af8f"
+
+files_changed:
+  - l4_ui/src/components/left/WallMigration.tsx
+  - l4_ui/src/components/left/wallMigrationLayout.ts
+  - l4_ui/src/components/left/__tests__/wallMigrationLayout.test.ts
+  - docs/SOP/L4_FRONTEND.md
+  - notes/context/project_state.md
+  - notes/context/open_tasks.md
+  - notes/context/handoff.md
+  - notes/sessions/2026-04-17/impl-l4-wall-migration-current-width-fix/project_state.md
+  - notes/sessions/2026-04-17/impl-l4-wall-migration-current-width-fix/open_tasks.md
+  - notes/sessions/2026-04-17/impl-l4-wall-migration-current-width-fix/handoff.md
+  - notes/sessions/2026-04-17/impl-l4-wall-migration-current-width-fix/meta.yaml
+commands:
+  - powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId "impl-l4-wall-migration-current-width-fix" -Title "L4 wall migration current width fix" -Scope "bugfix" -Owner "Codex" -ParentSession "2026-04-17/impl-l4-compressed-modules-scale-fix" -Timezone "America/New_York" -UpdatePointer
+  - git status --short --branch
+  - npm --prefix l4_ui run test
+  - npm --prefix l4_ui run build
+  - uvx --from 'browser-use[cli]' browser-use open http://localhost:5173
+  - uvx --from 'browser-use[cli]' browser-use --json eval "typeof window.mockL4"
+  - uvx --from 'browser-use[cli]' browser-use --json eval "...window.mockL4.injectPayload(payload)..."
+  - uvx --from 'browser-use[cli]' browser-use --json eval "...WallMigration DOM metrics..."
+  - uvx --from 'browser-use[cli]' browser-use screenshot E:\US.market\Option_v3\tmp\wall-migration-equal-tracks.png
+  - powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict
+tests_passed:
+  - npm --prefix l4_ui run test (41 files passed, 197 tests passed)
+  - Browser-side verification on localhost:5173 with mock payload (WallMigration strike cells render as 711/710 on equal-width adaptive tracks)
+  - powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict (passed)
+tests_failed:
+  - npm --prefix l4_ui run build (fails on pre-existing TypeScript errors in src/adapters/deltaDecoder.ts, src/components/right/activeOptionsModel.ts, src/components/right/MmFlowCard.tsx, src/components/right/mmFlowModel.ts)
+blockers: []
+notes:
+  - Live backend data briefly dropped to empty-state during browser inspection, so browser verification used the development smoke-test hook to inject deterministic wall rows.
+  - Browser DOM measurement after the equal-track change reported grid columns 26px | 45.66px | 45.67px | 45.67px | 68px for both rows.

@@ -4,7 +4,6 @@ export type DecisionTone = 'BULLISH' | 'BEARISH' | 'NEUTRAL' | 'HALT'
 
 type DirectionClasses = {
     dot: string
-    bar: string
     text: string
     banner: string
 }
@@ -21,26 +20,22 @@ const DIRECTION_ALIASES: Record<string, DecisionTone> = {
 
 const DIRECTION_CLASSES: Record<DecisionTone, DirectionClasses> = {
     BULLISH: {
-        dot: 'bg-accent-red shadow-[0_0_6px_rgba(255,77,79,0.5)]',
-        bar: 'bg-accent-red',
+        dot: 'bg-accent-red',
         text: 'text-accent-red',
         banner: 'bg-red-950/40 border-red-500/30',
     },
     BEARISH: {
-        dot: 'bg-accent-green shadow-[0_0_6px_rgba(0,214,143,0.5)]',
-        bar: 'bg-accent-green',
+        dot: 'bg-accent-green',
         text: 'text-accent-green',
         banner: 'bg-emerald-950/40 border-emerald-500/30',
     },
     NEUTRAL: {
         dot: 'bg-zinc-600',
-        bar: 'bg-zinc-600',
         text: 'text-text-secondary',
         banner: 'bg-zinc-900/40 border-zinc-700/30',
     },
     HALT: {
-        dot: 'bg-accent-amber shadow-[0_0_8px_rgba(245,158,11,0.6)] animate-pulse',
-        bar: 'bg-accent-amber',
+        dot: 'bg-accent-amber',
         text: 'text-accent-amber',
         banner: 'bg-amber-950/50 border-amber-500/40',
     },
@@ -96,11 +91,6 @@ export function resolveWeightPercent(
     if (fromCompWeight !== null) return ratioToPercent(fromCompWeight)
 
     return 0
-}
-
-export function resolveWeightBarWidth(percent: number): number {
-    if (percent <= 0) return 0
-    return Math.max(percent, 2)
 }
 
 export function resolveGexIntensityBadgeClass(gexIntensity: unknown): string {

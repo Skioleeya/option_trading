@@ -1,4 +1,3 @@
-import { describe, expect, it } from 'vitest'
 import { normalizeSkewDynamicsState } from '../right/skewDynamicsModel'
 
 describe('skewDynamicsModel', () => {
@@ -35,4 +34,40 @@ describe('skewDynamicsModel', () => {
         expect(skew.state_label).toBe('UNAVAILABLE')
         expect(skew.badge).toBe('badge-neutral')
     })
+
+    it('keeps contract stable for canonical rr25-driven values', () => {
+        const skew = normalizeSkewDynamicsState({
+            value: '-0.07',
+            state_label: 'SPECULATIVE',
+        })
+        expect(skew.value).toBe('-0.07')
+        expect(skew.state_label).toBe('SPECULATIVE')
+        expect(skew.badge).toBe('badge-red')
+    })
+
+    it('hard-cuts unknown state labels to NEUTRAL and ignores backend color tokens', () => {
+        const skew = normalizeSkewDynamicsState({
+            value: '-0.31',
+            state_label: 'CUSTOM_STATE',
+            color_class: 'text-accent-green',
+            border_class: 'border-accent-green/40',
+            bg_class: 'bg-accent-green/5',
+            shadow_class: 'shadow-custom-backend',
+            badge: 'badge-green',
+        })
+
+        expect(skew.state_label).toBe('NEUTRAL')
+        expect(skew.color_class).toBe('text-text-primary')
+        expect(skew.badge).toBe('badge-neutral')
+    })
+
+    it('formats numeric skew value to fixed precision in non-unavailable states', () => {
+        const skew = normalizeSkewDynamicsState({
+            value: -0.3333,
+            state_label: 'SPECULATIVE',
+        })
+
+        expect(skew.value).toBe('-0.33')
+    })
 })
+

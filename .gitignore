@@ -1,67 +1,86 @@
-﻿# Python
+# Python caches/build
 __pycache__/
 *.py[cod]
+*.pyo
 *.egg-info/
-dist/
-build/
 .eggs/
-*.egg
+build/
+dist/
 
-# Environment
+# Virtual env / secrets
 .env
-.env.local
+.env.*
 .venv/
 venv/
 env/
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Node
+# Node caches/build
 node_modules/
 .next/
-dist/
+.npm/
+.pnpm-store/
+*.tsbuildinfo
 
-# Redis data
+# Rust/C/C++ build artifacts
+**/target/
+*.o
+*.obj
+*.a
+*.so
+*.dll
+*.dylib
+*.pyd
+*.rlib
+*.rmeta
+*.node
+*.exp
+*.lib
+*.pdb
+
+# Runtime data / temp / logs
+tmp/
+logs/
+data
+data/
+backend/data/
 infra/redis/data/
+var/redis/
+*.log
 *.rdb
 *.aof
+*.parquet
+*.bak
 
-# Cold storage data (regenerated daily)
-backend/data/
+# Runtime-generated snapshots and diagnostics
+data/atm_decay/atm_*.json
+data/atm_decay/atm_series_*.jsonl
+data/mtf_iv/mtf_iv_series_*.jsonl
+data/wall_migration/wall_series_*.jsonl
+l2_decision/.audit_logs/l2_audit_*.jsonl
+l2_decision/.audit_logs/l2_audit_*.parquet
+l2_decision/audit/l2_audit_*.parquet
 
-# OS
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# Logs
-*.log
-logs/*.json
-
-# Redis binary (too large for git)
-infra/bin/
-
-# Compiled
-*.pyc
-*.pyo
-nul
-backend/nul
-
-nul
-backend/nul
-
-# Obsidian (vault at repo root)
-.obsidian/workspace.json
-.obsidian/workspaces.json
+# Local machine artifacts
+.vscode/
+.idea/
+.playwright-mcp/
+.codex
 .obsidian/cache/
 .obsidian/snapshots/
 .obsidian/.trash/
+.obsidian/workspace.json
+.obsidian/workspaces.json
 .obsidian/plugins/*/cache/
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+nul
+backend/nul
 
-# Local runtime temp data
-tmp/atm_decay_*/
-tmp/pytest_cache/
+# Local binaries and machine-specific configs
+infra/bin/
+.cargo/config.toml
+E:*
+.omx/

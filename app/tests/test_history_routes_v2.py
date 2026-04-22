@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from fastapi import FastAPI
-from fastapi.testclient import TestClient
+import httpx
+import pytest
 
 from app.routes import history
 from shared.config import settings
@@ -27,7 +28,7 @@ class _DummyWarmStore:
 
 
 class _DummyResearchStore:
-    async def query(self, **_: object):
+    def query(self, **_: object):
         return {
             "status": "ok",
             "count": 1,
@@ -68,16 +69,20 @@ class _DummyContainer:
         self.atm_decay_tracker = _DummyAtmTracker()
 
 
-def _client() -> TestClient:
+def _client() -> httpx.AsyncClient:
     app = FastAPI()
     app.include_router(history.router)
     app.state.container = _DummyContainer()
-    return TestClient(app)
+    return httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    )
 
 
-def test_history_v1_compat_shape():
-    with _client() as client:
-        resp = client.get("/history", params={"view": "compact", "count": 1, "schema": "v1"})
+@pytest.mark.asyncio
+async def test_history_v1_compat_shape():
+    async with _client() as client:
+        resp = await client.get("/history", params={"view": "compact", "count": 1, "schema": "v1"})
     assert resp.status_code == 200
     body = resp.json()
     assert "history" in body
@@ -85,9 +90,10 @@ def test_history_v1_compat_shape():
     assert "schema" not in body
 
 
-def test_history_v2_columnar_shape():
-    with _client() as client:
-        resp = client.get("/history", params={"view": "compact", "count": 1, "schema": "v2"})
+@pytest.mark.asyncio
+async def test_history_v2_columnar_shape():
+    async with _client() as client:
+        resp = await client.get("/history", params={"view": "compact", "count": 1, "schema": "v2"})
     assert resp.status_code == 200
     body = resp.json()
     assert body["schema"] == "v2"
@@ -97,18 +103,20 @@ def test_history_v2_columnar_shape():
     assert body["count"] == 1
 
 
-def test_history_defaults_to_v2_when_schema_omitted():
-    with _client() as client:
-        resp = client.get("/history", params={"view": "compact", "count": 1})
+@pytest.mark.asyncio
+async def test_history_defaults_to_v2_when_schema_omitted():
+    async with _client() as client:
+        resp = await client.get("/history", params={"view": "compact", "count": 1})
     assert resp.status_code == 200
     body = resp.json()
     assert body["schema"] == "v2"
     assert body["encoding"] == "columnar-json"
 
 
-def test_research_features_v2_columnar_shape():
-    with _client() as client:
-        resp = client.get(
+@pytest.mark.asyncio
+async def test_research_features_v2_columnar_shape():
+    async with _client() as client:
+        resp = await client.get(
             "/api/research/features",
             params={
                 "start": "2026-03-10T14:00:00+00:00",
@@ -123,9 +131,10 @@ def test_research_features_v2_columnar_shape():
     assert body["count"] == 1
 
 
-def test_atm_decay_history_v2_columnar_shape():
-    with _client() as client:
-        resp = client.get("/api/atm-decay/history", params={"schema": "v2"})
+@pytest.mark.asyncio
+async def test_atm_decay_history_v2_columnar_shape():
+    async with _client() as client:
+        resp = await client.get("/api/atm-decay/history", params={"schema": "v2"})
     assert resp.status_code == 200
     body = resp.json()
     assert body["schema"] == "v2"
@@ -133,17 +142,19 @@ def test_atm_decay_history_v2_columnar_shape():
     assert body["count"] == 1
 
 
-def test_invalid_schema_returns_400():
-    with _client() as client:
-        resp = client.get("/history", params={"schema": "bad"})
+@pytest.mark.asyncio
+async def test_invalid_schema_returns_400():
+    async with _client() as client:
+        resp = await client.get("/history", params={"schema": "bad"})
     assert resp.status_code == 400
     assert "invalid schema" in resp.text
 
 
-def test_v2_disabled_falls_back_to_v1(monkeypatch):
+@pytest.mark.asyncio
+async def test_v2_disabled_falls_back_to_v1(monkeypatch):
     monkeypatch.setattr(settings, "history_v2_enabled", False, raising=False)
-    with _client() as client:
-        resp = client.get("/api/atm-decay/history", params={"schema": "v2"})
+    async with _client() as client:
+        resp = await client.get("/api/atm-decay/history", params={"schema": "v2"})
     assert resp.status_code == 200
     body = resp.json()
     assert "history" in body

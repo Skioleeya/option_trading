@@ -31,6 +31,36 @@ export interface IVVelocityResult {
     spot_roc: number | null
 }
 
+export interface HeaderVolatilityTermAnchor {
+    anchor: string
+    symbol: string
+    expiry?: string | null
+    iv?: number | null
+    iv_decimal?: number | null
+    ratio: number | null
+    state: 'INVERTED' | 'FLAT' | 'NORMAL' | 'UNAVAILABLE' | string
+}
+
+export interface HeaderVolatilityRelation {
+    window_seconds: number
+    iv_change_pp: number | null
+    price_change_pct: number | null
+    beta_pp_per_pct: number | null
+    state: 'INVERSE_CONFIRM' | 'POSITIVE_DIVERGENCE' | 'VOL_LEAD' | 'PRICE_LEAD' | 'UNAVAILABLE' | string
+}
+
+export interface HeaderVolatilityContext {
+    lookback_days: number
+    lookback_effective_days: number
+    ivr: number | null
+    ivp: number | null
+    term_structure: {
+        primary: HeaderVolatilityTermAnchor
+        secondary: HeaderVolatilityTermAnchor
+    }
+    iv_price_relation: HeaderVolatilityRelation
+}
+
 export interface VannaFlowResult {
     state: VannaFlowState
     correlation: number | null
@@ -88,6 +118,9 @@ export interface ActiveOption {
     flow_direction?: 'BULLISH' | 'BEARISH' | 'NEUTRAL'
     is_placeholder?: boolean
     slot_index?: number
+    row_quality?: 'REAL' | 'PLACEHOLDER' | string | null
+    flow_signal_state?: 'LIVE' | 'DEGRADED' | string
+    flow_signal_reason?: string | null
 }
 
 export interface TacticalTriadCard {
@@ -177,6 +210,7 @@ export interface AgentGResult {
         gamma_walls: GammaWalls
         gamma_flip_level: number | null
         spy_atm_iv: number | null
+        header_volatility?: HeaderVolatilityContext | null
         trap_state: string
         fused_signal: FusedSignal
         micro_structure: { micro_structure_state: MicroStructureState } | null
@@ -229,6 +263,7 @@ export interface AgentGResult {
 
 export interface DashboardPayload {
     type: 'dashboard_update' | 'dashboard_init' | 'dashboard_delta' | 'keepalive'
+    version?: number
     // Canonical UTC data timestamp from L0 source time (L3 aliases it to `timestamp`).
     data_timestamp?: string
     // UTC broadcast wall-clock timestamp stamped by L3 governor.
@@ -238,10 +273,14 @@ export interface DashboardPayload {
     // UTC heartbeat stamped at broadcast time.
     heartbeat_timestamp?: string
     spot: number | null
+    drift_ms?: number
+    drift_warning?: boolean
+    is_stale?: boolean
     agent_g: AgentGResult | null
     atm?: AtmDecay | null
     rust_active?: boolean
     shm_stats?: Record<string, unknown> | null
+    governor_telemetry?: Record<string, unknown> | null
 }
 
 // ATM Decay

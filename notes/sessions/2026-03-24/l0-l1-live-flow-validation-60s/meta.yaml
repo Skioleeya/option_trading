@@ -1,0 +1,34 @@
+﻿session_id: "2026-03-24/l0-l1-live-flow-validation-60s"
+title: "L0 L1 live flow validation 60s"
+scope: "test"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-24 22:48:36 -04:00"
+updated_at_et: "2026-03-24 22:59:26 -04:00"
+parent_session: null
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "724efb3"
+head_commit: "724efb3"
+
+files_changed:
+  - "notes/sessions/2026-03-24/l0-l1-live-flow-validation-60s/project_state.md"
+  - "notes/sessions/2026-03-24/l0-l1-live-flow-validation-60s/open_tasks.md"
+  - "notes/sessions/2026-03-24/l0-l1-live-flow-validation-60s/handoff.md"
+  - "notes/sessions/2026-03-24/l0-l1-live-flow-validation-60s/meta.yaml"
+  - "notes/context/handoff.md"
+commands:
+  - "python scripts/test/l0_l1_live_flow_validation_60s.py --duration 60 --output tmp/l0_l1_live_flow_validation_60s.json"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "python scripts/test/l0_l1_live_flow_validation_60s.py --duration 60 --output tmp/l0_l1_live_flow_validation_60s.json -> classification=LIVE"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict -> PASS"
+tests_failed:
+  - "initial sandboxed live run failed during LongPort/Longbridge startup connectivity probe because the sandbox could not reach the socket-token endpoint"
+blockers: []
+notes:
+  - "SOP-EXEMPT: no runtime behavior changed; this session only verifies an existing L0-L1 live validation path."
+  - "OPENSPEC-EXEMPT: no runtime code under l0_ingest/l1_compute/l2_decision/l3_assembly/l4_ui/app/shared changed in this session."
+  - "Live rerun observed a handled LongPort 301607 warm-up rate-limit event; L0-L1 continuity remained intact and the global cooldown guard engaged."
+
+

@@ -1,0 +1,40 @@
+﻿session_id: "2026-03-25/tradingview-live-sampling-trace-20260325"
+title: "TradingView live sampling trace"
+scope: "ops"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-25 09:45:47 -04:00"
+updated_at_et: "2026-03-25 10:00:46 -04:00"
+parent_session: "2026-03-25/snapshot-iv-drift-behavior-fix-20260325"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "70cc81b"
+head_commit: "70cc81b"
+
+files_changed:
+  - "notes/sessions/2026-03-25/tradingview-live-sampling-trace-20260325/project_state.md"
+  - "notes/sessions/2026-03-25/tradingview-live-sampling-trace-20260325/open_tasks.md"
+  - "notes/sessions/2026-03-25/tradingview-live-sampling-trace-20260325/handoff.md"
+  - "notes/sessions/2026-03-25/tradingview-live-sampling-trace-20260325/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId tradingview-live-sampling-trace-20260325 -Title \"TradingView live sampling trace\" -Scope \"ops\" -Owner \"Codex\" -ParentSession \"2026-03-25/snapshot-iv-drift-behavior-fix-20260325\" -Timezone \"America/New_York\" -UpdatePointer"
+  - "rg -n \"tradingview|straddle|call_pct|put_pct|createChart|setData|update\\(\" l4_ui app shared -g \"*.ts\" -g \"*.tsx\" -g \"*.py\""
+  - "headless Playwright observation via python - + playwright.sync_api"
+  - "direct websocket sampling via python - + websockets"
+  - "HTTP inspection of /api/atm-decay/history and /debug/persistence_status"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "Headless browser trace captured 33 websocket frames over 30s but only 1 unique atm timestamp on the page."
+  - "Direct websocket trace confirmed dashboard_delta frames carried no changes.atm after init/update."
+  - "ATM history inspection confirmed out-of-order timestamps, including 15:01-15:02 ET rows ahead of current 09:5x ET."
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict -> first run failed only on missing validate evidence in notes; rerun passed"
+tests_failed: []
+blockers: []
+notes:
+  - "No code changed in this session; the outcome is a production diagnosis."
+  - "Incremental rendering logic is correct on paper, but live data continuity is not healthy enough for the chart to use it normally."
+
+

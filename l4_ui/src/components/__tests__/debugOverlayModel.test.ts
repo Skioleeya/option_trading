@@ -1,19 +1,49 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildDebugOverlayModel } from '../debugOverlayModel'
 import type { DashboardPayload } from '../../types/dashboard'
+import { L4Rum } from '../../observability/l4_rum'
 
 function basePayload(): DashboardPayload {
     return {
         type: 'dashboard_update',
+        version: 10,
+        data_timestamp: '2026-03-06T14:31:00Z',
+        broadcast_timestamp: '2026-03-06T14:31:01Z',
         timestamp: '2026-03-06T14:31:00Z',
+        heartbeat_timestamp: '2026-03-06T14:31:02Z',
         spot: 560.12,
+        drift_ms: 0,
+        drift_warning: false,
+        is_stale: false,
         agent_g: null,
         rust_active: false,
         shm_stats: null,
+        governor_telemetry: {
+            quote_lane: {
+                mode: 'live_spot',
+                last_source_gap_ms: 125,
+                source_event_count_1s: 6,
+                distinct_spot_count_1s: 4,
+                wire_emit_lag_ms: 9,
+            },
+        },
     }
 }
 
 describe('buildDebugOverlayModel', () => {
+    beforeEach(() => {
+        vi.restoreAllMocks()
+        vi.spyOn(L4Rum, 'snapshot').mockReturnValue({
+            fps: 60,
+            memoryMb: 128,
+            reconnectCount: 0,
+            lastMsgLatencyMs: 2.5,
+            lastStoreToPaintMs: 8.1,
+            lastWireLagMs: 9.0,
+            lastSourceToPaintObservedMs: 19.6,
+        })
+    })
+
     it('keeps valid zero raw fields visible', () => {
         const payload = basePayload()
         payload.agent_g = {
@@ -78,6 +108,18 @@ describe('buildDebugOverlayModel', () => {
         expect(model.bbo).toBe('0')
         expect(model.volAccel).toBe('0')
         expect(model.connStatus).toBe('CONNECTED')
+        expect(model.payloadVersion).toBe('10')
+        expect(model.broadcastTs).toBe('2026-03-06T14:31:01Z')
+        expect(model.driftWarning).toBe('false')
+        expect(model.isStale).toBe('false')
+        expect(model.quoteMode).toBe('live_spot')
+        expect(model.sourceGapMs).toBe('125')
+        expect(model.sourceEvents1s).toBe('6')
+        expect(model.distinctSpots1s).toBe('4')
+        expect(model.wireLagMs).toBe('9')
+        expect(model.msgToStoreMs).toBe('2.5')
+        expect(model.storeToPaintMs).toBe('8.1')
+        expect(model.sourceToPaintMs).toBe('19.6')
     })
 
     it('parses shm pointers and computes lag', () => {

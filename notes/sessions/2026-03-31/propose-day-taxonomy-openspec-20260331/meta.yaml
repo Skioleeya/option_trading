@@ -1,0 +1,38 @@
+﻿session_id: "2026-03-31/propose-day-taxonomy-openspec-20260331"
+title: "Propose non-overlapping day taxonomy"
+scope: "proposal"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-31 01:29:52 -04:00"
+updated_at_et: "2026-03-31 01:34:43 -04:00"
+parent_session: null
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "6ba6cb2"
+head_commit: "6ba6cb2"
+
+files_changed:
+  - "openspec/changes/research-day-taxonomy-non-overlap-20260331/proposal.md"
+  - "openspec/changes/research-day-taxonomy-non-overlap-20260331/design.md"
+  - "openspec/changes/research-day-taxonomy-non-overlap-20260331/tasks.md"
+  - "openspec/changes/research-day-taxonomy-non-overlap-20260331/specs/eod-day-taxonomy/spec.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-31/propose-day-taxonomy-openspec-20260331/project_state.md"
+  - "notes/sessions/2026-03-31/propose-day-taxonomy-openspec-20260331/open_tasks.md"
+  - "notes/sessions/2026-03-31/propose-day-taxonomy-openspec-20260331/handoff.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId propose-day-taxonomy-openspec-20260331 -Title \"Propose non-overlapping day taxonomy\" -Scope proposal -UpdatePointer"
+  - "repository/context/OpenSpec discovery commands"
+  - "web research on market regime / intraday state labeling literature"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "strict validation: scripts/validate_session.ps1 -Strict"
+tests_failed: []
+blockers: []
+notes:
+  - "The proposal replaces overlapping flat labels with mutually exclusive primary path types plus orthogonal context modifiers."
+  - "Design rationale cites regime/state literature and treats gap/pinning/vol-crush as modifiers instead of top-level day types."
+  - "Strict validation passed after meta.yaml recorded the validate_session command and evidence."
+
+

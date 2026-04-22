@@ -1,0 +1,52 @@
+﻿session_id: "2026-03-24/task3-atm-decay-after-hours-replay"
+title: "Task3 ATM decay after-hours replay"
+scope: "feature"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-24 23:28:32 -04:00"
+updated_at_et: "2026-03-24 23:57:50 -04:00"
+parent_session: "2026-03-24/task2-atm-decay-live-60s-validation"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "724efb3"
+head_commit: "724efb3"
+
+files_changed:
+  - "shared/config/persistence.py"
+  - "shared/config_cloud_ref/persistence.py"
+  - "l1_compute/analysis/atm_decay/storage.py"
+  - "l1_compute/analysis/atm_decay/replay.py"
+  - "l1_compute/analysis/atm_decay/tracker.py"
+  - "l1_compute/tests/test_atm_decay_replay.py"
+  - "scripts/test/atm_decay_frontend_live_validation_60s.py"
+  - "docs/SOP/L1_LOCAL_COMPUTATION.md"
+  - "docs/SOP/L4_FRONTEND.md"
+  - "openspec/changes/refactor-dependency-20260324-atm-decay-after-hours-replay-path/proposal.md"
+  - "openspec/changes/refactor-dependency-20260324-atm-decay-after-hours-replay-path/design.md"
+  - "openspec/changes/refactor-dependency-20260324-atm-decay-after-hours-replay-path/tasks.md"
+  - "openspec/changes/refactor-dependency-20260324-atm-decay-after-hours-replay-path/specs/dependency/spec.md"
+  - "notes/sessions/2026-03-24/task3-atm-decay-after-hours-replay/project_state.md"
+  - "notes/sessions/2026-03-24/task3-atm-decay-after-hours-replay/open_tasks.md"
+  - "notes/sessions/2026-03-24/task3-atm-decay-after-hours-replay/handoff.md"
+  - "notes/sessions/2026-03-24/task3-atm-decay-after-hours-replay/meta.yaml"
+  - "notes/context/handoff.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId task3-atm-decay-after-hours-replay -Title \"Task3 ATM decay after-hours replay\" -Scope \"feature\" -Owner \"Codex\" -ParentSession \"2026-03-24/task2-atm-decay-live-60s-validation\" -Timezone \"America/New_York\" -UpdatePointer"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_atm_decay_replay.py l1_compute/tests/test_atm_decay_tracker.py app/tests/test_history_routes_v2.py"
+  - "python -m py_compile l1_compute/analysis/atm_decay/replay.py l1_compute/analysis/atm_decay/tracker.py scripts/test/atm_decay_frontend_live_validation_60s.py l1_compute/tests/test_atm_decay_replay.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/ops/start_backend.ps1 -Degraded -LogFile logs/backend_runtime.replay.log"
+  - "python scripts/test/atm_decay_frontend_live_validation_60s.py --duration 60 --output tmp/task3_atm_decay_after_hours_replay_60s.json"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_atm_decay_replay.py l1_compute/tests/test_atm_decay_tracker.py app/tests/test_history_routes_v2.py -> 23 passed"
+  - "python -m py_compile l1_compute/analysis/atm_decay/replay.py l1_compute/analysis/atm_decay/tracker.py scripts/test/atm_decay_frontend_live_validation_60s.py l1_compute/tests/test_atm_decay_replay.py -> pass"
+  - "python scripts/test/atm_decay_frontend_live_validation_60s.py --duration 60 --output tmp/task3_atm_decay_after_hours_replay_60s.json -> classification=LIVE_STREAMING"
+tests_failed:
+  - "powershell -ExecutionPolicy Bypass -File scripts/ops/start_backend.ps1 -> strict startup blocked by Longbridge socket/token probe in current environment"
+blockers: []
+notes:
+  - "OpenSpec change added: refactor-dependency-20260324-atm-decay-after-hours-replay-path."
+  - "SOP updated: docs/SOP/L1_LOCAL_COMPUTATION.md and docs/SOP/L4_FRONTEND.md."
+  - "Runtime validation used degraded backend startup, but replay-backed history/WS/frontend flow passed for 60 seconds with non-flat data."
+
+

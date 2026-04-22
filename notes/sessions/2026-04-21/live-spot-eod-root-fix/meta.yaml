@@ -1,0 +1,67 @@
+session_id: "2026-04-21/live-spot-eod-root-fix"
+title: "live-spot-eod-root-fix"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-21 21:41:37 -04:00"
+updated_at_et: "2026-04-21 22:28:30 -04:00"
+parent_session: "2026-04-21/wsl-backend-loopback-rootfix"
+
+branch: "fix/frontend-data-zero-fallback"
+base_commit: "3ff3ba1"
+head_commit: "3ff3ba1"
+
+files_changed:
+  - app/loops/compute_loop.py
+  - app/loops/tests/test_active_options_input_bridge.py
+  - app/loops/shared_state.py
+  - infra/ops_cli/start_all.py
+  - infra/ops_cli/test_start_all.py
+  - app/loops/tests/test_broadcast_loop_phase_lock.py
+  - app/loops/tests/test_shared_state_live_spot.py
+  - docs/SOP/L0_DATA_FEED.md
+  - docs/SOP/L3_OUTPUT_ASSEMBLY.md
+  - notes/context/handoff.md
+  - notes/context/open_tasks.md
+  - notes/context/project_state.md
+  - notes/sessions/2026-04-21/live-spot-eod-root-fix/handoff.md
+  - notes/sessions/2026-04-21/live-spot-eod-root-fix/meta.yaml
+  - notes/sessions/2026-04-21/live-spot-eod-root-fix/open_tasks.md
+  - notes/sessions/2026-04-21/live-spot-eod-root-fix/project_state.md
+  - scripts/diagnostics/eod_bucket_archive.py
+  - scripts/test/test_eod_bucket_archive.py
+  - shared/services/l0_runtime/projection/snapshot/__init__.py
+  - shared/services/l0_runtime/services/orchestration/feed_orchestrator.py
+  - shared/services/l0_runtime/services/orchestration/test_feed_orchestrator.py
+  - shared/services/l0_runtime/services/runtime/builder.py
+  - shared/services/l0_runtime/state/runtime/__init__.py
+  - shared/services/l0_runtime/state/test_runtime_state.py
+  - shared_rust_services/src/active_options/input.rs
+commands:
+  - python3 manage.py new-session --task-id live-spot-eod-root-fix
+  - .venv/bin/python manage.py run-pytest app/loops/tests/test_shared_state_live_spot.py app/loops/tests/test_broadcast_loop_phase_lock.py shared/services/l0_runtime/state/test_runtime_state.py shared/services/l0_runtime/services/orchestration/test_feed_orchestrator.py scripts/test/test_eod_bucket_archive.py
+  - .venv/bin/python manage.py run-pytest app/tests/test_health_route_diagnostics.py shared/services/l0_runtime/services/runtime/test_arrow_events.py
+  - .venv/bin/python manage.py run-pytest shared/services/l0_runtime/services/orchestration/test_feed_orchestrator.py
+  - cargo build --release --manifest-path shared_rust_services/Cargo.toml --target-dir tmp/cargo_target_runtime
+  - cp tmp/cargo_target_runtime/release/libservices.so shared_rust/services.so
+  - .venv/bin/python manage.py run-pytest infra/ops_cli/test_start_all.py app/loops/tests/test_active_options_input_bridge.py app/loops/tests/test_compute_loop_gpu_dedup.py shared/services/l0_runtime/services/orchestration/test_feed_orchestrator.py
+  - .venv/bin/python manage.py start-all
+  - python3 manage.py start-all --verify-only
+  - curl -I http://127.0.0.1:8001/health
+  - curl -I http://127.0.0.1:5173
+  - cmd.exe /C "cd /d C:\\ && curl.exe -I http://localhost:5173"
+  - cmd.exe /C "cd /d C:\\ && curl.exe http://localhost:5173/api/atm-decay/history?schema=v2"
+  - python3 manage.py validate-session --strict
+tests_passed:
+  - .venv/bin/python manage.py run-pytest app/loops/tests/test_shared_state_live_spot.py app/loops/tests/test_broadcast_loop_phase_lock.py shared/services/l0_runtime/state/test_runtime_state.py shared/services/l0_runtime/services/orchestration/test_feed_orchestrator.py scripts/test/test_eod_bucket_archive.py (30 passed)
+  - .venv/bin/python manage.py run-pytest app/tests/test_health_route_diagnostics.py shared/services/l0_runtime/services/runtime/test_arrow_events.py (6 passed)
+  - .venv/bin/python manage.py run-pytest shared/services/l0_runtime/services/orchestration/test_feed_orchestrator.py (4 passed)
+  - .venv/bin/python manage.py run-pytest infra/ops_cli/test_start_all.py app/loops/tests/test_active_options_input_bridge.py app/loops/tests/test_compute_loop_gpu_dedup.py shared/services/l0_runtime/services/orchestration/test_feed_orchestrator.py (11 passed)
+  - .venv/bin/python manage.py start-all (Redis/backend/frontend listening)
+  - python3 manage.py start-all --verify-only (Redis/backend/frontend listening)
+tests_failed: []
+blockers: []
+notes:
+  - Quote-lane cadence now has a telemetry-only payload path for flat-price raw arrivals.
+  - Stale-source handling remains fail-fast; no REST `SPY.US` repair path was restored.
+  - Host verification exposed and closed three follow-on issues: stale-gate bootstrap deadlock, ActiveOptions `chain=None` crash, and detached frontend stdin inheritance.

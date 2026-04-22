@@ -1,0 +1,41 @@
+﻿session_id: "2026-03-30/fix-active-options-payload-live-continuity-20260330"
+title: "Fix ActiveOptions payload live continuity"
+scope: "implementation"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-30 09:17:26 -04:00"
+updated_at_et: "2026-03-30 09:26:30 -04:00"
+parent_session: null
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "6ba6cb2"
+head_commit: "6ba6cb2"
+
+files_changed:
+  - "app/loops/atm_live_payload.py"
+  - "app/loops/compute_loop.py"
+  - "app/loops/tests/test_compute_loop_atm_live_continuity.py"
+  - "notes/context/handoff.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/project_state.md"
+  - "notes/sessions/2026-03-30/fix-active-options-payload-live-continuity-20260330"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId fix-active-options-payload-live-continuity-20260330 -Title \"Fix ActiveOptions payload live continuity\" -Scope implementation -UpdatePointer"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/loops/tests/test_compute_loop_atm_live_continuity.py app/loops/tests/test_compute_loop_gpu_dedup.py app/tests/test_health_route_diagnostics.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+  - "powershell -ExecutionPolicy Bypass -File scripts/ops/start_backend.ps1"
+tests_passed:
+  - "pytest: app/loops/tests/test_compute_loop_atm_live_continuity.py"
+  - "pytest: app/loops/tests/test_compute_loop_gpu_dedup.py"
+  - "pytest: app/tests/test_health_route_diagnostics.py"
+  - "strict validation: scripts/validate_session.ps1 -Strict"
+  - "real-host restart health: /health status=ok at 2026-03-30T09:25:29.392328"
+  - "real-host active_options_capture: input_source_version=215 payload_source_version=215 aligned=true at 2026-03-30T09:25:59.206043"
+tests_failed:
+  - "initial strict validation failed because meta.yaml still had an empty files_changed key and handoff.md still carried a YYYY-MM-DD placeholder for DEBT-DUE"
+blockers: []
+notes:
+  - "Root cause: housekeeping updates ActiveOptions asynchronously after payload assembly, while duplicate snapshot ticks previously refreshed only ATM and left ui_state.active_options stale until the next non-duplicate compute tick."
+  - "Live evidence after restart: [ActiveOptions] duplicate snapshot live refresh tick_id=20 snapshot_version=215 rows=5."
+
+

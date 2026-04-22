@@ -23,7 +23,7 @@ EnrichedSnapshot (L1)
 ┌──────────────────────────────────────┐
 │  融合引擎                             │
 │  RuleFusionEngine（IV 区制权重表）    │
-│  AttentionFusionEngine（numpy softmax）│
+│  AttentionFusionEngine（Rust owner）   │
 └────────┬─────────────────────────────┘
          │ FusedDecision
          ▼
@@ -85,7 +85,7 @@ l2_decision/
 ├── fusion/
 │   ├── normalizer.py         # [-1,+1] 信号归一化
 │   ├── rule_fusion.py        # IV 区制自适应权重
-│   └── attention_fusion.py   # Numpy softmax + Platt Scaling
+│   └── attention_fusion.py   # Rust owner softmax/weighted-sum + Platt Scaling
 ├── guards/
 │   ├── kill_switch.py        # P0.0 手动熔断（持久化）
 │   └── rail_engine.py        # P0.0–P0.9 优先级护栏链
@@ -103,7 +103,7 @@ l2_decision/
 |------|------|
 | `FeatureStore` | 12 个特征，TTL 缓存，ROC/速度/相关性状态追踪 |
 | `RuleFusionEngine` | IV 区制（Low/Normal/High/Spike）切换权重表 |
-| `AttentionFusionEngine` | numpy softmax 注意力权重 + Platt Scaling 校准 |
+| `AttentionFusionEngine` | Rust owner 注意力权重融合 + Platt Scaling 校准 |
 | `KillSwitchGuard` | P0.0 手动熔断，持久化 JSON，重启恢复 |
 | `JumpGateGuard` | P0.1 跳空检测触发后立即 HALT |
 | `VRPVetoGuard` | P0.5 波动率风险溢价否决 |
@@ -122,7 +122,7 @@ python -m pytest l2_decision/tests/ -v
 
 | 包 | 必须 | 用途 |
 |----|------|------|
-| `numpy` | ✅ | Attention softmax |
+| `shared_rust.services` | ✅ | Attention fusion 数值 owner |
 | `pyarrow` | 可选 | Arrow RecordBatch 输入 |
 | `opentelemetry-api` | 可选 | OTel spans |
 | `prometheus-client` | 可选 | Prometheus 指标 |

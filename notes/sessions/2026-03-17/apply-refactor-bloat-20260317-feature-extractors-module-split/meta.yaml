@@ -1,0 +1,42 @@
+session_id: "2026-03-17/apply-refactor-bloat-20260317-feature-extractors-module-split"
+title: "apply bloat child proposal for feature_extractors module split"
+scope: "runtime bloat split for l2_decision feature extractors"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-17 13:21:46 -04:00"
+updated_at_et: "2026-03-17 13:35:48 -04:00"
+parent_session: "2026-03-17/apply-refactor-bloat-20260317-option-chain-builder-module-split"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "06be8f2"
+head_commit: "06be8f2"
+
+files_changed:
+  - "l2_decision/feature_store/extractors.py"
+  - "l2_decision/feature_store/extractors_common.py"
+  - "l2_decision/feature_store/extractors_flow.py"
+  - "l2_decision/feature_store/extractors_skew.py"
+  - "l2_decision/feature_store/extractors_volatility.py"
+  - "l2_decision/feature_store/extractors_registry.py"
+  - "openspec/changes/refactor-bloat-20260317-feature-extractors-module-split/design.md"
+  - "openspec/changes/refactor-bloat-20260317-feature-extractors-module-split/tasks.md"
+  - "notes/sessions/2026-03-17/apply-refactor-bloat-20260317-feature-extractors-module-split/project_state.md"
+  - "notes/sessions/2026-03-17/apply-refactor-bloat-20260317-feature-extractors-module-split/open_tasks.md"
+  - "notes/sessions/2026-03-17/apply-refactor-bloat-20260317-feature-extractors-module-split/handoff.md"
+  - "notes/sessions/2026-03-17/apply-refactor-bloat-20260317-feature-extractors-module-split/meta.yaml"
+commands:
+  - "& ./scripts/new_session.ps1 -TaskId \"apply-refactor-bloat-20260317-feature-extractors-module-split\" -Title \"apply bloat child proposal for feature_extractors module split\" -Scope \"runtime bloat split for l2_decision feature extractors\" -Owner \"Codex\" -ParentSession \"2026-03-17/apply-refactor-bloat-20260317-option-chain-builder-module-split\" -Timezone \"America/New_York\" -UpdatePointer"
+  - "python -m py_compile l2_decision/feature_store/extractors.py l2_decision/feature_store/extractors_common.py l2_decision/feature_store/extractors_flow.py l2_decision/feature_store/extractors_skew.py l2_decision/feature_store/extractors_volatility.py l2_decision/feature_store/extractors_registry.py l2_decision/tests/test_feature_store.py l2_decision/tests/test_institutional_logic.py"
+  - "& ./scripts/test/run_pytest.ps1 l2_decision/tests/test_feature_store.py"
+  - "& ./scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "LOC gate: extractors.py 804 -> 21; all themed modules <= 450"
+  - "python -m py_compile (changed runtime/test files)"
+  - "scripts/validate_session.ps1 -Strict (PASS)"
+tests_failed:
+  - "scripts/test/run_pytest.ps1 l2_decision/tests/test_feature_store.py (WinError 10106)"
+blockers:
+  - "Host Python asyncio initialization failure: WinError 10106"
+notes:
+  - "Extractor implementation split by theme modules with compatibility entry retained."
+  - "build_default_extractors/reset contract preserved via extractors_registry + extractors.py shim."

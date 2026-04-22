@@ -1,0 +1,45 @@
+session_id: "2026-03-13/atm-decay-interaction-null-guard-impl"
+title: "atm-decay-interaction-null-guard-impl"
+scope: "bugfix"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-13 11:13:33 -04:00"
+updated_at_et: "2026-03-13 11:24:13 -04:00"
+parent_session: "2026-03-13/formula-semantic-governance-archive-close-impl"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "df8758f"
+head_commit: "df8758f"
+
+files_changed:
+  - "l4_ui/src/components/center/atmDecayHover.ts"
+  - "l4_ui/src/components/center/__tests__/atmDecayHover.test.ts"
+  - "l4_ui/src/components/left/leftPanelModel.ts"
+  - "l4_ui/src/components/left/__tests__/leftPanelModel.test.ts"
+  - "docs/SOP/L4_FRONTEND.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-13/atm-decay-interaction-null-guard-impl/project_state.md"
+  - "notes/sessions/2026-03-13/atm-decay-interaction-null-guard-impl/open_tasks.md"
+  - "notes/sessions/2026-03-13/atm-decay-interaction-null-guard-impl/handoff.md"
+  - "notes/sessions/2026-03-13/atm-decay-interaction-null-guard-impl/meta.yaml"
+
+commands:
+  - "npm --prefix l4_ui run test -- atmDecayHover atmDecayChart.degrade"
+  - "npm --prefix l4_ui run test -- atmDecayHover atmDecayChart.degrade"
+  - "npm --prefix l4_ui run test -- leftPanelModel gexStatus"
+  - "npm --prefix l4_ui run test -- leftPanelModel gexStatus"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+
+tests_passed:
+  - "npm --prefix l4_ui run test -- atmDecayHover atmDecayChart.degrade (2 files, 9 tests)"
+  - "npm --prefix l4_ui run test -- leftPanelModel gexStatus (2 files, 8 tests)"
+  - "scripts/validate_session.ps1 -Strict"
+tests_failed:
+  - "vitest run #1 (atmDecayHover/atmDecayChart.degrade) failed: spawn EPERM"
+  - "vitest run #1 (leftPanelModel/gexStatus) failed: spawn EPERM"
+blockers: []
+notes:
+  - "Wall strike canonical source unified to gamma_walls in Left model layer."
+  - "AtmDecay hover strategy avoids visibility toggling to prevent lightweight-charts null hit-test failures."

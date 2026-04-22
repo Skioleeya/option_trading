@@ -1,0 +1,38 @@
+session_id: "2026-04-18/mm-flow-persistence-hardcut"
+title: "MM FLOW persistence hard-cut"
+scope: "runtime contract + persistence schema"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-18 07:38:34 -04:00"
+updated_at_et: "2026-04-18 08:02:15 -04:00"
+parent_session: null
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "c114661"
+head_commit: "c114661"
+
+files_changed:
+  - "shared_rust_services/src/research_store.rs"
+  - "shared_rust_services/src/research_schema.rs"
+  - "shared_rust_services/src/research_store_support.rs"
+  - "l0_ingest/l0_rust/src/service_support.rs"
+  - "app/loops/tests/test_research_store_mm_flow_persistence.py"
+  - "docs/SOP/L3_OUTPUT_ASSEMBLY.md"
+  - "notes/sessions/2026-04-18/mm-flow-persistence-hardcut/project_state.md"
+  - "notes/sessions/2026-04-18/mm-flow-persistence-hardcut/open_tasks.md"
+  - "notes/sessions/2026-04-18/mm-flow-persistence-hardcut/handoff.md"
+  - "notes/sessions/2026-04-18/mm-flow-persistence-hardcut/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/loops/tests/test_research_store_mm_flow_persistence.py l2_decision/tests/test_decision_output_mm_flow.py l3_assembly/events/test_payload_mm_flow_contract.py l3_assembly/assembly/test_delta_encoder_mm_flow.py"
+  - "cargo build --release (shared_rust_services, with CARGO_TARGET_DIR=target)"
+  - "cargo build --release (l0_ingest/l0_rust, with CARGO_TARGET_DIR=target)"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "scripts/test/run_pytest.ps1 app/loops/tests/test_research_store_mm_flow_persistence.py l2_decision/tests/test_decision_output_mm_flow.py l3_assembly/events/test_payload_mm_flow_contract.py l3_assembly/assembly/test_delta_encoder_mm_flow.py -> 7 passed"
+tests_failed: []
+blockers:
+  - "Historical backfill blocked: missing raw/source data required for no-fallback MM FLOW recompute."
+notes: []

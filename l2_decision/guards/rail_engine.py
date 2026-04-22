@@ -1,20 +1,4 @@
-"""l2_decision.guards.rail_engine — Independent P0.0–P0.9 Risk Guard Rails.
-
-Extracts guard gate logic from backend/app/agents/agent_g.py (AgentG._decide_impl)
-into an independent, testable priority chain.
-
-Priority order (lower number = higher priority, evaluated first):
-    P0.0  KillSwitchGuard     — manual halt
-    P0.1  JumpGateGuard       — price jump suppression
-    P0.3  CorrelationGuard    — cross-asset correlation break  (new)
-    P0.5  VRPVetoGuard        — volatility risk premium veto
-    P0.7  DrawdownGuard       — daily loss circuit breaker     (new)
-    P0.9  SessionGuard        — open/close window dampening   (new)
-
-Each GuardRule is independently testable and hot-swappable.
-The chain is processed in priority order; a HALT from any rule
-short-circuits the remaining guards.
-"""
+"""Independent risk-guard priority chain for L2 decision gating."""
 
 from __future__ import annotations
 
@@ -26,6 +10,10 @@ from zoneinfo import ZoneInfo
 
 from l2_decision.events.decision_events import FusedDecision, GuardedDecision
 from shared.config import settings
+from shared_rust.services import (
+    tactical_compute_guard_vrp_proxy_pct as compute_guard_vrp_proxy_pct,
+    tactical_normalize_guard_vrp_threshold_pct as normalize_guard_vrp_threshold_pct,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -91,15 +79,16 @@ class JumpGateGuard:
 class VRPVetoGuard:
     """P0.5 — Veto signal when Volatility Risk Premium is excessive.
 
-    VRP = ATM IV - realized vol proxy (vol_accel_ratio as proxy).
+    guard_vrp_proxy_pct = ATM IV(%) - realized vol proxy(%), where
+    realized-vol proxy still uses |vol_accel_ratio| engineering heuristic.
     High VRP → options are expensive → fade signals.
     """
 
     priority = 0.5
     name = "VRPVetoGuard"
 
-    ENTRY_THRESHOLD = 0.15
-    EXIT_THRESHOLD = 0.13
+    ENTRY_THRESHOLD = 15.0
+    EXIT_THRESHOLD = 13.0
     MIN_HOLD_TICKS = 3
     EXIT_CONFIRM_TICKS = 2
 
@@ -110,15 +99,17 @@ class VRPVetoGuard:
         min_hold_ticks: int | None = None,
         exit_confirm_ticks: int | None = None,
     ) -> None:
-        self._entry_threshold = float(
+        self._entry_threshold = normalize_guard_vrp_threshold_pct(
             entry_threshold
             if entry_threshold is not None
-            else getattr(settings, "guard_vrp_entry_threshold", self.ENTRY_THRESHOLD)
+            else getattr(settings, "guard_vrp_entry_threshold", self.ENTRY_THRESHOLD),
+            self.ENTRY_THRESHOLD,
         )
-        self._exit_threshold = float(
+        self._exit_threshold = normalize_guard_vrp_threshold_pct(
             exit_threshold
             if exit_threshold is not None
-            else getattr(settings, "guard_vrp_exit_threshold", self.EXIT_THRESHOLD)
+            else getattr(settings, "guard_vrp_exit_threshold", self.EXIT_THRESHOLD),
+            self.EXIT_THRESHOLD,
         )
         self._min_hold_ticks = max(
             1,
@@ -141,18 +132,19 @@ class VRPVetoGuard:
         self._below_exit_ticks = 0
 
     def check(self, decision: FusedDecision, context: dict[str, Any]) -> tuple[bool, str, float]:
-        atm_iv = decision.feature_vector.get("atm_iv", 0.20)
-        vol_accel = abs(decision.feature_vector.get("vol_accel_ratio", 0.0))
-        # Proxy VRP: IV minus realized vol proxy (normalized vol accel)
-        realized_vol_proxy = vol_accel * 0.10  # rough annualized proxy
-        vrp = atm_iv - realized_vol_proxy
+        vrp = compute_guard_vrp_proxy_pct(
+            decision.feature_vector.get("atm_iv", 0.20),
+            decision.feature_vector.get("vol_accel_ratio", 0.0),
+        )
+        if vrp is None:
+            return False, "", 1.0
 
         if not self._active:
             if vrp > self._entry_threshold:
                 self._active = True
                 self._active_ticks = 1
                 self._below_exit_ticks = 0
-                return True, f"P0.5 VRPVeto: VRP={vrp:.3f}> {self._entry_threshold:.2f}", 0.6
+                return True, f"P0.5 VRPVeto: guard_vrp_proxy_pct={vrp:.2f}> {self._entry_threshold:.2f}", 0.6
             return False, "", 1.0
 
         # Active state: hold while above exit threshold, and require
@@ -172,7 +164,7 @@ class VRPVetoGuard:
             self._below_exit_ticks = 0
             return False, "", 1.0
 
-        return True, f"P0.5 VRPVeto: VRP={vrp:.3f}> {self._entry_threshold:.2f}", 0.6
+        return True, f"P0.5 VRPVeto: guard_vrp_proxy_pct={vrp:.2f}> {self._entry_threshold:.2f}", 0.6
 
     def reset_session(self) -> None:
         self._active = False

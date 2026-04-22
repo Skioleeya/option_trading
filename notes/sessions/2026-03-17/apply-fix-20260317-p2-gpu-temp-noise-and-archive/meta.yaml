@@ -1,0 +1,57 @@
+session_id: "2026-03-17/apply-fix-20260317-p2-gpu-temp-noise-and-archive"
+title: "fix benchmark GPU temp warning and archive session"
+scope: "diagnostics noise reduction + governance archive"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-17 15:25:02 -04:00"
+updated_at_et: "2026-03-17 15:38:45 -04:00"
+parent_session: "2026-03-17/apply-fix-20260317-winerror-10106-async-recovery-p2"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "06be8f2"
+head_commit: "06be8f2"
+
+files_changed:
+  - "l1_compute/compute/gpu_greeks_kernel.py"
+  - "l1_compute/compute/compute_router.py"
+  - "l1_compute/output/enriched_snapshot.py"
+  - "l1_compute/tests/test_compute.py"
+  - "l1_compute/tests/test_reactor.py"
+  - "docs/SOP/L1_LOCAL_COMPUTATION.md"
+  - "tmp/session_validation_diag/p2_conversion_benchmark.json"
+  - "openspec/changes/archive/2026-03-17-refactor-bloat-20260317-l0-l1-arrow-zero-copy-path/design.md"
+  - "openspec/changes/archive/2026-03-17-refactor-bloat-20260317-l0-l1-arrow-zero-copy-path/proposal.md"
+  - "openspec/changes/archive/2026-03-17-refactor-bloat-20260317-l0-l1-arrow-zero-copy-path/tasks.md"
+  - "openspec/changes/archive/2026-03-17-refactor-bloat-20260317-l0-l1-arrow-zero-copy-path/specs/bloat/spec.md"
+  - "openspec/specs/bloat/spec.md"
+  - "notes/sessions/2026-03-17/apply-fix-20260317-p2-gpu-temp-noise-and-archive/project_state.md"
+  - "notes/sessions/2026-03-17/apply-fix-20260317-p2-gpu-temp-noise-and-archive/open_tasks.md"
+  - "notes/sessions/2026-03-17/apply-fix-20260317-p2-gpu-temp-noise-and-archive/handoff.md"
+  - "notes/sessions/2026-03-17/apply-fix-20260317-p2-gpu-temp-noise-and-archive/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId apply-fix-20260317-p2-gpu-temp-noise-and-archive -UpdatePointer"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_compute.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_reactor.py"
+  - "python -u scripts/diagnostics/measure_l0_l1_conversion.py --iterations 40 --warmup 5 --chain-size 300 --output tmp/session_validation_diag/p2_conversion_benchmark.json"
+  - "openspec archive refactor-bloat-20260317-l0-l1-arrow-zero-copy-path -y"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+
+tests_passed:
+  - "scripts/test/run_pytest.ps1 l1_compute/tests/test_compute.py (17 passed)"
+  - "scripts/test/run_pytest.ps1 l1_compute/tests/test_reactor.py (26 passed)"
+  - "python -u scripts/diagnostics/measure_l0_l1_conversion.py --iterations 40 --warmup 5 --chain-size 300 --output tmp/session_validation_diag/p2_conversion_benchmark.json (PASS)"
+  - "openspec archive refactor-bloat-20260317-l0-l1-arrow-zero-copy-path -y (archived)"
+  - "scripts/validate_session.ps1 -Strict (PASS)"
+
+tests_failed: []
+
+blockers: []
+
+notes:
+  - "GPU-only enforced: CPU recompute forbidden when GPU unavailable or runtime fails."
+  - "Benchmark noise reduced to first blocked warning while preserving explicit degradation."
+

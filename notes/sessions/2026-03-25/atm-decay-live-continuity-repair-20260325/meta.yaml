@@ -1,0 +1,47 @@
+session_id: "2026-03-25/atm-decay-live-continuity-repair-20260325"
+title: "ATM decay live continuity repair"
+scope: "ops"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-25 10:02:49 -04:00"
+updated_at_et: "2026-03-25 10:24:08 -04:00"
+parent_session: "2026-03-25/tradingview-live-sampling-trace-20260325"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "70cc81b"
+head_commit: "70cc81b"
+
+files_changed:
+  - "app/loops/compute_loop.py"
+  - "app/loops/atm_live_payload.py"
+  - "l1_compute/analysis/atm_decay/storage.py"
+  - "l1_compute/analysis/atm_decay/series_sanitizer.py"
+  - "app/loops/tests/test_compute_loop_atm_live_continuity.py"
+  - "l1_compute/tests/test_atm_decay_history_sanitizer.py"
+  - "openspec/changes/refactor-dependency-20260325-atm-decay-live-continuity-and-history-sanitize/proposal.md"
+  - "openspec/changes/refactor-dependency-20260325-atm-decay-live-continuity-and-history-sanitize/tasks.md"
+  - "openspec/changes/refactor-dependency-20260325-atm-decay-live-continuity-and-history-sanitize/design.md"
+  - "openspec/changes/refactor-dependency-20260325-atm-decay-live-continuity-and-history-sanitize/specs/dependency/spec.md"
+  - "docs/SOP/L1_LOCAL_COMPUTATION.md"
+  - "docs/SOP/L4_FRONTEND.md"
+  - "docs/SOP/SYSTEM_OVERVIEW.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/loops/tests/test_compute_loop_atm_live_continuity.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_atm_decay_history_sanitizer.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/loops/tests/test_compute_loop_gpu_dedup.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/tests/test_history_routes_v2.py"
+  - "powershell.exe -Command \"Stop-Process -Id 2868 -Force\""
+  - "powershell -ExecutionPolicy Bypass -File scripts/ops/start_backend.ps1"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "app/loops/tests/test_compute_loop_atm_live_continuity.py"
+  - "l1_compute/tests/test_atm_decay_history_sanitizer.py"
+  - "app/loops/tests/test_compute_loop_gpu_dedup.py"
+  - "app/tests/test_history_routes_v2.py"
+tests_failed: []
+blockers: []
+notes:
+  - "Online verify: /health=200"
+  - "Online verify: /api/atm-decay/history count=2 monotonic=true first=2026-03-25T09:36:09.490527-04:00 last=2026-03-25T10:17:06.001701-04:00"
+  - "Online verify: /ws/dashboard 18s sample -> total_messages=20 atm_updates=16 unique_atm_timestamps=16"
+  - "Strict validation: Session validation passed."

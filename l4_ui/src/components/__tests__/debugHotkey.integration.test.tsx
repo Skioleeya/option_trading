@@ -7,7 +7,19 @@ vi.mock('../../hooks/useDashboardWS', () => ({
 }))
 
 vi.mock('../../observability/l4_rum', () => ({
-    L4Rum: { markFmp: vi.fn() },
+    L4Rum: {
+        markFmp: vi.fn(),
+        setProfilingEnabled: vi.fn(),
+        snapshot: vi.fn(() => ({
+            fps: 60,
+            memoryMb: 64,
+            reconnectCount: 0,
+            lastMsgLatencyMs: null,
+            lastStoreToPaintMs: null,
+            lastWireLagMs: null,
+            lastSourceToPaintObservedMs: null,
+        })),
+    },
 }))
 
 vi.mock('../../alerts/alertEngine', () => ({
@@ -35,12 +47,24 @@ import { App } from '../App'
 
 beforeEach(() => {
     vi.stubEnv('DEV', true)
-    vi.stubGlobal(
-        'fetch',
-        vi.fn().mockResolvedValue({
-            json: async () => ({ history: [] }),
-        })
-    )
+    Object.defineProperty(window, 'innerWidth', {
+        configurable: true,
+        writable: true,
+        value: 1536,
+    })
+    Object.defineProperty(window, 'innerHeight', {
+        configurable: true,
+        writable: true,
+        value: 864,
+    })
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockResolvedValue({
+                ok: true,
+                text: async () => '',
+                json: async () => ({ history: [] }),
+            })
+        )
 })
 
 afterEach(() => {
@@ -59,6 +83,23 @@ afterEach(() => {
 })
 
 describe('Debug hotkey integration', () => {
+    it('marks the root container with the active layout profile', () => {
+        Object.defineProperty(window, 'innerWidth', {
+            configurable: true,
+            writable: true,
+            value: 1280,
+        })
+        Object.defineProperty(window, 'innerHeight', {
+            configurable: true,
+            writable: true,
+            value: 720,
+        })
+
+        const { container } = render(<App />)
+
+        expect(container.firstElementChild).toHaveAttribute('data-layout-profile', 'secondary_compact')
+    })
+
     it('toggles debug overlay via Ctrl/Cmd + D command hotkey chain', async () => {
         render(<App />)
 

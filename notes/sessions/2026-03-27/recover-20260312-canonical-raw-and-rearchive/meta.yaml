@@ -1,0 +1,42 @@
+﻿session_id: "2026-03-27/recover-20260312-canonical-raw-and-rearchive"
+title: "Recover 20260312 canonical raw and rearchive"
+scope: "implementation"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-27 23:49:01 -04:00"
+updated_at_et: "2026-03-27 23:50:00 -04:00"
+parent_session: null
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "6dfd9c5"
+head_commit: "6dfd9c5"
+
+files_changed:
+  - "data/research/raw/raw_20260312.parquet"
+  - "data/cold/daily/20260312/manifest.json"
+  - "data/cold/reports/20260312_quality.json"
+  - "data/cold/by_regime/trend_day/20260312/manifest.json"
+  - "notes/sessions/2026-03-27/recover-20260312-canonical-raw-and-rearchive/project_state.md"
+  - "notes/sessions/2026-03-27/recover-20260312-canonical-raw-and-rearchive/open_tasks.md"
+  - "notes/sessions/2026-03-27/recover-20260312-canonical-raw-and-rearchive/handoff.md"
+  - "notes/sessions/2026-03-27/recover-20260312-canonical-raw-and-rearchive/meta.yaml"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId recover-20260312-canonical-raw-and-rearchive -Title \"Recover 20260312 canonical raw and rearchive\" -Scope implementation -UpdatePointer"
+  - "searched data/, tmp/, and E:\\US.market for raw_20260312.parquet"
+  - "Copy-Item tmp/pr_validate_session_master/data/research/raw/raw_20260312.parquet data/research/raw/raw_20260312.parquet -Force"
+  - "python scripts/diagnostics/eod_bucket_archive.py --date 20260312 --root data --out-root data/cold --strict-quality"
+  - "Remove-Item data/cold/by_regime/unclassified/20260312 -Recurse -Force"
+  - "python scripts/diagnostics/check_eod_manifest_sync.py --date 20260312 --out-root data/cold"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "manifest sync: ok=true for data/cold/daily/20260312/manifest.json"
+  - "archive rerun: 20260312 primary=trend_day quality=PASS"
+tests_failed: []
+blockers:
+  - "No byte-identical copy of the original March 12 source snapshot exists under E:\\US.market."
+notes:
+  - "Recovered source set promoted into official data root and formal cold outputs now align with current source hashes."
+
+

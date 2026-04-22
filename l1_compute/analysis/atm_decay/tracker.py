@@ -13,29 +13,31 @@ from redis.asyncio import Redis
 from shared.config import settings
 
 from .anchor import (
+    build_anchor_leg_diagnostics,
     calculate_raw_pct,
     is_spot_stable_for_lock,
     record_spot_sample,
-    select_opening_anchor,
-    select_roll_anchor,
-    validate_anchor,
+    summarize_opening_chain_inputs,
 )
 from .models import (
+    CAPTURE_STALL_LOG_EVERY_FAILURES,
     ET,
-    MAX_ANCHOR_DISTANCE,
+    MAX_CONSECUTIVE_RAW_PCT_FAILURES,
     SPOT_STABILITY_MAX_RANGE,
     SPOT_STABILITY_MIN_SAMPLES,
     is_valid_spot,
-    spot_distance,
+)
+from .runtime import (
+    capture_anchor,
+    initialize_tracker,
+    invalidate_tracker,
+    load_stitch_state,
+    reset_for_new_day,
+    roll_anchor,
+    try_restore_pending_anchor,
 )
 from .storage import AtmDecayStorage
-from .stitching import (
-    advance_factor,
-    default_stitch_factor,
-    factor_to_legacy_offset,
-    legacy_offset_to_factor,
-    stitch_with_factor,
-)
+from .stitching import default_stitch_factor, factor_to_legacy_offset, stitch_with_factor
 
 logger = logging.getLogger(__name__)
 
@@ -50,20 +52,16 @@ class AtmDecayTracker:
     ):
         self.ctx = quote_ctx
         self.anchor: dict[str, Any] | None = None
-
         self._redis_key_tpl = "app:opening_atm:{date}"
         self._series_key_tpl = "app:atm_decay_series:{date}"
         self._today = datetime.now(ET).strftime("%Y%m%d")
-
         self._storage = AtmDecayStorage(
             redis_client=redis_client,
             cold_dir=settings.opening_atm_cold_storage_root,
             redis_key_tpl=self._redis_key_tpl,
             series_key_tpl=self._series_key_tpl,
         )
-        # Keep for compatibility with existing diagnostics/scripts.
         self._cold_dir = self._storage.cold_dir
-
         self._prev_pcts: tuple[float, float, float] | None = None
         self._warmup_ticks_remaining: int = 5
         self.accumulated_offset = {"c": 0.0, "p": 0.0, "s": 0.0}
@@ -73,6 +71,9 @@ class AtmDecayTracker:
         self._recent_spots: list[float] = []
         self._pending_restore_anchor: dict[str, Any] | None = None
         self._pending_restore_source: str | None = None
+        self._opening_tick_pending: bool = False
+        self._capture_failure_streak: int = 0
+        self._raw_pct_failure_streak: int = 0
         self.is_initialized = False
 
     @property
@@ -85,248 +86,77 @@ class AtmDecayTracker:
 
     async def initialize(self, spot: float = 0.0) -> None:
         """Restore today's anchor from Redis -> cold JSON -> empty."""
-        now = datetime.now(ET)
-        self._today = now.strftime("%Y%m%d")
-        self._pending_restore_anchor = None
-        self._pending_restore_source = None
-
-        # 1) Redis
-        if self.redis:
-            try:
-                anchor = await self._storage.load_anchor_from_redis(self._today)
-                if anchor:
-                    if validate_anchor(anchor):
-                        dist = spot_distance(anchor.get("strike"), spot)
-                        if dist is None:
-                            logger.warning(
-                                "[AtmDecayTracker] Redis anchor skipped: spot unavailable for strict restore "
-                                "(date=%s strike=%.2f spot=%s).",
-                                self._today,
-                                float(anchor["strike"]),
-                                spot,
-                            )
-                            self._pending_restore_anchor = anchor
-                            self._pending_restore_source = "redis"
-                            logger.info(
-                                "[AtmDecayTracker] Redis anchor deferred for later restore when spot is available "
-                                "(date=%s strike=%.2f).",
-                                self._today,
-                                float(anchor["strike"]),
-                            )
-                            self.is_initialized = True
-                            return
-                        elif dist > MAX_ANCHOR_DISTANCE:
-                            logger.warning(
-                                "[AtmDecayTracker] Redis anchor discarded (distance check): "
-                                "date=%s strike=%.2f spot=%.2f diff=%.2f max=%.2f",
-                                self._today,
-                                float(anchor["strike"]),
-                                float(spot),
-                                dist,
-                                MAX_ANCHOR_DISTANCE,
-                            )
-                        else:
-                            self.anchor = anchor
-                            self._load_stitch_state(anchor)
-                            logger.info(
-                                f"[AtmDecayTracker] Restored anchor from Redis: "
-                                f"strike={anchor['strike']} (spot={spot if spot else 'N/A'})"
-                            )
-                            self.is_initialized = True
-                            return
-                    else:
-                        logger.warning("[AtmDecayTracker] Redis anchor failed validation — discarding")
-            except Exception as exc:
-                logger.error(f"[AtmDecayTracker] Redis read failed: {exc}")
-
-        # 2) Cold JSON
-        try:
-            anchor = self._storage.load_anchor_from_cold(self._today)
-            if anchor:
-                if validate_anchor(anchor):
-                    dist = spot_distance(anchor.get("strike"), spot)
-                    if dist is None:
-                        logger.warning(
-                            "[AtmDecayTracker] Cold JSON anchor skipped: spot unavailable for strict restore "
-                            "(date=%s strike=%.2f spot=%s).",
-                            self._today,
-                            float(anchor["strike"]),
-                            spot,
-                        )
-                        self._pending_restore_anchor = anchor
-                        self._pending_restore_source = "cold_json"
-                        logger.info(
-                            "[AtmDecayTracker] Cold JSON anchor deferred for later restore when spot is available "
-                            "(date=%s strike=%.2f).",
-                            self._today,
-                            float(anchor["strike"]),
-                        )
-                        self.is_initialized = True
-                        return
-                    elif dist > MAX_ANCHOR_DISTANCE:
-                        logger.warning(
-                            "[AtmDecayTracker] Cold JSON anchor discarded (distance check): "
-                            "date=%s strike=%.2f spot=%.2f diff=%.2f max=%.2f",
-                            self._today,
-                            float(anchor["strike"]),
-                            float(spot),
-                            dist,
-                            MAX_ANCHOR_DISTANCE,
-                        )
-                    else:
-                        self.anchor = anchor
-                        self._load_stitch_state(anchor)
-                        logger.info(
-                            f"[AtmDecayTracker] Restored anchor from cold JSON: "
-                            f"strike={anchor['strike']} (spot={spot if spot else 'N/A'})"
-                        )
-                        if self.redis:
-                            try:
-                                await self._storage.save_anchor(
-                                    self._today,
-                                    anchor,
-                                    settings.opening_atm_redis_ttl_seconds,
-                                )
-                            except Exception as exc:
-                                logger.error("[AtmDecayTracker] Redis sync for cold-restored anchor failed: %s", exc)
-                            await self._storage.recover_series_from_cold_if_needed(
-                                self._today,
-                                settings.opening_atm_redis_ttl_seconds,
-                            )
-                        self.is_initialized = True
-                        return
-                else:
-                    logger.warning("[AtmDecayTracker] Cold JSON anchor failed validation — discarding")
-        except Exception as exc:
-            logger.error(f"[AtmDecayTracker] Cold JSON read failed: {exc}")
-
-        logger.info("[AtmDecayTracker] No valid anchor for today. Will capture at market open.")
-        self.is_initialized = True
+        await initialize_tracker(self, spot)
 
     def invalidate_anchor(self) -> None:
-        if self.anchor:
-            logger.warning(
-                f"[AtmDecayTracker] Anchor INVALIDATED (was strike={self.anchor.get('strike')}). "
-                "Will re-capture on next tick."
-            )
-        self.anchor = None
-        self._prev_pcts = None
-        self._warmup_ticks_remaining = 5
-        self._recent_spots.clear()
-        self.accumulated_factor = default_stitch_factor()
-        self.accumulated_offset = factor_to_legacy_offset(self.accumulated_factor)
-        self._pending_restore_anchor = None
-        self._pending_restore_source = None
-
-    def _load_stitch_state(self, anchor: dict[str, Any]) -> None:
-        raw_factor = anchor.get("accumulated_factor")
-        if isinstance(raw_factor, dict):
-            merged: dict[str, float] = default_stitch_factor()
-            for key in ("c", "p", "s"):
-                val = raw_factor.get(key, 1.0)
-                try:
-                    merged[key] = max(0.0, float(val))
-                except (TypeError, ValueError):
-                    merged[key] = 1.0
-            self.accumulated_factor = merged
-        else:
-            self.accumulated_factor = legacy_offset_to_factor(anchor.get("accumulated_offset"))
-        self.accumulated_offset = factor_to_legacy_offset(self.accumulated_factor)
+        invalidate_tracker(self)
 
     def _reset_for_new_day(self, today: str) -> None:
-        if self.anchor:
-            logger.info(
-                "[AtmDecayTracker] New trade date detected (%s -> %s). "
-                "Resetting in-memory anchor/stitch state.",
-                self._today,
-                today,
-            )
-        self._today = today
-        self.anchor = None
-        self._prev_pcts = None
-        self._warmup_ticks_remaining = 5
-        self._out_of_bounds_ticks = 0
-        self._strike_changed_flag = False
-        self._recent_spots.clear()
-        self.accumulated_factor = default_stitch_factor()
-        self.accumulated_offset = factor_to_legacy_offset(self.accumulated_factor)
-        self._pending_restore_anchor = None
-        self._pending_restore_source = None
+        reset_for_new_day(self, today)
+
+    def _load_stitch_state(self, anchor: dict[str, Any]) -> None:
+        load_stitch_state(self, anchor)
 
     async def _try_restore_pending_anchor(self, spot: Any) -> bool:
-        pending = self._pending_restore_anchor
-        if pending is None:
-            return False
-        if not is_valid_spot(spot):
-            return False
-        spot_f = float(spot)
+        return await try_restore_pending_anchor(self, spot)
 
-        dist = spot_distance(pending.get("strike"), spot_f)
-        if dist is None:
-            return False
-        if dist > MAX_ANCHOR_DISTANCE:
-            logger.warning(
-                "[AtmDecayTracker] Deferred anchor discarded (distance check): date=%s source=%s strike=%.2f spot=%.2f diff=%.2f max=%.2f",
-                self._today,
-                self._pending_restore_source or "unknown",
-                float(pending["strike"]),
-                spot_f,
-                dist,
-                MAX_ANCHOR_DISTANCE,
-            )
-            self._pending_restore_anchor = None
-            self._pending_restore_source = None
-            return False
+    async def _capture_anchor(self, chain: list[dict[str, Any]], spot: float, now: datetime) -> None:
+        await capture_anchor(self, chain, spot, now)
 
-        self.anchor = pending
-        self._load_stitch_state(pending)
-        logger.info(
-            "[AtmDecayTracker] Deferred anchor restored: source=%s strike=%.2f spot=%.2f",
-            self._pending_restore_source or "unknown",
-            float(pending["strike"]),
-            spot_f,
-        )
+    async def _roll_anchor(self, chain: list[dict[str, Any]], spot: float, now: datetime) -> None:
+        await roll_anchor(self, chain, spot, now)
 
-        if self.redis and self._pending_restore_source == "cold_json":
-            try:
-                await self._storage.save_anchor(
-                    self._today,
-                    pending,
-                    settings.opening_atm_redis_ttl_seconds,
-                )
-            except Exception as exc:
-                logger.error("[AtmDecayTracker] Failed syncing deferred cold anchor to Redis: %s", exc)
-            try:
-                await self._storage.recover_series_from_cold_if_needed(
-                    self._today,
-                    settings.opening_atm_redis_ttl_seconds,
-                )
-            except Exception as exc:
-                logger.error("[AtmDecayTracker] Failed recovering deferred cold series into Redis: %s", exc)
+    def _calculate_raw_pct(self, chain: list[dict[str, Any]]) -> tuple[float, float, float] | None:
+        return calculate_raw_pct(self.anchor, chain)
 
-        self._pending_restore_anchor = None
-        self._pending_restore_source = None
-        return True
+    def get_anchor_symbols(self) -> set[str]:
+        if not self.anchor:
+            return set()
+        syms: set[str] = set()
+        cs = self.anchor.get("call_symbol")
+        ps = self.anchor.get("put_symbol")
+        if cs:
+            syms.add(cs)
+        if ps:
+            syms.add(ps)
+        return syms
 
-    async def _persist(self, anchor: dict[str, Any]) -> None:
-        anchor["accumulated_factor"] = dict(getattr(self, "accumulated_factor", default_stitch_factor()))
-        anchor["accumulated_offset"] = factor_to_legacy_offset(anchor["accumulated_factor"])
-        self.anchor = anchor
-        self._today = datetime.fromisoformat(anchor["timestamp"]).strftime("%Y%m%d")
-        await self._storage.save_anchor(self._today, anchor, settings.opening_atm_redis_ttl_seconds)
-        logger.info(
-            f"[AtmDecayTracker] ANCHOR LOCKED — strike={anchor['strike']} "
-            f"call={anchor['call_symbol']} put={anchor['put_symbol']} "
-            f"C${anchor['call_price']:.2f} P${anchor['put_price']:.2f}"
+    async def get_history(self, date_str: str) -> list[dict[str, Any]]:
+        return await self._storage.get_history(date_str)
+
+    async def flush_and_rebuild(self) -> None:
+        logger.info("[AtmDecayTracker] Flushing series for %s", self._today)
+        await self._storage.flush_series(self._today)
+        self._prev_pcts = None
+
+    async def pre_fill_history(self) -> None:
+        logger.info("[AtmDecayTracker] pre_fill_history skipped (API limitation).")
+
+    def _note_capture_failure(self, chain: list[dict[str, Any]], spot: float, now: datetime, context: str) -> None:
+        self._capture_failure_streak += 1
+        if self._capture_failure_streak % CAPTURE_STALL_LOG_EVERY_FAILURES != 0:
+            return
+        summary = summarize_opening_chain_inputs(chain, now)
+        logger.warning(
+            "[AtmDecayTracker] capture stall: failures=%d context=%s spot=%.2f chain=%d zero_dte=%d integer_strikes=%d",
+            self._capture_failure_streak,
+            context,
+            spot,
+            summary["total_contracts"],
+            summary["zero_dte_contracts"],
+            summary["integer_strikes"],
         )
 
     async def update(self, chain: list[dict[str, Any]], spot: Any) -> dict[str, Any] | None:
         if not self.is_initialized:
+            logger.debug("[AtmDecayTracker] update skipped: not initialized")
             return None
 
-        logger.debug(f"[AtmDecayTracker] Update tick. Redis presence: {self.redis is not None}")
         now = datetime.now(ET)
         today = now.strftime("%Y%m%d")
+        
+        logger.debug("[AtmDecayTracker] update tick: spot=%s chain_size=%s anchor=%s", spot, len(chain), "YES" if self.anchor else "NO")
+
         if today != self._today:
             self._reset_for_new_day(today)
 
@@ -345,7 +175,8 @@ class AtmDecayTracker:
             if self._warmup_ticks_remaining > 0:
                 self._warmup_ticks_remaining -= 1
                 logger.debug(
-                    f"[AtmDecay] Warm-up delay: {self._warmup_ticks_remaining} ticks remaining before anchor capture"
+                    "[AtmDecay] Warm-up delay: %s ticks remaining before anchor capture",
+                    self._warmup_ticks_remaining,
                 )
             else:
                 ready, span = is_spot_stable_for_lock(self._recent_spots)
@@ -359,6 +190,8 @@ class AtmDecayTracker:
                     )
                 else:
                     await self._capture_anchor(chain, spot_f, now)
+                    if not self.anchor:
+                        self._note_capture_failure(chain, spot_f, now, "update")
 
         if not self.anchor:
             return None
@@ -375,69 +208,87 @@ class AtmDecayTracker:
 
         return self._calculate_decay(chain)
 
-    def get_anchor_symbols(self) -> set[str]:
+    async def bootstrap_intraday_anchor(self, chain: list[dict[str, Any]], spot: Any) -> dict[str, Any] | None:
+        if not self.is_initialized or self.anchor:
+            return None
+
+        now = datetime.now(ET)
+        if now.hour < 9 or (now.hour == 9 and now.minute < 30):
+            return None
+        if now.hour > 16 or (now.hour == 16 and (now.minute > 0 or now.second > 0)):
+            return None
+
+        spot_f = float(spot) if is_valid_spot(spot) else 0.0
+        if not is_valid_spot(spot_f):
+            return None
+
+        had_pending_restore = self._pending_restore_anchor is not None
+        if had_pending_restore:
+            await self._try_restore_pending_anchor(spot_f)
+            if self.anchor:
+                logger.info(
+                    "[AtmDecayTracker] Intraday startup bootstrap satisfied by deferred restore: strike=%s spot=%.2f",
+                    self.anchor["strike"],
+                    spot_f,
+                )
+                return self._calculate_decay(chain)
+            if self._pending_restore_anchor is None:
+                logger.info(
+                    "[AtmDecayTracker] Deferred startup anchor was discarded; continuing with fresh intraday capture "
+                    "using spot=%.2f",
+                    spot_f,
+                )
+
+        await self._capture_anchor(chain, spot_f, now)
         if not self.anchor:
-            return set()
-        syms: set[str] = set()
-        cs = self.anchor.get("call_symbol")
-        ps = self.anchor.get("put_symbol")
-        if cs:
-            syms.add(cs)
-        if ps:
-            syms.add(ps)
-        return syms
+            self._note_capture_failure(chain, spot_f, now, "startup_bootstrap")
+            return None
 
-    async def get_history(self, date_str: str) -> list[dict[str, Any]]:
-        return await self._storage.get_history(date_str)
-
-    async def flush_and_rebuild(self) -> None:
-        logger.info(f"[AtmDecayTracker] Flushing series for {self._today}")
-        await self._storage.flush_series(self._today)
-        self._prev_pcts = None
-
-    async def pre_fill_history(self) -> None:
-        logger.info("[AtmDecayTracker] pre_fill_history skipped (API limitation).")
-
-    async def _capture_anchor(self, chain: list[dict[str, Any]], spot: float, now: datetime) -> None:
-        anchor = select_opening_anchor(chain, spot, now, logger=logger)
-        if anchor:
-            await self._persist(anchor)
-
-    async def _roll_anchor(self, chain: list[dict[str, Any]], spot: float, now: datetime) -> None:
-        if not self.anchor:
-            return
-
-        next_anchor, same_strike = select_roll_anchor(self.anchor, chain, spot, now)
-        if same_strike:
-            self._out_of_bounds_ticks = 0
-            return
-        if not next_anchor:
-            return
-
-        raw_pcts = self._calculate_raw_pct(chain)
-        if raw_pcts:
-            self.accumulated_factor["c"] = advance_factor(self.accumulated_factor.get("c", 1.0), raw_pcts[0])
-            self.accumulated_factor["p"] = advance_factor(self.accumulated_factor.get("p", 1.0), raw_pcts[1])
-            self.accumulated_factor["s"] = advance_factor(self.accumulated_factor.get("s", 1.0), raw_pcts[2])
-            self.accumulated_offset = factor_to_legacy_offset(self.accumulated_factor)
-
-        logger.warning(
-            f"[AtmDecay] Rolling anchor {self.anchor['strike']} -> {next_anchor['strike']} "
-            f"(SCM CDD stitched, offsets: S={self.accumulated_offset['s']:+.3f})"
+        logger.info(
+            "[AtmDecayTracker] Intraday startup bootstrap locked anchor immediately: strike=%s spot=%.2f",
+            self.anchor["strike"],
+            spot_f,
         )
-        await self._persist(next_anchor)
-        self._strike_changed_flag = True
-        self._out_of_bounds_ticks = 0
+        return self._calculate_decay(chain)
 
-    def _calculate_raw_pct(self, chain: list[dict[str, Any]]) -> tuple[float, float, float] | None:
-        return calculate_raw_pct(self.anchor, chain)
+    def compute_current_decay(self, chain: list[dict[str, Any]]) -> dict[str, Any] | None:
+        if not self.anchor:
+            return None
+        return self._calculate_decay(chain)
 
     def _calculate_decay(self, chain: list[dict[str, Any]]) -> dict[str, Any] | None:
         raw_pcts = self._calculate_raw_pct(chain)
         if not raw_pcts:
+            diagnostic = build_anchor_leg_diagnostics(self.anchor, chain)
+            if diagnostic is not None:
+                diagnostic["reason"] = "raw_pct_unavailable"
+                diagnostic["tracker_today"] = self._today
+                diagnostic["timestamp"] = datetime.now(ET).isoformat()
+                logger.warning("[AtmDecay] decay compute skipped; anchor-leg diagnostics=%s", diagnostic)
+                asyncio.ensure_future(self._storage.append_anchor_diagnostic(self._today, diagnostic))
+            self._raw_pct_failure_streak += 1
+            if (
+                self.anchor
+                and self._raw_pct_failure_streak >= MAX_CONSECUTIVE_RAW_PCT_FAILURES
+            ):
+                strike = self.anchor.get("strike")
+                failures = self._raw_pct_failure_streak
+                logger.warning(
+                    "[AtmDecayTracker] Consecutive raw-pct failures hit threshold=%s for strike=%s; "
+                    "invalidating anchor and forcing re-capture.",
+                    MAX_CONSECUTIVE_RAW_PCT_FAILURES,
+                    strike,
+                )
+                self.invalidate_anchor()
+                asyncio.ensure_future(self._storage.delete_anchor(self._today))
+                logger.info(
+                    "[AtmDecayTracker] Persisted anchor cleared after %s consecutive raw-pct failures.",
+                    failures,
+                )
             return None
 
         c_raw, p_raw, s_raw = raw_pcts
+        self._raw_pct_failure_streak = 0
         factors = self.accumulated_factor
         c_pct = stitch_with_factor(c_raw, factors.get("c", 1.0))
         p_pct = stitch_with_factor(p_raw, factors.get("p", 1.0))
@@ -458,6 +309,13 @@ class AtmDecayTracker:
         if self._strike_changed_flag:
             self._strike_changed_flag = False
 
+        if self._opening_tick_pending and abs(c_pct) < 1e-9 and abs(p_pct) < 1e-9 and abs(s_pct) < 1e-9:
+            logger.info(
+                "[AtmDecay] opening tick suppressed for strike=%s while waiting for post-lock movement",
+                int(self.anchor["strike"]),
+            )
+            return None
+
         should_store = True
         if self._prev_pcts is not None:
             pc, pp, ps = self._prev_pcts
@@ -465,14 +323,32 @@ class AtmDecayTracker:
                 should_store = False
 
         if should_store:
+            if (
+                not self._opening_tick_pending
+                and abs(c_pct) < 1e-9
+                and abs(p_pct) < 1e-9
+                and abs(s_pct) < 1e-9
+            ):
+                diagnostic = build_anchor_leg_diagnostics(self.anchor, chain)
+                if diagnostic is not None:
+                    diagnostic["reason"] = "flat_post_lock_row"
+                    diagnostic["tracker_today"] = self._today
+                    diagnostic["timestamp"] = ts.isoformat()
+                    diagnostic["call_pct"] = c_pct
+                    diagnostic["put_pct"] = p_pct
+                    diagnostic["straddle_pct"] = s_pct
+                    diagnostic["previous_pcts"] = list(self._prev_pcts) if self._prev_pcts is not None else None
+                    logger.warning("[AtmDecay] post-lock flat row stored; anchor-leg diagnostics=%s", diagnostic)
+                    asyncio.ensure_future(self._storage.append_anchor_diagnostic(self._today, diagnostic))
+            self._opening_tick_pending = False
             self._prev_pcts = (c_pct, p_pct, s_pct)
-            asyncio.ensure_future(self._append_series(item, ts.strftime("%Y%m%d")))
+            asyncio.ensure_future(self._storage.append_series(ts.strftime("%Y%m%d"), item))
             logger.info(
-                f"[AtmDecay] {int(self.anchor['strike'])} | "
-                f"C:{c_pct:+.4f}  P:{p_pct:+.4f}  S:{s_pct:+.4f} (stored)"
+                "[AtmDecay] %s | C:%+.4f  P:%+.4f  S:%+.4f (stored)",
+                int(self.anchor["strike"]),
+                c_pct,
+                p_pct,
+                s_pct,
             )
 
         return item
-
-    async def _append_series(self, data: dict[str, Any], date_str: str) -> None:
-        await self._storage.append_series(date_str, data)

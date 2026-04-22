@@ -57,6 +57,10 @@ export function injectSmokeTester() {
                 useDashboardStore.getState().setConnectionStatus('connected')
                 console.log('[Smoke Test] Connection status set to connected')
             },
+            setProfiling: (enabled: boolean) => {
+                window.dispatchEvent(new CustomEvent('l4:set_profiling_enabled', { detail: enabled === true }))
+                console.log(`[Smoke Test] Profiling ${enabled === true ? 'enabled' : 'disabled'}`)
+            },
 
             /**
              * 5. Read current RUM metrics
@@ -74,6 +78,7 @@ Commands:
   mockL4.triggerAlert('critical', 'SIGNAL', 'Test Alert', 'This is a test trigger')
   mockL4.simulateDisconnect()
   mockL4.simulateConnect()
+  mockL4.setProfiling(true|false)
   mockL4.injectPayload({...})
   mockL4.getRum()
 `)

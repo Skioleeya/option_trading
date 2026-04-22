@@ -1,0 +1,44 @@
+﻿session_id: "2026-03-25/atm-decay-anchor-recapture-repair-20260325"
+title: "ATM decay anchor recapture repair"
+scope: "ops"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-25 10:36:12 -04:00"
+updated_at_et: "2026-03-25 10:55:14 -04:00"
+parent_session: "2026-03-25/atm-decay-tradingview-flatline-diagnosis-20260325"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "70cc81b"
+head_commit: "70cc81b"
+
+files_changed:
+  - "l1_compute/analysis/atm_decay/models.py"
+  - "l1_compute/analysis/atm_decay/storage.py"
+  - "l1_compute/analysis/atm_decay/tracker.py"
+  - "l1_compute/analysis/atm_decay/runtime.py"
+  - "app/loops/housekeeping_loop.py"
+  - "app/loops/tests/test_housekeeping_gpu_dedup.py"
+  - "l1_compute/tests/test_atm_decay_anchor_recovery.py"
+  - "docs/SOP/L1_LOCAL_COMPUTATION.md"
+  - "openspec/changes/refactor-dependency-20260325-atm-decay-anchor-recapture-repair/proposal.md"
+  - "openspec/changes/refactor-dependency-20260325-atm-decay-anchor-recapture-repair/tasks.md"
+  - "openspec/changes/refactor-dependency-20260325-atm-decay-anchor-recapture-repair/specs/dependency/spec.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_atm_decay_anchor_recovery.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/loops/tests/test_housekeeping_gpu_dedup.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_atm_decay_tracker.py"
+  - "Stop-Process -Id 16492 -Force"
+  - "python - <redis cleanup for app:opening_atm:20260325/app:atm_decay_series:20260325/app:atm_anchor_diag:20260325 on port 6380>"
+  - "powershell -ExecutionPolicy Bypass -File scripts/ops/start_backend.ps1"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "l1_compute/tests/test_atm_decay_anchor_recovery.py"
+  - "app/loops/tests/test_housekeeping_gpu_dedup.py"
+  - "l1_compute/tests/test_atm_decay_tracker.py"
+tests_failed: []
+blockers:
+  - "Online observe pending: first valid post-relock ATM decay point has not yet appeared in /api/atm-decay/history."
+notes:
+  - "Strict validation passed at 2026-03-25 10:55:14 -04:00."
+
+

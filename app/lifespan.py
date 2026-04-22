@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI
 
@@ -14,6 +15,18 @@ from app.loops.broadcast_loop import run_broadcast_loop
 from app.loops.housekeeping_loop import run_housekeeping_loop
 
 logger = logging.getLogger(__name__)
+_ATM_BOOTSTRAP_RETRIES = 20
+_ATM_BOOTSTRAP_DELAY_SECONDS = 0.5
+
+
+def _coerce_non_negative_spot(raw: Any) -> float:
+    try:
+        spot = float(raw)
+    except (TypeError, ValueError):
+        return 0.0
+    if spot < 0.0:
+        return 0.0
+    return spot
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -28,18 +41,91 @@ async def lifespan(app: FastAPI):
     if ctr.redis_service.client:
         await ctr.agent_g.set_redis_client(ctr.redis_service.client)
         ctr.atm_decay_tracker.redis = ctr.redis_service.client
+        ctr.l3_reactor.bind_redis(ctr.redis_service.client)
         await ctr.l3_reactor.ui_tracker.set_redis_client(ctr.redis_service.client)
             
     await ctr.option_chain_builder.initialize()
     
     # 3. Fetch initial spot to initialize trackers
+    logger.info("[Lifespan] Discarding first 5 seconds of opening data to allow WS quotes to warm up...")
+    await asyncio.sleep(5.0)
     try:
-        _init_snapshot = await ctr.option_chain_builder.fetch_chain()
-        _init_spot = _init_snapshot.get("spot", 0.0)
+        _init_snapshot = await ctr.option_chain_builder.fetch_snapshot()
+        _init_spot = _coerce_non_negative_spot(_init_snapshot.get("spot", 0.0))
     except Exception as exc:
         logger.warning("[Lifespan] Initial fetch_chain failed, using spot=0. reason=%s", exc)
         _init_spot = 0.0
+        _init_chain = []
+    else:
+        _init_chain = ctr.option_chain_builder.get_startup_chain_snapshot()
+
+    # Early REST quote pull for near-ATM symbols to guarantee prices exist for bootstrap
+    if _init_spot > 0 and _init_chain:
+        sorted_chain = sorted(_init_chain, key=lambda x: abs(float(x.get("strike", 0)) - _init_spot))
+        repair_syms = set()
+        for opt in sorted_chain[:20]:  # up to 10 strikes * 2 legs
+            if sym := opt.get("symbol"):
+                repair_syms.add(sym)
+        if repair_syms:
+            logger.info("[Lifespan] Forcing early REST quote pull for %d near-ATM symbols to bootstrap anchor...", len(repair_syms))
+            try:
+                await ctr.option_chain_builder.repair_symbols_once(repair_syms)
+                _init_chain = ctr.option_chain_builder.get_startup_chain_snapshot()
+            except Exception as exc:
+                logger.warning("[Lifespan] Early REST quote pull failed. reason=%s", exc)
+
     await ctr.atm_decay_tracker.initialize(spot=_init_spot)
+    if not ctr.atm_decay_tracker.anchor:
+        try:
+            await ctr.atm_decay_tracker.bootstrap_intraday_anchor(_init_chain, _init_spot)
+        except Exception as exc:
+            logger.warning("[Lifespan] Intraday ATM bootstrap lock failed. reason=%s", exc)
+    if not ctr.atm_decay_tracker.anchor:
+        for attempt in range(1, _ATM_BOOTSTRAP_RETRIES + 1):
+            await asyncio.sleep(_ATM_BOOTSTRAP_DELAY_SECONDS)
+            retry_spot, retry_chain = ctr.option_chain_builder.get_startup_bootstrap_context()
+            try:
+                await ctr.atm_decay_tracker.bootstrap_intraday_anchor(retry_chain, retry_spot)
+            except Exception as exc:
+                logger.warning(
+                    "[Lifespan] Intraday ATM bootstrap retry failed (attempt=%s/%s). reason=%s",
+                    attempt,
+                    _ATM_BOOTSTRAP_RETRIES,
+                    exc,
+                )
+            if ctr.atm_decay_tracker.anchor:
+                logger.info(
+                    "[Lifespan] Intraday ATM bootstrap succeeded during startup retry window (attempt=%s/%s).",
+                    attempt,
+                    _ATM_BOOTSTRAP_RETRIES,
+                )
+                break
+    restored_anchor_symbols = ctr.atm_decay_tracker.get_anchor_symbols()
+    if restored_anchor_symbols:
+        ctr.option_chain_builder.set_mandatory_symbols(restored_anchor_symbols)
+        retry_spot, retry_chain = ctr.option_chain_builder.get_startup_bootstrap_context()
+        try:
+            if retry_spot and retry_spot > 0:
+                await ctr.option_chain_builder.refresh_subscriptions_once(retry_spot)
+            repaired = await ctr.option_chain_builder.repair_symbols_once(
+                restored_anchor_symbols,
+                log_prefix="[Lifespan]",
+            )
+            retry_spot, retry_chain = ctr.option_chain_builder.get_startup_bootstrap_context()
+            ctr.atm_decay_tracker.compute_current_decay(retry_chain)
+            if repaired > 0:
+                logger.info(
+                    "[Lifespan] Startup ATM anchor repair seeded via one-shot price repair: symbols=%d repaired=%d",
+                    len(restored_anchor_symbols),
+                    repaired,
+                )
+            else:
+                logger.info(
+                    "[Lifespan] Startup ATM anchor recompute attempted without additional repair hits: symbols=%d",
+                    len(restored_anchor_symbols),
+                )
+        except Exception as exc:
+            logger.warning("[Lifespan] Startup ATM one-shot price repair failed. reason=%s", exc)
     ctr.quote_hub_ready.set()
     
     # Hook L1 microstructure into WS depth/trade callbacks

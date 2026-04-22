@@ -30,10 +30,10 @@ This file inventories the current repository metrics that are computed from IV o
 | `svol_correlation_15m` | L2 | 是 | 用 15 分钟窗口内 `spot` 与 `atm_iv` 的 Pearson 相关系数，结果 clamp 到 `[-1, 1]`。来源: `l2_decision/feature_store/extractors.py` |
 | `skew_25d_normalized` / `rr25_call_minus_put` / `skew_25d_valid` | L2 | 是 | 取最接近 `+0.25/-0.25` delta 的 call/put；legacy `skew_25d_normalized = (put_iv - call_iv) / atm_iv`，canonical `rr25_call_minus_put = call_iv - put_iv`；仅当双边 delta 都在容差内时有效。来源: `l2_decision/feature_store/extractors.py` |
 | `mtf_consensus_score` | L2 | 是 | `0.5 * iv1m + 0.3 * iv5m + 0.2 * iv15m`，三个输入都来自 ATM IV velocity。来源: `l2_decision/feature_store/extractors.py` |
-| `vol_risk_premium` | L2 | 是 | `vol_risk_premium = atm_iv * 100 - settings.vrp_baseline_hv`。来源: `l2_decision/feature_store/extractors.py` |
+| `vol_risk_premium` | L2 | 是 | `vol_risk_premium = compute_vrp(atm_iv, settings.vrp_baseline_hv)`，输出 `% points`。来源: `l2_decision/feature_store/extractors.py`, `shared/system/tactical_triad_logic.py` |
 | `realized_volatility_15m` / `vrp_realized_based` | L2 | 是 | `realized_volatility_15m` 基于 rolling spot log returns 年化得到 decimal RV；`vrp_realized_based` 先将 RV 显式转成 `%`，再计算 `ATM_IV(%) - realized_volatility(%)`，仅用于 research path。来源: `shared/services/realized_volatility.py`, `l2_decision/feature_store/extractors.py` |
 | `iv_regime` | L2 | 是 | 用 `atm_iv`、`iv_velocity_1m` 与 `net_gex_normalized` 做 regime 分类；先对 `atm_iv` 做 5-tick smoothing。来源: `l2_decision/signals/iv_regime.py` |
-| `VRPVetoGuard` | L2 | 是 | `vrp = atm_iv - realized_vol_proxy`，再做 entry/exit hysteresis。来源: `l2_decision/guards/rail_engine.py` |
+| `guard_vrp_proxy_pct` / `VRPVetoGuard` | L2 | 是 | `guard_vrp_proxy_pct = ATM_IV(%) - realized_vol_proxy(%)`，其中 `realized_vol_proxy(%) = abs(vol_accel_ratio) * 10`；guard entry/exit 阈值统一按 `% points`，并兼容 legacy `0.15/0.13 -> 15.0/13.0`。来源: `shared/system/tactical_triad_logic.py`, `l2_decision/guards/rail_engine.py` |
 | `vrp` / `vrp_state` | L3 | 是 | `compute_vrp(atm_iv, baseline_hv)`，即 `ATM_IV(%) - baseline_HV(%)`，再映射状态。来源: `shared/system/tactical_triad_logic.py`, `l3_assembly/assembly/ui_state_tracker.py` |
 | `FLOW_E` | Shared / ActiveOptions | 是 | `delta_iv = implied_volatility - historical_volatility`；`flow_e = volume * 100 * abs(vanna) * abs(delta_iv) * direction`。来源: `shared/services/active_options/flow_engine_e.py` |
 | `FLOW_G` | Shared / ActiveOptions | 是 | `iv_norm = implied_volatility / atm_iv`；`flow_g = delta_oi * iv_norm * turnover * type_sign`。来源: `shared/services/active_options/flow_engine_g.py` |

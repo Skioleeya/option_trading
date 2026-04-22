@@ -1,0 +1,68 @@
+session_id: "2026-04-02/wave-a-20260402-p1-p2-p4-parallel"
+title: "WAVE A parallel P1 P2 P4 proposals"
+scope: "feature"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-02 15:13:21 -04:00"
+updated_at_et: "2026-04-02 15:27:27 -04:00"
+parent_session: "2026-04-02/impl-20260402-subwave-f-dual-run-evidence"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "ba9ac77"
+head_commit: "ba9ac77"
+
+files_changed:
+  - "app/loops/compute_loop.py"
+  - "l2_decision/signals/flow/deg_composer.py"
+  - "l2_decision/signals/flow/flow_engine_d.py"
+  - "l2_decision/signals/flow/flow_engine_e.py"
+  - "l2_decision/signals/flow/flow_engine_g.py"
+  - "shared/services/active_options_engines.py"
+  - "shared/services/active_options_input.py"
+  - "shared_rust_services/src/tactical.rs"
+  - "shared_rust_services/src/lib.rs"
+  - "openspec/changes/refactor-dependency-20260402-services-root-retirement/proposal.md"
+  - "openspec/changes/refactor-dependency-20260402-services-root-retirement/design.md"
+  - "openspec/changes/refactor-dependency-20260402-services-root-retirement/tasks.md"
+  - "openspec/changes/refactor-dependency-20260402-services-root-retirement/specs/dependency/spec.md"
+  - "openspec/changes/refactor-dependency-20260402-tactical-triad-shared-rust-export/proposal.md"
+  - "openspec/changes/refactor-dependency-20260402-tactical-triad-shared-rust-export/design.md"
+  - "openspec/changes/refactor-dependency-20260402-tactical-triad-shared-rust-export/specs/dependency/spec.md"
+  - "openspec/changes/refactor-dependency-20260402-tactical-triad-shared-rust-export/tasks.md"
+  - "openspec/changes/impl-20260402-active-options-pure-shim-retirement/tasks.md"
+  - "openspec/changes/refactor-governance-20260317-l0-l2-data-path-remediation-chain/proposal.md"
+  - "openspec/changes/refactor-governance-20260317-l0-l2-data-path-remediation-chain/design.md"
+  - "openspec/changes/refactor-governance-20260317-l0-l2-data-path-remediation-chain/tasks.md"
+  - "openspec/changes/refactor-governance-20260317-l0-l2-data-path-remediation-chain/specs/refactor-governance/spec.md"
+  - "notes/sessions/2026-04-02/wave-a-20260402-p1-p2-p4-parallel/project_state.md"
+  - "notes/sessions/2026-04-02/wave-a-20260402-p1-p2-p4-parallel/open_tasks.md"
+  - "notes/sessions/2026-04-02/wave-a-20260402-p1-p2-p4-parallel/handoff.md"
+  - "notes/sessions/2026-04-02/wave-a-20260402-p1-p2-p4-parallel/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+
+commands:
+  - "python -c \"from shared_rust.services import tactical_compute_vrp, tactical_classify_vrp_state, tactical_normalize_svol_state, tactical_resolve_svol_fields, tactical_triad_spec, tactical_normalize_iv_percent, tactical_normalize_vrp_baseline_hv_pct, tactical_normalize_guard_vrp_threshold_pct, tactical_compute_guard_vrp_proxy_pct; print('tactical-export-ok')\""
+  - "python -c \"from l2_decision.signals.flow.deg_composer import DEGComposer; from l2_decision.signals.flow.flow_engine_d import FlowEngineD; from l2_decision.signals.flow.flow_engine_e import FlowEngineE; from l2_decision.signals.flow.flow_engine_g import FlowEngineG; from app.loops.compute_loop import _publish_active_options_input; print('active-options-retarget-ok')\""
+  - "python -c \"import shared_rust.services_root\""
+  - "python -c \"from shared_rust.services import build_columnar_payload, RollingRealizedVolatility; print('services-ok')\""
+  - "rg \"from shared\\.services\\.active_options_(engines|input)|import shared\\.services\\.active_options_(engines|input)\" app l0_ingest l1_compute l2_decision l3_assembly l4_ui shared --glob \"*.py\""
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+
+tests_passed:
+  - "tactical-export-ok"
+  - "active-options-retarget-ok"
+  - "shared_rust.services_root import raises ModuleNotFoundError"
+  - "services-ok"
+  - "shim residual import scan returns no runtime matches"
+  - "scripts/validate_session.ps1 -Strict passed"
+
+tests_failed:
+  - "scripts/test/run_pytest.ps1 tests/l0_runtime/ blocked by existing tmp/pytest_cache ACL mismatch (out of scope)"
+
+blockers:
+  - "Sub-wave F full market-session dual-run evidence still pending (cross-session backlog)"
+
+notes:
+  - "WAVE A executed in parallel with three subagents; strict gate blockers were remediated in-session."

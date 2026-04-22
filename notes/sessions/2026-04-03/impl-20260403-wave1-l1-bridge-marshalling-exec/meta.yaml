@@ -1,0 +1,46 @@
+session_id: "2026-04-03/impl-20260403-wave1-l1-bridge-marshalling-exec"
+title: "impl-20260403-wave1-l1-bridge-marshalling-exec"
+scope: "wave1 execution: l1 streaming+greeks bridge marshalling audit"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-03 09:13:48 -04:00"
+updated_at_et: "2026-04-03 09:37:22 -04:00"
+parent_session: "2026-04-03/impl-20260403-openspec-cleanup-proposals-review-fixes"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "aa3efd7"
+head_commit: "aa3efd7"
+
+files_changed:
+  - "l1_compute/aggregation/streaming_aggregator.py"
+  - "l1_compute/analysis/greeks_engine.py"
+  - "shared/services/greeks_engine_batch.py"
+  - "l1_compute/tests/test_greeks_engine_bridge.py"
+  - "l1_compute/tests/test_streaming_aggregator_rust_parity.py"
+  - "shared_rust_services/src/aggregation.rs"
+  - "openspec/changes/impl-20260403-l1-streaming-aggregator-bridge-marshalling-audit/proposal.md"
+  - "openspec/changes/impl-20260403-l1-streaming-aggregator-bridge-marshalling-audit/design.md"
+  - "openspec/changes/impl-20260403-l1-streaming-aggregator-bridge-marshalling-audit/tasks.md"
+  - "openspec/changes/impl-20260403-l1-streaming-aggregator-bridge-marshalling-audit/specs/l1-streaming-aggregator-bridge-marshalling/spec.md"
+  - "openspec/changes/impl-20260403-l1-greeks-engine-bridge-marshalling-audit/proposal.md"
+  - "openspec/changes/impl-20260403-l1-greeks-engine-bridge-marshalling-audit/design.md"
+  - "openspec/changes/impl-20260403-l1-greeks-engine-bridge-marshalling-audit/tasks.md"
+  - "openspec/changes/impl-20260403-l1-greeks-engine-bridge-marshalling-audit/specs/l1-greeks-engine-bridge-marshalling/spec.md"
+  - "docs/SOP/L1_LOCAL_COMPUTATION.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId impl-20260403-wave1-l1-bridge-marshalling-exec -Title \"impl-20260403-wave1-l1-bridge-marshalling-exec\" -Scope \"wave1 execution: l1 streaming aggregator bridge marshalling audit\" -Owner Codex -ParentSession \"2026-04-03/impl-20260403-openspec-cleanup-proposals-review-fixes\" -Timezone America/New_York -UpdatePointer"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_streaming_aggregator_rust_parity.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_greeks_engine_bridge.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_bsm_rust_parity.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "l1_compute/tests/test_streaming_aggregator_rust_parity.py -> 3 passed"
+  - "l1_compute/tests/test_greeks_engine_bridge.py -> 2 passed"
+  - "l1_compute/tests/test_bsm_rust_parity.py -> 53 passed"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict -> Session validation passed."
+tests_failed: []
+blockers: []
+notes:
+  - "StreamingAggregator now uses Rust payload ownership for cumulative flip and direct sequence marshalling."
+  - "GreeksEngine no longer routes through bsm_fast; live path is shared neutral batch marshalling -> Rust owner."
+  - "OpenSpec linked: streaming_aggregator + greeks_engine bridge marshalling audits."

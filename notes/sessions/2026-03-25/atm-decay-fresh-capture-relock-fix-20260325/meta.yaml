@@ -1,0 +1,38 @@
+﻿session_id: "2026-03-25/atm-decay-fresh-capture-relock-fix-20260325"
+title: "ATM decay fresh capture relock fix"
+scope: "ops"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-25 11:05:09 -04:00"
+updated_at_et: "2026-03-25 11:12:03 -04:00"
+parent_session: "2026-03-25/atm-decay-anchor-recapture-repair-20260325"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "70cc81b"
+head_commit: "70cc81b"
+
+files_changed:
+  - "l1_compute/analysis/atm_decay/tracker.py"
+  - "l1_compute/tests/test_atm_decay_tracker.py"
+  - "docs/SOP/L1_LOCAL_COMPUTATION.md"
+  - "openspec/changes/refactor-dependency-20260325-atm-decay-startup-bootstrap-fresh-capture/proposal.md"
+  - "openspec/changes/refactor-dependency-20260325-atm-decay-startup-bootstrap-fresh-capture/design.md"
+  - "openspec/changes/refactor-dependency-20260325-atm-decay-startup-bootstrap-fresh-capture/tasks.md"
+  - "openspec/changes/refactor-dependency-20260325-atm-decay-startup-bootstrap-fresh-capture/specs/dependency/spec.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_atm_decay_tracker.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_atm_decay_modular.py"
+  - "Stop-Process -Id 25796 -Force"
+  - "powershell -ExecutionPolicy Bypass -File scripts/ops/start_backend.ps1"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "l1_compute/tests/test_atm_decay_tracker.py"
+  - "l1_compute/tests/test_atm_decay_modular.py"
+tests_failed: []
+blockers:
+  - "Online observe pending: first valid decay point after fresh-captured 661 anchor has not yet appeared in /api/atm-decay/history."
+notes:
+  - "Backend restart confirmed startup discard of stale 662 and fresh capture of new 661 anchor at 2026-03-25 11:08:53 -04:00."
+  - "Strict validation passed at 2026-03-25 11:12:03 -04:00."
+
+

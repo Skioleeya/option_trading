@@ -11,7 +11,6 @@
  *   • Named selectors: selectSpot, selectAtm, selectIvPct etc.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
 import { useDashboardStore, smartMergeUiState } from '../../store/dashboardStore'
 import type { DashboardPayload } from '../../types/dashboard'
 
@@ -95,6 +94,8 @@ describe('DashboardStore', () => {
             ivPct: null,
             atm: null,
             atmHistory: [],
+            atmHistoryTradeDateKey: null,
+            atmHistoryLastTimestamp: null,
             version: 0,
         })
     })
@@ -155,6 +156,93 @@ describe('DashboardStore', () => {
         useDashboardStore.getState().applyFullUpdate(p)
         useDashboardStore.getState().applyFullUpdate(p) // same timestamp
         expect(useDashboardStore.getState().atmHistory).toHaveLength(1)
+    })
+
+    it('applyFullUpdate preserves a new ATM timepoint even when values are unchanged', () => {
+        const first = makePayload({
+            atm: {
+                strike: 560,
+                locked_at: '2026-01-01T09:30:00Z',
+                straddle_pct: 0.022,
+                call_pct: 0.011,
+                put_pct: 0.011,
+                timestamp: '2026-01-01T09:30:00Z',
+            },
+        })
+        const second = makePayload({
+            timestamp: '2026-01-01T09:30:05Z',
+            data_timestamp: '2026-01-01T09:30:05Z',
+            atm: {
+                strike: 560,
+                locked_at: '2026-01-01T09:30:00Z',
+                straddle_pct: 0.022,
+                call_pct: 0.011,
+                put_pct: 0.011,
+                timestamp: '2026-01-01T09:30:05Z',
+            },
+        })
+
+        useDashboardStore.getState().applyFullUpdate(first)
+        useDashboardStore.getState().applyFullUpdate(second)
+
+        const history = useDashboardStore.getState().atmHistory
+        expect(history).toHaveLength(2)
+        expect(history[0].timestamp).toBe('2026-01-01T09:30:00Z')
+        expect(history[1].timestamp).toBe('2026-01-01T09:30:05Z')
+    })
+
+    it('applyMergedPayload does not re-append an older hydrated ATM timestamp', () => {
+        useDashboardStore.getState().applyFullUpdate(makePayload({
+            timestamp: '2026-01-01T09:30:10Z',
+            data_timestamp: '2026-01-01T09:30:10Z',
+        }))
+
+        useDashboardStore.getState().hydrateAtmHistory([
+            {
+                strike: 560,
+                locked_at: '2026-01-01T09:30:00Z',
+                straddle_pct: 0.02,
+                call_pct: 0.01,
+                put_pct: 0.01,
+                timestamp: '2026-01-01T09:30:00Z',
+            },
+            {
+                strike: 560,
+                locked_at: '2026-01-01T09:30:05Z',
+                straddle_pct: 0.021,
+                call_pct: 0.011,
+                put_pct: 0.01,
+                timestamp: '2026-01-01T09:30:05Z',
+            },
+            {
+                strike: 560,
+                locked_at: '2026-01-01T09:30:10Z',
+                straddle_pct: 0.022,
+                call_pct: 0.012,
+                put_pct: 0.01,
+                timestamp: '2026-01-01T09:30:10Z',
+            },
+        ])
+
+        useDashboardStore.getState().applyMergedPayload(makePayload({
+            timestamp: '2026-01-01T09:30:06Z',
+            data_timestamp: '2026-01-01T09:30:06Z',
+            atm: {
+                strike: 560,
+                locked_at: '2026-01-01T09:30:00Z',
+                straddle_pct: 0.021,
+                call_pct: 0.011,
+                put_pct: 0.01,
+                timestamp: '2026-01-01T09:30:05Z',
+            },
+        }))
+
+        const history = useDashboardStore.getState().atmHistory
+        expect(history.map((tick) => tick.timestamp)).toEqual([
+            '2026-01-01T09:30:00Z',
+            '2026-01-01T09:30:05Z',
+            '2026-01-01T09:30:10Z',
+        ])
     })
 
     it('appendAtmHistory accumulates unique ticks and deduplicates', () => {
@@ -295,6 +383,12 @@ describe('smartMergeUiState', () => {
         expect(smartMergeUiState(prev, next).micro_stats).toEqual({})
     })
 
+
+    it('does not retain active_options when backend sends null', () => {
+        const prev = { active_options: [{ strike: 560 }] }
+        const next = { active_options: null }
+        expect(smartMergeUiState(prev, next).active_options).toBeNull()
+    })
     it('allows sticky key update when new value is non-empty', () => {
         const prev = { wall_migration: [{ strike: 555 }] }
         const next = { wall_migration: [{ strike: 560 }, { strike: 565 }] }

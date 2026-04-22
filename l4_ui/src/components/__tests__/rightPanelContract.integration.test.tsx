@@ -1,4 +1,3 @@
-import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import { useDashboardStore } from '../../store/dashboardStore'
 import type {
@@ -64,7 +63,13 @@ function makePayload(
                     explanation: 'contract-test',
                     components: {},
                 },
-                micro_structure: null,
+                micro_structure: {
+                    micro_structure_state: {
+                        iv_velocity: null,
+                        wall_migration: null,
+                        vanna_flow_result: null,
+                    },
+                },
                 ui_state: {
                     micro_stats: {
                         net_gex: { label: 'GEX +120M', badge: 'badge-red' },
@@ -170,12 +175,12 @@ describe('Right panel typed contract integration', () => {
                 turnover: 10000000,
                 flow: 1250000,
                 flow_score: -0.9,
-                impact_index: 88.1234,
+                impact_index: 88_123.4,
                 is_sweep: true,
                 flow_deg_formatted: '$1.25M',
                 flow_volume_label: '50K',
                 flow_color: 'text-accent-red',
-                flow_glow: '',
+                flow_glow: 'shadow-[0_0_8px_rgba(255,77,79,0.35)]',
                 flow_intensity: 'HIGH',
                 flow_direction: 'BULLISH',
             },
@@ -196,8 +201,11 @@ describe('Right panel typed contract integration', () => {
 
         expect(screen.getByText('FAIR')).toBeInTheDocument()
         expect(screen.getByText('SPECULATIVE')).toBeInTheDocument()
+        expect(screen.getByText('2.4')).toBeInTheDocument()
         expect(screen.getByText('SPLIT')).toBeInTheDocument()
-        expect(screen.getByText('88.12')).toBeInTheDocument()
+        expect(screen.getAllByRole('progressbar')).toHaveLength(4)
+        expect(screen.queryByText('80%')).not.toBeInTheDocument()
+        expect(screen.getByText('88.1K')).toBeInTheDocument()
         expect(screen.getByText('$1.25M')).toBeInTheDocument()
         expect(screen.getByText('50K')).toBeInTheDocument()
     })
@@ -291,7 +299,12 @@ describe('Right panel typed contract integration', () => {
                 volume: 22000,
                 turnover: 1500000,
                 flow: 520000,
+                flow_score: 0.8,
                 impact_index: 88.12,
+                flow_color: 'text-accent-red',
+                flow_glow: 'shadow-[0_0_8px_rgba(255,77,79,0.35)]',
+                flow_intensity: 'HIGH',
+                flow_direction: 'BULLISH',
             },
             {
                 symbol: 'SPY',
@@ -301,7 +314,12 @@ describe('Right panel typed contract integration', () => {
                 volume: 18000,
                 turnover: 1200000,
                 flow: -410000,
+                flow_score: -0.7,
                 impact_index: 77.11,
+                flow_color: 'text-accent-green',
+                flow_glow: 'shadow-[0_0_8px_rgba(16,185,129,0.35)]',
+                flow_intensity: 'MODERATE',
+                flow_direction: 'BEARISH',
             },
             {
                 symbol: 'SPY',
@@ -311,7 +329,12 @@ describe('Right panel typed contract integration', () => {
                 volume: 17000,
                 turnover: 980000,
                 flow: 210000,
+                flow_score: 0.4,
                 impact_index: 54.0,
+                flow_color: 'text-accent-red',
+                flow_glow: 'shadow-[0_0_8px_rgba(255,77,79,0.35)]',
+                flow_intensity: 'LOW',
+                flow_direction: 'BULLISH',
             },
         ]
 
@@ -323,3 +346,5 @@ describe('Right panel typed contract integration', () => {
         expect(screen.getAllByText('—').length).toBeGreaterThan(0)
     })
 })
+
+

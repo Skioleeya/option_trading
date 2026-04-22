@@ -1,0 +1,53 @@
+session_id: "2026-04-21/wsl-backend-loopback-rootfix"
+title: "wsl-backend-loopback-rootfix"
+scope: "hotfix + host networking cutover"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-21 19:34:49 -04:00"
+updated_at_et: "2026-04-21 21:20:00 -04:00"
+parent_session: null
+
+branch: "fix/frontend-data-zero-fallback"
+base_commit: "3ff3ba1"
+head_commit: "3ff3ba1"
+
+files_changed:
+  - infra/ops_cli/start_all.py
+  - 最新的启动步骤文档.md
+  - infra/ops_cli/windows_loopback.py
+  - infra/ops_cli/test_windows_loopback.py
+  - infra/bin/windows_tcp_relay.ps1
+commands:
+  - python3 manage.py start-all
+  - python3 manage.py start-all --verify-only
+  - curl -sS -i http://127.0.0.1:8001/health | sed -n '1,20p'
+  - .venv/bin/python manage.py run-pytest app/tests/test_start_backend_strict_restart.py scripts/test/test_eod_bucket_archive.py
+  - python3 - <<'PY' ... write Windows .wslconfig NAT + localhostForwarding ... PY
+  - cmd.exe /C ver
+  - wsl.exe --version
+  - hostname -I
+  - ss -ltnp | awk '$4 ~ /:(8001|5173)$/'
+  - powershell.exe ... localhost/ip probes for 5173 and 8001
+  - cmd.exe /C netsh interface ipv4 show excludedportrange protocol=tcp
+  - cmd.exe /C netsh interface ipv4 show dynamicportrange tcp
+  - cmd.exe /C netsh interface ipv6 show dynamicportrange tcp
+  - powershell.exe -NoProfile -ExecutionPolicy Bypass -File /tmp/win_probe_localhost.ps1
+  - powershell.exe -NoProfile -ExecutionPolicy Bypass -File /tmp/win_probe_frontend_business.ps1
+  - python3 manage.py validate-session --strict
+tests_passed:
+  - .venv/bin/python manage.py run-pytest app/tests/test_start_backend_strict_restart.py scripts/test/test_eod_bucket_archive.py (18 passed)
+  - python3 manage.py start-all (Redis/Backend/Frontend all up)
+  - python3 manage.py start-all --verify-only (all listening)
+  - curl http://127.0.0.1:8001/health (HTTP 200)
+  - Windows version probe: 10.0.19045.6691
+  - WSL version probe: 2.6.3.0
+  - Windows netsh dynamic range probe: ipv4/ipv6 tcp = 49152/16384
+  - Windows excluded-port probe: 8001 no longer covered after reboot
+  - Windows localhost probe: localhost:5173 = 200, 127.0.0.1:5173 = 200, localhost:8001/health = 200, 127.0.0.1:8001/health = 200
+  - Windows same-origin API probe: localhost:5173/api/atm-decay/history?schema=v2 = 200, 127.0.0.1:5173/api/atm-decay/history?schema=v2 = 200
+  - Windows same-origin WS probe: ws://localhost:5173/ws/dashboard and ws://127.0.0.1:5173/ws/dashboard opened and received dashboard_init
+tests_failed: []
+blockers: []
+notes:
+  - Windows 10 build 19045 does not support mirrored WSL networking and falls back to NAT.
+  - Official Windows 10 fix is WSL NAT + localhostForwarding; no repo relay or mirrored-mode contract remains.

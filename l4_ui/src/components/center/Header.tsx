@@ -1,15 +1,14 @@
 /**
- * Header — Phase 3: Zustand field-level selectors
- * DOM/CSS/Layout: UNCHANGED
+ * Header — Zustand field-level selectors with grouped center-lane layout.
  */
-import React, { memo } from 'react'
+import React, { memo, useEffect, useRef, useState } from 'react'
 import { fmtPrice } from '../../lib/utils'
-import type { ConnectionStatus } from '../../types/dashboard'
-import { Zap } from 'lucide-react'
+import type { ConnectionStatus, HeaderVolatilityContext } from '../../types/dashboard'
 import {
     useDashboardStore,
     selectSpot,
     selectIvPct,
+    selectHeaderVolatility,
     selectConnectionStatus,
     selectPayloadTimestamp,
     selectFusedIvRegime,
@@ -32,6 +31,46 @@ interface Props {
     as_of?: string | null
 }
 
+type SpotTickDirection = 'neutral' | 'up' | 'down'
+
+function formatTokenValue(value: number | null | undefined, digits = 0): string {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return '—'
+    return value.toFixed(digits)
+}
+
+function formatRatio(value: number | null | undefined): string {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return '—'
+    return value.toFixed(2)
+}
+
+function relationBadgeState(context: HeaderVolatilityContext | null): string {
+    const state = context?.iv_price_relation?.state
+    if (!state || state === 'UNAVAILABLE') return '—'
+    if (state === 'INVERSE_CONFIRM') return 'INV'
+    if (state === 'POSITIVE_DIVERGENCE') return 'POS'
+    if (state === 'VOL_LEAD') return 'VOL'
+    if (state === 'PRICE_LEAD') return 'PX'
+    return state
+}
+
+function termTokenClass(state: string | undefined): string {
+    if (state === 'INVERTED') return 'text-[#ef4444]'
+    if (state === 'FLAT') return 'text-[#f59e0b]'
+    if (state === 'NORMAL') return 'text-[#10b981]'
+    return 'text-[#71717a]'
+}
+
+function velocityText(state: string | null | undefined): string | null {
+    if (!state) return null
+    if (state.includes('EXPANSION') || state.includes('MOVE')) return `UP ${state}`
+    if (state.includes('DROP')) return `DOWN ${state}`
+    return state
+}
+
+function Divider(): React.JSX.Element {
+    return <i className="l4-header__divider" aria-hidden="true" />
+}
+
 export const Header: React.FC<Props> = memo(({
     spot: propSpot,
     ivPct: propIvPct,
@@ -47,6 +86,7 @@ export const Header: React.FC<Props> = memo(({
     const timestamp = useDashboardStore(selectPayloadTimestamp)
     const ivRegimeRaw = useDashboardStore(selectFusedIvRegime)
     const storeIvVelocity = useDashboardStore(selectUiStateIvVelocity)
+    const headerVolatility = useDashboardStore(selectHeaderVolatility)
 
     const spot = storeSpot ?? propSpot ?? null
     const ivPct = storeIvPct ?? propIvPct ?? null
@@ -65,56 +105,139 @@ export const Header: React.FC<Props> = memo(({
     const rust = getRustIndicator(rustActive)
     const ivRegimeColor = (ivRegime === 'HIGH' || ivRegime === 'EXTREME') ? 'text-[#ef4444]' : ivRegime === 'ELEVATED' ? 'text-[#f59e0b]' : 'text-[#10b981]'
     const ivBadgeCls = (ivRegime === 'HIGH' || ivRegime === 'EXTREME') ? 'border-[#7f1d1d] text-[#ef4444] bg-[#450a0a]/50' : ivRegime === 'ELEVATED' ? 'border-[#92400e] text-[#f59e0b] bg-[#422006]/50' : 'border-[#065f46] text-[#10b981] bg-[#022c22]/50'
+    const ivVelocityText = velocityText(storeIvVelocity?.state)
+    const prevSpotRef = useRef<number | null>(null)
+    const tickResetRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const [spotTickDirection, setSpotTickDirection] = useState<SpotTickDirection>('neutral')
+    const [spotTickFlash, setSpotTickFlash] = useState<'up' | 'down' | null>(null)
+
+    useEffect(() => {
+        return () => {
+            if (tickResetRef.current) {
+                clearTimeout(tickResetRef.current)
+            }
+        }
+    }, [])
+
+    useEffect(() => {
+        if (typeof spot !== 'number' || !Number.isFinite(spot)) {
+            prevSpotRef.current = null
+            setSpotTickDirection('neutral')
+            setSpotTickFlash(null)
+            if (tickResetRef.current) {
+                clearTimeout(tickResetRef.current)
+                tickResetRef.current = null
+            }
+            return
+        }
+
+        if (prevSpotRef.current === null) {
+            prevSpotRef.current = spot
+            setSpotTickDirection('neutral')
+            setSpotTickFlash(null)
+            return
+        }
+
+        if (spot > prevSpotRef.current) {
+            setSpotTickDirection('up')
+            setSpotTickFlash('up')
+        } else if (spot < prevSpotRef.current) {
+            setSpotTickDirection('down')
+            setSpotTickFlash('down')
+        } else {
+            return
+        }
+
+        prevSpotRef.current = spot
+        if (tickResetRef.current) {
+            clearTimeout(tickResetRef.current)
+        }
+        tickResetRef.current = setTimeout(() => {
+            setSpotTickFlash(null)
+            tickResetRef.current = null
+        }, 360)
+    }, [spot])
+
+    const spotTickClass =
+        spotTickDirection === 'up'
+            ? 'l4-header__spot-value--up'
+            : spotTickDirection === 'down'
+                ? 'l4-header__spot-value--down'
+                : 'l4-header__spot-value--neutral'
+
+    const spotTickFlashClass =
+        spotTickFlash === 'up'
+            ? 'l4-header__spot-value--tick-up'
+            : spotTickFlash === 'down'
+                ? 'l4-header__spot-value--tick-down'
+                : ''
 
     return (
-        <header className="grid items-center h-[36px] border-b border-[#27272a] bg-[#060606] w-full font-sans selection:bg-transparent"
-            style={{ gridTemplateColumns: '280px 1fr 320px' }}>
-
-            <div className="flex items-center gap-2 px-3 border-r border-[#27272a] h-full">
-                <span className="text-[11px] font-black tracking-[0.2em] text-white/90 uppercase">ANALYSIS</span>
+        <header className="l4-header font-sans selection:bg-transparent">
+            <div className="l4-header__left">
+                <span className="l4-header__left-title">ANALYSIS</span>
             </div>
 
-            <div className="flex items-center justify-center gap-5 h-full">
-                <span className="font-black tracking-[0.15em] text-[#e4e4e7] text-[11px]">SPX SENTINEL</span>
-                <div className="w-[1px] h-[12px] bg-[#3f3f46]" />
-                <span className="font-mono text-[10px] text-[#71717a]">{timeStr} ET</span>
-                <div className="w-[1px] h-[12px] bg-[#3f3f46]" />
-                <span className={`text-[10px] font-black tracking-wider ${marketStatus === 'OPEN' ? 'text-[#10b981]' : 'text-[#52525b]'}`}>{marketStatus}</span>
-                <div className="w-[1px] h-[12px] bg-[#3f3f46]" />
-                <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-bold text-[#71717a]">SPY</span>
-                    <span className="font-mono text-[12px] font-black text-[#e4e4e7]">{fmtPrice(spot)}</span>
-                </div>
-                <div className="w-[1px] h-[12px] bg-[#3f3f46]" />
-                <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-bold text-[#71717a]">IV</span>
-                    <span className={`font-mono text-[12px] font-black ${ivRegimeColor}`}>{ivPct != null ? `${(ivPct * 100).toFixed(2)}%` : '—'}</span>
-                    <span className={`text-[9px] font-black tracking-widest px-1.5 py-[1px] rounded-[2px] border flex flex-col items-center justify-center ${ivBadgeCls}`}>
-                        <div className="flex items-center gap-1">
-                            {ivRegime}
-                            {/* IV Velocity Micro Indicator */}
-                            {storeIvVelocity && storeIvVelocity.state && typeof storeIvVelocity.state === 'string' && (
-                                <span className={`text-[7px] font-mono whitespace-nowrap ml-1 ${storeIvVelocity.state.includes('EXPANSION') || storeIvVelocity.state.includes('MOVE') ? 'text-[#ef4444] animate-pulse' : storeIvVelocity.state.includes('DROP') ? 'text-[#10b981]' : 'text-text-muted'}`}>
-                                    {storeIvVelocity.state.includes('EXPANSION') || storeIvVelocity.state.includes('MOVE') ? '↑' : storeIvVelocity.state.includes('DROP') ? '↓' : '•'} {storeIvVelocity.state}
-                                </span>
-                            )}
+            <div className="l4-header__center" data-testid="header-center">
+                <div className="l4-header__center-shell" data-testid="header-center-shell">
+                    <div className="l4-header__group-left l4-header__core" data-testid="header-group-left">
+                        <span className="l4-header__brand">SPX SENTINEL</span>
+                        <Divider />
+                        <span className="l4-header__time">{timeStr} ET</span>
+                        <Divider />
+                        <span className={`l4-header__status ${marketStatus === 'OPEN' ? 'text-[#10b981]' : 'text-[#52525b]'}`}>{marketStatus}</span>
+                        <Divider />
+                        <div className="l4-header__spot-cluster">
+                            <span className="l4-header__spot-label">SPY</span>
+                            <span
+                                className={`l4-header__spot-value ${spotTickClass} ${spotTickFlashClass}`.trim()}
+                                data-testid="header-spot-value"
+                            >
+                                {fmtPrice(spot)}
+                            </span>
                         </div>
-                    </span>
-                </div>
-                <div className="w-[1px] h-[12px] bg-[#3f3f46]" />
-                <div className="flex items-center gap-1.5">
-                    <div className={`w-1.5 h-1.5 rounded-full ${connColor} shadow-[0_0_6px_currentcolor]`} />
-                    <span className="text-[10px] font-bold text-[#71717a] tracking-widest">{connLabel}</span>
+                    </div>
+
+                    <div className="l4-header__group-middle" data-testid="header-group-middle">
+                        <div className="l4-header__iv-summary" data-testid="header-iv-summary">
+                            <span className="l4-header__iv-label">IV</span>
+                            <span className={`l4-header__iv-value ${ivRegimeColor}`}>{ivPct != null ? `${(ivPct * 100).toFixed(2)}%` : '—'}</span>
+                        </div>
+
+                        <div className="l4-header__detail-badge-wrap" data-testid="header-detail-badge-wrap">
+                            <div className={`l4-header__vol-badge ${ivBadgeCls}`} data-testid="header-vol-badge">
+                                <span className="l4-header__vol-state">{ivRegime}</span>
+                                {ivVelocityText && (
+                                    <span className={`l4-header__vol-velocity ${storeIvVelocity?.state?.includes('EXPANSION') || storeIvVelocity?.state?.includes('MOVE') ? 'text-[#ef4444]' : storeIvVelocity?.state?.includes('DROP') ? 'text-[#10b981]' : 'text-text-muted'}`}>
+                                        {ivVelocityText}
+                                    </span>
+                                )}
+                                <div className="l4-header__vol-micro" data-testid="header-vol-micro">
+                                    <span className="l4-header__micro-token">R{formatTokenValue(headerVolatility?.ivr, 0)}</span>
+                                    <span className="l4-header__micro-token">P{formatTokenValue(headerVolatility?.ivp, 0)}</span>
+                                    <span className={`l4-header__micro-token ${termTokenClass(headerVolatility?.term_structure?.primary?.state)}`}>
+                                        1D {formatRatio(headerVolatility?.term_structure?.primary?.ratio)}
+                                    </span>
+                                    <span className="l4-header__micro-token">VX {formatRatio(headerVolatility?.term_structure?.secondary?.ratio)}</span>
+                                    <span className="l4-header__micro-token">β {relationBadgeState(headerVolatility)}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="l4-header__group-right l4-header__transport" data-testid="header-group-right">
+                        <span className={`l4-header__rds-dot ${connColor}`} />
+                        <span className="l4-header__rds-label">{connLabel}</span>
+                    </div>
                 </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 px-3 border-l border-[#27272a] h-full">
-                <div className="flex items-center gap-1.5 text-[#ef4444]">
-                    <Zap size={10} className="fill-current shrink-0" />
-                    <span className="text-[11px] font-black tracking-[0.2em] text-white/90 uppercase">TACTICAL OFFENSE</span>
+            <div className="l4-header__right">
+                <span className="l4-header__offense-title l4-header__right-title">TACTICAL OFFENSIVE</span>
+                <div className="l4-header__ops-cluster">
+                    <span className="l4-header__rust">{rust.label}</span>
+                    <span className={`l4-header__rust-dot ${rust.dotClass}`} />
                 </div>
-                <span className="text-[9px] font-bold tracking-widest text-[#71717a] ml-1">{rust.label}</span>
-                <div className={`w-2 h-2 rounded-full ${rust.dotClass}`} />
             </div>
         </header>
     )

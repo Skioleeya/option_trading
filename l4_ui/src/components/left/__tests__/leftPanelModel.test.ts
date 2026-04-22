@@ -93,6 +93,45 @@ describe('leftPanelModel', () => {
         expect(out.depthProfileRows[0].put_pct).toBe(0.35)
     })
 
+    it('uses gamma_walls as canonical strike source for wall rows', () => {
+        const payload = {
+            type: 'dashboard_update',
+            timestamp: '2026-03-11T14:45:00Z',
+            spot: 560.5,
+            agent_g: {
+                agent: 'agent_g',
+                signal: 'NEUTRAL',
+                as_of: '2026-03-11T14:45:00Z',
+                data: {
+                    gamma_walls: { call_wall: 570, put_wall: 550 },
+                    gamma_flip_level: 559,
+                    ui_state: {
+                        wall_migration: [
+                            { label: 'CALL WALL', strike: 566, state: 'REINFORCED', history: [564, 565, 566] },
+                            { label: 'PUT WALL', strike: 554, state: 'STABLE', history: [552, 553, 554] },
+                        ],
+                        depth_profile: [],
+                        macro_volume_map: {},
+                        micro_stats: {
+                            net_gex: { label: 'GEX +90M', badge: 'badge-red' },
+                            wall_dyn: { label: 'SIEGE', badge: 'badge-red' },
+                            vanna: { label: 'NORMAL', badge: 'badge-neutral' },
+                            momentum: { label: 'BULLISH', badge: 'badge-red' },
+                        },
+                    },
+                },
+            },
+        } as unknown as DashboardPayload
+
+        const out = deriveLeftPanelContracts(payload)
+
+        expect(out.wallMigrationRows).toHaveLength(2)
+        expect(out.wallMigrationRows[0].strike).toBe(570)
+        expect(out.wallMigrationRows[1].strike).toBe(550)
+        expect(out.wallMigrationRows[0].history).toEqual([564, 565, 566])
+        expect(out.wallMigrationRows[1].history).toEqual([552, 553, 554])
+    })
+
     it('returns safe defaults when payload is null', () => {
         const out = deriveLeftPanelContracts(null)
         expect(out.spot).toBeNull()

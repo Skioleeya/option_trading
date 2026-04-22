@@ -1,4 +1,3 @@
-import { describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import type { ActiveOption } from '../../types/dashboard'
 import { ActiveOptions } from '../right/ActiveOptions'
@@ -14,12 +13,30 @@ function row(slot: number, partial: Partial<ActiveOption>): ActiveOption {
         flow: 1000,
         impact_index: 50,
         slot_index: slot,
+        flow_direction: 'BULLISH',
+        flow_color: 'text-accent-red',
+        flow_intensity: 'LOW',
+        flow_glow: '',
         ...partial,
     }
 }
 
 describe('ActiveOptions render contracts', () => {
-    it('keeps fixed slot markers 1..5 across rerenders', () => {
+    it('keeps the canonical table header order unchanged', () => {
+        render(<ActiveOptions options={[]} preferProp />)
+
+        expect(screen.getAllByRole('columnheader').map((node) => node.textContent)).toEqual([
+            '#',
+            'SYM',
+            'T',
+            'STRIKE',
+            'IMP',
+            'VOL',
+            'FLOW',
+        ])
+    })
+
+    it('keeps slot markers unique and within 1..5 across rerenders', () => {
         const { rerender, container } = render(
             <ActiveOptions
                 options={[
@@ -31,7 +48,9 @@ describe('ActiveOptions render contracts', () => {
 
         let rows = Array.from(container.querySelectorAll('tbody tr'))
         expect(rows).toHaveLength(5)
-        expect(rows.map((el) => el.getAttribute('data-slot'))).toEqual(['1', '2', '3', '4', '5'])
+        let slots = rows.map((el) => el.getAttribute('data-slot') ?? '')
+        expect(new Set(slots).size).toBe(5)
+        expect(slots.slice().sort()).toEqual(['1', '2', '3', '4', '5'])
 
         rerender(
             <ActiveOptions
@@ -45,17 +64,51 @@ describe('ActiveOptions render contracts', () => {
 
         rows = Array.from(container.querySelectorAll('tbody tr'))
         expect(rows).toHaveLength(5)
-        expect(rows.map((el) => el.getAttribute('data-slot'))).toEqual(['1', '2', '3', '4', '5'])
+        slots = rows.map((el) => el.getAttribute('data-slot') ?? '')
+        expect(new Set(slots).size).toBe(5)
+        expect(slots.slice().sort()).toEqual(['1', '2', '3', '4', '5'])
     })
 
-    it('renders negative FLOW with bearish green class even when backend color/direction conflict', () => {
+    it('renders rows in backend order (no local VOL sorting)', () => {
+        const { container } = render(
+            <ActiveOptions
+                options={[
+                    row(1, { symbol: 'LOW', volume: 100 }),
+                    row(2, { symbol: 'HIGH', volume: 900 }),
+                    row(3, { symbol: 'MID', volume: 500 }),
+                ]}
+            />
+        )
+
+        const symbolCells = Array.from(container.querySelectorAll('tbody tr td:nth-child(2)'))
+            .map((el) => el.textContent?.trim())
+
+        expect(symbolCells.slice(0, 3)).toEqual(['LOW', 'HIGH', 'MID'])
+    })
+
+    it('renders IMP with compact numeric units only', () => {
+        render(
+            <ActiveOptions
+                options={[
+                    row(1, { impact_index: 88_123.4 }),
+                ]}
+            />
+        )
+
+        expect(screen.getByText('88.1K')).toBeInTheDocument()
+        expect(screen.queryByText('88123.40')).not.toBeInTheDocument()
+    })
+
+    it('renders negative FLOW with backend bearish green class', () => {
         const { container } = render(
             <ActiveOptions
                 options={[
                     row(1, {
                         flow: -320000,
-                        flow_direction: 'BULLISH',
-                        flow_color: 'text-accent-red',
+                        flow_direction: 'BEARISH',
+                        flow_color: 'text-accent-green',
+                        flow_intensity: 'LOW',
+                        flow_glow: '',
                         flow_deg_formatted: '-$320K',
                         flow_volume_label: '12K',
                     }),
@@ -76,8 +129,10 @@ describe('ActiveOptions render contracts', () => {
                 options={[
                     row(1, {
                         flow: 0,
-                        flow_direction: 'BEARISH',
-                        flow_color: 'text-accent-green',
+                        flow_direction: 'NEUTRAL',
+                        flow_color: 'text-text-secondary',
+                        flow_intensity: 'LOW',
+                        flow_glow: '',
                         flow_deg_formatted: '-$0',
                     }),
                 ]}
@@ -87,4 +142,46 @@ describe('ActiveOptions render contracts', () => {
         expect(screen.getByText('$0')).toBeInTheDocument()
         expect(screen.queryByText('-$0')).not.toBeInTheDocument()
     })
+    it('shows DEGRADED header when all rows are placeholders', () => {
+        render(<ActiveOptions options={[]} preferProp />)
+
+        expect(screen.getByText('DEGRADED')).toBeInTheDocument()
+        expect(screen.queryByText('TOP BY VOL')).not.toBeInTheDocument()
+    })
+
+    it('shows TOP BY VOL header when at least one real row exists', () => {
+        render(
+            <ActiveOptions
+                preferProp
+                options={[
+                    row(1, { symbol: 'REAL', is_placeholder: false, volume: 1234 }),
+                ]}
+            />
+        )
+
+        expect(screen.getByText('TOP BY VOL')).toBeInTheDocument()
+        expect(screen.queryByText('DEGRADED')).not.toBeInTheDocument()
+    })
+
+    it('shows DEGRADED header when any non-placeholder row is marked degraded', () => {
+        render(
+            <ActiveOptions
+                preferProp
+                options={[
+                    row(1, {
+                        symbol: 'REAL',
+                        is_placeholder: false,
+                        volume: 1234,
+                        flow_signal_state: 'DEGRADED',
+                        flow_signal_reason: 'missing_turnover',
+                    }),
+                ]}
+            />
+        )
+
+        expect(screen.getByText('DEGRADED')).toBeInTheDocument()
+        expect(screen.queryByText('TOP BY VOL')).not.toBeInTheDocument()
+    })
 })
+
+

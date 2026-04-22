@@ -1,0 +1,28 @@
+﻿session_id: "2026-04-02/cargo-target-dir-local-config"
+title: "cargo target dir local config"
+scope: "chore"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-02 08:17:22 -04:00"
+updated_at_et: "2026-04-02 08:17:22 -04:00"
+parent_session: "2026-04-02/wave18-active-options-rust-owner-closeout"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "7fb0f53"
+head_commit: "7fb0f53"
+
+files_changed:
+  - ".cargo/config.toml"
+  - ".gitignore"
+commands:
+  - "cargo build --release --manifest-path shared_rust_services/Cargo.toml"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "cargo build --release --manifest-path shared_rust_services/Cargo.toml"
+tests_failed: []
+blockers: []
+notes:
+  - "Configured Cargo to use C:\\Users\\Lenovo\\.cargo\\option_v3_target as the machine-local target directory."
+  - "Kept the override local-only by ignoring .cargo/config.toml."
+
+

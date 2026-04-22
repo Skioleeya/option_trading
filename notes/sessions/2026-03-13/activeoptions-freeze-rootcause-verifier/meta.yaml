@@ -1,0 +1,45 @@
+session_id: "2026-03-13/activeoptions-freeze-rootcause-verifier"
+title: "activeoptions-freeze-rootcause-verifier"
+scope: "activeoptions freeze hotfix + regression verification"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-13 16:03:01 -04:00"
+updated_at_et: "2026-03-13 16:23:40 -04:00"
+parent_session: "2026-03-13/l4-ui-asian-color-semantics-audit-fix"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "1179556"
+head_commit: "1179556"
+
+files_changed:
+  - "shared/services/active_options/runtime_service.py"
+  - "shared/services/active_options/test_runtime_service.py"
+  - "l4_ui/src/components/right/ActiveOptions.tsx"
+  - "l4_ui/src/components/__tests__/activeOptions.render.test.tsx"
+  - "docs/SOP/L4_FRONTEND.md"
+  - "scripts/diag/check_active_options_freeze_rootcause.py"
+  - "scripts/test/test_active_options_freeze_rootcause.py"
+  - "notes/sessions/2026-03-13/activeoptions-freeze-rootcause-verifier/project_state.md"
+  - "notes/sessions/2026-03-13/activeoptions-freeze-rootcause-verifier/open_tasks.md"
+  - "notes/sessions/2026-03-13/activeoptions-freeze-rootcause-verifier/handoff.md"
+  - "notes/sessions/2026-03-13/activeoptions-freeze-rootcause-verifier/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 shared/services/active_options/test_runtime_service.py -q"
+  - "npm --prefix l4_ui run test -- src/components/__tests__/activeOptions.render.test.tsx"
+  - "python scripts/diag/check_active_options_freeze_rootcause.py --json"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+
+tests_passed:
+  - "shared/services/active_options/test_runtime_service.py (11 passed)"
+  - "l4_ui/src/components/__tests__/activeOptions.render.test.tsx (6 passed)"
+  - "scripts/validate_session.ps1 -Strict (PASS)"
+tests_failed: []
+blockers: []
+notes:
+  - "Fix applied: placeholder signature now commits immediately to prevent stale ActiveOptions retention."
+  - "UI now exposes DEGRADED state when all rows are placeholders."
+  - "Strict session validation passed."

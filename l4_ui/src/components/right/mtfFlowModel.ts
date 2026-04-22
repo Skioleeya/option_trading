@@ -8,7 +8,6 @@ export interface VisualTokenSet {
     borderColor: string
     shadowClass: string
     animateClass: string
-    barColor: string
     regimeLabel: string
 }
 
@@ -46,9 +45,8 @@ export const STATE_THEME: Record<FlowState, VisualTokenSet> = {
         dotColor: 'bg-accent-red',
         textColor: 'text-accent-red',
         borderColor: 'border-accent-red/30',
-        shadowClass: 'shadow-[0_0_8px_rgba(255,77,79,0.5)]',
+        shadowClass: '',
         animateClass: '',
-        barColor: 'bg-accent-red',
         regimeLabel: 'EXP',
     },
     0: {
@@ -57,16 +55,14 @@ export const STATE_THEME: Record<FlowState, VisualTokenSet> = {
         borderColor: 'border-bg-border',
         shadowClass: 'shadow-none',
         animateClass: '',
-        barColor: 'bg-zinc-600',
         regimeLabel: 'EQ',
     },
     [-1]: {
         dotColor: 'bg-accent-green',
         textColor: 'text-accent-green',
         borderColor: 'border-accent-green/30',
-        shadowClass: 'shadow-[0_0_8px_rgba(0,214,143,0.5)]',
+        shadowClass: '',
         animateClass: '',
-        barColor: 'bg-accent-green',
         regimeLabel: 'CON',
     },
 }
@@ -103,12 +99,11 @@ function normalizeTfState(raw: unknown): MtfTfState {
 
 function toViewState(tf: MtfTfState): MtfTfViewState {
     const tokens = STATE_THEME[tf.state]
-    const animateClass = tf.kinetic_level >= 0.85 ? 'animate-pulse' : tokens.animateClass
     return {
         ...tf,
         tokens: {
             ...tokens,
-            animateClass,
+            animateClass: '',
         },
     }
 }

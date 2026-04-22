@@ -14,7 +14,7 @@ Design:
 Usage:
     reactor = L3AssemblyReactor()
 
-    # In compute loop (replaces SnapshotBuilder.build())
+    # In compute loop
     frozen = await reactor.tick(decision, snapshot, atm_decay, active_options)
 
     # Broadcast (replaces _broadcast_loop body)
@@ -28,7 +28,7 @@ Usage:
     # Historical query (replaces historical_store.get_latest())
     history = await reactor.store.get_warm_latest(50)
 
-    # Backward-compat (replaces SnapshotBuilder.build() return value)
+    # Backward-compat
     legacy_dict = frozen.to_dict()
 """
 
@@ -46,9 +46,13 @@ from l3_assembly.broadcast.broadcast_governor import BroadcastGovernor
 from l3_assembly.storage.timeseries_store import TimeSeriesStoreV2
 from l3_assembly.observability.l3_instrumentation import L3Instrumentation
 from l3_assembly.assembly.ui_state_tracker import UIStateTracker
-from shared.services.research_feature_store import ResearchFeatureStore
+from shared_rust.services import HeaderVolatilityContextService, ResearchFeatureStore
 
 logger = logging.getLogger(__name__)
+
+
+class ResearchPersistenceFatalError(RuntimeError):
+    """Raised when research persistence fails and runtime must hard-stop."""
 
 
 class L3AssemblyReactor:
@@ -58,7 +62,6 @@ class L3AssemblyReactor:
         redis:                  Async Redis client (None = Warm tier disabled).
         full_snapshot_interval: Seconds between forced full WS snapshots (default 30s).
         max_hot:                Hot ring buffer capacity (default 7200 = 2h at 1Hz).
-        shadow_mode:            If True, log numeric diffs vs legacy SnapshotBuilder.
     """
 
     def __init__(
@@ -66,7 +69,6 @@ class L3AssemblyReactor:
         redis: Any = None,
         full_snapshot_interval: float = 30.0,
         max_hot: int = 7200,
-        shadow_mode: bool = False,
     ) -> None:
         self.assembler = PayloadAssemblerV2()
         self.encoder = FieldDeltaEncoder(full_snapshot_interval)
@@ -74,11 +76,15 @@ class L3AssemblyReactor:
         self.store = TimeSeriesStoreV2(max_hot=max_hot, redis=redis)
         self.research_store = ResearchFeatureStore()
         self.instrumentation = L3Instrumentation()
-        self.ui_tracker = UIStateTracker()
-        self.shadow_mode = shadow_mode
+        self.ui_tracker = UIStateTracker(
+            header_volatility_service=HeaderVolatilityContextService(
+                research_store=self.research_store,
+            )
+        )
 
         self._total_ticks = 0
         self._failed_ticks = 0
+        self._research_persistence_fatal: str | None = None
 
     async def tick(
         self,
@@ -89,7 +95,7 @@ class L3AssemblyReactor:
     ) -> FrozenPayload:
         """Single compute tick: assemble + store FrozenPayload.
 
-        This is a DROP-IN replacement for SnapshotBuilder.build().
+        This is the L3 payload assembly entrypoint.
 
         Args:
             decision:       L2 DecisionOutput or None (returns zero-state).
@@ -119,19 +125,20 @@ class L3AssemblyReactor:
 
             with self.instrumentation.span_timeseries():
                 await self.store.write(payload)
-                try:
-                    self.research_store.append_tick(decision=decision, snapshot=snapshot, payload=payload)
-                except Exception as exc:
-                    logger.error("[L3 Reactor] research_store append failed (non-fatal): %s", exc)
+                self._append_research_tick(
+                    decision=decision,
+                    snapshot=snapshot,
+                    payload=payload,
+                )
 
             assemble_ms = (time.monotonic() - start) * 1000
             self.instrumentation.record_assembly_latency(assemble_ms)
             self.instrumentation.set_hot_size(self.store.hot_size())
 
-            if self.shadow_mode and decision is not None:
-                self._shadow_compare(payload, decision, snapshot)
-
             return payload
+        except ResearchPersistenceFatalError:
+            self._failed_ticks += 1
+            raise
 
         except Exception as exc:
             self._failed_ticks += 1
@@ -154,7 +161,15 @@ class L3AssemblyReactor:
             },
             "l3_store": store_diag,
             "research_store": self.research_store.diagnostics(),
+            "research_persistence": {
+                "healthy": self._research_persistence_fatal is None,
+                "fatal_error": self._research_persistence_fatal,
+            },
         }
+
+    def bind_redis(self, redis: Any) -> None:
+        """Bind warm-tier Redis after RedisService startup."""
+        self.store.bind_redis(redis)
 
     # ── Private helpers ────────────────────────────────────────────────────
 
@@ -188,21 +203,26 @@ class L3AssemblyReactor:
             atm=None,
         )
 
-    def _shadow_compare(
+    def _append_research_tick(
         self,
-        l3_payload: FrozenPayload,
+        *,
         decision: Any,
         snapshot: Any,
+        payload: FrozenPayload,
     ) -> None:
-        """Compare L3 output with legacy SnapshotBuilder (shadow mode)."""
+        if self._research_persistence_fatal is not None:
+            raise ResearchPersistenceFatalError(self._research_persistence_fatal)
         try:
-            from shared.system.snapshot_builder import SnapshotBuilder
-            legacy = SnapshotBuilder.build(snapshot, decision, None)
-            l3_spot = l3_payload.spot
-            legacy_spot = legacy.get("spot", 0.0)
-            if abs((l3_spot or 0) - (legacy_spot or 0)) > 0.01:
-                logger.warning(
-                    f"[L3 Shadow] spot mismatch: L3={l3_spot}, legacy={legacy_spot}"
-                )
+            self.research_store.append_tick(
+                decision=decision,
+                snapshot=snapshot,
+                payload=payload,
+            )
         except Exception as exc:
-            logger.debug(f"[L3 Shadow] compare failed: {exc}")
+            self._research_persistence_fatal = f"{type(exc).__name__}: {exc}"
+            logger.critical(
+                "[L3 Reactor] research_store append failed (fatal): %s",
+                self._research_persistence_fatal,
+            )
+            raise ResearchPersistenceFatalError(self._research_persistence_fatal) from exc
+

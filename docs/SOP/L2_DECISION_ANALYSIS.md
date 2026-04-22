@@ -62,6 +62,12 @@ flowchart LR
 - 禁止 `l2_decision -> l4_ui`
 - `l2_decision/agents/services` 禁止导入 `l1_compute.analysis/*`
 
+### 5.1 AgentG 决策管线边界（P1 去混乱）
+
+- `agent_g.py` 负责决策编排与状态机（VRP/MTF hysteresis）持有。
+- `agents/services/agent_g_decision_support.py` 负责输入归一化、ATM 微结构聚合、micro-flow 计算等纯 helper。
+- 对外契约保持不变：`AgentG.decide(...) -> AgentResult`，`fused_signal/summary/jump-gate` 语义不变。
+
 ## 6. Data Semantics
 
 - L2 不重写 L0/L1 时间语义
@@ -71,6 +77,8 @@ flowchart LR
 - `gamma_flip` 必须优先基于 `spot` 与 L1 `zero_gamma_level` 判定（`spot < zero_gamma_level` 视为负 gamma），仅在缺失 `zero_gamma_level` 时回退 `net_gex < 0`
 - `call_wall_distance` 仅描述 spot 到 `call_wall` 代理位的几何距离，不得被解释为真实 dealer ceiling
 - `vol_risk_premium` 必须输出 `% points`，并复用统一标准化逻辑处理 `0.15`/`15.0` 两类 baseline HV 输入
+- `guard_vrp_proxy_pct`（`VRPVetoGuard` 专用）必须与 `vol_risk_premium` 保持语义隔离：前者是 guard heuristic proxy，后者是 live feature proxy；两者都按 `% points` 输出/解释，且 guard 阈值必须兼容 `0.15/0.13` 到 `15.0/13.0` 的归一化
+- `shared/models/*.py` 已删除；L2 对 `AgentB1Output`、`FusedSignalResult`、`MicroStructureAnalysis` 等 typed model 的 live import surface 必须是 `shared_rust.models`，不得恢复 `shared.models` 兼容层。
 - `skew_25d_normalized` 与 `rr25_call_minus_put` 必须共享同一组真 25Δ 选腿：
   - CALL 使用 `+0.25`，PUT 使用 `-0.25`
   - 仅当两侧 delta 距离均在容差 `±0.10` 内时才判定有效
@@ -80,8 +88,14 @@ flowchart LR
 - `rr25_call_minus_put` 明确定义为 canonical 25Δ risk reversal `call_iv - put_iv`
 - L2 必须同时输出 `skew_25d_valid`（1/0）以区分“真实 0”与“不可计算”
 - L2 对 `net_vanna_raw_sum` / `net_charm_raw_sum` 必须优先消费 canonical raw-sum 字段；`net_vanna` / `net_charm` 仅作兼容 alias，不得在文案中表述为 inventory exposure
+- L2 feature store 必须消费 `extra_metadata.mm_flow_metrics` 并稳定输出 MM 微观结构字段到 `feature_vector`（至少包含 `net_delta_exposure_live/net_gamma_exposure_live/residual_delta_after_netting/oi_participation_ratio_live/flow_suppression_bias/flow_dominance_ratio/midpoint_tickrule_count/condition_filtered_count/complex_spread_count`）
+- `shared/models/agent_output.py` 与 `shared/models/microstructure.py` 现为 Rust-backed wrappers；L2 不得在本地复制 AgentB1 output 默认结构或 microstructure 状态枚举。
+- `shared/system/tactical_triad_logic.py` 现为 Rust-backed wrapper；VRP、guard-VRP、S-VOL 归一化的 source-of-truth 位于 `l0_ingest/l0_rust/src/tactical_triad_logic.rs`，L2 不得再本地复制这些归一化规则。
 - `vrp_realized_based` 仅允许进入 research / diagnostics / optional feature path；现网默认决策继续使用 proxy `vol_risk_premium`
 - `realized_volatility_15m` 必须由本地 rolling spot log-return 计算得到，按 decimal annualized vol 输出；`vrp_realized_based` 必须先将该 RV 显式换算到 `%` 后再进入 `compute_vrp()`
+- `RollingRealizedVolatility` 的 live Python import surface 已切到 `shared_rust.services`；`shared/services/realized_volatility.py` 不再保留 compat owner。
+- `AttentionFusionEngine` 的 softmax + weighted sum + confidence 数值 owner 现为 Rust `shared_rust.services.compute_attention_fused`；`l2_decision/fusion/attention_fusion.py` 不得保留 NumPy softmax/dot 运行时计算，且 `fusion_weights` 必须继续贯通 `FusedDecision/DecisionOutput/DecisionAuditEntry`
+- `AttentionFusionEngine` Python delegation 层必须对 Rust 返回值做契约硬校验：`raw_score/confidence` 必须有限，`fusion_weights` 必须有限、非负且归一（`sum(weights)=1±1e-6`）；任一违规必须显式抛错，禁止静默纠偏。
 
 ## 7. Observability
 
@@ -93,9 +107,9 @@ flowchart LR
 
 ## 8. Verification
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l2_decision/tests
-powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 scripts/test/test_l0_l4_pipeline.py
+```bash
+python manage.py run-pytest l2_decision/tests
+python manage.py run-pytest scripts/test/test_l0_l4_pipeline.py
 ```
 
 ## 9. Offline Threshold Calibration (Decoupled Tooling)

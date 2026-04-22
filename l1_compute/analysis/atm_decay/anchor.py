@@ -51,6 +51,25 @@ def is_spot_stable_for_lock(samples: list[float]) -> tuple[bool, float | None]:
     return span <= SPOT_STABILITY_MAX_RANGE, span
 
 
+def summarize_opening_chain_inputs(
+    chain: list[dict[str, Any]],
+    now: datetime,
+) -> dict[str, int]:
+    """Summarize same-day opening capture inputs for forensic logs."""
+    today_ymd = now.strftime("%y%m%d")
+    zero_dte = [opt for opt in chain if parse_expiry(opt.get("symbol", "")) == today_ymd]
+    integer_strikes = {
+        float(opt["strike"])
+        for opt in zero_dte
+        if isinstance(opt.get("strike"), (int, float)) and is_integer_strike(float(opt["strike"]))
+    }
+    return {
+        "total_contracts": len(chain),
+        "zero_dte_contracts": len(zero_dte),
+        "integer_strikes": len(integer_strikes),
+    }
+
+
 def select_opening_anchor(
     chain: list[dict[str, Any]],
     spot: float,
@@ -64,7 +83,7 @@ def select_opening_anchor(
     today_ymd = now.strftime("%y%m%d")
     zero_dte = [opt for opt in chain if parse_expiry(opt.get("symbol", "")) == today_ymd]
     if not zero_dte:
-        logger.debug(f"[AtmDecay] No 0DTE contracts in chain ({len(chain)} total) for {today_ymd}")
+        logger.info(f"[AtmDecay] No 0DTE contracts in chain ({len(chain)} total) for {today_ymd}")
         return None
 
     strikes = sorted(
@@ -131,6 +150,17 @@ def select_opening_anchor(
 
     ranked = sorted(tradable, key=lambda kv: abs(kv[0] - float(spot)))[:MAX_CAPTURE_CANDIDATES]
     candidate, legs = ranked[0]
+
+    if abs(candidate - float(spot)) > MAX_SPOT_PARITY_STRIKE_GAP:
+        logger.warning(
+            "[AtmDecayTracker] Opening candidate %.2f is too far from spot %.2f (gap=%.2f max=%.2f). Waiting for ATM liquidity.",
+            float(candidate),
+            float(spot),
+            abs(candidate - float(spot)),
+            MAX_SPOT_PARITY_STRIKE_GAP,
+        )
+        return None
+
     return {
         "strike": candidate,
         "base_strike": candidate,
@@ -222,3 +252,66 @@ def calculate_raw_pct(anchor: dict[str, Any] | None, chain: list[dict[str, Any]]
     p_pct = (curr_p - anchor_p) / anchor_p if anchor_p > 0 else 0.0
     s_pct = (curr_s - anchor_s) / anchor_s if anchor_s > 0 else 0.0
     return c_pct, p_pct, s_pct
+
+
+def build_anchor_leg_diagnostics(
+    anchor: dict[str, Any] | None,
+    chain: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Capture the exact anchor-leg price inputs used for ATM decay computation."""
+    if not anchor:
+        return None
+
+    call_symbol = anchor.get("call_symbol")
+    put_symbol = anchor.get("put_symbol")
+    if not call_symbol or not put_symbol:
+        return None
+
+    call_leg = _build_leg_snapshot(chain, call_symbol)
+    put_leg = _build_leg_snapshot(chain, put_symbol)
+    failure_reasons = []
+    if call_leg["mid_price"] <= 0:
+        failure_reasons.append("call_leg_non_positive")
+    if put_leg["mid_price"] <= 0:
+        failure_reasons.append("put_leg_non_positive")
+
+    return {
+        "strike": anchor.get("strike"),
+        "base_strike": anchor.get("base_strike", anchor.get("strike")),
+        "locked_at": anchor.get("timestamp"),
+        "call_symbol": call_symbol,
+        "put_symbol": put_symbol,
+        "call_leg": call_leg,
+        "put_leg": put_leg,
+        "failure_reasons": failure_reasons,
+    }
+
+
+def _build_leg_snapshot(chain: list[dict[str, Any]], symbol: str) -> dict[str, Any]:
+    entry = next((opt for opt in chain if opt.get("symbol") == symbol), None)
+    if entry is None:
+        return {
+            "symbol": symbol,
+            "found": False,
+            "bid": None,
+            "ask": None,
+            "last_price": None,
+            "mid_price": 0.0,
+        }
+
+    raw_bid = entry.get("bid", 0.0)
+    raw_ask = entry.get("ask", 0.0)
+    raw_last = entry.get("last_price", 0.0)
+    bid = 0.0 if raw_bid is None else raw_bid
+    ask = 0.0 if raw_ask is None else raw_ask
+    last = 0.0 if raw_last is None else raw_last
+    return {
+        "symbol": symbol,
+        "found": True,
+        "strike": entry.get("strike"),
+        "option_type": entry.get("option_type", entry.get("type")),
+        "bid": raw_bid,
+        "ask": raw_ask,
+        "last_price": raw_last,
+        "mid_price": mid_price(bid, ask, last),
+    }

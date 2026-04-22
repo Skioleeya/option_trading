@@ -1,0 +1,42 @@
+session_id: "2026-04-01/wave4-l0-runtime-normalize-projection"
+title: "wave4-l0-runtime-normalize-projection"
+scope: "Wave 4 bounded shared/services/l0_runtime normalize-bridge and projection-snapshot helper cutover"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-01 15:06:14 -04:00"
+updated_at_et: "2026-04-01 15:17:08 -04:00"
+parent_session: "2026-04-01/wave3-shared-system-services-implementation"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "790471c"
+head_commit: "790471c"
+
+files_changed:
+  - "l0_ingest/l0_rust/src/l0_market_bridge.rs"
+  - "l0_ingest/l0_rust/src/l0_projection.rs"
+  - "l0_ingest/l0_rust/src/lib.rs"
+  - "shared/services/l0_runtime/normalize/bridges/_native_bridge_support.py"
+  - "shared/services/l0_runtime/normalize/bridges/market_event_bridge.py"
+  - "shared/services/l0_runtime/projection/snapshot/_native_projection_support.py"
+  - "shared/services/l0_runtime/projection/snapshot/components.py"
+  - "docs/SOP/L0_DATA_FEED.md"
+  - "openspec/changes/refactor-bloat-20260401-rust-shared-l0-migration-boundary/artifacts/shared-l0-boundary-evidence.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId wave4-l0-runtime-normalize-projection"
+  - "python -m py_compile shared/services/l0_runtime/projection/snapshot/components.py shared/services/l0_runtime/projection/snapshot/_native_projection_support.py shared/services/l0_runtime/normalize/bridges/market_event_bridge.py shared/services/l0_runtime/normalize/bridges/_native_bridge_support.py"
+  - "cargo test (workdir: l0_ingest/l0_rust)"
+  - "maturin build --release -o dist (workdir: l0_ingest/l0_rust)"
+  - "extract built l0_rust.pyd from wheel into shared/services/l0_runtime/_native_generated/l0_rust.pyd"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 tests/l0_runtime/test_fetch_chain_components.py tests/l0_runtime/test_rust_event_bridge.py tests/l0_runtime/test_quote_runtime.py tests/l0_runtime/test_arrow_roundtrip.py"
+  - "python scripts/policy/check_openspec_chain.py --repo-root . --meta-file notes/sessions/2026-04-01/wave4-l0-runtime-normalize-projection/meta.yaml --handoff-file notes/sessions/2026-04-01/wave4-l0-runtime-normalize-projection/handoff.md"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "cargo test (l0_rust): 3 passed"
+  - "pytest Wave 4 normalize/projection helper cluster: 19 passed"
+  - "OpenSpec chain gate: PASS"
+  - "strict validation: Session validation passed."
+tests_failed: []
+blockers: []
+notes:
+  - "bounded slice keeps Python import surfaces stable while market-event bridge and projection semantics move into Rust native exports"
+  - "generated extension artifact refreshed locally in shared/services/l0_runtime/_native_generated/l0_rust.pyd"

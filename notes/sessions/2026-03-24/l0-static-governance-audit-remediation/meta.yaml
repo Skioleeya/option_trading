@@ -1,0 +1,42 @@
+session_id: "2026-03-24/l0-static-governance-audit-remediation"
+title: "L0 static governance audit remediation"
+scope: "refactor"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-24 21:49:23 -04:00"
+updated_at_et: "2026-03-24 22:05:00 -04:00"
+parent_session: null
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "724efb3"
+head_commit: "724efb3"
+
+files_changed:
+  - "l0_ingest/v2/source/runtime/base_feed.py"
+  - "l0_ingest/v2/source/runtime/longport_adapter.py"
+  - "l0_ingest/v2/normalize/events/chain_event_processor.py"
+  - "l0_ingest/tests/v2/quote_runtime_support.py"
+  - "l0_ingest/tests/v2/test_quote_runtime_rust.py"
+  - "l0_ingest/tests/v2/test_quote_runtime_failover.py"
+  - "l0_ingest/tests/v2/test_quote_runtime_python.py"
+  - "l0_ingest/tests/v2/test_quote_runtime.py"
+  - "l0_ingest/tests/v2/test_state_event_processor.py"
+  - "l0_ingest/tests/v2/test_chain_event_processor.py"
+  - "l0_ingest/README.md"
+  - "docs/SOP/L0_DATA_FEED.md"
+  - "openspec/changes/refactor-governance-20260324-l0-runtime-dead-path-cleanup/*"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId l0-static-governance-audit-remediation -Title \"L0 static governance audit remediation\" -Scope \"refactor\" -Owner \"Codex\" -Timezone \"America/New_York\" -UpdatePointer"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/v2/test_quote_runtime_rust.py l0_ingest/tests/v2/test_quote_runtime_failover.py l0_ingest/tests/v2/test_quote_runtime_python.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/v2"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/v2/test_quote_runtime_rust.py l0_ingest/tests/v2/test_quote_runtime_failover.py l0_ingest/tests/v2/test_quote_runtime_python.py -> 6 passed"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l0_ingest/tests/v2 -> 73 passed"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict -> PASS"
+tests_failed: []
+blockers: []
+notes:
+  - "Removed the orphan `longport_adapter.py` side path from the active L0 runtime tree."
+  - "Removed runtime-dead `ChainEventProcessor` and kept `StateEventProcessor` as the single active facade event processor."
+  - "Split the original quote runtime test file into a support module plus focused test modules, keeping all resulting Python files under the 400-line ceiling."

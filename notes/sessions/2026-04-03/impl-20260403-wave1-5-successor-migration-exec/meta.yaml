@@ -1,0 +1,57 @@
+﻿session_id: "2026-04-03/impl-20260403-wave1-5-successor-migration-exec"
+title: "impl-20260403-wave1-5-successor-migration-exec"
+scope: "wave1.5 execute successor migration proposals for l1 wall-context and l2 attention fusion"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-03 09:41:55 -04:00"
+updated_at_et: "2026-04-03 10:08:12 -04:00"
+parent_session: "2026-04-03/impl-20260403-wave1-l1-bridge-marshalling-exec"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "aa3efd7"
+head_commit: "aa3efd7"
+
+files_changed:
+  - "shared_rust_services/src/fusion.rs"
+  - "shared_rust_services/src/microstructure.rs"
+  - "shared_rust_services/src/lib.rs"
+  - "l2_decision/fusion/attention_fusion.py"
+  - "l2_decision/README.md"
+  - "l1_compute/microstructure/wall_context_builder.py"
+  - "l2_decision/tests/test_attention_fusion_rust_bridge.py"
+  - "l1_compute/tests/test_wall_context_builder_rust_bridge.py"
+  - "docs/SOP/L1_LOCAL_COMPUTATION.md"
+  - "docs/SOP/L2_DECISION_ANALYSIS.md"
+  - "openspec/changes/impl-20260403-l1-wall-context-rust/proposal.md"
+  - "openspec/changes/impl-20260403-l1-wall-context-rust/tasks.md"
+  - "openspec/changes/impl-20260403-l2-attention-fusion-rust/proposal.md"
+  - "openspec/changes/impl-20260403-l2-attention-fusion-rust/tasks.md"
+  - "notes/sessions/2026-04-03/impl-20260403-wave1-5-successor-migration-exec/project_state.md"
+  - "notes/sessions/2026-04-03/impl-20260403-wave1-5-successor-migration-exec/open_tasks.md"
+  - "notes/sessions/2026-04-03/impl-20260403-wave1-5-successor-migration-exec/handoff.md"
+  - "notes/sessions/2026-04-03/impl-20260403-wave1-5-successor-migration-exec/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId impl-20260403-wave1-5-successor-migration-exec -Title \"impl-20260403-wave1-5-successor-migration-exec\" -Scope \"wave1.5 execute successor migration proposals for l1 wall-context and l2 attention fusion\" -Owner Codex -ParentSession \"2026-04-03/impl-20260403-wave1-l1-bridge-marshalling-exec\" -Timezone America/New_York -UpdatePointer"
+  - "cargo build --release --target-dir C:\\Users\\Lenovo\\.codex\\memories\\cargo_target\\shared_rust_services"
+  - "Copy-Item C:\\Users\\Lenovo\\.codex\\memories\\cargo_target\\shared_rust_services\\release\\services.dll E:\\US.market\\Option_v3\\shared_rust\\services.pyd -Force"
+  - "python -c \"from shared_rust.services import compute_attention_fused, compute_wall_context_metrics, estimate_near_wall_liquidity, classify_wall_gamma_regime; print('fusion-ok'); print('wall-ok')\""
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_wall_context_builder_rust_bridge.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l2_decision/tests/test_attention_fusion_rust_bridge.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_microstructure_rust_parity.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "python -c import smoke for compute_attention_fused/wall_context helpers -> fusion-ok, wall-ok"
+  - "l1_compute/tests/test_wall_context_builder_rust_bridge.py -> 2 passed"
+  - "l2_decision/tests/test_attention_fusion_rust_bridge.py -> 3 passed"
+  - "l1_compute/tests/test_microstructure_rust_parity.py -> 4 passed"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict -> Session validation passed."
+tests_failed: []
+blockers: []
+notes:
+  - "Wave1.5 executed both successor proposals blocked by the bridge-marshalling audits."
+  - "No fallback branch or compatibility guard was retained in runtime code."
+
+

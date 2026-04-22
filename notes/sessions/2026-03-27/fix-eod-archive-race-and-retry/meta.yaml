@@ -1,0 +1,47 @@
+﻿session_id: "2026-03-27/fix-eod-archive-race-and-retry"
+title: "Fix EOD archive race and retry coverage"
+scope: "ops"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-27 22:52:39 -04:00"
+updated_at_et: "2026-03-27 23:24:00 -04:00"
+parent_session: "2026-03-27/regenerate-20260326-cold-archive"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "6dfd9c5"
+head_commit: "6dfd9c5"
+
+files_changed:
+  - "scripts/ops/run_eod_bucket.ps1"
+  - "scripts/ops/register_eod_bucket_task.ps1"
+  - "scripts/diagnostics/wait_for_eod_sources_settle.py"
+  - "scripts/diagnostics/check_eod_manifest_sync.py"
+  - "scripts/test/test_eod_archive_guards.py"
+  - "data/cold/daily/20260326/manifest.json"
+  - "data/cold/by_regime/unclassified/20260326/manifest.json"
+  - "data/cold/reports/20260326_quality.json"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-27/fix-eod-archive-race-and-retry/project_state.md"
+  - "notes/sessions/2026-03-27/fix-eod-archive-race-and-retry/open_tasks.md"
+  - "notes/sessions/2026-03-27/fix-eod-archive-race-and-retry/handoff.md"
+  - "notes/sessions/2026-03-27/fix-eod-archive-race-and-retry/meta.yaml"
+commands:
+  - "python -m py_compile scripts/diagnostics/wait_for_eod_sources_settle.py scripts/diagnostics/check_eod_manifest_sync.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 scripts/test/test_eod_archive_guards.py scripts/test/test_eod_bucket_archive.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/ops/run_eod_bucket.ps1 -Date 20260326 -RunLabel Verify -SettleStableWindowSeconds 0 -SettleTimeoutSeconds 1 -SettlePollSeconds 0.1 -MaxAttempts 1"
+  - "powershell -ExecutionPolicy Bypass -File scripts/ops/register_eod_bucket_task.ps1"
+  - "powershell -ExecutionPolicy Bypass -File scripts/ops/register_eod_bucket_task.ps1 -Apply"
+  - "Get-ScheduledTask -TaskName EODBucketPrimary,EODBucketRetry"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "scripts/test/test_eod_archive_guards.py and scripts/test/test_eod_bucket_archive.py passed (17 passed)"
+  - "real-data runner verification for 20260326 passed with settle_guard stable=true and sync_check ok=true"
+  - "host scheduled tasks re-registered with StartWhenAvailable=True, MultipleInstances=IgnoreNew, Primary=16:01, Retry=16:04, and unchanged settle-guard arguments"
+tests_failed: []
+blockers: []
+notes:
+  - "Repo-local evidence proved the runner race; exact historical host scheduler failure mode remained external, so the fix removes dependence on that external retry for correctness."
+
+

@@ -6,7 +6,7 @@
  *   • AlertToast rendered as portal-sibling (bottom-right stack)
  *   • AlertEngine.start() called on mount, stop() on unmount
  *
- * Layout / DOM / CSS: 100% UNCHANGED
+ * Layout now uses viewport-driven layout tokens; whole-app transform scaling was removed.
  */
 
 import React, { useEffect } from 'react'
@@ -28,6 +28,8 @@ import { deriveMarketStatus } from './center/headerState'
 import { decodeHistoryRows } from '../lib/historyColumnar'
 import type { AtmDecay } from '../types/dashboard'
 import { runtimeConfig } from '../config/runtime'
+import { buildLayoutScaleVars } from '../lib/layoutScale'
+import { useLayoutScale } from '../hooks/useLayoutScale'
 
 function toNullableNumber(raw: unknown): number | null {
     if (raw === null || raw === undefined) return null
@@ -75,7 +77,16 @@ function normalizeAtmHistoryRows(rows: Record<string, unknown>[]): AtmDecay[] {
 export const App: React.FC = () => {
     useDashboardWS()
     const [debugOpen, setDebugOpen] = React.useState(false)
+    const [profilingForced, setProfilingForced] = React.useState(false)
+    const [atmHistoryLoadError, setAtmHistoryLoadError] = React.useState<string | null>(null)
     const moduleFlags = runtimeConfig.flags
+    const { scale, profile } = useLayoutScale()
+    const profilingEnabled = debugOpen || profilingForced
+
+    useEffect(() => {
+        L4Rum.setProfilingEnabled(profilingEnabled)
+        return () => L4Rum.setProfilingEnabled(false)
+    }, [profilingEnabled])
 
     useEffect(() => {
         L4Rum.markFmp()
@@ -91,48 +102,80 @@ export const App: React.FC = () => {
         )
 
         const handleOverlayToggle = () => setDebugOpen(prev => !prev)
+        const handleProfilingToggle = (event: Event) => {
+            const detail = (event as CustomEvent<boolean>).detail
+            setProfilingForced(detail === true)
+        }
         window.addEventListener('l4:toggle_debug_overlay', handleOverlayToggle)
+        window.addEventListener('l4:set_profiling_enabled', handleProfilingToggle as EventListener)
 
         // Cold boot: hydrate chart with minimal ATM history fields before websocket.
         const atmHistoryFields = 'timestamp,straddle_pct,call_pct,put_pct,strike_changed'
-        const fetchAtmHistoryV2 = async (): Promise<AtmDecay[] | null> => {
+        const fetchAtmHistoryV2 = async (): Promise<AtmDecay[]> => {
             const url = `${runtimeConfig.apiBase}/api/atm-decay/history?fields=${encodeURIComponent(atmHistoryFields)}&schema=v2`
-            try {
-                const res = await fetch(url)
-                const data = await res.json()
-                const rows = decodeHistoryRows(data, 'history')
-                return rows ? normalizeAtmHistoryRows(rows) : null
-            } catch (err) {
-                console.warn('[App] ATM history fetch failed (schema=v2):', err)
-                return null
+            const res = await fetch(url)
+            if (!res.ok) {
+                const body = await res.text()
+                throw new Error(
+                    `[App] ATM history request failed status=${res.status} body=${body.slice(0, 256)}`
+                )
             }
+            const data = await res.json()
+            const rows = decodeHistoryRows(data, 'history')
+            if (!rows) {
+                throw new Error('[App] ATM history response is invalid for schema=v2')
+            }
+            return normalizeAtmHistoryRows(rows)
         }
 
         ; (async () => {
-            const rows = await fetchAtmHistoryV2()
-            if (rows && rows.length > 0) {
+            try {
+                const rows = await fetchAtmHistoryV2()
+                if (rows.length === 0) {
+                    throw new Error('[App] ATM history is empty; persistence is required in strict mode.')
+                }
+                const last = rows[rows.length - 1]
+                console.info(
+                    '[L4 ATM] history hydrate rows=%s last_ts=%s straddle=%s call=%s put=%s',
+                    rows.length,
+                    last?.timestamp ?? 'NA',
+                    last?.straddle_pct ?? 'NA',
+                    last?.call_pct ?? 'NA',
+                    last?.put_pct ?? 'NA',
+                )
                 useDashboardStore.getState().hydrateAtmHistory(rows)
+                setAtmHistoryLoadError(null)
+            } catch (err) {
+                const message = err instanceof Error ? err.message : String(err)
+                setAtmHistoryLoadError(message)
+                console.error('[L4 ATM] strict history hydrate failed:', message)
             }
         })()
 
         return () => {
             AlertEngine.stop()
             window.removeEventListener('l4:toggle_debug_overlay', handleOverlayToggle)
+            window.removeEventListener('l4:set_profiling_enabled', handleProfilingToggle as EventListener)
         }
     }, [moduleFlags.centerV2, moduleFlags.leftV2, moduleFlags.rightV2])
 
     const marketStatus = deriveMarketStatus()
+    const layoutScaleStyle = buildLayoutScaleVars(scale, profile) as React.CSSProperties
 
     return (
-        <>
-            <DebugOverlay open={debugOpen} onClose={() => setDebugOpen(false)} />
-            {/* ─── Portal siblings (no layout impact) ─────────────────────────── */}
+        <div
+            className="h-screen w-screen overflow-hidden bg-bg-primary"
+            style={layoutScaleStyle}
+            data-layout-profile={profile}
+        >
+            {debugOpen ? <DebugOverlay open onClose={() => setDebugOpen(false)} /> : null}
+            {/* ─── Portal siblings (no layout impact) ─────────────────── */}
             <CommandPalette />
             <AlertToast />
 
-            {/* ─── Main layout ───────────────────────────────────────────────── */}
+            {/* ─── Main layout ───────────────────────────────────────── */}
             <div
-                className="flex flex-col h-screen w-screen overflow-hidden bg-bg-primary"
+                className="flex flex-col h-full w-full overflow-hidden bg-bg-primary"
                 data-center-module={moduleFlags.centerV2 ? 'v2' : 'stable'}
                 data-right-module={moduleFlags.rightV2 ? 'v2' : 'stable'}
                 data-left-module={moduleFlags.leftV2 ? 'v2' : 'stable'}
@@ -145,22 +188,43 @@ export const App: React.FC = () => {
 
                     {/* CENTER PANEL */}
                     <div className="relative flex flex-col flex-1 overflow-hidden bg-[#090a0c]">
+                        {atmHistoryLoadError && (
+                            <div
+                                className="absolute z-30 text-red-400 border border-red-500/40 bg-black/75"
+                                style={{
+                                    top: 'var(--l4-space-3)',
+                                    right: 'var(--l4-space-3)',
+                                    padding: '6px 10px',
+                                    fontSize: 'var(--l4-font-8)',
+                                }}
+                            >
+                                ATM HISTORY FAST-FAIL: {atmHistoryLoadError}
+                            </div>
+                        )}
                         <div className="flex-1 overflow-hidden relative"><AtmDecayChart /></div>
-                        <div className="absolute top-3 left-3 z-10 pointer-events-none">
+                        <div
+                            className="absolute z-10 pointer-events-none"
+                            style={{ top: 'var(--l4-space-3)', left: 'var(--l4-space-3)' }}
+                        >
                             <div className="pointer-events-auto"><AtmDecayOverlay /></div>
                         </div>
-                        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+                        <div
+                            className="absolute left-1/2 -translate-x-1/2 z-20 pointer-events-none"
+                            style={{ bottom: 'var(--l4-space-8)' }}
+                        >
                             <div className="pointer-events-auto"><GexStatusBar /></div>
                         </div>
                     </div>
 
                     {/* RIGHT PANEL */}
-                    <div className="flex flex-col border-l border-bg-border overflow-y-auto"
-                        style={{ width: '320px', minWidth: '320px' }}>
+                    <div
+                        className="flex flex-col border-l border-bg-border overflow-y-auto"
+                        style={{ width: 'var(--l4-right-w)', minWidth: 'var(--l4-right-w)' }}
+                    >
                         <RightPanel mode={moduleFlags.rightV2 ? 'v2' : 'stable'} />
                     </div>
                 </div>
             </div>
-        </>
+        </div>
     )
 }

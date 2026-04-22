@@ -25,14 +25,17 @@ describe('gexStatus', () => {
 
     it('maps net_gex direction to asian color semantics', () => {
         expect(resolveAsianGexTone(10).direction).toBe('BULLISH')
-        expect(resolveAsianGexTone(10).textClass).toContain('#ef4444')
+        expect(resolveAsianGexTone(10).textClass).toBe('text-market-up')
         expect(resolveAsianGexTone(-10).direction).toBe('BEARISH')
-        expect(resolveAsianGexTone(-10).textClass).toContain('#10b981')
+        expect(resolveAsianGexTone(-10).textClass).toBe('text-market-down')
         expect(resolveAsianGexTone(0).direction).toBe('NEUTRAL')
+        expect(resolveAsianGexTone(0).textClass).toBe('text-text-secondary')
     })
 
     it('exposes asian wall style tokens', () => {
-        expect(ASIAN_WALL_STYLE.call).toContain('#10b981')
-        expect(ASIAN_WALL_STYLE.put).toContain('#ef4444')
+        expect(ASIAN_WALL_STYLE.call).toContain('text-market-up')
+        expect(ASIAN_WALL_STYLE.put).toContain('text-market-down')
     })
 })
+
+

@@ -1,0 +1,49 @@
+﻿session_id: "2026-04-02/wave17-shared-services-root-owners-cutover"
+title: "shared services root owners to rust"
+scope: "feature"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-02 04:00:07 -04:00"
+updated_at_et: "2026-04-02 05:01:39 -04:00"
+parent_session: "2026-04-02/wave16-shared-services-root-retirement"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "7fb0f53"
+head_commit: "7fb0f53"
+
+files_changed:
+  - "shared_rust_services/Cargo.toml"
+  - "shared_rust_services/src/lib.rs"
+  - "shared_rust_services/src/header_context.rs"
+  - "shared_rust_services/src/research_store.rs"
+  - "shared_rust_services/src/research_store_support.rs"
+  - "shared_rust/services.pyd"
+  - "app/routes/history.py"
+  - "l3_assembly/reactor.py"
+  - "l3_assembly/assembly/ui_state_tracker.py"
+  - "l3_assembly/tests/test_research_feature_store.py"
+  - "l3_assembly/tests/test_header_volatility_context.py"
+  - "docs/SOP/L3_OUTPUT_ASSEMBLY.md"
+  - "openspec/changes/refactor-bloat-20260401-rust-shared-l0-migration-boundary/artifacts/shared-l0-boundary-evidence.md"
+  - "shared/services/research_feature_store.py"
+  - "shared/services/research_feature_store_io.py"
+  - "shared/services/header_volatility_context.py"
+commands:
+  - "cargo build --release --target-dir C:\\Users\\Lenovo\\.codex\\memories\\cargo_target\\shared_rust_services"
+  - "Copy-Item ...\\services.dll E:\\US.market\\Option_v3\\shared_rust\\services.pyd -Force"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l3_assembly/tests/test_research_feature_store.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l3_assembly/tests/test_header_volatility_context.py app/tests/test_history_schema_v2.py l2_decision/tests/test_feature_store.py"
+  - "python scripts/policy/check_openspec_chain.py --repo-root . --meta-file notes/sessions/2026-04-02/wave17-shared-services-root-owners-cutover/meta.yaml --handoff-file notes/sessions/2026-04-02/wave17-shared-services-root-owners-cutover/handoff.md"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "l3_assembly/tests/test_research_feature_store.py"
+  - "l3_assembly/tests/test_header_volatility_context.py"
+  - "app/tests/test_history_schema_v2.py"
+  - "l2_decision/tests/test_feature_store.py"
+tests_failed: []
+blockers:
+  - "tmp/pytest_cache ACL warning persists for pytest cache writes"
+notes:
+  - "shared/services root owner imports now resolve to shared_rust.services"
+
+

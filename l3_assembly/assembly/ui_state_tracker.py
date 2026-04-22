@@ -11,22 +11,29 @@ import math
 from types import SimpleNamespace
 from typing import Any
 
+from l3_assembly.assembly.gex_regime_contract import parse_gex_regime
 from shared.config import settings
-from shared.system.tactical_triad_logic import (
-    classify_vrp_state,
-    compute_vrp,
-    normalize_svol_state,
-    resolve_svol_fields,
+from shared_rust.services import HeaderVolatilityContextService
+from shared_rust.services import (
+    tactical_classify_vrp_state as classify_vrp_state,
+    tactical_compute_vrp as compute_vrp,
+    tactical_normalize_svol_state as normalize_svol_state,
+    tactical_resolve_svol_fields as resolve_svol_fields,
 )
 
 
 class UIStateTracker:
     """Maps EnrichedSnapshot + DecisionOutput contracts to UI metrics."""
 
+    def __init__(
+        self,
+        header_volatility_service: HeaderVolatilityContextService | None = None,
+    ) -> None:
+        self._header_volatility_service = header_volatility_service
+
     async def set_redis_client(self, client: Any) -> None:
-        """Compatibility no-op. UI tracker is contract-only and stateless."""
         _ = client
-        return None
+        return None  # Compatibility no-op: UI tracker is contract-only and stateless.
 
     def tick(self, snapshot: Any, decision: Any) -> dict[str, Any]:
         """Build UI metrics from contract fields only."""
@@ -36,9 +43,17 @@ class UIStateTracker:
 
         spot = self._to_float(self._get(agg, "spot", self._get(snapshot, "spot", 0.0)), default=0.0)
         atm_iv = self._to_float(self._get(agg, "atm_iv", 0.0), default=0.0)
-        net_charm = self._to_float(self._get(agg, "net_charm", 0.0), default=0.0)
+        # Phase G live canonical cutover: tactical charm source must use
+        # canonical raw sum (`net_charm_raw_sum`), not legacy alias (`net_charm`).
+        net_charm = self._to_float(self._get(agg, "net_charm_raw_sum", 0.0), default=0.0)
+        net_vanna_raw_sum = self._to_float(
+            self._get(agg, "net_vanna_raw_sum", self._get(agg, "net_vanna", 0.0)),
+            default=0.0,
+        )
 
         micro_state = self._extract_micro_state(snapshot)
+        micro_structure_state = dict(micro_state)
+        micro_structure_state["net_vanna_raw_sum"] = net_vanna_raw_sum
 
         vanna_raw = micro_state.get("vanna_flow_result") or micro_state.get("vanna_flow")
         wall_raw = micro_state.get("wall_migration")
@@ -51,7 +66,7 @@ class UIStateTracker:
 
         vanna_state_raw = getattr(getattr(vanna_view, "state", None), "value", "UNAVAILABLE")
         vanna_state_str = normalize_svol_state(vanna_state_raw)
-        gex_regime_str = getattr(getattr(vanna_view, "gex_regime", None), "value", "NEUTRAL")
+        gex_regime_str = parse_gex_regime(getattr(vanna_view, "gex_regime", None))
 
         svol_corr, svol_state = resolve_svol_fields(vanna_view)
 
@@ -77,6 +92,11 @@ class UIStateTracker:
 
         skew_dynamics = self._extract_skew_dynamics(decision)
         momentum_direction = self._extract_momentum(decision)
+        header_volatility = self._build_header_volatility(
+            snapshot=snapshot,
+            spot=spot,
+            atm_iv=atm_iv,
+        )
 
         return {
             "wall_migration_data": wall_payload,
@@ -91,9 +111,25 @@ class UIStateTracker:
             "svol_corr": svol_corr,
             "svol_state": svol_state,
             "iv_velocity": iv_velocity,
-            "micro_structure": {"micro_structure_state": micro_state},
+            "micro_structure": {"micro_structure_state": micro_structure_state},
             "spot": spot,
+            "header_volatility": header_volatility,
         }
+
+    def _build_header_volatility(
+        self,
+        *,
+        snapshot: Any,
+        spot: float,
+        atm_iv: float,
+    ) -> dict[str, Any] | None:
+        if self._header_volatility_service is None:
+            return None
+        return self._header_volatility_service.build(
+            snapshot=snapshot,
+            spot=spot,
+            atm_iv=atm_iv,
+        )
 
     @classmethod
     def _extract_aggregates(cls, snapshot: Any) -> Any | None:
@@ -253,13 +289,26 @@ class UIStateTracker:
                 "skew_state": "UNAVAILABLE",
             }
 
-        skew_val = cls._to_float(features.get("skew_25d_normalized", 0.0), default=0.0)
+        # Phase G live canonical cutover: use RR25 canonical source only.
+        raw_rr25 = features.get("rr25_call_minus_put")
+        try:
+            skew_val = float(raw_rr25)
+        except (TypeError, ValueError):
+            return {
+                "skew_value": None,
+                "skew_state": "UNAVAILABLE",
+            }
+        if not math.isfinite(skew_val):
+            return {
+                "skew_value": None,
+                "skew_state": "UNAVAILABLE",
+            }
 
         skew_state = "NEUTRAL"
-        if skew_val < getattr(settings, "skew_speculative_max", -0.10):
-            skew_state = "SPECULATIVE"
-        elif skew_val > getattr(settings, "skew_defensive_min", 0.15):
+        if skew_val <= settings.skew_rr25_defensive_max:
             skew_state = "DEFENSIVE"
+        elif skew_val >= settings.skew_rr25_speculative_min:
+            skew_state = "SPECULATIVE"
 
         return {
             "skew_value": skew_val,

@@ -1,13 +1,10 @@
 {
-  "classification_mode": "primary_only",
+  "classification_mode": "primary_plus_context_v1",
   "primary_priority": [
-    "high_vol_open",
-    "gap_trend_day",
-    "vol_crush_day",
-    "pinning_day",
     "whipsaw_day",
+    "reversal_day",
     "trend_day",
-    "range_day"
+    "balance_day"
   ],
   "thresholds": {
     "high_vol_open": {
@@ -16,23 +13,32 @@
     },
     "trend_day": {
       "abs_ret_threshold": 0.0070,
-      "ofi_persistence_threshold": 0.55
+      "ofi_persistence_threshold": 0.55,
+      "directional_efficiency_min": 0.60,
+      "open_side_persistence_min": 0.65,
+      "close_to_extreme_max": 0.20,
+      "state_switch_rate_max": 0.35
     },
-    "range_day": {
-      "realized_range_threshold": 0.0120,
-      "net_return_cap": 0.0030
+    "reversal_day": {
+      "midday_pivot_time": "12:00",
+      "opening_leg_abs_min": 0.0035,
+      "reversal_leg_abs_min": 0.0040,
+      "net_return_abs_min": 0.0025,
+      "state_switch_rate_max": 0.45
     },
-    "gap_trend_day": {
-      "overnight_gap_abs_min": 0.0060,
-      "intraday_followthrough_abs_min": 0.0040,
-      "require_same_direction": true
+    "balance_day": {
+      "net_return_cap": 0.0050,
+      "directional_efficiency_max": 0.55
     },
-    "vol_crush_day": {
+    "gap_open": {
+      "overnight_gap_abs_min": 0.0060
+    },
+    "vol_crush": {
       "atm_iv_change_pct_max": -0.12,
       "net_return_cap": 0.0050,
       "realized_range_cap": 0.0150
     },
-    "pinning_day": {
+    "pinning": {
       "close_to_key_level_max": 0.0015,
       "pin_band_ratio_min": 0.30,
       "pin_band_width": 0.0020,
@@ -42,6 +48,13 @@
       "state_switch_rate_min": 0.55,
       "realized_range_min": 0.0120,
       "net_return_cap": 0.0040
+    },
+    "close_profile": {
+      "strong_close_max": 0.10,
+      "mid_close_max": 0.35
+    },
+    "raw_sanitizer": {
+      "spot_trim_quantile": 0.001
     },
     "quality_gate": {
       "min_rows_raw": 5000,

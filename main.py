@@ -5,9 +5,16 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+import logging
 from app.lifespan import lifespan
 from app.routes import health, history, ws_dashboard
 from shared.config import settings
+
+logging.basicConfig(
+    level=logging.DEBUG, 
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
 
 # Hardware optimization: set thread limits before NumPy/SciPy imports.
 os.environ["OMP_NUM_THREADS"] = "4"

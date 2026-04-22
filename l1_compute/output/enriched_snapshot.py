@@ -96,7 +96,7 @@ class ComputeQualityReport:
     contracts_computed: int = 0
     contracts_skipped: int = 0       # Missing IV or invalid inputs
     nan_count: int = 0
-    compute_tier: str = "numpy"      # gpu | numba | numpy
+    compute_tier: str = "numpy"      # gpu | gpu_only_blocked | numba | numpy
     greeks_latency_ms: float = 0.0
     aggregation_latency_ms: float = 0.0
     # IV resolution source distribution

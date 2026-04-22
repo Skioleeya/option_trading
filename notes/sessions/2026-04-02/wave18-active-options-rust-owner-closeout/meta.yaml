@@ -1,0 +1,51 @@
+﻿session_id: "2026-04-02/wave18-active-options-rust-owner-closeout"
+title: "wave18 active options rust owner closeout"
+scope: "feature"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-02 07:39:03 -04:00"
+updated_at_et: "2026-04-02 08:14:55 -04:00"
+parent_session: "2026-04-02/wave18-active-options-rust-cutover"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "7fb0f53"
+head_commit: "7fb0f53"
+
+files_changed:
+  - "shared_rust_services/src/active_options/mod.rs"
+  - "shared_rust_services/src/active_options/common.rs"
+  - "shared_rust_services/src/active_options/input.rs"
+  - "shared_rust_services/src/active_options/engines.rs"
+  - "shared_rust_services/src/active_options/support.rs"
+  - "shared_rust_services/src/active_options/fallback.rs"
+  - "shared_rust_services/src/active_options/diagnostics.rs"
+  - "shared_rust_services/src/lib.rs"
+  - "shared/services/active_options_runtime.py"
+  - "shared/services/active_options_input.py"
+  - "shared/services/active_options_engines.py"
+  - "shared/services/_active_options_deg.py"
+  - "shared/services/_active_options_runtime_fallbacks.py"
+  - "shared/services/_active_options_runtime_state.py"
+  - "shared/services/_active_options_runtime_support.py"
+  - "docs/SOP/L3_OUTPUT_ASSEMBLY.md"
+  - "openspec/changes/impl-20260402-active-options-rust-cutover/tasks.md"
+commands:
+  - "cargo build --release --target-dir C:\\Users\\Lenovo\\.codex\\memories\\cargo_target\\shared_rust_services"
+  - "Copy-Item C:\\Users\\Lenovo\\.codex\\memories\\cargo_target\\shared_rust_services\\release\\services.dll E:\\US.market\\Option_v3\\shared_rust\\services.pyd -Force"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 tests/active_options"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/tests/test_lifespan_startup.py app/loops/tests/test_compute_loop_helpers.py app/loops/tests/test_housekeeping_gpu_dedup.py"
+  - "python - <<import-smoke>>"
+  - "python scripts/policy/check_openspec_chain.py --repo-root . --meta-file notes/sessions/2026-04-02/wave18-active-options-rust-owner-closeout/meta.yaml --handoff-file notes/sessions/2026-04-02/wave18-active-options-rust-owner-closeout/handoff.md"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "tests/active_options"
+  - "app/tests/test_lifespan_startup.py"
+  - "app/loops/tests/test_compute_loop_helpers.py"
+  - "app/loops/tests/test_housekeeping_gpu_dedup.py"
+tests_failed: []
+blockers: []
+notes:
+  - "Wave 18 P1 and P2 were completed in one session by moving the root-neutral ActiveOptions owner behind shared_rust.services and deleting the transient Python helper layer."
+  - "A leftover pytest process had to be stopped before replacing shared_rust/services.pyd because it was holding a file lock."
+
+

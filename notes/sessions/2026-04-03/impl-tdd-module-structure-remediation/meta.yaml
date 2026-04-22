@@ -1,0 +1,59 @@
+session_id: "2026-04-03/impl-tdd-module-structure-remediation"
+title: "impl-tdd-module-structure-remediation"
+scope: "feature"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-03 14:43:50 -04:00"
+updated_at_et: "2026-04-03 15:58:45 -04:00"
+parent_session: "2026-04-03/impl-blocked-field-rootcause-zero-fallback"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "d35aa24"
+head_commit: "d35aa24"
+
+files_changed:
+  - "app/loops/housekeeping_loop.py"
+  - "app/loops/tests/test_housekeeping_gpu_dedup.py"
+  - "app/tests/test_health_route_diagnostics.py"
+  - "docs/SOP/L0_DATA_FEED.md"
+  - "docs/SOP/L3_OUTPUT_ASSEMBLY.md"
+  - "docs/SOP/L4_FRONTEND.md"
+  - "l2_decision/signals/flow/__init__.py [deleted]"
+  - "l2_decision/signals/flow/deg_composer.py [deleted]"
+  - "l2_decision/signals/flow/flow_engine_d.py [deleted]"
+  - "l2_decision/signals/flow/flow_engine_e.py [deleted]"
+  - "l2_decision/signals/flow/flow_engine_g.py [deleted]"
+  - "l3_assembly/events/active_options_contract.py"
+  - "l3_assembly/events/payload_ui_state.py"
+  - "l4_ui/src/components/right/activeOptionsModel.ts"
+  - "l4_ui/src/types/dashboard.ts"
+  - "shared/config/api_credentials.py"
+  - "shared/config/flow_engine.py"
+  - "shared/services/active_options_runtime.py"
+  - "shared/services/l0_runtime/services/runtime/builder.py"
+  - "shared/services/l0_runtime/services/subscription/__init__.py"
+  - "scripts/test/test_active_options_contract_no_fallback_fields.py"
+  - "scripts/test/test_active_options_strict_no_fallback.py"
+  - "scripts/test/test_l0_arrow_startup_gate.py"
+  - "scripts/test/test_module_structure_guards.py"
+
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 scripts/test/test_module_structure_guards.py scripts/test/test_active_options_strict_no_fallback.py scripts/test/test_active_options_contract_no_fallback_fields.py scripts/test/test_l0_arrow_startup_gate.py app/loops/tests/test_housekeeping_gpu_dedup.py app/tests/test_health_route_diagnostics.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 app/loops/tests/test_compute_loop_atm_live_continuity.py app/loops/tests/test_active_options_input_bridge.py scripts/test/test_active_options_freeze_rootcause.py scripts/test/test_l0_l4_pipeline.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 scripts/test/test_module_structure_guards.py scripts/test/test_l0_arrow_startup_gate.py scripts/test/test_active_options_strict_no_fallback.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+  - "powershell -ExecutionPolicy Bypass -File scripts/ops/start_backend.ps1 -LogFile logs/backend_runtime.postfix.log"
+  - "Get-Content logs/backend_runtime.postfix.log -TotalCount 100"
+
+tests_passed:
+  - "targeted strict suites (16 passed)"
+  - "active options + pipeline regression subset (8 passed)"
+  - "post-delete guard rerun (9 passed)"
+  - "scripts/validate_session.ps1 -Strict [PASS]"
+  - "backend first-100 log health check [PASS]"
+
+tests_failed: []
+blockers: []
+notes:
+  - "Strict no-fallback behavior is intentionally breaking for legacy fallback field consumers."
+

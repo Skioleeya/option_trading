@@ -1,0 +1,42 @@
+﻿session_id: "2026-04-17/fix-l4-typescript-build-errors"
+title: "L4 TypeScript build errors fix"
+scope: "bugfix"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-17 16:51:41 -04:00"
+updated_at_et: "2026-04-17 16:55:00 -04:00"
+parent_session: "2026-04-17/impl-l4-wall-migration-current-width-fix"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "c40af8f"
+head_commit: "c40af8f"
+
+files_changed:
+  - l4_ui/src/adapters/deltaDecoder.ts
+  - l4_ui/src/components/right/activeOptionsModel.ts
+  - l4_ui/src/components/right/MmFlowCard.tsx
+  - l4_ui/src/components/right/mmFlowModel.ts
+  - notes/context/project_state.md
+  - notes/context/open_tasks.md
+  - notes/context/handoff.md
+  - notes/sessions/2026-04-17/fix-l4-typescript-build-errors/project_state.md
+  - notes/sessions/2026-04-17/fix-l4-typescript-build-errors/open_tasks.md
+  - notes/sessions/2026-04-17/fix-l4-typescript-build-errors/handoff.md
+  - notes/sessions/2026-04-17/fix-l4-typescript-build-errors/meta.yaml
+commands:
+  - powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId "fix-l4-typescript-build-errors" -Title "L4 TypeScript build errors fix" -Scope "bugfix" -Owner "Codex" -ParentSession "2026-04-17/impl-l4-wall-migration-current-width-fix" -Timezone "America/New_York" -UpdatePointer
+  - git status --short --branch
+  - npm --prefix l4_ui run build
+  - npm --prefix l4_ui run test -- src/components/__tests__/mmFlowModel.test.ts src/components/__tests__/activeOptions.render.test.tsx src/adapters/__tests__/protocolAdapter.test.ts
+  - powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict
+tests_passed:
+  - npm --prefix l4_ui run build
+  - npm --prefix l4_ui run test -- src/components/__tests__/mmFlowModel.test.ts src/components/__tests__/activeOptions.render.test.tsx src/adapters/__tests__/protocolAdapter.test.ts (3 files passed, 20 tests passed)
+  - powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict (passed)
+tests_failed:
+  - Full l4_ui test suite not run in this session
+blockers: []
+notes:
+  - Initial targeted test run inside the sandbox failed with esbuild spawn EPERM; rerunning with escalation succeeded.
+
+

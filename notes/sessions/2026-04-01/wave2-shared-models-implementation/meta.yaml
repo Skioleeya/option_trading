@@ -1,0 +1,44 @@
+session_id: "2026-04-01/wave2-shared-models-implementation"
+title: "wave2-shared-models-implementation"
+scope: "Wave 2 shared/models Rust-backed owner cutover"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-01 13:54:47 -04:00"
+updated_at_et: "2026-04-01 16:05:00 -04:00"
+parent_session: "2026-04-01/cross-repo-wave-planning"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "790471c"
+head_commit: "790471c"
+
+files_changed:
+  - "l0_ingest/l0_rust/src/lib.rs"
+  - "l0_ingest/l0_rust/src/model_contracts.rs"
+  - "shared/models/_native_models.py"
+  - "shared/models/__init__.py"
+  - "shared/models/flow_engine.py"
+  - "shared/models/microstructure.py"
+  - "shared/models/agent_output.py"
+  - "l1_compute/tests/test_shared_models_rust_backed.py"
+  - "docs/SOP/L1_LOCAL_COMPUTATION.md"
+  - "docs/SOP/L2_DECISION_ANALYSIS.md"
+  - "openspec/changes/refactor-bloat-20260401-rust-shared-l0-migration-boundary/artifacts/shared-l0-boundary-evidence.md"
+commands:
+  - "cargo check (workdir: l0_ingest/l0_rust)"
+  - "maturin build --release -o dist (workdir: l0_ingest/l0_rust)"
+  - "extract built l0_rust.pyd from wheel into shared/services/l0_runtime/_native_generated/l0_rust.pyd"
+  - "python -m py_compile shared/models/__init__.py shared/models/_native_models.py shared/models/flow_engine.py shared/models/microstructure.py shared/models/agent_output.py l1_compute/tests/test_shared_models_rust_backed.py l1_compute/trackers/wall_migration_tracker.py l1_compute/trackers/vanna_flow_analyzer.py l2_decision/agents/agent_g.py l2_decision/signals/fusion/dynamic_weight_engine.py"
+  - "cargo test (workdir: l0_ingest/l0_rust)"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l1_compute/tests/test_shared_models_rust_backed.py l1_compute/tests/test_wall_migration_tracker.py l1_compute/tests/test_vanna_flow_analyzer.py l2_decision/tests/test_institutional_logic.py shared/services/active_options/test_runtime_service.py"
+  - "python scripts/policy/check_openspec_chain.py --repo-root . --meta-file notes/sessions/2026-04-01/wave2-shared-models-implementation/meta.yaml --handoff-file notes/sessions/2026-04-01/wave2-shared-models-implementation/handoff.md"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "cargo test (l0_rust): 3 passed"
+  - "pytest Wave 2 consumer set: 53 passed"
+  - "OpenSpec chain gate: PASS"
+  - "strict validation: Session validation passed."
+tests_failed: []
+blockers: []
+notes:
+  - "generated extension artifact refreshed locally in shared/services/l0_runtime/_native_generated/l0_rust.pyd"
+  - "Python model import paths remain stable while enum/default source-of-truth moved to Rust native exports"

@@ -1,0 +1,41 @@
+﻿session_id: "2026-03-24/l0-live-penetration-test-20s"
+title: "L0 live penetration test 20s"
+scope: "test"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-24 22:40:04 -04:00"
+updated_at_et: "2026-03-24 22:40:04 -04:00"
+parent_session: null
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "724efb3"
+head_commit: "724efb3"
+
+updated_at_et: "2026-03-24 22:44:37 -04:00"
+updated_at_et: "2026-03-24 22:45:30 -04:00"
+
+files_changed:
+  - "scripts/test/l0_live_penetration_20s.py"
+  - "notes/sessions/2026-03-24/l0-live-penetration-test-20s/project_state.md"
+  - "notes/sessions/2026-03-24/l0-live-penetration-test-20s/open_tasks.md"
+  - "notes/sessions/2026-03-24/l0-live-penetration-test-20s/handoff.md"
+  - "notes/sessions/2026-03-24/l0-live-penetration-test-20s/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId l0-live-penetration-test-20s -Title \"L0 live penetration test 20s\" -Scope \"test\" -Owner \"Codex\" -Timezone \"America/New_York\" -UpdatePointer"
+  - "python scripts/test/l0_live_penetration_20s.py --duration 20 --output tmp/l0_live_penetration_20s.json"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "python scripts/test/l0_live_penetration_20s.py --duration 20 --output tmp/l0_live_penetration_20s.json -> classification=LIVE"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict -> PASS"
+tests_failed:
+  - "initial sandboxed live run failed during Longbridge socket token connectivity; escalated rerun succeeded"
+blockers: []
+notes:
+  - "Observed implausible WS current_volume values dropped by ChainStateStore guard during the live run."
+  - "SOP-EXEMPT: no runtime behavior changed; this session only adds a live test harness and execution record."
+  - "OPENSPEC-EXEMPT: no runtime code under l0_ingest/l1_compute/l2_decision/l3_assembly/l4_ui/app/shared changed in this session."
+
+

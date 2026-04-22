@@ -1,0 +1,37 @@
+session_id: "2026-04-19/restore-windows-eod-entry-20260419"
+title: "restore windows eod bucket task entry"
+scope: "hotfix only"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-19 17:41:22 -04:00"
+updated_at_et: "2026-04-19 17:46:47 -04:00"
+parent_session: null
+
+branch: "main"
+base_commit: "a23cf79"
+head_commit: "a23cf79"
+
+files_changed:
+  - "scripts/ops/run_eod_bucket.ps1"
+  - "notes/sessions/2026-04-19/restore-windows-eod-entry-20260419/project_state.md"
+  - "notes/sessions/2026-04-19/restore-windows-eod-entry-20260419/open_tasks.md"
+  - "notes/sessions/2026-04-19/restore-windows-eod-entry-20260419/handoff.md"
+  - "notes/sessions/2026-04-19/restore-windows-eod-entry-20260419/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+commands:
+  - "python3 manage.py new-session --task-id restore-windows-eod-entry-20260419 --title \"restore windows eod bucket task entry\" --scope \"hotfix only\" --update-pointer"
+  - "python3 manage.py run-pytest scripts/test/test_eod_task_guards.py -q"
+  - "install -m 0644 scripts/ops/run_eod_bucket.ps1 /mnt/e/US.market/Option_v3/scripts/ops/run_eod_bucket.ps1"
+  - "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"& 'E:\\US.market\\Option_v3\\scripts\\ops\\run_eod_bucket.ps1' -DataRoot 'tmp/eod_probe_empty' -OutRoot 'tmp/eod_probe_out_windows_probe_fast' -SettleStableWindowSeconds 1 -SettleTimeoutSeconds 1 -SettlePollSeconds 1 -MaxAttempts 1 -RunLabel 'ProbeFast'; echo EXIT:$LASTEXITCODE\""
+  - "python3 manage.py validate-session --strict"
+tests_passed:
+  - "python3 manage.py run-pytest scripts/test/test_eod_task_guards.py -q (6 passed)"
+  - "python3 manage.py validate-session --strict (passed)"
+tests_failed:
+  - "Windows probe returned exit_code=1 on non-trading day 20260419 (expected date gate behavior)"
+blockers: []
+notes:
+  - "Task scheduler path is E:\\US.market\\Option_v3, distinct from current /home workspace path."
+  - "Restored script was synchronized to /mnt/e path to recover host scheduled-task execution."

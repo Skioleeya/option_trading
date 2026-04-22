@@ -185,12 +185,16 @@ export class ProtocolAdapter {
                 result = DeltaDecoder.applyPatch(current, data.patch, {
                     heartbeat_timestamp: data.heartbeat_timestamp,
                     timestamp: data.timestamp,
+                    broadcast_timestamp: data.broadcast_timestamp,
+                    version: data.version,
                 })
             } else if (data.changes) {
                 // Backend preferred structural diff path
                 result = DeltaDecoder.applyChanges(current, data.changes, {
                     heartbeat_timestamp: data.heartbeat_timestamp,
                     timestamp: data.timestamp,
+                    broadcast_timestamp: data.broadcast_timestamp,
+                    version: data.version,
                 })
             } else {
                 console.warn('[L4 ProtocolAdapter] Delta received without patch or changes field.')
@@ -199,7 +203,7 @@ export class ProtocolAdapter {
 
             if (result.ok) {
                 this.store.applyMergedPayload(result.value)
-                L4Rum.markMsgProcessed()
+                L4Rum.markMsgProcessed(result.value)
             } else {
                 console.error(
                     '[L4 ProtocolAdapter] Failed to apply delta:',
@@ -212,8 +216,13 @@ export class ProtocolAdapter {
         }
 
         // ── dashboard_update / dashboard_init (full snapshot) ────────────────────
-        this.store.applyFullUpdate(msg as DashboardPayload)
-        L4Rum.markMsgProcessed()
+        const validated = DeltaDecoder.validatePayload(msg)
+        if (!validated.ok) {
+            console.error('[L4 ProtocolAdapter] Full payload rejected by strict contract:', validated.error, 'Data:', msg)
+            return
+        }
+        this.store.applyFullUpdate(validated.value)
+        L4Rum.markMsgProcessed(validated.value)
         ConnectionMonitor.onFullPayload()
     }
 

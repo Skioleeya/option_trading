@@ -1,0 +1,39 @@
+session_id: "2026-04-01/shared-rust-wave1-implementation"
+title: "shared-rust-wave1-implementation"
+scope: "shared wave0/wave1 zero-hit delete continuation"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-01 13:25:23 -04:00"
+updated_at_et: "2026-04-01 14:18:00 -04:00"
+parent_session: "2026-04-01/shared-zero-hit-wave0"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "790471c"
+head_commit: "790471c"
+
+files_changed:
+  - "shared/config_cloud_ref/__init__.py"
+  - "shared/config_cloud_ref/agent_g.py"
+  - "shared/models/active_option.py"
+  - "openspec/specs/guard-vrp-unit-sync/spec.md"
+  - "10_SHARED_RUST_CUTOVER_AUDIT.md"
+  - "11_SHARED_ZERO_HIT_DELETE_ALLOWLIST.md"
+  - "12_SHARED_ZERO_HIT_DELETE_BLOCKLIST.md"
+  - "openspec/changes/refactor-bloat-20260401-rust-shared-l0-migration-boundary/artifacts/shared-l0-boundary-evidence.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId shared-rust-wave1-implementation"
+  - "rg reference scans for shared/config_cloud_ref and shared/models/active_option.py"
+  - "Remove-Item -LiteralPath 'shared/config_cloud_ref' -Recurse -Force"
+  - "python scripts/policy/check_openspec_chain.py --repo-root . --meta-file notes/sessions/2026-04-01/shared-rust-wave1-implementation/meta.yaml --handoff-file notes/sessions/2026-04-01/shared-rust-wave1-implementation/handoff.md"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "reference scan: deleted files have no live code/spec hits"
+  - "file-system verification: shared/config_cloud_ref has no remaining Python files"
+  - "OpenSpec chain gate: PASS (runtime_changed=3, openspec_changed=1)"
+  - "strict validation: Session validation passed."
+tests_failed: []
+blockers:
+  - "remaining shared Python files require owner-group Rust replacement rather than zero-hit cleanup"
+notes:
+  - "shared Python file count reduced from 128 to 125"
+  - "active spec reference moved from shared/config_cloud_ref/agent_g.py to shared/config/agent_g.py"

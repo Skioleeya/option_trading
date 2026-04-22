@@ -1,0 +1,37 @@
+session_id: "2026-04-22/option-v4-copy-checklist"
+title: "option-v4-copy-checklist"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-22 10:35:53 -04:00"
+updated_at_et: "2026-04-22 10:41:12 -04:00"
+parent_session: "2026-04-22/redis-wsl-startup-rootfix"
+
+branch: "fix/frontend-data-zero-fallback"
+base_commit: "9f5ad57"
+head_commit: "9f5ad57"
+
+files_changed:
+  - notes/context/handoff.md
+  - notes/context/open_tasks.md
+  - notes/context/project_state.md
+  - notes/sessions/2026-04-22/option-v4-copy-checklist/handoff.md
+  - notes/sessions/2026-04-22/option-v4-copy-checklist/meta.yaml
+  - notes/sessions/2026-04-22/option-v4-copy-checklist/open_tasks.md
+  - notes/sessions/2026-04-22/option-v4-copy-checklist/project_state.md
+  - notes/sessions/2026-04-22/option-v4-copy-checklist/scheme_a_option_v4_copy_checklist.md
+commands:
+  - python3 manage.py new-session --task-id option-v4-copy-checklist
+  - python3 manage.py start-all --verify-only
+  - git status --short
+  - git ls-files -o -i --exclude-standard
+  - rsync -a --delete --exclude='.git/' --exclude='.mypy_cache/' --filter=':- .gitignore' ./ tmp/option_v4_copy_probe_v2/
+  - python3 manage.py validate-session --strict
+tests_passed:
+  - python3 manage.py start-all --verify-only (Redis/backend/frontend all listening)
+  - probe rsync copy preserved source files and excluded runtime/cache/native artifacts
+tests_failed: []
+blockers: []
+notes:
+  - Scheme A was verified as a source-only mirror plan, not a Windows runtime cutover.
+  - `.mypy_cache/` required an explicit exclude because it is not covered by the current `.gitignore`.

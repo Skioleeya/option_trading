@@ -1,0 +1,50 @@
+session_id: "2026-03-19/active-options-volume-sanitize-20260319"
+title: "Active options volume sanitize hardening"
+scope: "l0_ingest,shared,scripts,docs"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-19 16:45:49 -04:00"
+updated_at_et: "2026-03-19 16:49:15 -04:00"
+parent_session: null
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "d64eb98"
+head_commit: "d64eb98"
+
+files_changed:
+  - "l0_ingest/feeds/chain_state_store.py"
+  - "l0_ingest/tests/test_chain_state_store.py"
+  - "shared/services/active_options/runtime_service_support.py"
+  - "shared/services/active_options/test_runtime_service.py"
+  - "scripts/ops/verify_active_options_hotfix.ps1"
+  - "docs/SOP/L0_DATA_FEED.md"
+  - "notes/sessions/2026-03-19/active-options-volume-sanitize-20260319/project_state.md"
+  - "notes/sessions/2026-03-19/active-options-volume-sanitize-20260319/open_tasks.md"
+  - "notes/sessions/2026-03-19/active-options-volume-sanitize-20260319/handoff.md"
+  - "notes/sessions/2026-03-19/active-options-volume-sanitize-20260319/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+commands:
+  - "./scripts/new_session.ps1 -TaskId active-options-volume-sanitize-20260319 -Title \"Active options volume sanitize hardening\" -Scope \"l0_ingest,shared,scripts,docs\" -Owner \"Codex\" -UpdatePointer"
+  - "./scripts/test/run_pytest.ps1 l0_ingest/tests/test_chain_state_store.py -k \"corruption_with_turnover\""
+  - "./scripts/test/run_pytest.ps1 l0_ingest/tests/test_chain_state_store.py shared/services/active_options/test_runtime_service.py"
+  - "./scripts/test/run_pytest.ps1 l0_ingest/tests/test_rust_event_bridge.py l0_ingest/tests/test_option_chain_builder_rust_events.py l1_compute/tests/test_rust_bridge.py"
+  - "./scripts/validate_session.ps1 -Strict"
+  - "./scripts/ops/start_backend.ps1 -HotfixActiveOptions"
+  - "./scripts/ops/verify_active_options_hotfix.ps1"
+tests_passed:
+  - "./scripts/test/run_pytest.ps1 l0_ingest/tests/test_chain_state_store.py shared/services/active_options/test_runtime_service.py"
+  - "./scripts/test/run_pytest.ps1 l0_ingest/tests/test_rust_event_bridge.py l0_ingest/tests/test_option_chain_builder_rust_events.py l1_compute/tests/test_rust_bridge.py"
+  - "./scripts/validate_session.ps1 -Strict"
+tests_failed:
+  - "./scripts/ops/start_backend.ps1 -HotfixActiveOptions: Start-Process failed (cmd.exe child process launch error)"
+  - "./scripts/ops/verify_active_options_hotfix.ps1: backend /health unreachable"
+blockers:
+  - "Host runtime cannot launch backend subprocess via Start-Process/cmd.exe in this environment."
+notes:
+  - "Root-cause reproduction added first: turnover>0 with corrupted WS volume can lock owner and block REST fallback."
+  - "Applied two-layer volume sanitation: L0 store ingress + ActiveOptions runtime normalize fallback."
+  - "Updated verify script gate to rely on real rows and turnover coverage instead of strict live_rows requirement."
+
+

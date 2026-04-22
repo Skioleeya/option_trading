@@ -1,0 +1,38 @@
+﻿session_id: "2026-03-27/analyze-day-classification-20260312-20260327"
+title: "Analyze day classification for 20260312 and 20260327"
+scope: "analysis"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-27 23:21:09 -04:00"
+updated_at_et: "2026-03-27 23:25:15 -04:00"
+parent_session: "2026-03-27/fix-eod-archive-race-and-retry"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "6dfd9c5"
+head_commit: "6dfd9c5"
+
+files_changed:
+  - "notes/sessions/2026-03-27/analyze-day-classification-20260312-20260327/project_state.md"
+  - "notes/sessions/2026-03-27/analyze-day-classification-20260312-20260327/open_tasks.md"
+  - "notes/sessions/2026-03-27/analyze-day-classification-20260312-20260327/handoff.md"
+  - "notes/sessions/2026-03-27/analyze-day-classification-20260312-20260327/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+commands:
+  - "Read scripts/diagnostics/eod_bucket_archive.py"
+  - "Read scripts/diagnostics/config/eod_bucket_thresholds.json"
+  - "Read cold manifests/reports for 20260312 and 20260327"
+  - "Recomputed 20260327 metrics from raw_20260327.parquet"
+  - "Inspected feature/ATM/MTF-IV/wall traces for 20260312"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "Analysis consistency check against classifier thresholds and cold reports"
+tests_failed: []
+blockers:
+  - "data/research/raw/raw_20260312.parquet missing in current workspace snapshot"
+notes:
+  - "20260327 best-fit remains gap_trend_day."
+  - "20260312 best-fit is bearish trend_day with vol-crush overlay, despite current unclassified tag."
+
+

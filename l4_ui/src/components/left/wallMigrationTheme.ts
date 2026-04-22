@@ -13,6 +13,7 @@ export interface WallMigrationRowTokens {
     isDecaying: boolean
     isReinforced: boolean
     isRetreating: boolean
+    isCollapsing: boolean
     labelColor: string
     labelBorder: string
     labelBg: string
@@ -23,29 +24,65 @@ export interface WallMigrationRowTokens {
     currentShadow: string
 }
 
+function hexToRgbTriplet(hex: string, fallback: string): string {
+    const normalized = hex.trim().replace('#', '')
+    if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return fallback
+    const r = Number.parseInt(normalized.slice(0, 2), 16)
+    const g = Number.parseInt(normalized.slice(2, 4), 16)
+    const b = Number.parseInt(normalized.slice(4, 6), 16)
+    return `${r},${g},${b}`
+}
+
+const WALL_LEVEL_MIN_EXCLUSIVE = 0
+
+function normalizeStateToken(raw: unknown): string {
+    const text = String(raw ?? '').trim().toUpperCase()
+    return text ? text.replace(/\s+/g, ' ') : ''
+}
+
+function hasState(state: string, keyword: string): boolean {
+    return state.includes(keyword)
+}
+
+export function isDisplayableWallLevel(value: unknown): value is number {
+    return typeof value === 'number' && Number.isFinite(value) && value > WALL_LEVEL_MIN_EXCLUSIVE
+}
+
 export function getHistoryValue(history: unknown, index: number): number | null {
     if (!Array.isArray(history) || index < 0 || index >= history.length) {
         return null
     }
     const value = history[index]
-    return typeof value === 'number' && Number.isFinite(value) ? value : null
+    return isDisplayableWallLevel(value) ? value : null
 }
 
 export function getWallMigrationRowTokens(row: WallMigrationRowLike): WallMigrationRowTokens {
     const label = String(row.label ?? '').toUpperCase()
-    const state = String(row.state ?? 'UNAVAILABLE').toUpperCase()
+    const stateCandidate = normalizeStateToken(row.state)
+    const badgeCandidate = normalizeStateToken(row.lights?.wall_dyn_badge)
+    const state = stateCandidate || badgeCandidate || 'UNAVAILABLE'
 
-    const isCall = label.startsWith('C')
-    const isBreached = state.includes('BREACHED')
-    const isDecaying = state.includes('DECAYING')
-    const isReinforced = state.includes('REINFORCED')
-    const isRetreating = state.includes('RETREATING')
+    const isCall = label.startsWith('C') || label.includes('CALL')
+    const isPut = label.startsWith('P') || label.includes('PUT')
+    const isBreached = hasState(state, 'BREACH')
+    const isDecaying = hasState(state, 'DECAY')
+    const isReinforced = hasState(state, 'REINFORCE')
+    const isRetreating = hasState(state, 'RETREAT')
+    const isCollapsing = hasState(state, 'COLLAPSE')
 
-    const labelColor = isCall ? THEME.market.up : THEME.market.down
-    const labelBorder = isCall ? 'rgba(239,68,68,0.30)' : 'rgba(16,185,129,0.30)'
+    const marketUpRgb = hexToRgbTriplet(THEME.market.up, '239,68,68')
+    const marketDownRgb = hexToRgbTriplet(THEME.market.down, '16,185,129')
+    const labelColor = isCall ? THEME.market.up : isPut ? THEME.market.down : THEME.text.secondary
+    const labelBorder = isCall
+        ? `rgba(${marketUpRgb},0.30)`
+        : isPut
+            ? `rgba(${marketDownRgb},0.30)`
+            : 'rgba(255,255,255,0.20)'
     const labelBg = isCall
         ? THEME.defense.wallMigration.callLabelBg
-        : THEME.defense.wallMigration.putLabelBg
+        : isPut
+            ? THEME.defense.wallMigration.putLabelBg
+            : 'rgba(18,18,20,0.80)'
 
     const neutralBorder = 'rgba(255,255,255,0.10)'
     const neutralBg = 'rgba(18,18,20,0.80)'
@@ -55,24 +92,37 @@ export function getWallMigrationRowTokens(row: WallMigrationRowLike): WallMigrat
     const retreatBg = 'rgba(245,158,11,0.08)'
     const retreatShadow = '0 0 6px rgba(245,158,11,0.25)'
 
-    const reinforceBorder = isCall ? 'rgba(239,68,68,0.45)' : 'rgba(16,185,129,0.45)'
-    const reinforceBg = isCall ? 'rgba(239,68,68,0.12)' : 'rgba(16,185,129,0.12)'
+    const reinforceBorder = isCall
+        ? `rgba(${marketUpRgb},0.45)`
+        : isPut
+            ? `rgba(${marketDownRgb},0.45)`
+            : 'rgba(255,255,255,0.24)'
+    const reinforceBg = isCall
+        ? `rgba(${marketUpRgb},0.12)`
+        : isPut
+            ? `rgba(${marketDownRgb},0.12)`
+            : 'rgba(255,255,255,0.06)'
     const reinforceShadow = isCall
-        ? '0 0 8px rgba(239,68,68,0.30)'
-        : '0 0 8px rgba(16,185,129,0.30)'
+        ? `0 0 8px rgba(${marketUpRgb},0.30)`
+        : isPut
+            ? `0 0 8px rgba(${marketDownRgb},0.30)`
+            : 'none'
 
     const breachBorder = 'rgba(245,158,11,0.6)'
     const breachBg = 'rgba(245,158,11,0.14)'
     const breachShadow = '0 0 8px rgba(245,158,11,0.35)'
+    const collapseBorder = 'rgba(245,158,11,0.75)'
+    const collapseBg = 'rgba(245,158,11,0.18)'
+    const collapseShadow = '0 0 10px rgba(245,158,11,0.45)'
 
     const decayingBorder = 'rgba(113,113,122,0.25)'
     const decayingBg = '#060606'
     const decayingShadow = 'none'
 
-    const badgeColor = isBreached
+    const badgeColor = (isBreached || isCollapsing)
         ? THEME.accent.amber
         : isReinforced
-            ? (isCall ? THEME.market.up : THEME.market.down)
+            ? (isCall ? THEME.market.up : isPut ? THEME.market.down : THEME.text.secondary)
             : isRetreating
                 ? THEME.accent.amber
                 : isDecaying
@@ -87,10 +137,10 @@ export function getWallMigrationRowTokens(row: WallMigrationRowLike): WallMigrat
         currentBorder = decayingBorder
         currentBg = decayingBg
         currentShadow = decayingShadow
-    } else if (isBreached) {
-        currentBorder = breachBorder
-        currentBg = breachBg
-        currentShadow = breachShadow
+    } else if (isBreached || isCollapsing) {
+        currentBorder = isCollapsing ? collapseBorder : breachBorder
+        currentBg = isCollapsing ? collapseBg : breachBg
+        currentShadow = isCollapsing ? collapseShadow : breachShadow
     } else if (isReinforced) {
         currentBorder = reinforceBorder
         currentBg = reinforceBg
@@ -108,6 +158,7 @@ export function getWallMigrationRowTokens(row: WallMigrationRowLike): WallMigrat
         isDecaying,
         isReinforced,
         isRetreating,
+        isCollapsing,
         labelColor,
         labelBorder,
         labelBg,

@@ -1,0 +1,61 @@
+session_id: "2026-03-19/turnover-shm-v2-handshake-20260319"
+title: "Turnover SHM v2 handshake fix"
+scope: "l0_ingest,l1_compute,docs"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-19 14:53:36 -04:00"
+updated_at_et: "2026-03-19 16:32:00 -04:00"
+parent_session: null
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "d64eb98"
+head_commit: "d64eb98"
+
+files_changed:
+  - "l0_ingest/l0_rust/src/schema.rs"
+  - "l0_ingest/l0_rust/src/ipc.rs"
+  - "l0_ingest/l0_rust/src/lib.rs"
+  - "l1_compute/rust_bridge.py"
+  - "l0_ingest/feeds/rust_event_bridge.py"
+  - "l0_ingest/feeds/chain_state_store.py"
+  - "l1_compute/tests/test_rust_bridge.py"
+  - "l0_ingest/tests/test_rust_event_bridge.py"
+  - "l0_ingest/tests/test_option_chain_builder_rust_events.py"
+  - "l0_ingest/tests/test_chain_state_store.py"
+  - "docs/LONGPORT_OPTION_FIELD_DICTIONARY.md"
+  - "docs/SOP/L0_DATA_FEED.md"
+  - "openspec/changes/turnover-shm-v2-handshake-20260319/proposal.md"
+  - "openspec/changes/turnover-shm-v2-handshake-20260319/design.md"
+  - "openspec/changes/turnover-shm-v2-handshake-20260319/tasks.md"
+  - "openspec/changes/turnover-shm-v2-handshake-20260319/specs/l0-runtime-resilience/spec.md"
+  - "notes/sessions/2026-03-19/turnover-shm-v2-handshake-20260319/project_state.md"
+  - "notes/sessions/2026-03-19/turnover-shm-v2-handshake-20260319/open_tasks.md"
+  - "notes/sessions/2026-03-19/turnover-shm-v2-handshake-20260319/handoff.md"
+  - "notes/sessions/2026-03-19/turnover-shm-v2-handshake-20260319/meta.yaml"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+commands:
+  - "./scripts/new_session.ps1 -TaskId turnover-shm-v2-handshake-20260319 -Title \"Turnover SHM v2 handshake fix\" -Scope \"l0_ingest,l1_compute,docs\" -Owner \"Codex\" -UpdatePointer"
+  - "./scripts/test/run_pytest.ps1 l1_compute/tests/test_rust_bridge.py l0_ingest/tests/test_rust_event_bridge.py l0_ingest/tests/test_option_chain_builder_rust_events.py"
+  - "./scripts/test/run_pytest.ps1 l0_ingest/tests/test_chain_state_store.py"
+  - "cargo test (workdir: l0_ingest/l0_rust)"
+  - "./scripts/validate_session.ps1 -Strict"
+  - "./scripts/ops/verify_active_options_hotfix.ps1 (operator)"
+  - "1Hz monitoring loop on /debug/persistence_status (operator)"
+tests_passed:
+  - "./scripts/test/run_pytest.ps1 l1_compute/tests/test_rust_bridge.py l0_ingest/tests/test_rust_event_bridge.py l0_ingest/tests/test_option_chain_builder_rust_events.py"
+  - "./scripts/test/run_pytest.ps1 l0_ingest/tests/test_chain_state_store.py"
+  - "./scripts/test/run_pytest.ps1 l0_ingest/tests/test_chain_state_store.py (round2)"
+  - "./scripts/validate_session.ps1 -Strict"
+tests_failed:
+  - "cargo test (l0_ingest/l0_rust): linker `link.exe` not found"
+blockers:
+  - "MSVC linker `link.exe` missing on host; Rust compile/test unavailable."
+notes:
+  - "Implemented SHM v2 event fields + metadata handshake and Python v1/v2 decode compatibility."
+  - "Mapped turnover/current_volume in rust_event_bridge; kept chain_state_store/fetch_chain behavior unchanged."
+  - "Added L0 runtime non-negative volume clamp before Rust SHM push to prevent signed-to-unsigned overflow artifacts."
+  - "Applied WS dual-volume reconciliation in ChainStateStore (valid pair => min(volume,current_volume)) and restored independent Rust push fields."
+
+

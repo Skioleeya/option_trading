@@ -1,0 +1,49 @@
+session_id: "2026-04-01/active-options-top5-vol-fix"
+title: "Fix Active Options TOP5 vol low values"
+scope: "implementation"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-01 09:38:12 -04:00"
+updated_at_et: "2026-04-01 09:50:30 -04:00"
+parent_session: null
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "790471c"
+head_commit: "790471c"
+
+files_changed:
+  - "shared/services/active_options/runtime_service.py"
+  - "shared/services/active_options/runtime_service_fallbacks.py"
+  - "shared/services/active_options/runtime_service_support.py"
+  - "shared/services/active_options/test_runtime_service_sparse_fallback.py"
+  - "docs/SOP/L0_DATA_FEED.md"
+  - "notes/context/handoff.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/project_state.md"
+  - "notes/sessions/2026-04-01/active-options-top5-vol-fix/project_state.md"
+  - "notes/sessions/2026-04-01/active-options-top5-vol-fix/open_tasks.md"
+  - "notes/sessions/2026-04-01/active-options-top5-vol-fix/handoff.md"
+  - "notes/sessions/2026-04-01/active-options-top5-vol-fix/meta.yaml"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId active-options-top5-vol-fix -Title \"Fix Active Options TOP5 vol low values\" -Scope implementation -UpdatePointer"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 shared/services/active_options/test_runtime_service_sparse_fallback.py -q"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 shared/services/active_options/test_runtime_service.py -q"
+  - "python -m compileall shared/services/active_options/runtime_service.py shared/services/active_options/runtime_service_fallbacks.py shared/services/active_options/runtime_service_support.py shared/services/active_options/test_runtime_service_sparse_fallback.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/ops/start_backend.ps1"
+  - "powershell -ExecutionPolicy Bypass -File scripts/ops/start_backend.ps1 -Degraded"
+  - "powershell -ExecutionPolicy Bypass -File scripts/ops/verify_active_options_hotfix.ps1"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "pytest: shared/services/active_options/test_runtime_service_sparse_fallback.py -> 2 passed"
+  - "pytest: shared/services/active_options/test_runtime_service.py -> 23 passed"
+  - "compileall: changed Active Options files compiled successfully"
+  - "live persistence_status: rows_real_non_synthetic=5 rows_synthetic_fallback=0 live_rows=5 last_fallback_mode=subthreshold_volume"
+  - "live active_options_capture: aligned sparse window kept five real rows with subthreshold_volume fallback reason"
+  - "scripts/ops/verify_active_options_hotfix.ps1: PASS"
+  - "strict validation: powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_failed:
+  - "strict real-host restart failed startup connectivity probe before degraded retry succeeded"
+blockers: []
+notes:
+  - "Root cause was sparse fallback ordering, not L0 decode loss: the runtime skipped real sub-threshold volume candidates and filled with synthetic turnover/OI rows."
+  - "Live verification used degraded retry because the strict startup probe hit QuoteContext timeout on the real host."

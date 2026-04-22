@@ -1,4 +1,3 @@
-import { describe, expect, it } from 'vitest'
 import type { FusedSignal } from '../../types/dashboard'
 import {
     confidenceToPercent,
@@ -6,7 +5,6 @@ import {
     normalizeDecisionTone,
     resolveDirectionClasses,
     resolveGexIntensityBadgeClass,
-    resolveWeightBarWidth,
     resolveWeightPercent,
 } from '../right/decisionEngineModel'
 
@@ -60,11 +58,9 @@ describe('decisionEngineModel', () => {
         expect(resolveGexIntensityBadgeClass('NEUTRAL')).toBe('badge-neutral')
     })
 
-    it('keeps zero-weight bars hidden and preserves HALT styling', () => {
-        expect(resolveWeightBarWidth(0)).toBe(0)
-        expect(resolveWeightBarWidth(1)).toBe(2)
-        expect(resolveWeightBarWidth(25)).toBe(25)
-        expect(resolveDirectionClasses('HALT').bar).toContain('accent-amber')
+    it('preserves HALT banner and text styling after bar removal', () => {
+        expect(resolveDirectionClasses('HALT').banner).toContain('amber')
+        expect(resolveDirectionClasses('HALT').text).toContain('accent-amber')
     })
 
     it('formats regime labels without per-letter splitting', () => {
@@ -73,3 +69,4 @@ describe('decisionEngineModel', () => {
         expect(formatRegimeLabel('HighVol')).toBe('HIGH VOL')
     })
 })
+

@@ -1,0 +1,37 @@
+session_id: "2026-03-19/diagnose-active-options-empty-20260319"
+title: "Diagnose active options empty and add checker"
+scope: "diagnostic script + runtime triage"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-19 10:24:18 -04:00"
+updated_at_et: "2026-03-19 10:30:31 -04:00"
+parent_session: "2026-03-17/apply-refactor-governance-20260317-l0-l2-dechaos-chain-p1-implementation"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "d64eb98"
+head_commit: "d64eb98"
+
+files_changed:
+  - "scripts/diag/check_active_options_no_data_cause.py"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-03-19/diagnose-active-options-empty-20260319/project_state.md"
+  - "notes/sessions/2026-03-19/diagnose-active-options-empty-20260319/open_tasks.md"
+  - "notes/sessions/2026-03-19/diagnose-active-options-empty-20260319/handoff.md"
+  - "notes/sessions/2026-03-19/diagnose-active-options-empty-20260319/meta.yaml"
+commands:
+  - "python scripts/diag/check_active_options_no_data_cause.py --json"
+  - "python scripts/diag/check_active_options_no_data_cause.py"
+  - "python -m py_compile scripts/diag/check_active_options_no_data_cause.py"
+  - "./scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "py_compile scripts/diag/check_active_options_no_data_cause.py"
+  - "validate_session.ps1 -Strict: pass"
+tests_failed: []
+blockers: []
+notes:
+  - "Diagnosis evidence points to repeated min_volume empty-filter with concurrent Spot/token connectivity failures."
+  - "HTTP diagnostics endpoints were unreachable from current shell due WinError 10106."
+
+

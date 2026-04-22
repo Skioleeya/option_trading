@@ -14,27 +14,36 @@ class AgentGConfig(BaseConfig):
     fusion_confidence_threshold: float = Field(default=0.5)
 
     # GEX thresholds are configured in Million USD (MMUSD).
-    # Current production scale uses 20B/100B cutoffs => 20_000 / 100_000 MMUSD.
-    gex_neutral_threshold: float = Field(default=20000.0)      # 20B
-    gex_super_pin_threshold: float = Field(default=100000.0)   # 100B
+    # Current production scale uses 0.8B/4B cutoffs => 800 / 4_000 MMUSD.
+    gex_neutral_threshold: float = Field(default=800.0)        # 0.8B
+    gex_super_pin_threshold: float = Field(default=4000.0)     # 4B
     gex_strong_positive: float = Field(default=50000.0)        # 50B
     gex_strong_negative: float = Field(default=-50000.0)       # -50B
     gex_moderate_threshold: float = Field(default=30000.0)     # 30B
     gex_accel_threshold: float = Field(default=10000.0)        # 10B
+    gex_accel_boost_bearish: float = Field(default=1.5)
+    gex_accel_boost_bullish: float = Field(default=1.3)
+
+    # IV Regime thresholds
+    iv_low_max: float = Field(default=0.12)
+    iv_normal_max: float = Field(default=0.20)
+    iv_elevated_max: float = Field(default=0.30)
+    iv_high_max: float = Field(default=0.35)
 
     # VRP thresholds:
     # - `vrp_baseline_hv` accepts either decimal fraction (0.15) or percent (15.0)
     #   and is normalized to percent points by `compute_vrp`.
     # - `vrp_*_threshold` values below are already percent-point thresholds.
-    # - `guard_vrp_*_threshold` remain decimal-fraction guard inputs in Phase A.
+    # - `guard_vrp_*_threshold` are stored in percent points; legacy decimal
+    #   inputs like `0.15` are still normalized to `15.0` for compatibility.
     vrp_baseline_hv: float = Field(default=0.15)
     vrp_trap_threshold: float = Field(default=10.0)
     vrp_expensive_threshold: float = Field(default=5.0)
     vrp_cheap_threshold: float = Field(default=-5.0)
     vrp_veto_threshold: float = Field(default=-2.0)
     vrp_bargain_boost: float = Field(default=1.2)
-    guard_vrp_entry_threshold: float = Field(default=0.15)
-    guard_vrp_exit_threshold: float = Field(default=0.13)
+    guard_vrp_entry_threshold: float = Field(default=15.0)
+    guard_vrp_exit_threshold: float = Field(default=13.0)
     guard_vrp_min_hold_ticks: int = Field(default=3)
     guard_vrp_exit_confirm_ticks: int = Field(default=2)
     guard_drawdown_limit_usd: float = Field(default=-500.0)

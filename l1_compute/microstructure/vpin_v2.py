@@ -20,21 +20,20 @@ References:
 from __future__ import annotations
 
 import logging
-import math
 import time
 from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
+from typing import Sequence
 
 logger = logging.getLogger(__name__)
 
-# ── Rust bridge (Phase 2) ────────────────────────────────────────
+# ── Rust bridge ───────────────────────────────────────────────────
 try:
-    import l1_rust as _rust  # type: ignore
-    logger.info("[VPINv2] l1_rust native extension loaded for AVX-512 SIMD.")
+    from shared_rust.services import compute_vpin_regime as _rust_compute_vpin_regime  # type: ignore
     _RUST_AVAILABLE = True
-except ImportError:
+except (ImportError, AttributeError):
+    _rust_compute_vpin_regime = None
     _RUST_AVAILABLE = False
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -111,9 +110,8 @@ class VPINv2:
         bucket_size = adv_daily * adv_percentile_fraction
         (defaults to 500 until ADV history is populated)
 
-    rust_kernel Bridge (Phase 2):
-        When _RUST_AVAILABLE, update() will delegate the inner bucket
-        loop to rust_kernel.update_vpin_v2() for AVX-512 SIMD acceleration.
+    Rust bridge:
+        Regime classification is delegated to shared_rust.services.compute_vpin_regime().
 
     Usage::
 
@@ -147,11 +145,7 @@ class VPINv2:
             return
 
         now = time.monotonic()
-
-        if _RUST_AVAILABLE:
-            self._update_rust(trades, now)
-        else:
-            self._update_python(trades, now)
+        self._update_python(trades, now)
 
         self._session_vol += sum(t.get("vol", 0.0) for t in trades)
 
@@ -206,7 +200,12 @@ class VPINv2:
             # Bucket completion check
             while self._current.total_vol >= self._bucket_size:
                 score = self._current.vpin()
-                self._completed.append(_CompletedBucket(vpin_score=score, timestamp=now))
+                self._completed.append(
+                    _CompletedBucket(
+                        vpin_score=score,
+                        timestamp=now,
+                    )
+                )
                 self._buckets_filled += 1
                 # Roll over excess volume to next bucket
                 excess = self._current.total_vol - self._bucket_size
@@ -215,26 +214,6 @@ class VPINv2:
                 self._current.total_vol = excess
                 self._current.buy_vol   = buy_v * fraction
                 self._current.sell_vol  = sell_v * fraction
-
-    def _update_rust(self, trades: list[dict], now: float) -> None:
-        """Phase 2 Rust bridge — SIMD accelerated execution."""
-        trade_tuples = [(float(t.get("vol", 0.0)), float(t.get("dir", 0))) for t in trades]
-        
-        buy_vol, sell_vol, total_vol, completed_scores = _rust.update_vpin_v2(
-            self._current.buy_vol,
-            self._current.sell_vol,
-            self._current.total_vol,
-            self._bucket_size,
-            trade_tuples,
-        )
-        
-        self._current.buy_vol = buy_vol
-        self._current.sell_vol = sell_vol
-        self._current.total_vol = total_vol
-        
-        for score in completed_scores:
-            self._completed.append(_CompletedBucket(vpin_score=score, timestamp=now))
-            self._buckets_filled += 1
 
     def _compute_timeframe(self, now: float, window_seconds: int) -> VPINTimeframe:
         """Compute VPIN for the most recent `window_seconds`."""
@@ -245,12 +224,12 @@ class VPINv2:
             # Use current partial bucket
             score = self._current.vpin()
             conf = self._current.fill_fraction(self._bucket_size) * 0.5
+            regime = self._classify_regime_from_rust([score], [0.0])
         else:
             scores = [b.vpin_score for b in relevant]
             score = sum(scores) / len(scores)
             conf = min(len(relevant) / 10.0, 1.0)  # 10 complete buckets = full confidence
-
-        regime = self._classify_regime(score)
+            regime = self._classify_regime_from_rust(scores, [0.0] * len(scores))
         return VPINTimeframe(
             score=score,
             regime=regime,
@@ -259,10 +238,31 @@ class VPINv2:
             total_vol=self._current.total_vol,
         )
 
-    @staticmethod
-    def _classify_regime(score: float) -> VPINRegime:
-        if score >= _REGIME_THRESHOLDS["TOXIC"]:
-            return VPINRegime.TOXIC
-        if score >= _REGIME_THRESHOLDS["ELEVATED"]:
+    def _classify_regime_from_rust(
+        self,
+        buy_vols: Sequence[float],
+        sell_vols: Sequence[float],
+    ) -> VPINRegime:
+        if not _RUST_AVAILABLE or _rust_compute_vpin_regime is None:
+            raise RuntimeError("shared_rust.services.compute_vpin_regime unavailable")
+
+        try:
+            code = int(
+                _rust_compute_vpin_regime(
+                    list(buy_vols),
+                    list(sell_vols),
+                    _REGIME_THRESHOLDS["ELEVATED"],
+                    _REGIME_THRESHOLDS["TOXIC"],
+                )
+            )
+        except Exception as exc:  # nosec B904 - explicit bridge failure context
+            logger.error("[VPINv2] Rust regime bridge failed: %s", exc)
+            raise RuntimeError("Rust VPIN regime bridge failed") from exc
+
+        if code == 0:
+            return VPINRegime.NORMAL
+        if code == 1:
             return VPINRegime.ELEVATED
-        return VPINRegime.NORMAL
+        if code == 2:
+            return VPINRegime.TOXIC
+        raise ValueError(f"Unexpected VPIN regime code from Rust: {code}")

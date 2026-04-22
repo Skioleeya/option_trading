@@ -1,0 +1,48 @@
+session_id: "2026-03-13/l4-ui-asian-color-semantics-audit-fix"
+title: "l4-ui-asian-color-semantics-audit-fix"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-13 11:35:36 -04:00"
+updated_at_et: "2026-03-13 14:19:20 -04:00"
+parent_session: "2026-03-13/atm-decay-interaction-null-guard-impl"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "41deba6"
+head_commit: "1179556"
+
+files_changed:
+  - "l4_ui/src/components/left/microStatsTheme.ts"
+  - "l4_ui/src/components/left/MicroStats.tsx"
+  - "l4_ui/src/components/left/wallMigrationTheme.ts"
+  - "l4_ui/src/components/left/WallMigration.tsx"
+  - "l4_ui/src/components/left/depthProfileTheme.ts"
+  - "l4_ui/src/components/left/DepthProfile.tsx"
+  - "l4_ui/src/components/left/__tests__/microStatsTheme.test.ts"
+  - "l4_ui/src/components/left/__tests__/microStats.render.test.tsx"
+  - "l4_ui/src/components/left/__tests__/wallMigrationTheme.test.ts"
+  - "l4_ui/src/components/left/__tests__/depthProfileTheme.test.ts"
+  - "l4_ui/src/components/right/rightPanelModel.ts"
+  - "l4_ui/src/components/right/RightPanel.tsx"
+  - "l4_ui/src/components/__tests__/rightPanelModel.test.ts"
+  - "l4_ui/src/components/__tests__/rightPanelContract.integration.test.tsx"
+  - "l4_ui/src/components/__tests__/activeOptions.model.test.ts"
+  - "l4_ui/src/components/__tests__/tacticalTriad.model.test.ts"
+  - "l4_ui/src/components/__tests__/skewDynamics.model.test.ts"
+  - "l4_ui/src/components/__tests__/mtfFlow.model.test.ts"
+  - "l4_ui/src/components/__tests__/decisionEngineModel.test.ts"
+  - "l4_ui/src/__tests__/setup.ts"
+  - "docs/SOP/L4_FRONTEND.md"
+
+commands:
+  - "npm --prefix e:\\US.market\\Option_v3\\l4_ui run test -- src/components/__tests__/rightPanelModel.test.ts src/components/__tests__/activeOptions.model.test.ts src/components/__tests__/tacticalTriad.model.test.ts src/components/__tests__/skewDynamics.model.test.ts src/components/__tests__/mtfFlow.model.test.ts src/components/__tests__/decisionEngineModel.test.ts src/components/__tests__/rightPanelContract.integration.test.tsx"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+
+tests_passed:
+  - "right-panel regression: 7 files, 43 passed"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict (PASS)"
+tests_failed: []
+blockers: []
+notes:
+  - "Right panel status/color mapping is bus-normalized via rightPanelModel."
+  - "Right-panel related tests migrated to Vitest globals API to avoid suite collection failure in current environment."

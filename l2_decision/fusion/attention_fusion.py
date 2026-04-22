@@ -1,7 +1,7 @@
-"""l2_decision.fusion.attention_fusion — Numpy-based attention-weighted signal fusion.
+"""l2_decision.fusion.attention_fusion — Rust-owner attention-weighted signal fusion.
 
 Implements the Attention Fusion layer described in L2_DECISION_ANALYSIS.md §5.2.
-Uses numpy softmax instead of torch to eliminate heavy ML framework dependency.
+Core softmax / weighted-sum / confidence calibration is delegated to Rust owner.
 
 Architecture:
     Layer 1: Signal Normalization   [-1.0 ~ +1.0]
@@ -27,23 +27,15 @@ import math
 import time
 from typing import Any
 
-import numpy as np
-
 from l2_decision.events.decision_events import FeatureVector, FusedDecision, RawSignal
 from l2_decision.fusion.normalizer import SignalNormalizer
 from l2_decision.fusion.rule_fusion import RuleFusionEngine
+from shared_rust.services import compute_attention_fused as rust_compute_attention_fused  # type: ignore
 
 logger = logging.getLogger(__name__)
 
-
-def _softmax(x: np.ndarray) -> np.ndarray:
-    """Numerically stable softmax."""
-    e_x = np.exp(x - np.max(x))
-    return e_x / e_x.sum()
-
-
 class AttentionFusionEngine:
-    """Numpy-based attention-weighted signal fusion engine.
+    """Rust-owner attention-weighted signal fusion engine.
 
     Learns signal weights per regime from historical performance.
     Falls back to RuleFusionEngine when no learned weights are available.
@@ -53,7 +45,7 @@ class AttentionFusionEngine:
         Actual fusion weights = softmax(raw_attention_scores)
     """
 
-    # Signal names in canonical order for numpy ops
+    # Signal names in canonical order for attention owner input
     _SIGNAL_NAMES = [
         "momentum_signal",
         "trap_detector",
@@ -125,23 +117,41 @@ class AttentionFusionEngine:
 
         normalized = self._normalizer.normalize_batch(signals)
 
-        # Attention weights via softmax over logits
-        logits = np.array([logits_map.get(n, 0.0) for n in active_names])
-        attn_weights = _softmax(logits)
+        signal_values = [float(normalized.get(n, 0.0)) for n in active_names]
+        logits = [float(logits_map.get(n, 0.0)) for n in active_names]
+        try:
+            raw_score, confidence, weight_values = rust_compute_attention_fused(
+                signal_values,
+                logits,
+                regime,
+                float(self._platt_a),
+                float(self._platt_b),
+            )
+        except Exception as exc:
+            logger.error("AttentionFusion: Rust owner execution failed: %s", exc)
+            raise RuntimeError("Rust compute_attention_fused execution failed") from exc
 
-        # Weighted signal values
-        signal_values = np.array([normalized.get(n, 0.0) for n in active_names])
-        raw_score = float(np.dot(attn_weights, signal_values))
+        raw_score = float(raw_score)
+        confidence = float(confidence)
+        if not math.isfinite(raw_score) or not math.isfinite(confidence):
+            raise RuntimeError("Rust compute_attention_fused returned non-finite raw score or confidence")
         raw_score = max(-1.0, min(1.0, raw_score))
-
-        # Platt scaling: σ(a·score + b) → calibrated confidence
-        platt_input = self._platt_a * raw_score + self._platt_b
-        confidence = 1.0 / (1.0 + math.exp(-platt_input))
+        confidence = max(0.0, min(1.0, confidence))
+        if len(weight_values) != len(active_names):
+            raise RuntimeError("Rust compute_attention_fused returned mismatched weight length")
+        weights = [float(value) for value in weight_values]
+        if any((not math.isfinite(value)) or value < 0.0 for value in weights):
+            raise RuntimeError("Rust compute_attention_fused returned invalid attention weights")
+        weight_sum = sum(weights)
+        if weight_sum <= 0.0 or abs(weight_sum - 1.0) > 1e-6:
+            raise RuntimeError("Rust compute_attention_fused returned invalid attention weights")
 
         direction = SignalNormalizer.float_to_direction(raw_score, threshold=0.05)
         latency_ms = (time.perf_counter() - t0) * 1000.0
 
-        fusion_weights = dict(zip(active_names, attn_weights.tolist()))
+        fusion_weights = {
+            name: weights[idx] for idx, name in enumerate(active_names)
+        }
 
         return FusedDecision(
             direction=direction,

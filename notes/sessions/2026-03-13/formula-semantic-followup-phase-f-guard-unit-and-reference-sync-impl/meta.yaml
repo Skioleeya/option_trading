@@ -1,0 +1,40 @@
+session_id: "2026-03-13/formula-semantic-followup-phase-f-guard-unit-and-reference-sync-impl"
+title: "formula-semantic-followup-phase-f-guard-unit-and-reference-sync-impl"
+scope: "feature"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-03-13 09:40:08 -04:00"
+updated_at_et: "2026-03-13 09:46:47 -04:00"
+parent_session: "2026-03-13/formula-semantic-followup-phase-e-governance-impl"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "f8a9b52"
+head_commit: "f8a9b52"
+
+files_changed:
+  - "l2_decision/guards/rail_engine.py"
+  - "l2_decision/tests/test_reactor_and_guards.py"
+  - "shared/tests/test_metric_semantics.py"
+  - "docs/IV_METRICS_MAP.md"
+  - "docs/SOP/L2_DECISION_ANALYSIS.md"
+  - "openspec/changes/formula-semantic-followup-phase-f-guard-unit-and-reference-sync/tasks.md"
+  - "notes/sessions/2026-03-13/formula-semantic-followup-phase-f-guard-unit-and-reference-sync-impl/project_state.md"
+  - "notes/sessions/2026-03-13/formula-semantic-followup-phase-f-guard-unit-and-reference-sync-impl/open_tasks.md"
+  - "notes/sessions/2026-03-13/formula-semantic-followup-phase-f-guard-unit-and-reference-sync-impl/handoff.md"
+  - "notes/sessions/2026-03-13/formula-semantic-followup-phase-f-guard-unit-and-reference-sync-impl/meta.yaml"
+
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/new_session.ps1 -TaskId \"formula-semantic-followup-phase-f-guard-unit-and-reference-sync-impl\" -Title \"formula-semantic-followup-phase-f-guard-unit-and-reference-sync-impl\" -Scope \"feature\" -Owner \"Codex\" -ParentSession \"2026-03-13/formula-semantic-followup-phase-e-governance-impl\" -Timezone \"America/New_York\" -UpdatePointer"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 l2_decision/tests/test_reactor_and_guards.py shared/tests/test_metric_semantics.py"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+
+tests_passed:
+  - "scripts/test/run_pytest.ps1 l2_decision/tests/test_reactor_and_guards.py shared/tests/test_metric_semantics.py (63 passed, 1 warning)"
+  - "scripts/validate_session.ps1 -Strict run #2 passed"
+tests_failed:
+  - "scripts/validate_session.ps1 -Strict run #1 failed: commands evidence missing in meta"
+blockers: []
+notes:
+  - "Phase F task checklist marked complete after code/docs/tests sync."
+  - "Cloud reference config already aligned with live 20B/100B and guard threshold scale; no additional value change required."

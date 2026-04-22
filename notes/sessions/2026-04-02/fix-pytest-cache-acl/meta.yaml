@@ -1,0 +1,34 @@
+﻿session_id: "2026-04-02/fix-pytest-cache-acl"
+title: "fix pytest cache acl"
+scope: "chore"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-02 08:23:13 -04:00"
+updated_at_et: "2026-04-02 08:37:05 -04:00"
+parent_session: "2026-04-02/cargo-target-dir-local-config"
+
+branch: "chore/sync-all-local-changes-20260313"
+base_commit: "7fb0f53"
+head_commit: "7fb0f53"
+
+files_changed:
+  - "scripts/test/run_pytest.ps1"
+  - "scripts/test/repair_pytest_cache_acl.ps1"
+  - "scripts/README.md"
+  - "notes/sessions/2026-04-02/fix-pytest-cache-acl/project_state.md"
+  - "notes/sessions/2026-04-02/fix-pytest-cache-acl/open_tasks.md"
+  - "notes/sessions/2026-04-02/fix-pytest-cache-acl/handoff.md"
+commands:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/repair_pytest_cache_acl.ps1"
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 tests/active_options -q"
+  - "powershell -ExecutionPolicy Bypass -File scripts/validate_session.ps1 -Strict"
+tests_passed:
+  - "powershell -ExecutionPolicy Bypass -File scripts/test/run_pytest.ps1 tests/active_options -q"
+tests_failed: []
+blockers: []
+notes:
+  - "Added a cache writeability preflight to the pytest wrapper."
+  - "Added a dedicated ACL repair script for tmp/pytest_cache."
+  - "Host-context probes confirmed root and research_store_tests writes after the repair pass."
+
+

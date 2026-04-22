@@ -20,9 +20,18 @@ import type { DashboardPayload } from '../../types/dashboard'
 
 const PREV: DashboardPayload = {
     type: 'dashboard_update',
+    version: 10,
+    data_timestamp: '2026-01-01T09:30:00Z',
+    broadcast_timestamp: '2026-01-01T09:30:00Z',
     timestamp: '2026-01-01T09:30:00Z',
+    heartbeat_timestamp: '2026-01-01T09:30:00Z',
     spot: 560.0,
+    drift_ms: 0,
+    drift_warning: false,
+    is_stale: false,
     agent_g: null,
+    rust_active: true,
+    shm_stats: { status: 'OK', head: 1, tail: 1 },
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -84,11 +93,12 @@ describe('DeltaDecoder.applyPatch', () => {
 
     it('injects timestamp meta from delta envelope', () => {
         const patch = [{ op: 'replace', path: '/spot', value: 563.0 }]
-        const meta = { timestamp: 'META-TS', heartbeat_timestamp: 'HB-TS' }
+        const meta = { timestamp: 'META-TS', heartbeat_timestamp: 'HB-TS', version: 11 }
         const result = DeltaDecoder.applyPatch(PREV, patch, meta)
         expect(result.ok).toBe(true)
         if (result.ok) {
             expect(result.value.timestamp).toBe('META-TS')
+            expect(result.value.version).toBe(11)
         }
     })
 
@@ -99,5 +109,32 @@ describe('DeltaDecoder.applyPatch', () => {
         if (result.ok) {
             expect((result.value as any).extraField).toBe('hello')
         }
+    })
+})
+
+describe('DeltaDecoder.validatePayload active_options contract', () => {
+    function withActiveOptions(rows: unknown[]): DashboardPayload {
+        return {
+            ...PREV,
+            agent_g: {
+                data: {
+                    ui_state: {
+                        active_options: rows,
+                    },
+                },
+            } as unknown as DashboardPayload['agent_g'],
+        }
+    }
+
+    it('accepts empty active_options rows (premarket/no-qualified-flow)', () => {
+        const payload = withActiveOptions([])
+        const result = DeltaDecoder.validatePayload(payload)
+        expect(result.ok).toBe(true)
+    })
+
+    it('rejects active_options rows above fixed render capacity', () => {
+        const payload = withActiveOptions(new Array(6).fill({ is_placeholder: true }))
+        const result = DeltaDecoder.validatePayload(payload)
+        expect(result.ok).toBe(false)
     })
 })
