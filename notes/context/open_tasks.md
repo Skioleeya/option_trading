@@ -1,10 +1,14 @@
 # Open Tasks (Index)
 
 ## Active Session Tasks
-- Path: notes/sessions/2026-04-22/master-sync-clean/open_tasks.md
+- Path: notes/sessions/2026-04-23/research-startup-spot-fix/open_tasks.md
 
 ## Global Backlog (Cross-Session)
-- [ ] Open and merge a PR from `chore/master-sync-clean-20260422` into `master` because direct `origin/master` pushes are blocked by repository rules.
+- [x] Preserve valid L0 source spot through the L1 empty-snapshot startup path so first-tick research persistence no longer fatals on `snapshot.spot must be finite and > 0`. (2026-04-23 09:53 ET)
+- [x] Hard-cut runtime research persistence to a single canonical parquet owner, remove silent input fallback, and switch EOD archive runtime input to canonical. (2026-04-23 09:21 ET)
+- [x] Fully resync `最新的启动步骤文档.md` so its meaning exactly matches the current Windows startup implementation and host verification boundary. (2026-04-22 18:40 ET)
+- [x] Refresh `最新的启动步骤文档.md` from real-host Windows startup evidence and remove the frontend runtime/startup blockers in the standard `start-all` path. (2026-04-22 18:33 ET)
+- [x] Open and merge a PR from `chore/master-sync-clean-20260422` into `master` because direct `origin/master` pushes are blocked by repository rules. (2026-04-22 18:10 ET)
 - [x] Link local `Option_v4` origin to the provided GitHub SSH remote URL. (2026-04-22 17:09 ET)
 - [x] Restore local Git provenance in `Option_v4` so branch/head/origin are no longer `unknown`. (2026-04-22 16:58 ET)
 - [x] Remove sandbox-local frontend `spawn EPERM` by hard-cutting the strict dev launcher to the Vite JS API path. (2026-04-22 17:09 ET)

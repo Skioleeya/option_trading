@@ -1,0 +1,52 @@
+session_id: "2026-04-22/rewrite-startup-doc"
+title: "rewrite startup doc"
+scope: "infra"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-22 18:16:47 -04:00"
+updated_at_et: "2026-04-22 18:33:04 -04:00"
+parent_session: "2026-04-22/post-merge-sync"
+
+branch: "master"
+base_commit: "b6ef4ff"
+head_commit: "b6ef4ff"
+
+files_changed:
+  - "infra/ops_cli/start_all.py"
+  - "l4_ui/scripts/preview-strict.mjs"
+  - "l4_ui/vite.config.mjs"
+  - "l4_ui/src/config/runtime.ts"
+  - "l4_ui/src/config/__tests__/runtime.test.ts"
+  - "docs/SOP/L4_FRONTEND.md"
+  - "最新的启动步骤文档.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-04-22/rewrite-startup-doc/project_state.md"
+  - "notes/sessions/2026-04-22/rewrite-startup-doc/open_tasks.md"
+  - "notes/sessions/2026-04-22/rewrite-startup-doc/handoff.md"
+  - "notes/sessions/2026-04-22/rewrite-startup-doc/meta.yaml"
+commands:
+  - ".\\.venv\\Scripts\\python.exe manage.py start-all --verify-only"
+  - ".\\.venv\\Scripts\\python.exe manage.py start-all"
+  - "npm --prefix l4_ui run build"
+  - "npm --prefix l4_ui run test -- src/config/__tests__/runtime.test.ts"
+  - "real-host .\\.venv\\Scripts\\python.exe manage.py start-all"
+  - "real-host .\\.venv\\Scripts\\python.exe manage.py start-all --verify-only"
+  - "real-host Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8001/health"
+  - "real-host Invoke-WebRequest -UseBasicParsing http://127.0.0.1:5173"
+  - ".\\.venv\\Scripts\\python.exe manage.py validate-session --strict"
+tests_passed:
+  - "npm --prefix l4_ui run build"
+  - "real-host .\\.venv\\Scripts\\python.exe manage.py start-all"
+  - "real-host .\\.venv\\Scripts\\python.exe manage.py start-all --verify-only"
+  - "real-host Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8001/health"
+  - "real-host Invoke-WebRequest -UseBasicParsing http://127.0.0.1:5173"
+  - ".\\.venv\\Scripts\\python.exe manage.py validate-session --strict"
+tests_failed:
+  - "npm --prefix l4_ui run test -- src/config/__tests__/runtime.test.ts (spawn EPERM via vitest config-loader)"
+blockers: []
+notes:
+  - "Frontend startup was moved to preview-strict to avoid Windows host instability in dev-server mode."
+  - "Browser runtime now falls back to current frontend origin in same-origin mode when VITE_BACKEND_ORIGIN is absent from the built bundle."
+

@@ -1,0 +1,43 @@
+session_id: "2026-04-22/startup-doc-semantic-sync"
+title: "startup doc semantic sync"
+scope: "infra"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-22 18:38:26 -04:00"
+updated_at_et: "2026-04-22 18:40:18 -04:00"
+parent_session: "2026-04-22/rewrite-startup-doc"
+
+branch: "master"
+base_commit: "b6ef4ff"
+head_commit: "b6ef4ff"
+
+files_changed:
+  - "最新的启动步骤文档.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-04-22/startup-doc-semantic-sync/project_state.md"
+  - "notes/sessions/2026-04-22/startup-doc-semantic-sync/open_tasks.md"
+  - "notes/sessions/2026-04-22/startup-doc-semantic-sync/handoff.md"
+  - "notes/sessions/2026-04-22/startup-doc-semantic-sync/meta.yaml"
+commands:
+  - "Get-Content 最新的启动步骤文档.md"
+  - "Get-Content infra\\ops_cli\\start_all.py"
+  - "Get-Content infra\\ops_cli\\start_backend.py"
+  - "Get-Content l4_ui\\scripts\\preview-strict.mjs"
+  - "Get-Content docs\\SOP\\L4_FRONTEND.md"
+  - "real-host .\\.venv\\Scripts\\python.exe manage.py start-all --verify-only"
+  - "real-host Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8001/health"
+  - "real-host Invoke-WebRequest -UseBasicParsing http://127.0.0.1:5173"
+  - ".\\.venv\\Scripts\\python.exe manage.py validate-session --strict"
+tests_passed:
+  - "real-host .\\.venv\\Scripts\\python.exe manage.py start-all --verify-only"
+  - "real-host Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8001/health"
+  - "real-host Invoke-WebRequest -UseBasicParsing http://127.0.0.1:5173"
+  - ".\\.venv\\Scripts\\python.exe manage.py validate-session --strict"
+tests_failed: []
+blockers: []
+notes:
+  - "This session intentionally changed documentation only."
+  - "The startup doc now states the exact boundary that verify-only is port-listening verification rather than a health probe."
+

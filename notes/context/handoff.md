@@ -1,12 +1,12 @@
 # Handoff (Index)
 
 ## Active Handoff
-- Path: notes/sessions/2026-04-22/master-sync-clean/handoff.md
-- Meta: notes/sessions/2026-04-22/master-sync-clean/meta.yaml
+- Path: notes/sessions/2026-04-23/research-startup-spot-fix/handoff.md
+- Meta: notes/sessions/2026-04-23/research-startup-spot-fix/meta.yaml
 
 ## Latest Outcome
-- Session: 2026-04-22/master-sync-clean
-- Summary: Local `master` now points at the cleaned source-only snapshot, tracked runtime artifacts were retired from Git, strict validation passed locally, and the same state was published to `origin/chore/master-sync-clean-20260422`; only the PR merge into protected `master` remains.
+- Session: 2026-04-23/research-startup-spot-fix
+- Summary: Host-verified startup hotfix landed; preserved valid L0 spot through empty L1 snapshots, `start-all` returned healthy (`/health=200`, `research_persistence.healthy=true`), and strict validation passed.
 
 ## Next Session Bootstrap
 1. Read this file.

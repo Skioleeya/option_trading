@@ -54,6 +54,63 @@ fn sync_parent_dir(parent: &Path) -> PyResult<()> {
         .map_err(|err| PyErr::new::<pyo3::exceptions::PyOSError, _>(err.to_string()))
 }
 
+#[cfg(windows)]
+fn replace_existing_file(temp_path: &Path, target_path: &Path) -> PyResult<()> {
+    use std::iter;
+    use std::os::windows::ffi::OsStrExt;
+    use std::ptr;
+
+    #[link(name = "Kernel32")]
+    unsafe extern "system" {
+        fn ReplaceFileW(
+            lp_replaced_file_name: *const u16,
+            lp_replacement_file_name: *const u16,
+            lp_backup_file_name: *const u16,
+            dw_replace_flags: u32,
+            lp_exclude: *mut core::ffi::c_void,
+            lp_reserved: *mut core::ffi::c_void,
+        ) -> i32;
+    }
+
+    const REPLACEFILE_IGNORE_MERGE_ERRORS: u32 = 0x0000_0002;
+    let target_wide: Vec<u16> = target_path
+        .as_os_str()
+        .encode_wide()
+        .chain(iter::once(0))
+        .collect();
+    let temp_wide: Vec<u16> = temp_path
+        .as_os_str()
+        .encode_wide()
+        .chain(iter::once(0))
+        .collect();
+    let ok = unsafe {
+        ReplaceFileW(
+            target_wide.as_ptr(),
+            temp_wide.as_ptr(),
+            ptr::null(),
+            REPLACEFILE_IGNORE_MERGE_ERRORS,
+            ptr::null_mut(),
+            ptr::null_mut(),
+        )
+    };
+    if ok == 0 {
+        return Err(PyErr::new::<pyo3::exceptions::PyOSError, _>(
+            std::io::Error::last_os_error().to_string(),
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn replace_existing_file(temp_path: &Path, target_path: &Path) -> PyResult<()> {
+    fs::rename(temp_path, target_path)
+        .map_err(|err| PyErr::new::<pyo3::exceptions::PyOSError, _>(err.to_string()))?;
+    let parent = target_path
+        .parent()
+        .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyValueError, _>("parquet target has no parent directory"))?;
+    sync_parent_dir(parent)
+}
+
 fn atomic_write_bytes(path: &Path, payload: &[u8]) -> PyResult<()> {
     let parent = path
         .parent()
@@ -62,18 +119,29 @@ fn atomic_write_bytes(path: &Path, payload: &[u8]) -> PyResult<()> {
         .map_err(|err| PyErr::new::<pyo3::exceptions::PyOSError, _>(err.to_string()))?;
     let temp_path = temp_path_for(path)?;
     let result = (|| -> PyResult<()> {
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&temp_path)
-            .map_err(|err| PyErr::new::<pyo3::exceptions::PyOSError, _>(err.to_string()))?;
-        file.write_all(payload)
-            .map_err(|err| PyErr::new::<pyo3::exceptions::PyOSError, _>(err.to_string()))?;
-        file.sync_all()
-            .map_err(|err| PyErr::new::<pyo3::exceptions::PyOSError, _>(err.to_string()))?;
-        fs::rename(&temp_path, path)
-            .map_err(|err| PyErr::new::<pyo3::exceptions::PyOSError, _>(err.to_string()))?;
-        sync_parent_dir(parent)
+        {
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&temp_path)
+                .map_err(|err| PyErr::new::<pyo3::exceptions::PyOSError, _>(err.to_string()))?;
+            file.write_all(payload)
+                .map_err(|err| PyErr::new::<pyo3::exceptions::PyOSError, _>(err.to_string()))?;
+            file.sync_all()
+                .map_err(|err| PyErr::new::<pyo3::exceptions::PyOSError, _>(err.to_string()))?;
+        }
+        if path.exists() {
+            replace_existing_file(&temp_path, path)?;
+            Ok(())
+        } else {
+            fs::rename(&temp_path, path)
+                .map_err(|err| PyErr::new::<pyo3::exceptions::PyOSError, _>(err.to_string()))?;
+            #[cfg(not(windows))]
+            {
+                sync_parent_dir(parent)?;
+            }
+            Ok(())
+        }
     })();
     if result.is_err() {
         let _ = fs::remove_file(&temp_path);
@@ -130,6 +198,23 @@ fn service_research_append_parquet_rows(
 }
 
 #[pyfunction]
+fn service_research_write_parquet_rows(
+    py: Python<'_>,
+    path: String,
+    rows: Bound<'_, PyAny>,
+    schema: Py<PyAny>,
+) -> PyResult<()> {
+    let (pa, pq) = pyarrow_modules(py)?;
+    let kwargs = PyDict::new(py);
+    kwargs.set_item("schema", schema.bind(py))?;
+    let table = pa
+        .getattr("Table")?
+        .call_method("from_pylist", (rows,), Some(&kwargs))?;
+    let bytes = table_to_bytes(py, &pa, &pq, &table)?;
+    atomic_write_bytes(Path::new(&path), &bytes)
+}
+
+#[pyfunction]
 fn service_research_read_file_bytes(path: String) -> PyResult<Option<Vec<u8>>> {
     match fs::read(path) {
         Ok(bytes) => Ok(Some(bytes)),
@@ -142,6 +227,7 @@ pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(service_research_records_to_parquet, module)?)?;
     module.add_function(wrap_pyfunction!(service_research_read_parquet_rows, module)?)?;
     module.add_function(wrap_pyfunction!(service_research_append_parquet_rows, module)?)?;
+    module.add_function(wrap_pyfunction!(service_research_write_parquet_rows, module)?)?;
     module.add_function(wrap_pyfunction!(service_research_read_file_bytes, module)?)?;
     Ok(())
 }

@@ -73,6 +73,17 @@ class ActiveOptionsRuntimeService:
     def _utc_now_iso() -> str:
         return datetime.now(ZoneInfo("UTC")).isoformat()
 
+    def _can_rearm_from_input(self, input_stats: dict[str, int]) -> bool:
+        """Allow post-warmup recovery once real traded volume reappears."""
+        if not self._halted:
+            return False
+        if self._halt_reason not in {
+            "engine_empty_output",
+            "normalized_chain_empty_no_candidates",
+        }:
+            return False
+        return int(input_stats.get("day_volume_gt_zero", 0) or 0) > 0
+
     def get_diagnostics(self) -> dict[str, Any]:
         rows = self._latest_payload
         rows_total = len(rows)
@@ -128,11 +139,6 @@ class ActiveOptionsRuntimeService:
         limit: int = ACTIVE_OPTIONS_DEFAULT_LIMIT,
         source_version: int | None = None,
     ) -> None:
-        if self._halted:
-            raise ActiveOptionsHardFailure(
-                f"service_halted: reason={self._halt_reason or 'unknown'} halted_at_utc={self._halted_at_utc or 'unknown'}"
-            )
-
         self._last_update_at_utc = self._utc_now_iso()
         target_limit = max(0, int(limit))
         self._spot_window_steps = max(0, int(settings.flow_active_spot_window_steps))
@@ -147,6 +153,20 @@ class ActiveOptionsRuntimeService:
         self._last_input_current_volume_gt_zero = int(input_stats["current_volume_gt_zero"])
         self._last_input_turnover_gt_zero = int(input_stats["turnover_gt_zero"])
         self._last_input_gamma_nonzero = int(input_stats["gamma_nonzero"])
+        if self._can_rearm_from_input(input_stats):
+            logger.warning(
+                "[ActiveOptionsRuntimeService] REARM reason=%s halted_at_utc=%s day_volume_gt_zero=%s",
+                self._halt_reason,
+                self._halted_at_utc,
+                self._last_input_day_volume_gt_zero,
+            )
+            self._halted = False
+            self._halt_reason = None
+            self._halted_at_utc = None
+        elif self._halted:
+            raise ActiveOptionsHardFailure(
+                f"service_halted: reason={self._halt_reason or 'unknown'} halted_at_utc={self._halted_at_utc or 'unknown'}"
+            )
         logger.debug(
             "[ActiveOptionsFlow] runtime_input chain_size=%s spot_window_steps=%s "
             "day_volume_gt_zero=%s current_volume_gt_zero=%s "

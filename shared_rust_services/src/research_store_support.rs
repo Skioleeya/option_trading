@@ -78,15 +78,13 @@ pub fn tier_schema(py: Python<'_>, tier_name: &str) -> PyResult<Py<PyAny>> {
     Ok(shared_services(py)?.getattr("research_tier_schema")?.call1((tier_name,))?.unbind())
 }
 
-pub fn ensure_dirs(root: &Path) -> std::io::Result<(PathBuf, PathBuf, PathBuf, PathBuf)> {
-    let raw = root.join("raw");
-    let feature = root.join("feature");
-    let label = root.join("label");
+pub fn ensure_dirs(root: &Path) -> std::io::Result<(PathBuf, PathBuf)> {
+    let canonical = root.join("canonical");
     let export = root.join("exports");
-    for path in [&raw, &feature, &label, &export] {
+    for path in [&canonical, &export] {
         fs::create_dir_all(path)?;
     }
-    Ok((raw, feature, label, export))
+    Ok((canonical, export))
 }
 
 pub fn cleanup_tier_path(tier_dir: &Path, prefix: &str, now_et_date: NaiveDate, retention_days: i64) -> PyResult<()> {

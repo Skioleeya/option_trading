@@ -149,6 +149,8 @@ class L3AssemblyReactor:
     def get_diagnostics(self) -> dict[str, Any]:
         """Return L3 layer health diagnostics for /debug/persistence_status."""
         store_diag = self.store.get_diagnostics()
+        research_store_diag = self.research_store.diagnostics()
+        research_store_diag["fatal_error"] = self._research_persistence_fatal
         return {
             "l3_reactor": {
                 "total_ticks": self._total_ticks,
@@ -160,7 +162,7 @@ class L3AssemblyReactor:
                 "delta_ratio": f"{self.encoder.delta_ratio:.1%}",
             },
             "l3_store": store_diag,
-            "research_store": self.research_store.diagnostics(),
+            "research_store": research_store_diag,
             "research_persistence": {
                 "healthy": self._research_persistence_fatal is None,
                 "fatal_error": self._research_persistence_fatal,

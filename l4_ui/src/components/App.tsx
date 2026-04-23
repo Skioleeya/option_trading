@@ -70,6 +70,10 @@ function normalizeAtmHistoryRows(rows: Record<string, unknown>[]): AtmDecay[] {
     }))
 }
 
+function isStrictAtmHistoryRequired(now: Date = new Date()): boolean {
+    return deriveMarketStatus(now) === 'OPEN'
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // App
 // ─────────────────────────────────────────────────────────────────────────────
@@ -131,7 +135,7 @@ export const App: React.FC = () => {
         ; (async () => {
             try {
                 const rows = await fetchAtmHistoryV2()
-                if (rows.length === 0) {
+                if (rows.length === 0 && isStrictAtmHistoryRequired()) {
                     throw new Error('[App] ATM history is empty; persistence is required in strict mode.')
                 }
                 const last = rows[rows.length - 1]
@@ -227,4 +231,8 @@ export const App: React.FC = () => {
             </div>
         </div>
     )
+}
+
+export const __appTestOnly = {
+    isStrictAtmHistoryRequired,
 }

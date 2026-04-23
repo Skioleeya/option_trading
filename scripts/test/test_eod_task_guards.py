@@ -39,13 +39,13 @@ def _sig(role: str, exists: bool, size_bytes: int = -1, last_write_ns: int = -1,
 def test_wait_for_settle_respects_stable_window_after_last_change():
     snapshots = iter(
         [
-            (_sig("research_raw", False), _sig("mtf_iv_series", False, required=False)),
-            (_sig("research_raw", True, 10, 100), _sig("mtf_iv_series", False, required=False)),
-            (_sig("research_raw", True, 10, 100), _sig("mtf_iv_series", False, required=False)),
-            (_sig("research_raw", True, 20, 200), _sig("mtf_iv_series", False, required=False)),
-            (_sig("research_raw", True, 20, 200), _sig("mtf_iv_series", False, required=False)),
-            (_sig("research_raw", True, 20, 200), _sig("mtf_iv_series", False, required=False)),
-            (_sig("research_raw", True, 20, 200), _sig("mtf_iv_series", False, required=False)),
+            (_sig("research_canonical", False), _sig("mtf_iv_series", False, required=False)),
+            (_sig("research_canonical", True, 10, 100), _sig("mtf_iv_series", False, required=False)),
+            (_sig("research_canonical", True, 10, 100), _sig("mtf_iv_series", False, required=False)),
+            (_sig("research_canonical", True, 20, 200), _sig("mtf_iv_series", False, required=False)),
+            (_sig("research_canonical", True, 20, 200), _sig("mtf_iv_series", False, required=False)),
+            (_sig("research_canonical", True, 20, 200), _sig("mtf_iv_series", False, required=False)),
+            (_sig("research_canonical", True, 20, 200), _sig("mtf_iv_series", False, required=False)),
         ]
     )
     times = iter([0.0, 0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0])
@@ -76,11 +76,11 @@ def test_wait_parser_defaults_cover_late_post_close_writes():
 def test_wait_for_settle_ignores_optional_source_churn():
     snapshots = iter(
         [
-            (_sig("research_raw", True, 20, 100), _sig("mtf_iv_series", False, required=False)),
-            (_sig("research_raw", True, 20, 100), _sig("mtf_iv_series", True, 1, 101, required=False)),
-            (_sig("research_raw", True, 20, 100), _sig("mtf_iv_series", True, 2, 102, required=False)),
-            (_sig("research_raw", True, 20, 100), _sig("mtf_iv_series", True, 3, 103, required=False)),
-            (_sig("research_raw", True, 20, 100), _sig("mtf_iv_series", True, 4, 104, required=False)),
+            (_sig("research_canonical", True, 20, 100), _sig("mtf_iv_series", False, required=False)),
+            (_sig("research_canonical", True, 20, 100), _sig("mtf_iv_series", True, 1, 101, required=False)),
+            (_sig("research_canonical", True, 20, 100), _sig("mtf_iv_series", True, 2, 102, required=False)),
+            (_sig("research_canonical", True, 20, 100), _sig("mtf_iv_series", True, 3, 103, required=False)),
+            (_sig("research_canonical", True, 20, 100), _sig("mtf_iv_series", True, 4, 104, required=False)),
         ]
     )
     times = iter([0.0, 0.0, 5.0, 10.0, 15.0, 20.0])
@@ -100,7 +100,7 @@ def test_wait_for_settle_ignores_optional_source_churn():
 
 
 def test_wait_for_settle_returns_immediately_for_historical_stable_snapshot():
-    snapshot = (_sig("research_raw", True, 10, 1_000_000_000), _sig("research_feature", True, 10, 1_000_000_000))
+    snapshot = (_sig("research_canonical", True, 10, 1_000_000_000),)
 
     result = WAIT_MOD.wait_for_settle(
         capture_fn=lambda: snapshot,

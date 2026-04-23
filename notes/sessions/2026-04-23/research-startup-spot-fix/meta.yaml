@@ -1,0 +1,38 @@
+session_id: "2026-04-23/research-startup-spot-fix"
+title: "research-startup-spot-fix"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-23 09:45:24 -04:00"
+updated_at_et: "2026-04-23 09:54:00 -04:00"
+parent_session: null
+
+branch: "master"
+base_commit: "b6ef4ff"
+head_commit: "b6ef4ff"
+
+files_changed:
+  - "app/loops/compute_loop.py"
+  - "app/loops/snapshot_spot.py"
+  - "app/loops/tests/test_compute_loop_gpu_dedup.py"
+  - "docs/SOP/L3_OUTPUT_ASSEMBLY.md"
+commands:
+  - ".\\.venv\\Scripts\\python.exe manage.py new-session --task-id research-startup-spot-fix --update-pointer"
+  - ".\\.venv\\Scripts\\python.exe manage.py run-pytest app/loops/tests/test_compute_loop_gpu_dedup.py app/tests/test_health_route_diagnostics.py scripts/test/test_active_options_strict_no_fallback.py"
+  - ".\\.venv\\Scripts\\python.exe manage.py validate-session --strict"
+  - "Stop-Process -Id 22492 -Force"
+  - ".\\.venv\\Scripts\\python.exe manage.py start-all"
+  - "Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8001/health"
+  - "Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8001/debug/persistence_status"
+  - "Invoke-WebRequest -UseBasicParsing http://127.0.0.1:5173/"
+tests_passed:
+  - "app/loops/tests/test_compute_loop_gpu_dedup.py"
+  - "app/tests/test_health_route_diagnostics.py"
+  - "scripts/test/test_active_options_strict_no_fallback.py"
+tests_failed: []
+blockers: []
+notes:
+  - "Root cause: first live tick bypassed L1 with n_valid=0, returning spot=0.0 while L0 spot was valid."
+  - "Hotfix keeps valid L0 spot on the L1 snapshot before L3 assembly/research persistence."
+  - "SOP updated to require preserving valid source spot through the empty-snapshot startup path."
+

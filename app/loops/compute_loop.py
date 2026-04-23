@@ -11,6 +11,7 @@ from app.loops.atm_live_payload import build_duplicate_snapshot_live_refresh
 from app.loops.active_options_sync import ensure_active_options_same_version
 from app.loops.compute_metadata import _build_l1_extra_metadata
 from app.loops.payload_debug import emit_payload_debug, should_log_duplicate_payload_debug
+from app.loops.snapshot_spot import reconcile_l1_snapshot_spot
 from app.loops.compute_probe import (
     _SnapshotVersionIvDriftProbe,
     _extract_runtime_atm_iv_context,
@@ -34,6 +35,8 @@ logger = logging.getLogger(__name__)
 L2_AUDIT_FLUSH_EVERY_TICKS = 60
 LOOP_OVERRUN_SLEEP_SECONDS = 0.01
 ACTIVE_OPTIONS_DEFAULT_GEX_REGIME = "NEUTRAL"
+
+
 def _to_shared_active_options_input(
     snapshot: ActiveOptionsInputSnapshotData,
 ) -> ActiveOptionsInputSnapshot:
@@ -253,6 +256,7 @@ async def _run_l1_l2_pipeline(
         spot_at_sync=spot_sync,
         extra_metadata=_build_l1_extra_metadata(snapshot, compute_audit),
     )
+    l1_snap = reconcile_l1_snapshot_spot(l1_snap, snapshot.get("spot"))
     state.record_l1_compute(
         snapshot_version=snapshot_version,
         compute_id=next_compute_id,
