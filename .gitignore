@@ -40,8 +40,11 @@ node_modules/
 # Runtime data / temp / logs
 tmp/
 logs/
-data
-data/
+.vite/
+data/*
+!data/cold/
+!data/cold/**
+data/cold/.staging/
 backend/data/
 infra/redis/data/
 var/redis/

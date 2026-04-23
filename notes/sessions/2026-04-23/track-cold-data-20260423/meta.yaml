@@ -1,0 +1,34 @@
+session_id: "2026-04-23/track-cold-data-20260423"
+title: "track-cold-data-20260423"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-23 16:28:22 -04:00"
+updated_at_et: "2026-04-23 16:32:00 -04:00"
+parent_session: null
+
+branch: "codex/research-persistence-startup-fixes-20260423"
+base_commit: "a4109aa"
+head_commit: "a4109aa"
+
+files_changed:
+  - ".gitignore"
+  - "data/cold/daily/**"
+  - "data/cold/reports/**"
+  - "data/cold/by_regime/**"
+  - "notes/sessions/2026-04-23/track-cold-data-20260423/project_state.md"
+  - "notes/sessions/2026-04-23/track-cold-data-20260423/open_tasks.md"
+  - "notes/sessions/2026-04-23/track-cold-data-20260423/handoff.md"
+  - "notes/sessions/2026-04-23/track-cold-data-20260423/meta.yaml"
+commands:
+  - "python manage.py new-session --task-id track-cold-data-20260423"
+  - "PowerShell compare/copy of E:\\US.market\\Option_v3\\data\\cold -> E:\\US.market\\Option_v4\\data\\cold"
+  - "python manage.py validate-session --strict"
+tests_passed:
+  - "Historical cold-data parity check vs Option_v3: missing daily/reports/by_regime = 0/0/0"
+  - "python manage.py validate-session --strict"
+tests_failed: []
+blockers: []
+notes:
+  - "Cold-data Git tracking is user-directed despite repo runtime-artifact default policy."
+

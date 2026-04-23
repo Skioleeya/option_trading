@@ -1,0 +1,115 @@
+{
+  "version": "v3",
+  "classification_mode": "primary_plus_context_v1",
+  "date": "20260422",
+  "primary_day_type": "INCOMPLETE_SOURCE",
+  "context_modifiers": [],
+  "close_profile": "UNKNOWN",
+  "source_files": [
+    {
+      "role": "research_raw",
+      "path": "data/cold/daily/20260422/sources/research_raw/raw_20260422.parquet",
+      "source_path": "data/research/raw/raw_20260422.parquet",
+      "size_bytes": 122735,
+      "sha256": "fa69582fabde8826480c021347ec75d3598961ee9a214b684cab756dc3a2bd70"
+    },
+    {
+      "role": "research_feature",
+      "path": "data/cold/daily/20260422/sources/research_feature/feature_20260422.parquet",
+      "source_path": "data/research/feature/feature_20260422.parquet",
+      "size_bytes": 337019,
+      "sha256": "c2a65f2dea046b0d621987d28f936f0defccb851d218624cb865cc85fe4e903c"
+    },
+    {
+      "role": "research_label",
+      "path": "data/cold/daily/20260422/sources/research_label/label_20260422.parquet",
+      "source_path": "data/research/label/label_20260422.parquet",
+      "size_bytes": 102770,
+      "sha256": "b8d32d3e3693785f1e86d6cc1658465fce4f7ae819cc4c84413d6c5dc3c6d5b7"
+    },
+    {
+      "role": "atm_series",
+      "path": "data/cold/daily/20260422/sources/atm_series/atm_series_20260422.jsonl",
+      "source_path": "data/atm_decay/atm_series_20260422.jsonl",
+      "size_bytes": 529400,
+      "sha256": "e4d6d57f39f1950e8bc510841bdb8384285511970b18de95f76ec50b0bbe6162"
+    },
+    {
+      "role": "mtf_iv_series",
+      "path": "data/cold/daily/20260422/sources/mtf_iv_series/mtf_iv_series_20260422.jsonl",
+      "source_path": "data/mtf_iv/mtf_iv_series_20260422.jsonl",
+      "size_bytes": 115271,
+      "sha256": "39e624d5bb8c6d62f23869954e4708adddfa4d7f0fa741406a0f1f8232677d32"
+    },
+    {
+      "role": "wall_series",
+      "path": "data/cold/daily/20260422/sources/wall_series/wall_series_20260422.jsonl",
+      "source_path": "data/wall_migration/wall_series_20260422.jsonl",
+      "size_bytes": 1340,
+      "sha256": "6f428a57d3bc2c0d17fb65b3a03e72020c20ab3ba308e2d4e5c63221862a2338"
+    }
+  ],
+  "metrics": {
+    "rows": {
+      "research_raw": 2871,
+      "research_feature": 2869,
+      "research_label": 2069
+    },
+    "raw_day": {
+      "rows": 2871,
+      "session_rows_used": 2866,
+      "spot_outlier_rows_dropped": 5,
+      "net_return": 0.0017427502998659616,
+      "intraday_followthrough": 0.0017427502998659616,
+      "overnight_gap": 0.0030360719315503525,
+      "overnight_gap_available": true,
+      "realized_range": 0.0033514428843575816,
+      "open_rv_1m": 3.674037603632123e-05,
+      "ofi_persistence": 0.0,
+      "ofi_nonzero_coverage": 0.0,
+      "directional_efficiency": 0.5200000000000058,
+      "open_side_persistence": 0.942079553384508,
+      "close_to_extreme": 0.32842105263156746,
+      "max_abs_jump": 0.0003662513470301818,
+      "state_switch_rate": 0.39455307262569833,
+      "atm_iv_change_pct": -0.051829832567355946,
+      "atm_iv_available": true,
+      "pin_band_ratio": 0.07536636427076064,
+      "close_to_key_level": 0.003898258976088654,
+      "key_level_coverage": 1.0,
+      "start_timestamp": "2026-04-22T13:50:14.105Z",
+      "end_timestamp": "2026-04-22T14:43:23.247Z",
+      "ofi_source": "bbo_imbalance_raw",
+      "midday_return": 0.0017568616383264017,
+      "afternoon_return": -1.4086590270379289e-05,
+      "prev_trade_day": "20260421"
+    },
+    "source_count": 6
+  },
+  "quality": {
+    "status": "LOW_QUALITY_DAY",
+    "reasons": [
+      "raw rows below minimum: 2871 < 5000",
+      "feature rows below minimum: 2869 < 5000",
+      "label rows below minimum: 2069 < 5000"
+    ],
+    "classification_blocked": true,
+    "min_rows": {
+      "raw": 5000,
+      "feature": 5000,
+      "label": 5000
+    },
+    "key_null_pct": {
+      "data_timestamp": 0.0,
+      "spot": 0.0,
+      "atm_iv": 0.0,
+      "net_gex": 0.0
+    }
+  },
+  "rule_hits": [
+    "classification_blocked:raw rows below minimum: 2871 < 5000",
+    "classification_blocked:feature rows below minimum: 2869 < 5000",
+    "classification_blocked:label rows below minimum: 2069 < 5000"
+  ],
+  "generated_at_utc": "2026-04-22T20:04:03Z"
+}

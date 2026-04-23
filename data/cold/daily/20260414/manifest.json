@@ -1,0 +1,113 @@
+{
+  "version": "v3",
+  "classification_mode": "primary_plus_context_v1",
+  "date": "20260414",
+  "primary_day_type": "INCOMPLETE_SOURCE",
+  "context_modifiers": [],
+  "close_profile": "UNKNOWN",
+  "source_files": [
+    {
+      "role": "research_raw",
+      "path": "data/cold/daily/20260414/sources/research_raw/raw_20260414.parquet",
+      "source_path": "data/research/raw/raw_20260414.parquet",
+      "size_bytes": 12460,
+      "sha256": "77931700c35eadbcadd4cb7959886b99aa3ac5371485c406cad43159a5a433d1"
+    },
+    {
+      "role": "research_feature",
+      "path": "data/cold/daily/20260414/sources/research_feature/feature_20260414.parquet",
+      "source_path": "data/research/feature/feature_20260414.parquet",
+      "size_bytes": 28037,
+      "sha256": "2edb54f4207020e5c6312712d4f333bb6258477b299921d6a55c4af0716856e6"
+    },
+    {
+      "role": "research_label",
+      "path": "data/cold/daily/20260414/sources/research_label/label_20260414.parquet",
+      "source_path": "data/research/label/label_20260414.parquet",
+      "size_bytes": 509551,
+      "sha256": "3325ab280b70bf0afa13a657acd88e9142951eea78aac2be4760eea68f87f7ff"
+    },
+    {
+      "role": "atm_series",
+      "path": "data/cold/daily/20260414/sources/atm_series/atm_series_20260414.jsonl",
+      "source_path": "data/atm_decay/atm_series_20260414.jsonl",
+      "size_bytes": 2692105,
+      "sha256": "6acc49f05a493e96844cb8967b05cde25361765054b1ff94c8575f7a878b9c53"
+    },
+    {
+      "role": "mtf_iv_series",
+      "path": "data/cold/daily/20260414/sources/mtf_iv_series/mtf_iv_series_20260414.jsonl",
+      "source_path": "data/mtf_iv/mtf_iv_series_20260414.jsonl",
+      "size_bytes": 1681654,
+      "sha256": "2852a6655c6d05d36c93d14aeb119d71962a7fbc138244bef3ff85f801853819"
+    },
+    {
+      "role": "wall_series",
+      "path": "data/cold/daily/20260414/sources/wall_series/wall_series_20260414.jsonl",
+      "source_path": "data/wall_migration/wall_series_20260414.jsonl",
+      "size_bytes": 12491,
+      "sha256": "93bd88ece7d531000a8fd4cab6e39f0bafd1d210132bed66c0c8d1076d5c63f4"
+    }
+  ],
+  "metrics": {
+    "rows": {
+      "research_raw": 38,
+      "research_feature": 38,
+      "research_label": 20223
+    },
+    "raw_day": {
+      "rows": 38,
+      "session_rows_used": 0,
+      "spot_outlier_rows_dropped": 0,
+      "net_return": 0.0,
+      "intraday_followthrough": 0.0,
+      "overnight_gap": 0.0,
+      "overnight_gap_available": false,
+      "realized_range": 0.0,
+      "open_rv_1m": 0.0,
+      "ofi_persistence": 0.0,
+      "ofi_nonzero_coverage": 0.0,
+      "directional_efficiency": 0.0,
+      "open_side_persistence": 0.0,
+      "close_to_extreme": 1.0,
+      "max_abs_jump": 0.0,
+      "state_switch_rate": 0.0,
+      "atm_iv_change_pct": 0.0,
+      "atm_iv_available": false,
+      "pin_band_ratio": 0.0,
+      "close_to_key_level": 1.0,
+      "key_level_coverage": 0.0,
+      "start_timestamp": "",
+      "end_timestamp": "",
+      "ofi_source": "bbo_imbalance_raw",
+      "midday_return": 0.0,
+      "afternoon_return": 0.0,
+      "prev_trade_day": "20260413"
+    },
+    "source_count": 6
+  },
+  "quality": {
+    "status": "LOW_QUALITY_DAY",
+    "reasons": [
+      "raw rows below minimum: 38 < 5000",
+      "feature rows below minimum: 38 < 5000"
+    ],
+    "classification_blocked": true,
+    "min_rows": {
+      "raw": 5000,
+      "feature": 5000,
+      "label": 5000
+    },
+    "key_null_pct": {
+      "data_timestamp": 0.0,
+      "spot": 0.0,
+      "atm_iv": 0.0,
+      "net_gex": 0.0
+    }
+  },
+  "rule_hits": [
+    "classification_blocked:raw rows below minimum: 38 < 5000",
+    "classification_blocked:feature rows below minimum: 38 < 5000"
+  ],
+  "generated_at_utc": "2026-04-14T21:05:15Z"
+}

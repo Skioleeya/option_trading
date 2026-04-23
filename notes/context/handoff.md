@@ -1,12 +1,12 @@
 # Handoff (Index)
 
 ## Active Handoff
-- Path: notes/sessions/2026-04-23/research-startup-spot-fix/handoff.md
-- Meta: notes/sessions/2026-04-23/research-startup-spot-fix/meta.yaml
+- Path: notes/sessions/2026-04-23/track-cold-data-20260423/handoff.md
+- Meta: notes/sessions/2026-04-23/track-cold-data-20260423/meta.yaml
 
 ## Latest Outcome
-- Session: 2026-04-23/research-startup-spot-fix
-- Summary: Host-verified startup hotfix landed; preserved valid L0 spot through empty L1 snapshots, `start-all` returned healthy (`/health=200`, `research_persistence.healthy=true`), and strict validation passed.
+- Session: 2026-04-23/track-cold-data-20260423
+- Summary: `data/cold` is now prepared for version control, `Option_v3` historical cold data has been copied into `Option_v4`, and the remaining gate is strict validation plus commit/push.
 
 ## Next Session Bootstrap
 1. Read this file.
