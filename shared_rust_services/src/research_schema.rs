@@ -27,6 +27,28 @@ const LABEL_FIELDS: [&str; 8] = [
     "fwd_ret_1m", "fwd_ret_5m", "fwd_ret_15m", "fwd_ret_60m", "max_adverse_excursion",
     "realized_vol_horizon", "horizon_observed_seconds", "stored_at",
 ];
+const CANONICAL_FIELDS: [(&str, &str); 45] = [
+    ("data_timestamp", "string"), ("as_of_utc", "string"), ("l0_version", "int64"),
+    ("symbol", "string"), ("spot", "float64"), ("atm_iv", "float64"), ("net_gex", "float64"),
+    ("call_wall", "float64"), ("put_wall", "float64"), ("flip_level", "float64"),
+    ("bbo_imbalance_raw", "float64"), ("session_phase", "string"),
+    ("skew_25d_normalized", "float64"), ("rr25_call_minus_put", "float64"),
+    ("realized_volatility_15m", "float64"), ("vol_risk_premium", "float64"),
+    ("vrp_realized_based", "float64"), ("longport_official_hv_decimal", "float64"),
+    ("longport_official_hv_sample_count", "int64"), ("longport_official_hv_age_sec", "float64"),
+    ("vrp_official_hv_based", "float64"), ("direction_code", "int8"),
+    ("iv_regime_code", "int8"), ("gex_intensity_code", "int8"), ("confidence", "float64"),
+    ("max_impact", "float64"), ("dealer_squeeze_alert", "bool_"),
+    ("net_delta_exposure_live", "float64"), ("net_gamma_exposure_live", "float64"),
+    ("residual_delta_after_netting", "float64"), ("oi_participation_ratio_live", "float64"),
+    ("flow_suppression_bias", "float64"), ("flow_dominance_ratio", "float64"),
+    ("midpoint_tickrule_count", "float64"), ("condition_filtered_count", "float64"),
+    ("complex_spread_count", "float64"), ("stored_at", "string"),
+    ("fwd_ret_1m", "float64"), ("fwd_ret_5m", "float64"), ("fwd_ret_15m", "float64"),
+    ("fwd_ret_60m", "float64"), ("max_adverse_excursion", "float64"),
+    ("realized_vol_horizon", "float64"), ("horizon_observed_seconds", "float64"),
+    ("label_stored_at", "string"),
+];
 
 fn build_schema(py: Python<'_>, fields: &[(&str, &str)]) -> PyResult<Py<PyAny>> {
     let pa = py.import("pyarrow")?;
@@ -116,11 +138,17 @@ fn research_label_schema(py: Python<'_>) -> PyResult<Py<PyAny>> {
 }
 
 #[pyfunction]
+fn research_canonical_schema(py: Python<'_>) -> PyResult<Py<PyAny>> {
+    build_schema(py, &CANONICAL_FIELDS)
+}
+
+#[pyfunction]
 fn research_tier_schema(py: Python<'_>, tier_name: &str) -> PyResult<Py<PyAny>> {
     match tier_name {
         "raw" => research_raw_schema(py),
         "feature" => research_feature_schema(py),
         "label" => research_label_schema(py),
+        "canonical" => research_canonical_schema(py),
         _ => Err(PyValueError::new_err(format!("unknown tier schema: {tier_name}"))),
     }
 }
@@ -135,6 +163,7 @@ pub fn register(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(research_raw_schema, m)?)?;
     m.add_function(wrap_pyfunction!(research_feature_schema, m)?)?;
     m.add_function(wrap_pyfunction!(research_label_schema, m)?)?;
+    m.add_function(wrap_pyfunction!(research_canonical_schema, m)?)?;
     m.add_function(wrap_pyfunction!(research_tier_schema, m)?)?;
     Ok(())
 }

@@ -34,26 +34,10 @@ def _write_parquet(path: Path, cols: dict[str, list]):
 def test_wait_for_settle_returns_stable_when_snapshot_stops_changing():
     mod = _load_module("wait_for_eod_sources_settle", "scripts/diagnostics/wait_for_eod_sources_settle.py")
     snapshots = [
-        (
-            mod.SourceSignature("research_raw", "a", True, True, 10, 1),
-            mod.SourceSignature("research_feature", "b", True, True, 10, 1),
-            mod.SourceSignature("research_label", "c", True, True, 10, 1),
-        ),
-        (
-            mod.SourceSignature("research_raw", "a", True, True, 12, 2),
-            mod.SourceSignature("research_feature", "b", True, True, 10, 1),
-            mod.SourceSignature("research_label", "c", True, True, 10, 1),
-        ),
-        (
-            mod.SourceSignature("research_raw", "a", True, True, 12, 2),
-            mod.SourceSignature("research_feature", "b", True, True, 10, 1),
-            mod.SourceSignature("research_label", "c", True, True, 10, 1),
-        ),
-        (
-            mod.SourceSignature("research_raw", "a", True, True, 12, 2),
-            mod.SourceSignature("research_feature", "b", True, True, 10, 1),
-            mod.SourceSignature("research_label", "c", True, True, 10, 1),
-        ),
+        (mod.SourceSignature("research_canonical", "a", True, True, 10, 1),),
+        (mod.SourceSignature("research_canonical", "a", True, True, 12, 2),),
+        (mod.SourceSignature("research_canonical", "a", True, True, 12, 2),),
+        (mod.SourceSignature("research_canonical", "a", True, True, 12, 2),),
     ]
     clock = {"now": 0.0, "capture_count": 0}
 

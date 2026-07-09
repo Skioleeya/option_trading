@@ -1,12 +1,12 @@
 # Handoff (Index)
 
 ## Active Handoff
-- Path: notes/sessions/2026-04-22/master-sync-clean/handoff.md
-- Meta: notes/sessions/2026-04-22/master-sync-clean/meta.yaml
+- Path: notes/sessions/2026-07-09/branch-convergence-master-main/handoff.md
+- Meta: notes/sessions/2026-07-09/branch-convergence-master-main/meta.yaml
 
 ## Latest Outcome
-- Session: 2026-04-22/master-sync-clean
-- Summary: Local `master` now points at the cleaned source-only snapshot, tracked runtime artifacts were retired from Git, strict validation passed locally, and the same state was published to `origin/chore/master-sync-clean-20260422`; only the PR merge into protected `master` remains.
+- Session: 2026-07-09/branch-convergence-master-main
+- Summary: PR `#5` is open against `master`, the GitHub default branch is now `master`, and `origin/main` has been force-aligned to `origin/master`.
 
 ## Next Session Bootstrap
 1. Read this file.

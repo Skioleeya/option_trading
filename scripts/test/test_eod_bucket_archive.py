@@ -118,13 +118,35 @@ def _make_day_files(
         prev_day = "20260310"
         prev_ts = ["2026-03-10T15:59:00-04:00", "2026-03-10T16:00:00-04:00"]
         _write_parquet(
-            root / "research/raw" / f"raw_{prev_day}.parquet",
+            root / "research/canonical" / f"day_{prev_day}.parquet",
             {
                 "data_timestamp": prev_ts,
+                "as_of_utc": prev_ts,
+                "l0_version": [1, 2],
+                "symbol": ["SPY", "SPY"],
                 "spot": [100.0, 100.0],
                 "atm_iv": [0.20, 0.20],
                 "net_gex": [300.0, 300.0],
+                "call_wall": [101.0, 101.0],
+                "put_wall": [99.0, 99.0],
+                "flip_level": [100.0, 100.0],
                 "bbo_imbalance_raw": [0.0, 0.0],
+                "session_phase": ["RTH", "RTH"],
+                "direction_code": [1, 1],
+                "iv_regime_code": [0, 0],
+                "gex_intensity_code": [0, 0],
+                "confidence": [0.7, 0.7],
+                "max_impact": [1.0, 1.0],
+                "dealer_squeeze_alert": [False, False],
+                "stored_at": prev_ts,
+                "label_stored_at": prev_ts,
+                "fwd_ret_1m": [0.0, 0.0],
+                "fwd_ret_5m": [0.0, 0.0],
+                "fwd_ret_15m": [0.0, 0.0],
+                "fwd_ret_60m": [0.0, 0.0],
+                "max_adverse_excursion": [0.0, 0.0],
+                "realized_vol_horizon": [0.0, 0.0],
+                "horizon_observed_seconds": [3600.0, 3600.0],
             },
         )
 
@@ -144,27 +166,64 @@ def _make_day_files(
 
     cols = {
         "data_timestamp": ts,
+        "as_of_utc": ts,
+        "l0_version": list(range(1, rows + 1)),
+        "symbol": ["SPY" for _ in range(rows)],
         "spot": spot,
         "atm_iv": [0.20 for _ in range(rows)],
         "net_gex": [300.0 + i for i in range(rows)],
         "bbo_imbalance_raw": [0.1 for _ in range(rows)],
+        "session_phase": ["RTH" for _ in range(rows)],
+        "direction_code": [1 for _ in range(rows)],
+        "iv_regime_code": [0 for _ in range(rows)],
+        "gex_intensity_code": [0 for _ in range(rows)],
+        "confidence": [0.7 for _ in range(rows)],
+        "max_impact": [1.0 for _ in range(rows)],
+        "dealer_squeeze_alert": [False for _ in range(rows)],
+        "stored_at": ts,
     }
     if include_walls:
         cols["call_wall"] = [101.0 for _ in range(rows)]
         cols["put_wall"] = [99.0 for _ in range(rows)]
         cols["flip_level"] = [100.0 for _ in range(rows)]
+    else:
+        cols["call_wall"] = [None for _ in range(rows)]
+        cols["put_wall"] = [None for _ in range(rows)]
+        cols["flip_level"] = [None for _ in range(rows)]
 
-    _write_parquet(root / "research/raw" / f"raw_{date_str}.parquet", cols)
+    label_values = [0.0 for _ in range(rows)] if include_feature_label else [None for _ in range(rows)]
+    cols.update(
+        {
+            "skew_25d_normalized": [0.0 for _ in range(rows)],
+            "rr25_call_minus_put": [0.0 for _ in range(rows)],
+            "realized_volatility_15m": [0.2 for _ in range(rows)],
+            "vol_risk_premium": [0.01 for _ in range(rows)],
+            "vrp_realized_based": [0.02 for _ in range(rows)],
+            "longport_official_hv_decimal": [0.2 for _ in range(rows)],
+            "longport_official_hv_sample_count": [1 for _ in range(rows)],
+            "longport_official_hv_age_sec": [1.0 for _ in range(rows)],
+            "vrp_official_hv_based": [0.0 for _ in range(rows)],
+            "net_delta_exposure_live": [1.0 for _ in range(rows)],
+            "net_gamma_exposure_live": [1.0 for _ in range(rows)],
+            "residual_delta_after_netting": [1.0 for _ in range(rows)],
+            "oi_participation_ratio_live": [0.1 for _ in range(rows)],
+            "flow_suppression_bias": [0.1 for _ in range(rows)],
+            "flow_dominance_ratio": [0.1 for _ in range(rows)],
+            "midpoint_tickrule_count": [1.0 for _ in range(rows)],
+            "condition_filtered_count": [1.0 for _ in range(rows)],
+            "complex_spread_count": [1.0 for _ in range(rows)],
+            "fwd_ret_1m": label_values,
+            "fwd_ret_5m": label_values,
+            "fwd_ret_15m": label_values,
+            "fwd_ret_60m": label_values,
+            "max_adverse_excursion": label_values,
+            "realized_vol_horizon": label_values,
+            "horizon_observed_seconds": [3600.0 for _ in range(rows)] if include_feature_label else [None for _ in range(rows)],
+            "label_stored_at": ts if include_feature_label else [None for _ in range(rows)],
+        }
+    )
 
-    if include_feature_label:
-        _write_parquet(
-            root / "research/feature" / f"feature_{date_str}.parquet",
-            {"data_timestamp": ts, "spot": spot},
-        )
-        _write_parquet(
-            root / "research/label" / f"label_{date_str}.parquet",
-            {"data_timestamp": ts, "fwd_ret_1m": [0.0 for _ in range(rows)]},
-        )
+    _write_parquet(root / "research/canonical" / f"day_{date_str}.parquet", cols)
 
     for folder, name in [
         ("atm_decay", f"atm_series_{date_str}.jsonl"),
@@ -525,13 +584,35 @@ def test_missing_prev_session_file_does_not_fallback_to_older_day():
 
     # Intentionally provide an older file but keep the immediate previous session file absent.
     _write_parquet(
-        data_root / "research/raw" / "raw_20260309.parquet",
+        data_root / "research/canonical" / "day_20260309.parquet",
         {
             "data_timestamp": ["2026-03-09T15:59:00-04:00", "2026-03-09T16:00:00-04:00"],
+            "as_of_utc": ["2026-03-09T15:59:00-04:00", "2026-03-09T16:00:00-04:00"],
+            "l0_version": [1, 2],
+            "symbol": ["SPY", "SPY"],
             "spot": [99.0, 100.0],
             "atm_iv": [0.20, 0.20],
             "net_gex": [300.0, 300.0],
+            "call_wall": [101.0, 101.0],
+            "put_wall": [99.0, 99.0],
+            "flip_level": [100.0, 100.0],
             "bbo_imbalance_raw": [0.0, 0.0],
+            "session_phase": ["RTH", "RTH"],
+            "direction_code": [1, 1],
+            "iv_regime_code": [0, 0],
+            "gex_intensity_code": [0, 0],
+            "confidence": [0.7, 0.7],
+            "max_impact": [1.0, 1.0],
+            "dealer_squeeze_alert": [False, False],
+            "stored_at": ["2026-03-09T15:59:00-04:00", "2026-03-09T16:00:00-04:00"],
+            "label_stored_at": ["2026-03-09T15:59:00-04:00", "2026-03-09T16:00:00-04:00"],
+            "fwd_ret_1m": [0.0, 0.0],
+            "fwd_ret_5m": [0.0, 0.0],
+            "fwd_ret_15m": [0.0, 0.0],
+            "fwd_ret_60m": [0.0, 0.0],
+            "max_adverse_excursion": [0.0, 0.0],
+            "realized_vol_horizon": [0.0, 0.0],
+            "horizon_observed_seconds": [3600.0, 3600.0],
         },
     )
 
@@ -613,7 +694,7 @@ def test_corrupt_required_raw_fails_without_visible_publish() -> None:
     out_root = root / "cold"
     date_str = "20260311"
     _make_day_files(data_root, date_str, rows=120, include_feature_label=True, include_walls=True, with_prev_day=True)
-    (data_root / "research/raw" / f"raw_{date_str}.parquet").write_bytes(b"PAR1")
+    (data_root / "research/canonical" / f"day_{date_str}.parquet").write_bytes(b"PAR1")
 
     cfg = _default_cfg()
     cfg_path = root / "cfg_corrupt.json"

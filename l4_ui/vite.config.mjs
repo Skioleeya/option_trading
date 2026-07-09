@@ -24,29 +24,36 @@ function resolveBackendOrigin(raw) {
 
 export default defineConfig(({ mode, command }) => {
     const env = loadEnv(mode, process.cwd(), '')
-    const isServe = command === 'serve'
-    const backend = isServe
+    const usesProxy = command === 'serve' || command === 'preview'
+    const backend = usesProxy
         ? resolveBackendOrigin(env.VITE_BACKEND_ORIGIN || process.env.VITE_BACKEND_ORIGIN)
         : null
     const wsTarget = backend
         ? `${backend.protocol === 'https:' ? 'wss:' : 'ws:'}//${backend.host}`
         : null
+    const proxy = backend
+        ? {
+            '/ws': {
+                target: wsTarget,
+                ws: true,
+            },
+            '/api': {
+                target: backend.origin,
+                changeOrigin: true,
+            },
+        }
+        : undefined
 
     return {
         plugins: [react()],
-        ...(isServe ? {
+        ...(backend ? {
             server: {
                 port: 5173,
-                proxy: {
-                    '/ws': {
-                        target: wsTarget,
-                        ws: true,
-                    },
-                    '/api': {
-                        target: backend.origin,
-                        changeOrigin: true,
-                    },
-                },
+                proxy,
+            },
+            preview: {
+                port: 5173,
+                proxy,
             },
         } : {}),
     }

@@ -33,8 +33,10 @@ def run_pytest(args: argparse.Namespace) -> int:
 
     repo = repo_root()
     cache_dir = repo / "tmp/pytest_cache"
+    temp_dir = repo / "tmp/pytest_tmp"
     try:
         _assert_cache_dir_writable(cache_dir)
+        _assert_cache_dir_writable(temp_dir)
     except Exception as exc:
         print_fail(str(exc))
         return 1
@@ -42,6 +44,8 @@ def run_pytest(args: argparse.Namespace) -> int:
     env = os.environ.copy()
     env.setdefault("PYTEST_DISABLE_PLUGIN_AUTOLOAD", "1")
     env.setdefault("HOME", str(Path.home()))
+    env["TMP"] = str(temp_dir)
+    env["TEMP"] = str(temp_dir)
 
     cmd = [sys.executable, "-m", "pytest", "-p", "pytest_asyncio.plugin", "-o", f"cache_dir={cache_dir}"]
     cmd.extend(args.pytest_args)

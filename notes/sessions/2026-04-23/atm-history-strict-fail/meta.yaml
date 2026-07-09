@@ -1,0 +1,46 @@
+session_id: "2026-04-23/atm-history-strict-fail"
+title: "atm history strict fail"
+scope: "infra"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-23 07:58:16 -04:00"
+updated_at_et: "2026-04-23 08:04:15 -04:00"
+parent_session: "2026-04-23/start-all-health-check"
+
+branch: "master"
+base_commit: "b6ef4ff"
+head_commit: "b6ef4ff"
+
+files_changed:
+  - "l4_ui/src/components/App.tsx"
+  - "l4_ui/src/components/__tests__/atmHistoryHydrate.test.tsx"
+  - "docs/SOP/L4_FRONTEND.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-04-23/atm-history-strict-fail/project_state.md"
+  - "notes/sessions/2026-04-23/atm-history-strict-fail/open_tasks.md"
+  - "notes/sessions/2026-04-23/atm-history-strict-fail/handoff.md"
+  - "notes/sessions/2026-04-23/atm-history-strict-fail/meta.yaml"
+commands:
+  - ".\\.venv\\Scripts\\python.exe manage.py new-session --task-id atm-history-strict-fail --title \"atm history strict fail\" --scope infra --owner Codex --parent-session 2026-04-23/start-all-health-check --update-pointer"
+  - "Invoke-WebRequest -UseBasicParsing \"http://127.0.0.1:5173/api/atm-decay/history?fields=timestamp%2Cstraddle_pct%2Ccall_pct%2Cput_pct%2Cstrike_changed&schema=v2\""
+  - ".\\.venv\\Scripts\\python.exe -c \"from websockets.sync.client import connect; ... ws://127.0.0.1:5173/ws/dashboard ...\""
+  - "Get-ChildItem data\\atm_decay"
+  - "npm --prefix l4_ui run test -- atmHistoryHydrate"
+  - "npm --prefix l4_ui run test -- debugHotkey.integration"
+  - "$env:VITE_BACKEND_ORIGIN='http://127.0.0.1:8001'; npm --prefix l4_ui run build"
+  - ".\\.venv\\Scripts\\python.exe manage.py validate-session --strict"
+tests_passed:
+  - "live host same-origin /api/atm-decay/history reproduction (count=0 before RTH)"
+  - "live host same-origin /ws/dashboard reproduction (atm=null before RTH)"
+  - "npm --prefix l4_ui run test -- atmHistoryHydrate"
+  - "npm --prefix l4_ui run test -- debugHotkey.integration"
+  - "$env:VITE_BACKEND_ORIGIN='http://127.0.0.1:8001'; npm --prefix l4_ui run build"
+  - ".\\.venv\\Scripts\\python.exe manage.py validate-session --strict"
+tests_failed: []
+blockers: []
+notes:
+  - "Root cause: premarket same-day ATM history is legitimately empty before 09:30 ET, but App.tsx previously treated all empty history as strict failure."
+  - "The fix preserves fast-fail during OPEN while allowing outside-RTH empty history to remain pending."
+

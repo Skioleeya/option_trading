@@ -35,9 +35,7 @@ class WaitResult:
 
 def _default_sources(root: Path, date_str: str) -> tuple[SourceEntry, ...]:
     return (
-        SourceEntry("research_raw", root / "research" / "raw" / f"raw_{date_str}.parquet", True),
-        SourceEntry("research_feature", root / "research" / "feature" / f"feature_{date_str}.parquet", True),
-        SourceEntry("research_label", root / "research" / "label" / f"label_{date_str}.parquet", True),
+        SourceEntry("research_canonical", root / "research" / "canonical" / f"day_{date_str}.parquet", True),
         SourceEntry("atm_series", root / "atm_decay" / f"atm_series_{date_str}.jsonl", False),
         SourceEntry("mtf_iv_series", root / "mtf_iv" / f"mtf_iv_series_{date_str}.jsonl", False),
         SourceEntry("wall_series", root / "wall_migration" / f"wall_series_{date_str}.jsonl", False),

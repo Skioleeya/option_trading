@@ -225,6 +225,7 @@ flowchart LR
   - `1DTE` 最近 ATM 合约 `atm_iv_1dte`
   - `next_expiry`
 - ActiveOptions runtime 采用 strict no-fallback 合同：标准化输入链为空、引擎输出为空或输入无效时必须硬失败并进入 halted 状态，禁止生成补位/合成 fallback 行。
+- 当 halted 原因是开盘暖机期 `engine_empty_output` / `normalized_chain_empty_no_candidates`，且后续 tick 首次恢复到存在真实当日成交量（`volume > 0`）的输入时，runtime MAY 自动 re-arm 并重新计算；禁止靠 synthetic fallback 行解锁。
 - ActiveOptions `VOL` 口径必须使用当日累计成交量（`volume`）作为唯一排序字段；禁止以 `current_volume` 替代、补位或兜底。
 - ActiveOptions 候选池必须严格围绕 `spot` 按固定窗口过滤（`flow_active_spot_window_steps`，默认 `±7` 档）；超窗合约即使 `volume` 更高也不得进入 Top 榜单。
 - `housekeeping_loop` 启动竞态守卫：当 `latest_active_options_input` 尚未发布（`missing_input`）时必须记录显式告警并等待下一 tick，禁止因首 tick 缺输入直接终止 housekeeping 任务；一旦输入对象存在但 `valid=false`，仍按 strict 合同硬失败。

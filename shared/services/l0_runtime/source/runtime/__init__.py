@@ -288,7 +288,7 @@ def _build_rust_gateway_config(cfg: object) -> dict[str, object]:
 
 def build_runtime_bundle() -> RuntimeBundle:
     endpoint_profiles = _build_openapi_endpoint_profiles(settings)
-    config = Config(**_longport_config_kwargs(settings))
+    config = Config.from_apikey(**_longport_config_kwargs(settings))
     gateway_config = _build_rust_gateway_config(settings)
     limiter = APIRateLimiter(
         rate=settings.longport_api_rate_limit,

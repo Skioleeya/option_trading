@@ -117,31 +117,11 @@ def test_wait_for_settle_stabilizes_after_snapshot_changes():
     mod = _load_module("settle_mod", "scripts/diagnostics/wait_for_eod_sources_settle.py")
     sig = mod.SourceSignature
     snapshots = [
-        (
-            sig("research_raw", "raw", True, True, 10, 100),
-            sig("research_feature", "feature", True, False, -1, -1),
-            sig("research_label", "label", True, False, -1, -1),
-        ),
-        (
-            sig("research_raw", "raw", True, True, 10, 100),
-            sig("research_feature", "feature", True, True, 20, 200),
-            sig("research_label", "label", True, True, 30, 300),
-        ),
-        (
-            sig("research_raw", "raw", True, True, 11, 101),
-            sig("research_feature", "feature", True, True, 20, 200),
-            sig("research_label", "label", True, True, 30, 300),
-        ),
-        (
-            sig("research_raw", "raw", True, True, 11, 101),
-            sig("research_feature", "feature", True, True, 20, 200),
-            sig("research_label", "label", True, True, 30, 300),
-        ),
-        (
-            sig("research_raw", "raw", True, True, 11, 101),
-            sig("research_feature", "feature", True, True, 20, 200),
-            sig("research_label", "label", True, True, 30, 300),
-        ),
+        (sig("research_canonical", "canonical", True, True, 10, 100),),
+        (sig("research_canonical", "canonical", True, True, 10, 100),),
+        (sig("research_canonical", "canonical", True, True, 11, 101),),
+        (sig("research_canonical", "canonical", True, True, 11, 101),),
+        (sig("research_canonical", "canonical", True, True, 11, 101),),
     ]
     idx = {"value": 0}
     clock = {"value": 0.0}
@@ -173,11 +153,7 @@ def test_wait_for_settle_stabilizes_after_snapshot_changes():
 def test_wait_for_settle_times_out_when_required_sources_missing():
     mod = _load_module("settle_mod_timeout", "scripts/diagnostics/wait_for_eod_sources_settle.py")
     sig = mod.SourceSignature
-    snapshot = (
-        sig("research_raw", "raw", True, True, 10, 100),
-        sig("research_feature", "feature", True, False, -1, -1),
-        sig("research_label", "label", True, False, -1, -1),
-    )
+    snapshot = (sig("research_canonical", "canonical", True, False, -1, -1),)
     clock = {"value": 0.0}
 
     def capture():

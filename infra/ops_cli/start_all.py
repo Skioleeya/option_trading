@@ -13,6 +13,8 @@ from .common import ensure_dir, repo_root
 from .redis_preflight import describe_redis_preflight, preflight_redis_runtime
 from .start_backend import run_start_backend
 
+DEFAULT_REDIS_EXE = r"C:\Program Files\Memurai\memurai.exe"
+
 
 def _step(message: str) -> None:
     print(f"[start-all] {message}")
@@ -87,7 +89,7 @@ def _resolve_abs_path(repo: Path, value: str) -> Path:
 
 
 def _default_redis_exe(repo: Path) -> Path:
-    return repo / "infra/bin/redis-server.exe"
+    return Path(DEFAULT_REDIS_EXE)
 
 
 def _start_redis(repo: Path, args: argparse.Namespace) -> None:
@@ -175,6 +177,41 @@ def _kill_existing_vite(ui_dir: Path) -> None:
     _run_powershell(script)
 
 
+def _listening_pids(port: int) -> list[int]:
+    proc = subprocess.run(
+        ["cmd.exe", "/c", f"netstat -ano -p tcp | findstr LISTENING | findstr :{port}"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        return []
+    pids: list[int] = []
+    for raw in (proc.stdout or "").splitlines():
+        parts = raw.split()
+        if len(parts) < 5:
+            continue
+        local_addr = parts[1]
+        if not local_addr.endswith(f":{port}"):
+            continue
+        try:
+            pid = int(parts[-1])
+        except ValueError:
+            continue
+        if pid not in pids:
+            pids.append(pid)
+    return pids
+
+
+def _kill_processes_on_port(port: int) -> list[int]:
+    killed: list[int] = []
+    for pid in _listening_pids(port):
+        proc = _run_powershell(f"Stop-Process -Id {pid} -Force -ErrorAction SilentlyContinue")
+        if proc.returncode == 0 and pid not in _listening_pids(port):
+            killed.append(pid)
+    return killed
+
+
 def _resolve_backend_origin(bind_host: str, backend_port: int) -> str:
     host = "127.0.0.1" if bind_host in {"0.0.0.0", "::"} else bind_host
     raw = host.strip()
@@ -191,8 +228,22 @@ def _resolve_backend_origin(bind_host: str, backend_port: int) -> str:
     return f"http://{host}:{backend_port}"
 
 
-def _resolve_npm_command() -> str:
-    return "npm.cmd" if os.name == "nt" else "npm"
+def _frontend_ready(port: int) -> bool:
+    req = Request(f"http://127.0.0.1:{port}", method="GET")
+    try:
+        with urlopen(req, timeout=2) as resp:  # nosec - local readiness probe
+            return 200 <= resp.status < 500
+    except Exception:
+        return False
+
+
+def _wait_frontend_ready(port: int, timeout_sec: int) -> bool:
+    deadline = time.time() + timeout_sec
+    while time.time() < deadline:
+        if _is_listening(port) and _frontend_ready(port):
+            return True
+        time.sleep(0.5)
+    return _is_listening(port) and _frontend_ready(port)
 
 
 def _validate_frontend_env(env: dict[str, str]) -> None:
@@ -213,6 +264,10 @@ def _start_frontend(repo: Path, args: argparse.Namespace) -> None:
     if _is_listening(args.frontend_port):
         _step(f"Frontend port {args.frontend_port} is busy, forcing restart to apply strict env.")
         _kill_existing_vite(ui_dir)
+        if _is_listening(args.frontend_port):
+            killed = _kill_processes_on_port(args.frontend_port)
+            if killed:
+                _step(f"Stopped existing frontend listener(s) on port {args.frontend_port}: pids={killed}")
         time.sleep(0.8)
         if _is_listening(args.frontend_port):
             raise RuntimeError(
@@ -230,8 +285,16 @@ def _start_frontend(repo: Path, args: argparse.Namespace) -> None:
     backend_origin = _resolve_backend_origin(args.bind_host, args.backend_port)
     env["VITE_BACKEND_ORIGIN"] = backend_origin
 
-    cmd = [_resolve_npm_command(), "run", "dev", "--", "--host", "0.0.0.0", "--port", str(args.frontend_port)]
-    _step(f"Starting frontend via npm run dev (VITE_BACKEND_ORIGIN={backend_origin}) ...")
+    cmd = [
+        "node",
+        "./scripts/preview-strict.mjs",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        str(args.frontend_port),
+        "--strictPort",
+    ]
+    _step(f"Starting frontend via node scripts/preview-strict.mjs (VITE_BACKEND_ORIGIN={backend_origin}) ...")
     with frontend_log_path.open("a", encoding="utf-8") as fp:
         proc = subprocess.Popen(
             cmd,
@@ -244,12 +307,14 @@ def _start_frontend(repo: Path, args: argparse.Namespace) -> None:
         )
     _step(f"Frontend launcher pid={proc.pid}")
 
-    if not _wait_listening(args.frontend_port, args.frontend_ready_timeout_sec):
+    if not _wait_frontend_ready(args.frontend_port, args.frontend_ready_timeout_sec):
         if frontend_log_path.exists():
             _step("Frontend log tail:")
             print("\n".join(frontend_log_path.read_text(encoding="utf-8", errors="ignore").splitlines()[-40:]))
-        raise RuntimeError(f"Frontend did not open port {args.frontend_port} within {args.frontend_ready_timeout_sec}s.")
-    _step(f"Frontend is listening on port {args.frontend_port}.")
+        raise RuntimeError(
+            f"Frontend did not become HTTP-ready on port {args.frontend_port} within {args.frontend_ready_timeout_sec}s."
+        )
+    _step(f"Frontend is HTTP-ready on port {args.frontend_port}.")
 
 
 def _verify_stack(redis_port: int, backend_port: int, frontend_port: int) -> None:
@@ -319,7 +384,7 @@ def build_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]
     parser.add_argument("--redis-log", default="logs/redis_runtime.current.log")
     parser.add_argument(
         "--redis-exe",
-        default="infra/bin/redis-server.exe",
+        default=DEFAULT_REDIS_EXE,
         help="Redis executable path; defaults to the repo-fixed Windows binary.",
     )
     parser.add_argument("--no-degraded-retry", action="store_true")

@@ -20,6 +20,19 @@ describe('runtime config strict fast-fail', () => {
         expect(cfg.flags.leftV2).toBe(true)
     })
 
+    it('allows missing VITE_BACKEND_ORIGIN in browser-facing mode and stays same-origin', () => {
+        const cfg = buildRuntimeConfig(
+            {
+                VITE_L4_ENABLE_CENTER_V2: 'true',
+            },
+            { location: { protocol: 'http:', host: 'localhost:5173' } }
+        )
+
+        expect(cfg.backendOrigin).toBe('http://localhost:5173')
+        expect(cfg.apiBase).toBe('')
+        expect(cfg.wsUrl).toBe('ws://localhost:5173/ws/dashboard')
+    })
+
     it('builds api/ws from VITE_BACKEND_ORIGIN when browser location is unavailable', () => {
         const cfg = buildRuntimeConfig({
             VITE_BACKEND_ORIGIN: 'https://desk.local:9001',
@@ -36,8 +49,8 @@ describe('runtime config strict fast-fail', () => {
         expect(cfg.flags.leftV2).toBe(true)
     })
 
-    it('throws when VITE_BACKEND_ORIGIN is missing', () => {
-        expect(() => buildRuntimeConfig({})).toThrow(/VITE_BACKEND_ORIGIN is required/i)
+    it('throws when VITE_BACKEND_ORIGIN is missing without browser location', () => {
+        expect(() => buildRuntimeConfig({}, { location: null })).toThrow(/VITE_BACKEND_ORIGIN is required/i)
     })
 
     it('throws when legacy endpoint vars are present', () => {

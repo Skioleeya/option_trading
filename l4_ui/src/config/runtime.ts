@@ -113,6 +113,10 @@ function normalizeBackendOrigin(raw: unknown): string {
     return parsed.origin
 }
 
+function buildBrowserOrigin(location: BrowserLocation): string {
+    return `${location.protocol}//${location.host}`
+}
+
 function buildWsUrl(backendOrigin: string): string {
     const parsed = new URL(backendOrigin)
     const wsProtocol = parsed.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -129,9 +133,15 @@ export function buildRuntimeConfig(
     options?: { location?: BrowserLocation | null }
 ): L4RuntimeConfig {
     assertLegacyVarsForbidden(env)
-    const backendOrigin = normalizeBackendOrigin(env.VITE_BACKEND_ORIGIN)
     const location = options?.location === undefined ? readBrowserLocation() : options.location
     const browserFacing = Boolean(location)
+    const backendOrigin = browserFacing
+        ? (
+            typeof env.VITE_BACKEND_ORIGIN === 'string' && env.VITE_BACKEND_ORIGIN.trim()
+                ? normalizeBackendOrigin(env.VITE_BACKEND_ORIGIN)
+                : buildBrowserOrigin(location as BrowserLocation)
+        )
+        : normalizeBackendOrigin(env.VITE_BACKEND_ORIGIN)
     return {
         backendOrigin,
         wsUrl: browserFacing ? buildBrowserWsUrl(location as BrowserLocation) : buildWsUrl(backendOrigin),
@@ -151,6 +161,7 @@ export const runtimeConfig: L4RuntimeConfig = buildRuntimeConfig(
 
 export const __runtimeTestOnly = {
     normalizeBackendOrigin,
+    buildBrowserOrigin,
     buildWsUrl,
     buildBrowserWsUrl,
     assertLegacyVarsForbidden,

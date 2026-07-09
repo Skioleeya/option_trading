@@ -28,10 +28,11 @@ class _FakeL1Snapshot:
 
 
 class _FakeL1Reactor:
-    def __init__(self) -> None:
+    def __init__(self, *, returned_spot: float | None = None) -> None:
         self.calls = 0
         self.compute_audits: list[dict[str, Any]] = []
         self.chain_inputs: list[Any] = []
+        self.returned_spot = returned_spot
 
     async def compute(
         self,
@@ -47,7 +48,8 @@ class _FakeL1Reactor:
         self.calls += 1
         self.compute_audits.append(dict(extra_metadata.get("compute_audit", {})))
         self.chain_inputs.append(chain_snapshot)
-        return _FakeL1Snapshot(version=l0_version, spot=spot, extra_metadata=extra_metadata)
+        snapshot_spot = spot if self.returned_spot is None else self.returned_spot
+        return _FakeL1Snapshot(version=l0_version, spot=snapshot_spot, extra_metadata=extra_metadata)
 
 
 class _FakeDecision:
@@ -167,6 +169,15 @@ class _FatalL3Reactor:
         raise ResearchPersistenceFatalError("PyValueError: corrupt raw parquet")
 
 
+class _CaptureL3Reactor:
+    def __init__(self) -> None:
+        self.snapshot_spots: list[float] = []
+
+    async def tick(self, **kwargs: Any) -> _FakeFrozen:
+        self.snapshot_spots.append(float(kwargs["snapshot"].spot))
+        return _FakeFrozen()
+
+
 def _snapshot(version: int) -> dict[str, Any]:
     return {
         "spot": 560.0,
@@ -251,3 +262,22 @@ async def test_compute_loop_stops_on_research_persistence_fatal(
     fatal = state.get_diagnostics()["fatal_runtime_error"]
     assert fatal["source"] == "research_persistence"
     assert "corrupt raw parquet" in fatal["message"]
+
+
+@pytest.mark.asyncio
+async def test_compute_loop_reconciles_l1_empty_snapshot_spot_before_l3(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "websocket_update_interval", 0.001, raising=False)
+
+    ctr = _FakeContainer([_snapshot(401)])
+    ctr.l1_reactor = _FakeL1Reactor(returned_spot=0.0)
+    ctr.l3_reactor = _CaptureL3Reactor()
+    state = SharedLoopState()
+
+    task = asyncio.create_task(run_compute_loop(ctr, state))
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert ctr.l1_reactor.calls == 1
+    assert ctr.l3_reactor.snapshot_spots == [560.0]

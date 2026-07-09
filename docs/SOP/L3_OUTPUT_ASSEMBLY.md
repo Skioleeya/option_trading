@@ -80,23 +80,25 @@ flowchart LR
 
 ### 3.2 Research Feature Store
 
-- L3 必须维护 `research_feature_store` 三层数据：
-  - `raw-lite`（短期）
-  - `feature`（中期）
-  - `label/outcome`（长期）
+- L3 运行时只允许维护单一 durable owner：`research/canonical/day_YYYYMMDD.parquet`
+- `canonical` schema 必须同时承载当前 `feature` 字段与远期 `label/outcome` 字段；未成熟 label 初始为 `null`
 - 存储格式必须优先 Parquet + ZSTD，支持 `jsonl` 调试导出
 - `ResearchFeatureStore` 与 `HeaderVolatilityContextService` 的 live owner 已切到 `shared_rust.services`
 - `shared_rust.services` 内部访问 `l0_rust` 必须经 `shared.services.l0_runtime.native_loader.l0_rust`；禁止回退到 `_native_generated.l0_rust` 旧路径。
 - `shared/services/research_feature_store.py`、`shared/services/research_feature_store_io.py`、`shared/services/header_volatility_context.py` 已退役，不得再恢复 Python compat owner
 - `/api/research/features`、`/api/research/exports/*` 现直接调用 `shared_rust.services.ResearchFeatureStore` 的同步接口；路由层不再保留这组 root owner 的 async Python 壳
 - 研究表主键必须包含 `data_timestamp + l0_version`，用于跨层 join 对齐
-- `ResearchFeatureStore` 的 parquet 持久化必须采用 same-directory `temp file -> fsync -> rename -> fsync parent dir` 原子提交；禁止恢复同路径整文件覆盖写入。
+- `ResearchFeatureStore` 的 parquet 持久化必须采用单文件重写提交：读取当日 canonical -> 纯内存合成下一版 -> `temp file -> fsync -> atomic replace`
+- Windows 提交必须使用文件级原子替换原语，禁止恢复目录 `fsync` 依赖或多文件分步提交
 - `ResearchFeatureStore` 初始化必须直接绑定配置的 `research_store_root`；root 不可写或不是目录时必须立即失败，禁止回退到临时目录。
-- `ResearchFeatureStore` 的 label pending queue 只能在 raw/feature 成功写入后注册；禁止出现未落 raw/feature 的 label-only 样本。
-- `ResearchFeatureStore` 的 label continuity owner 不得依赖纯内存 `pending_labels`。backend 启动时必须基于最新 `feature_<date>.parquet` 与 `label_<date>.parquet` 重放恢复未成熟队列，并补齐缺失但已成熟的 label；禁止因重启把 60 分钟标签窗口直接清零。
+- 运行时不得再写 `research/raw`、`research/feature`、`research/label` 目录；这三类文件只允许由 EOD archive 从 canonical 投影生成
+- `ResearchFeatureStore` 的 label pending queue 只能在 canonical 成功提交后注册；禁止出现未落 canonical 的 label-only 样本。
+- `ResearchFeatureStore` 的 label continuity owner 不得依赖纯内存 `pending_labels`。backend 启动时必须基于最新 `day_<date>.parquet` 重放恢复未成熟队列，并补齐缺失但已成熟的 label；禁止因重启把 60 分钟标签窗口直接清零。
+- `append_tick()` 对 `payload.data_timestamp`、`snapshot.spot`、`payload.fused_signal.mm_flow` 等持久化关键字段必须严格校验；禁止回退到进程时间或静默跳过非法样本
 - `research_store.append_tick()` 失败是 fatal runtime 事件：L3 不得吞错，不得继续 broadcast 旧 payload，不得以 neutral payload 掩盖 research persistence 破坏。
+- 当 L1 因 `n_valid=0` 或等价 bypass 条件返回 empty snapshot 时，只要同 tick 的 L0 source `spot` 有效，`app/loops/compute_loop.py` 必须在进入 L3 前保留该 source spot；禁止把首帧 live tick 降级为 `spot=0.0` 并触发 research persistence fatal。
 - EOD 归档质量闸门触发时必须阻断主日型分类并标记 `primary_day_type=INCOMPLETE_SOURCE`，禁止在低质量样本上输出 `balance_day` 等交易日型结论。
-- EOD archive 必须先在 staging 树下完成 source freeze、指标计算、manifest/report 生成，再一次性 publish；已存在最终产物时必须 fast-fail，禁止覆盖或边写边发布。
+- EOD archive 必须以 canonical 作为 runtime research 输入，在 staging 树下生成 `research_raw` / `research_feature` / `research_label` 冻结产物后再统一 publish；已存在最终产物时必须 fast-fail，禁止覆盖或边写边发布。
 - `ResearchFeatureStore` 采样必须限制为 RTH (`09:30-16:00 ET`) 且固定 1s 频率（同一秒最多一行）；禁止事件触发扩采样导致样本间隔不稳定。
 - 研究存储契约采用最小字段集：`feature/compact` 仅保留编码字段 `direction_code/iv_regime_code/gex_intensity_code`，禁止在落盘层重复写入同义字符串状态。
 - `feature` tier 必须持久化 MM FLOW 9 字段：`net_delta_exposure_live/net_gamma_exposure_live/residual_delta_after_netting/oi_participation_ratio_live/flow_suppression_bias/flow_dominance_ratio/midpoint_tickrule_count/condition_filtered_count/complex_spread_count`；`append_tick` 遇到缺失或非数值必须显式报错，禁止 fallback。

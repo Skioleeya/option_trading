@@ -24,11 +24,11 @@ flowchart LR
 - 协议层和渲染层解耦
 - Store 是前端状态单一事实源
 - 组件通过 selector 精准订阅
-- 连接与历史端点必须由单一环境变量 `VITE_BACKEND_ORIGIN` 驱动（示例：`http://127.0.0.1:8001`）；该变量用于 Vite `/api` 与 `/ws` 代理上游
+- 连接与历史端点必须由单一环境变量 `VITE_BACKEND_ORIGIN` 驱动（示例：`http://127.0.0.1:8001`）；该变量只属于 Vite 代理/启动层，用于 `/api` 与 `/ws` 的上游代理目标
 - 浏览器运行态必须使用同源端点：`apiBase=''`（请求 `/api/...`）与 `ws(s)://<current-frontend-host>/ws/dashboard`；禁止浏览器直连 `VITE_BACKEND_ORIGIN`
-- `VITE_BACKEND_ORIGIN` 缺失或非法（非 http/https、包含 path/query/hash）时，前端启动必须 fast-fail；禁止 `window.location` 推导、`localhost` 默认值或任何 fallback
-- `Vite serve` 是唯一允许依赖 `VITE_BACKEND_ORIGIN` 的前端启动面；`vite build` 不得因该变量缺失而阻断编译
-- `l4_ui/scripts/dev-strict.mjs` 必须直接通过 Vite JS API 创建 dev server，禁止再外壳到 `vite` CLI；Windows 受限上下文下需要绕开 CLI config-loader 对 `esbuild` 原生子进程的额外依赖
+- `VITE_BACKEND_ORIGIN` 缺失或非法（非 http/https、包含 path/query/hash）时，代理启动面必须 fast-fail；浏览器已有 current location 时不得因为该变量缺失而崩溃
+- 标准 Windows `start-all` 前端启动面固定为 `l4_ui/scripts/preview-strict.mjs`；局部调试仍可使用 `l4_ui/scripts/dev-strict.mjs`
+- `l4_ui/scripts/dev-strict.mjs` 与 `l4_ui/scripts/preview-strict.mjs` 都必须直接通过 Vite JS API 创建 server，禁止再外壳到 `vite` CLI；Windows 受限上下文下需要绕开 CLI config-loader 对 `esbuild` 原生子进程的额外依赖
 - `VITE_L4_WS_URL` 与 `VITE_L4_API_BASE` 已退出运行合同；若仍被设置，运行时必须抛错并阻断启动
 - 模块切换必须由显式开关控制（`VITE_L4_ENABLE_CENTER_V2`、`VITE_L4_ENABLE_RIGHT_V2`、`VITE_L4_ENABLE_LEFT_V2`）
 - 全局布局必须使用单一路径的布局令牌缩放：固定设计基准 `1920x1080`，按 `min(width_ratio,height_ratio)` 同步窗口/浏览器缩放，并限制在 `50%~125%`
@@ -105,7 +105,8 @@ flowchart LR
 - `AtmDecayChart` 在 `document.visibilityState='hidden'` 时可以暂停同步，但 `visibilitychange -> visible` 必须重放当前 store 最新 ATM 状态；禁止依赖“下一笔 live tick”才能补图
 - 冷启动历史拉取 `/api/atm-decay/history` 必须使用字段投影（最小集：`timestamp,straddle_pct,call_pct,put_pct,strike_changed`），禁止传输完整行字段到浏览器
 - 历史接口默认以 `schema=v2`（columnar-json）消费；`schema=v1` 仅用于兼容/回放验证
-- 冷启动 history 请求非 2xx、响应解码失败或空历史在 strict 模式下必须显式报错并可见告警；禁止静默吞错或假数据补齐
+- 冷启动 history 请求非 2xx 或响应解码失败在 strict 模式下必须显式报错并可见告警；禁止静默吞错或假数据补齐
+- 当市场处于 `OPEN`（RTH）时，冷启动 ATM history 为空必须显式 fast-fail 并可见告警；当市场处于 `CLOSE`（盘前/盘后/周末）时，当日空 history 属于合法状态，前端必须保持 `-- PENDING` / 历史回放语义，不得把 outside-RTH 空 history 误报为 strict 故障
 - `/api/atm-decay/history` 视为后端已净化的单调序列：前端不得自行容忍 future/out-of-order ATM points 来“修图”，若出现逆序或未来点应视为后端违约并回查 storage sanitizer
 - 盘后 ATM replay 验证必须继续复用同一个 `/api/atm-decay/history` + `/ws/dashboard` 消费路径，前端不得引入 replay-only 分支；若 history 存在且曲线非平台化，TradingView 应在 cold boot 后恢复显示而不是长期 `-- PENDING`
 - 前端对 columnar 包络仅负责解码为对象行，不得改变既有图表/store 业务语义
@@ -156,7 +157,8 @@ flowchart LR
 
 ```bash
 npm --prefix l4_ui run test
+$env:VITE_BACKEND_ORIGIN='http://127.0.0.1:8001'; npm --prefix l4_ui run build
 $env:VITE_BACKEND_ORIGIN='http://127.0.0.1:8001'; npm --prefix l4_ui run dev -- --host 0.0.0.0 --port 5173
 ```
 
-上述 `npm run dev` 仅用于前端局部调试，不构成系统整体健康证据；完整启动与最终复核必须通过 `.venv\Scripts\python.exe manage.py start-all` 完成。
+上述 `npm run dev` 仅用于前端局部调试，不构成系统整体健康证据；标准 Windows 启动与最终复核必须通过 `.venv\Scripts\python.exe manage.py start-all` 完成，且该入口会使用 `preview-strict` 提供 `http://localhost:5173`。

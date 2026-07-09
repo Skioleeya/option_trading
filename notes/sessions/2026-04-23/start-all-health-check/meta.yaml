@@ -1,0 +1,45 @@
+session_id: "2026-04-23/start-all-health-check"
+title: "start-all health check"
+scope: "infra"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-04-23 07:45:30 -04:00"
+updated_at_et: "2026-04-23 07:51:49 -04:00"
+parent_session: "2026-04-22/startup-doc-semantic-sync"
+
+branch: "master"
+base_commit: "b6ef4ff"
+head_commit: "b6ef4ff"
+
+files_changed:
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-04-23/start-all-health-check/project_state.md"
+  - "notes/sessions/2026-04-23/start-all-health-check/open_tasks.md"
+  - "notes/sessions/2026-04-23/start-all-health-check/handoff.md"
+  - "notes/sessions/2026-04-23/start-all-health-check/meta.yaml"
+commands:
+  - ".\\.venv\\Scripts\\python.exe manage.py new-session --task-id start-all-health-check --title \"start-all health check\" --scope infra --owner Codex --parent-session 2026-04-22/startup-doc-semantic-sync --update-pointer"
+  - ".\\.venv\\Scripts\\python.exe manage.py start-all"
+  - "Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8001/health"
+  - "Invoke-WebRequest -UseBasicParsing http://127.0.0.1:5173"
+  - "Invoke-WebRequest -UseBasicParsing \"http://127.0.0.1:5173/api/atm-decay/history?fields=timestamp%2Cstraddle_pct%2Ccall_pct%2Cput_pct%2Cstrike_changed&schema=v2\""
+  - ".\\.venv\\Scripts\\python.exe -c \"from websockets.sync.client import connect; ... ws://127.0.0.1:5173/ws/dashboard ...\""
+  - "Get-Content logs\\redis_runtime.current.log -Tail 80"
+  - "Get-Content logs\\backend_runtime.current.log -Tail 120"
+  - "Select-String -Path logs\\backend_runtime.current.log -Pattern '^2026-04-23 .*?(ERROR|CRITICAL|Traceback|Exception|fatal)'"
+  - ".\\.venv\\Scripts\\python.exe manage.py validate-session --strict"
+tests_passed:
+  - "real-host .\\.venv\\Scripts\\python.exe manage.py start-all"
+  - "real-host Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8001/health"
+  - "real-host Invoke-WebRequest -UseBasicParsing http://127.0.0.1:5173"
+  - "real-host Invoke-WebRequest -UseBasicParsing \"http://127.0.0.1:5173/api/atm-decay/history?fields=timestamp%2Cstraddle_pct%2Ccall_pct%2Cput_pct%2Cstrike_changed&schema=v2\""
+  - "real-host same-origin WebSocket ws://127.0.0.1:5173/ws/dashboard"
+  - ".\\.venv\\Scripts\\python.exe manage.py validate-session --strict"
+tests_failed: []
+blockers: []
+notes:
+  - "Frontend health was verified by live HTTP/API/WS probes because frontend_runtime.current.log did not emit fresh lines during this run."
+  - "Backend log sampling showed advancing snapshot versions and rust_active=True during premarket flow."
+

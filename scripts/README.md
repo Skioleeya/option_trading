@@ -89,6 +89,22 @@ python manage.py register-eod-bucket-task --output-dir tmp/schtasks
 python manage.py register-eod-bucket-task --apply
 ```
 
+## 盘前自动启动调度（Windows Task Scheduler）
+
+```bash
+# 先生成任务预览
+.venv\Scripts\python.exe manage.py register-start-all-task --output-dir tmp/schtasks
+
+# 安装/更新计划任务
+.venv\Scripts\python.exe manage.py register-start-all-task --apply
+```
+
+说明：
+- 计划任务固定在工作日 `09:25` 触发。
+- 实际执行命令为 `run-scheduled-start-all`，它会先执行标准 `start-all`。
+- `start-all` 完成后，命令会用 `XNYS` 日历判断当天是否为美股交易日。
+- 若当天不是美股交易日（如周末或美股休市节假日），任务会显式关闭刚拉起的 Redis / backend / frontend 栈。
+
 ## 运行建议
 
 所有 Python 脚本应在仓库根目录下运行，确保 `PYTHONPATH` 正确。

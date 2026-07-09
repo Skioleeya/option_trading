@@ -12,7 +12,6 @@ and writes:
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import shutil
 import sys
@@ -40,6 +39,7 @@ from eod_bucket_publish import (
     stage_report_path,
     write_stage_text,
 )
+from eod_bucket_research_sources import project_research_sources_from_canonical, sha256_file
 from eod_bucket_rules import classify_metrics
 
 DEFAULT_CONFIG = Path("scripts/diagnostics/config/eod_bucket_thresholds.json")
@@ -92,18 +92,12 @@ def _load_json(path: Path) -> dict[str, Any]:
 
 
 def _sha256(path: Path) -> str:
-    h = hashlib.sha256()
-    with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(1024 * 1024), b""):
-            h.update(chunk)
-    return h.hexdigest()
+    return sha256_file(path)
 
 
 def _collect_sources(root: Path, date_str: str) -> list[SourceEntry]:
     return [
-        SourceEntry("research_raw", root / "research" / "raw" / f"raw_{date_str}.parquet", True),
-        SourceEntry("research_feature", root / "research" / "feature" / f"feature_{date_str}.parquet", True),
-        SourceEntry("research_label", root / "research" / "label" / f"label_{date_str}.parquet", True),
+        SourceEntry("research_canonical", root / "research" / "canonical" / f"day_{date_str}.parquet", True),
         SourceEntry("atm_series", root / "atm_decay" / f"atm_series_{date_str}.jsonl", False),
         SourceEntry("mtf_iv_series", root / "mtf_iv" / f"mtf_iv_series_{date_str}.jsonl", False),
         SourceEntry("wall_series", root / "wall_migration" / f"wall_series_{date_str}.jsonl", False),
@@ -124,7 +118,7 @@ def _freeze_source_file(*, src: SourceEntry, frozen_root: Path) -> Path:
 
 def _find_prev_close_spot(root: Path, date_str: str) -> tuple[float | None, str | None]:
     prev_day = _previous_xnys_session(date_str)
-    prev_path = root / "research" / "raw" / f"raw_{prev_day}.parquet"
+    prev_path = root / "research" / "canonical" / f"day_{prev_day}.parquet"
     if not prev_path.exists():
         return None, prev_day
     try:
@@ -211,11 +205,22 @@ def run_archive(
 
     try:
         staged_daily_dir = stage_daily_dir(stage_root=stage_root, date_str=date_str)
+        raw_path: Path | None = None
         for src in _collect_sources(root=root, date_str=date_str):
             if not src.path.exists():
                 if src.required:
                     required_missing += 1
                     quality_reasons.append(f"missing required source: {src.role}")
+                continue
+            if src.role == "research_canonical":
+                projected_files, projected_rows, raw_path = project_research_sources_from_canonical(
+                    canonical_path=src.path,
+                    frozen_root=staged_daily_dir,
+                    final_daily_dir=final_daily_dir,
+                    date_str=date_str,
+                )
+                source_files.extend(projected_files)
+                rows_by_role.update(projected_rows)
                 continue
             frozen_path = _freeze_source_file(src=src, frozen_root=staged_daily_dir)
             source_files.append(
@@ -227,12 +232,9 @@ def run_archive(
                     "sha256": _sha256(frozen_path),
                 }
             )
-            if frozen_path.suffix == ".parquet":
-                rows_by_role[src.role] = _read_rows(frozen_path)
 
-        raw_path = root / "research" / "raw" / f"raw_{date_str}.parquet"
         key_nulls: dict[str, float | str] = {}
-        if raw_path.exists():
+        if raw_path is not None and raw_path.exists():
             prev_close_spot, prev_day = _find_prev_close_spot(root, date_str)
             raw_metrics = read_raw_metrics(raw_path, thresholds, prev_close_spot)
             raw_metrics["prev_trade_day"] = prev_day or ""
