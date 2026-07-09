@@ -1,0 +1,55 @@
+session_id: "2026-07-09/auto-startall-preopen"
+title: "auto start-all preopen"
+scope: "infra"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-07-09 13:31:43 -04:00"
+updated_at_et: "2026-07-09 13:40:22 -04:00"
+parent_session: null
+
+branch: "codex/research-persistence-startup-fixes-20260423"
+base_commit: "775b3f7"
+head_commit: "775b3f7"
+
+files_changed:
+  - "manage.py"
+  - "infra/ops_cli/start_all_task.py"
+  - "infra/ops_cli/test_start_all_task.py"
+  - "shared/services/l0_runtime/source/runtime/__init__.py"
+  - "docs/SOP/SYSTEM_OVERVIEW.md"
+  - "scripts/README.md"
+  - "最新的启动步骤文档.md"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-07-09/auto-startall-preopen/project_state.md"
+  - "notes/sessions/2026-07-09/auto-startall-preopen/open_tasks.md"
+  - "notes/sessions/2026-07-09/auto-startall-preopen/handoff.md"
+  - "notes/sessions/2026-07-09/auto-startall-preopen/meta.yaml"
+commands:
+  - "python manage.py new-session --task-id auto-startall-preopen --title \"auto start-all preopen\" --scope infra --owner Codex --update-pointer"
+  - "git config --global --add safe.directory E:/US.market/Option_v4"
+  - ".\\.venv\\Scripts\\python.exe manage.py start-all"
+  - ".\\.venv\\Scripts\\python.exe manage.py start-all --verify-only"
+  - ".\\.venv\\Scripts\\python.exe -m pip install pytest"
+  - ".\\.venv\\Scripts\\python.exe -m pip install pytest-asyncio"
+  - ".\\.venv\\Scripts\\python.exe manage.py run-pytest infra\\ops_cli\\test_start_all.py infra\\ops_cli\\test_start_all_task.py"
+  - ".\\.venv\\Scripts\\python.exe manage.py register-start-all-task --output-dir tmp/schtasks"
+  - ".\\.venv\\Scripts\\python.exe manage.py register-start-all-task --apply --output-dir tmp/schtasks"
+  - "schtasks /Query /TN \\OptionV4-StartAll-PreOpen /V /FO LIST"
+  - ".\\.venv\\Scripts\\python.exe manage.py run-scheduled-start-all --date 2026-07-04 --repo-root E:\\US.market\\Option_v4 --python-exe python --run-label manual-skip"
+  - ".\\.venv\\Scripts\\python.exe manage.py run-scheduled-start-all --date 2026-07-09 --repo-root E:\\US.market\\Option_v4 --python-exe python --run-label manual-run"
+  - ".\\.venv\\Scripts\\python.exe manage.py run-scheduled-start-all --date 2026-07-04 --repo-root E:\\US.market\\Option_v4 --python-exe python --run-label manual-holiday-full-shutdown"
+  - ".\\.venv\\Scripts\\python.exe manage.py validate-session --strict"
+tests_passed:
+  - ".\\.venv\\Scripts\\python.exe manage.py run-pytest infra\\ops_cli\\test_start_all.py infra\\ops_cli\\test_start_all_task.py"
+  - ".\\.venv\\Scripts\\python.exe manage.py start-all"
+  - ".\\.venv\\Scripts\\python.exe manage.py start-all --verify-only"
+  - ".\\.venv\\Scripts\\python.exe manage.py validate-session --strict"
+tests_failed: []
+blockers: []
+notes:
+  - "Installed scheduled task \\OptionV4-StartAll-PreOpen for MON-FRI 09:25 ET using tmp/schtasks/run_start_all_preopen.cmd."
+  - "Post-launch trading-day guard verified: 2026-07-04 launched then shut the stack back down; 2026-07-09 kept the stack running."
+  - "Current task logon mode is interactive-only because no stored credentials were supplied during registration."
+

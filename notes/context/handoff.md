@@ -1,12 +1,12 @@
 # Handoff (Index)
 
 ## Active Handoff
-- Path: notes/sessions/2026-04-23/track-cold-data-20260423/handoff.md
-- Meta: notes/sessions/2026-04-23/track-cold-data-20260423/meta.yaml
+- Path: notes/sessions/2026-07-09/branch-convergence-master-main/handoff.md
+- Meta: notes/sessions/2026-07-09/branch-convergence-master-main/meta.yaml
 
 ## Latest Outcome
-- Session: 2026-04-23/track-cold-data-20260423
-- Summary: `data/cold` is now prepared for version control, `Option_v3` historical cold data has been copied into `Option_v4`, and the remaining gate is strict validation plus commit/push.
+- Session: 2026-07-09/branch-convergence-master-main
+- Summary: Session created. Fill handoff.md when work is completed.
 
 ## Next Session Bootstrap
 1. Read this file.

@@ -13,6 +13,8 @@ from .common import ensure_dir, repo_root
 from .redis_preflight import describe_redis_preflight, preflight_redis_runtime
 from .start_backend import run_start_backend
 
+DEFAULT_REDIS_EXE = r"C:\Program Files\Memurai\memurai.exe"
+
 
 def _step(message: str) -> None:
     print(f"[start-all] {message}")
@@ -87,7 +89,7 @@ def _resolve_abs_path(repo: Path, value: str) -> Path:
 
 
 def _default_redis_exe(repo: Path) -> Path:
-    return repo / "infra/bin/redis-server.exe"
+    return Path(DEFAULT_REDIS_EXE)
 
 
 def _start_redis(repo: Path, args: argparse.Namespace) -> None:
@@ -382,7 +384,7 @@ def build_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]
     parser.add_argument("--redis-log", default="logs/redis_runtime.current.log")
     parser.add_argument(
         "--redis-exe",
-        default="infra/bin/redis-server.exe",
+        default=DEFAULT_REDIS_EXE,
         help="Redis executable path; defaults to the repo-fixed Windows binary.",
     )
     parser.add_argument("--no-degraded-retry", action="store_true")

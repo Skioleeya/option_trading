@@ -226,6 +226,10 @@ powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 6380 -State List
 # backend strict (default)
 python manage.py start-backend
 
+# pre-open auto-start task (weekday 09:25 + post-launch XNYS guard)
+python manage.py register-start-all-task --output-dir tmp/schtasks
+python manage.py register-start-all-task --apply
+
 # degraded mode is forbidden by policy
 # python manage.py start-backend --degraded  # DO NOT USE
 

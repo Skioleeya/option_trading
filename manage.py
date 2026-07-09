@@ -4,7 +4,19 @@ from __future__ import annotations
 import argparse
 import sys
 
-from infra.ops_cli import build_pyd, eod, hotfix_verify, layer_boundaries, new_session, pin_processes, run_pytest, start_all, start_backend, validate_session
+from infra.ops_cli import (
+    build_pyd,
+    eod,
+    hotfix_verify,
+    layer_boundaries,
+    new_session,
+    pin_processes,
+    run_pytest,
+    start_all,
+    start_all_task,
+    start_backend,
+    validate_session,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -16,6 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_pytest.build_parser(subparsers)
     start_backend.build_parser(subparsers)
     start_all.build_parser(subparsers)
+    start_all_task.build_parser(subparsers)
     build_pyd.build_parser(subparsers)
     layer_boundaries.build_parser(subparsers)
     eod.build_parser(subparsers)

@@ -1,0 +1,40 @@
+session_id: "2026-05-06/upgrade-native-windows-redis-service"
+title: "upgrade-native-windows-redis-service"
+scope: "feature"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-05-06 03:38:35 -04:00"
+updated_at_et: "2026-05-06 06:44:08 -04:00"
+parent_session: null
+
+branch: "codex/research-persistence-startup-fixes-20260423"
+base_commit: "775b3f7"
+head_commit: "775b3f7"
+
+files_changed:
+  - "infra/ops_cli/start_all.py"
+  - "infra/ops_cli/run_pytest.py"
+  - "infra/ops_cli/test_start_all.py"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-05-06/upgrade-native-windows-redis-service/project_state.md"
+  - "notes/sessions/2026-05-06/upgrade-native-windows-redis-service/open_tasks.md"
+  - "notes/sessions/2026-05-06/upgrade-native-windows-redis-service/handoff.md"
+  - "notes/sessions/2026-05-06/upgrade-native-windows-redis-service/meta.yaml"
+commands:
+  - "python manage.py new-session --task-id upgrade-native-windows-redis-service --title \"upgrade-native-windows-redis-service\" --scope \"feature\" --owner \"Codex\" --update-pointer"
+  - "python manage.py run-pytest infra/ops_cli/test_start_all.py"
+  - "python manage.py validate-session --strict"
+tests_passed:
+  - "python manage.py run-pytest infra/ops_cli/test_start_all.py"
+  - "python manage.py validate-session --strict"
+tests_failed: []
+blockers:
+  - "Unable to create C:\\Program Files\\Memurai on the current host context: Access to the path is denied."
+  - "Unable to complete Windows service start/cutover on the current host context: service control access is denied."
+notes:
+  - "The `start-all` default path now matches the approved Memurai Program Files contract."
+  - "The pytest wrapper now forces repo-local TMP/TEMP to avoid Windows temp ACL drift."
+  - "Strict session validation now passes; the remaining cutover work is external host state, not an unresolved repo-side debt item."
+

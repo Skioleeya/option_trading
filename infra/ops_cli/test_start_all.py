@@ -40,8 +40,8 @@ def test_start_frontend_detaches_stdin_and_sets_backend_origin(
         calls.append({"args": args, "kwargs": kwargs})
         return _FakeProcess()
 
-    states = iter([False, True])
-    monkeypatch.setattr(start_all, "_is_listening", lambda port: next(states))
+    monkeypatch.setattr(start_all, "_is_listening", lambda port: False)
+    monkeypatch.setattr(start_all, "_wait_frontend_ready", lambda port, timeout_sec: True)
     monkeypatch.setattr(start_all, "_kill_existing_vite", lambda _ui_dir: None)
     monkeypatch.setattr(start_all, "_validate_frontend_env", lambda env: None)
     monkeypatch.setattr(start_all.subprocess, "Popen", fake_popen)
@@ -115,3 +115,9 @@ def test_redis_preflight_accepts_ntfs_fixed_drive(monkeypatch, tmp_path: Path) -
     assert result.resolved_dir == tmp_path / "var/redis"
     assert result.fs_type == "NTFS"
     assert result.aof_total_bytes == 0
+
+
+def test_default_redis_exe_points_to_program_files_memurai() -> None:
+    assert start_all._default_redis_exe(Path("E:/US.market/Option_v4")) == Path(
+        r"C:\Program Files\Memurai\memurai.exe"
+    )

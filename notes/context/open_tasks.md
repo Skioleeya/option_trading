@@ -1,7 +1,7 @@
 # Open Tasks (Index)
 
 ## Active Session Tasks
-- Path: notes/sessions/2026-04-23/track-cold-data-20260423/open_tasks.md
+- Path: notes/sessions/2026-07-09/branch-convergence-master-main/open_tasks.md
 
 ## Global Backlog (Cross-Session)
 - [x] Preserve valid L0 source spot through the L1 empty-snapshot startup path so first-tick research persistence no longer fatals on `snapshot.spot must be finite and > 0`. (2026-04-23 09:53 ET)
