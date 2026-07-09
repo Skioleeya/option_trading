@@ -7,12 +7,8 @@ import subprocess
 from getpass import getuser
 from pathlib import Path
 
-import exchange_calendars as xc
-
 from .common import ensure_dir, now_in_timezone, repo_root, shell_join
 from . import start_all, start_backend
-
-XNYS_CAL = xc.get_calendar("XNYS")
 
 
 def _resolve_python(python_exe: str) -> str:
@@ -32,7 +28,9 @@ def _today_et_iso() -> str:
 
 
 def _is_trading_session(date_iso: str) -> bool:
-    return bool(XNYS_CAL.is_session(date_iso))
+    import exchange_calendars as xc
+
+    return bool(xc.get_calendar("XNYS").is_session(date_iso))
 
 
 def _task_command(repo: Path, args: argparse.Namespace) -> list[str]:

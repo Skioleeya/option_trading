@@ -12,6 +12,7 @@ base_commit: "775b3f7"
 head_commit: "5355410"
 
 files_changed:
+  - "infra/ops_cli/start_all_task.py"
   - "notes/context/project_state.md"
   - "notes/context/open_tasks.md"
   - "notes/context/handoff.md"
@@ -39,11 +40,15 @@ commands:
   - "git fetch origin --prune"
   - "git remote set-head origin -a"
   - "git ls-remote --heads origin main master codex/research-persistence-startup-fixes-20260423"
+  - "python manage.py check-layer-boundaries"
+  - ".\\.venv\\Scripts\\python.exe manage.py run-pytest infra\\ops_cli\\test_start_all_task.py"
   - ".\\.venv\\Scripts\\python.exe manage.py validate-session --strict"
 tests_passed:
   - "gh pr view 5 --json number,title,state,baseRefName,headRefName,url"
   - "gh api repos/Skioleeya/option_trading --jq \".default_branch\""
   - "git ls-remote --heads origin main master codex/research-persistence-startup-fixes-20260423"
+  - "python manage.py check-layer-boundaries"
+  - ".\\.venv\\Scripts\\python.exe manage.py run-pytest infra\\ops_cli\\test_start_all_task.py"
   - ".\\.venv\\Scripts\\python.exe manage.py validate-session --strict"
 tests_failed: []
 blockers: []
@@ -51,4 +56,5 @@ notes:
   - "PR #5 opened against master."
   - "GitHub default branch switched to master."
   - "origin/main force-aligned to origin/master at b6ef4ff."
+  - "Deferred exchange_calendars import in start_all_task so CI can bootstrap manage.py without the trading-calendar dependency preinstalled."
 

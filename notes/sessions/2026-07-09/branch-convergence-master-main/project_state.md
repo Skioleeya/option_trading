@@ -16,6 +16,7 @@
 
 ## What Changed (Latest Session)
 - Files:
+  - `infra/ops_cli/start_all_task.py`
   - `notes/context/project_state.md`
   - `notes/context/open_tasks.md`
   - `notes/context/handoff.md`
@@ -27,6 +28,7 @@
   - Published the current `codex/...` change set as PR `#5` targeting `master`.
   - Switched the GitHub default branch from `main` to `master`.
   - Force-aligned `origin/main` to the same commit as `origin/master`.
+  - Fixed PR CI bootstrap by deferring `exchange_calendars` import inside `run-scheduled-start-all` so `manage.py check-layer-boundaries` can run in minimal environments.
 - Verification:
   - `git remote -v`
   - `git branch -vv`
@@ -41,6 +43,8 @@
   - `gh api -X PATCH repos/Skioleeya/option_trading -f default_branch=master`
   - `git push origin refs/remotes/origin/master:refs/heads/main --force`
   - `git ls-remote --heads origin main master codex/research-persistence-startup-fixes-20260423`
+  - `python manage.py check-layer-boundaries`
+  - `.\.venv\Scripts\python.exe manage.py run-pytest infra\ops_cli\test_start_all_task.py`
   - `python manage.py validate-session --strict`
 
 ## Risks / Constraints

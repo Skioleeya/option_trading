@@ -15,7 +15,7 @@
   - `notes/sessions/2026-07-09/branch-convergence-master-main/handoff.md`
   - `notes/sessions/2026-07-09/branch-convergence-master-main/meta.yaml`
 - Runtime / Infra Changes:
-  - No runtime behavior changes; only branch/remote governance state changed.
+  - No runtime behavior changes beyond a PR-CI bootstrap fix: `exchange_calendars` import is now deferred until the scheduled-start command actually runs.
 - Commands Run:
   - `git remote -v`
   - `git branch -vv`
@@ -36,6 +36,8 @@
   - `git fetch origin --prune`
   - `git remote set-head origin -a`
   - `git ls-remote --heads origin main master codex/research-persistence-startup-fixes-20260423`
+  - `python manage.py check-layer-boundaries`
+  - `.\.venv\Scripts\python.exe manage.py run-pytest infra\ops_cli\test_start_all_task.py`
   - `.\.venv\Scripts\python.exe manage.py validate-session --strict`
 
 ## Verification
@@ -45,6 +47,8 @@
   - `gh api repos/Skioleeya/option_trading --jq ".default_branch"` -> `master`
   - `git ls-remote --heads origin main master ...` -> `main` and `master` both at `b6ef4ffdd689435c6ac2689e2e0659bd1f216e36`
   - `git remote set-head origin -a` -> `origin/HEAD` now points to `origin/master`
+  - `python manage.py check-layer-boundaries` -> PASS
+  - `.\.venv\Scripts\python.exe manage.py run-pytest infra\ops_cli\test_start_all_task.py` -> `3 passed`
   - `.\.venv\Scripts\python.exe manage.py validate-session --strict` -> PASS
 - Failed / Not Run:
   - None
