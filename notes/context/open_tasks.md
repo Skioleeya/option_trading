@@ -3,6 +3,10 @@
 ## Active Session Tasks
 - Path: notes/sessions/2026-07-09/branch-convergence-master-main/open_tasks.md
 
+## Current Priority
+- PR `#5` is open from `codex/research-persistence-startup-fixes-20260423` to `master`.
+- GitHub default branch is now `master`, and `origin/main` has been force-aligned to the same commit as `origin/master`.
+
 ## Global Backlog (Cross-Session)
 - [x] Preserve valid L0 source spot through the L1 empty-snapshot startup path so first-tick research persistence no longer fatals on `snapshot.spot must be finite and > 0`. (2026-04-23 09:53 ET)
 - [x] Hard-cut runtime research persistence to a single canonical parquet owner, remove silent input fallback, and switch EOD archive runtime input to canonical. (2026-04-23 09:21 ET)

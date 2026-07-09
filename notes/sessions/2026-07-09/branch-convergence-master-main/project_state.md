@@ -24,7 +24,9 @@
   - `notes/sessions/2026-07-09/branch-convergence-master-main/handoff.md`
   - `notes/sessions/2026-07-09/branch-convergence-master-main/meta.yaml`
 - Behavior:
-  - Session created for branch convergence and remote cleanup.
+  - Published the current `codex/...` change set as PR `#5` targeting `master`.
+  - Switched the GitHub default branch from `main` to `master`.
+  - Force-aligned `origin/main` to the same commit as `origin/master`.
 - Verification:
   - `git remote -v`
   - `git branch -vv`
@@ -32,11 +34,19 @@
   - `git log --oneline --graph --decorate --all -n 40`
   - `gh auth status`
   - `gh repo view Skioleeya/option_trading --json defaultBranchRef,nameWithOwner,url`
+  - `git push origin codex/research-persistence-startup-fixes-20260423`
+  - `gh pr create --base master --head codex/research-persistence-startup-fixes-20260423 ...`
+  - `gh pr view 5 --json number,title,state,baseRefName,headRefName,url`
+  - `gh api repos/Skioleeya/option_trading --jq ".default_branch"`
+  - `gh api -X PATCH repos/Skioleeya/option_trading -f default_branch=master`
+  - `git push origin refs/remotes/origin/master:refs/heads/main --force`
+  - `git ls-remote --heads origin main master codex/research-persistence-startup-fixes-20260423`
+  - `python manage.py validate-session --strict`
 
 ## Risks / Constraints
 - Risk 1: the worktree contains unrelated untracked cold-data artifacts that must not be swept into the PR.
 - Risk 2: `main` currently differs radically from `master`, so force-aligning it must only happen after `master` is confirmed as the canonical default branch.
 
 ## Next Action
-- Immediate Next Step: stage only the intended PR files, publish the branch, and open the PR to `master`.
+- Immediate Next Step: no further repo-side work is required for this branch-convergence objective; only merge/close PR `#5` when ready.
 - Owner: Codex

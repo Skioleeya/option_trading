@@ -1,15 +1,15 @@
 # Open Tasks
 
 ## Priority Queue
-- [ ] P0: Publish the current `codex/research-persistence-startup-fixes-20260423` work as a PR targeting `master`.
+- [x] P0: Publish the current `codex/research-persistence-startup-fixes-20260423` work as a PR targeting `master`.
   - Owner: Codex
   - Definition of Done: branch commits are pushed and a GitHub PR exists with `base=master` and `head=codex/research-persistence-startup-fixes-20260423`.
   - Blocking: None
-- [ ] P0: Switch the GitHub default branch from `main` to `master`.
+- [x] P0: Switch the GitHub default branch from `main` to `master`.
   - Owner: Codex
   - Definition of Done: `gh repo view ... --json defaultBranchRef` returns `master`.
   - Blocking: None
-- [ ] P0: Force-align `origin/main` to `origin/master`.
+- [x] P0: Force-align `origin/main` to `origin/master`.
   - Owner: Codex
   - Definition of Done: `origin/main` and `origin/master` resolve to the same commit after the update.
   - Blocking: None
@@ -23,3 +23,6 @@
 
 ## Completed (Recent)
 - [x] Audited the current remote topology and confirmed `master` is the true development line while `main` still points at the old initial-commit line. (2026-07-09 15:50 ET)
+- [x] Opened PR `#5` from `codex/research-persistence-startup-fixes-20260423` to `master`. (2026-07-09 15:57 ET)
+- [x] Switched the GitHub default branch to `master`. (2026-07-09 15:58 ET)
+- [x] Force-aligned `origin/main` to `origin/master` (`b6ef4ff`). (2026-07-09 15:58 ET)
