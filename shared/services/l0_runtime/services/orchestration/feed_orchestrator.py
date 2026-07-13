@@ -71,6 +71,7 @@ class FeedOrchestrator:
         self._header_volatility_aux_ttl_sec = 60.0
         self._spot_stale_after_sec = 10.0
         self._source_stale = False
+        self._first_source_seen_at_mono: float | None = None
 
     async def run(self) -> None:
         self._running = True
@@ -189,6 +190,8 @@ class FeedOrchestrator:
                 source_timestamp_utc,
             )
         self._source_stale = False
+        if self._first_source_seen_at_mono is None:
+            self._first_source_seen_at_mono = now_mono
         await self._refresh_header_volatility_aux(
             spot=spot,
             now_mono=now_mono,
@@ -209,7 +212,13 @@ class FeedOrchestrator:
         if not self._subscription_refresh_due(now_mono):
             return
         prev_symbols = set(self._sub_mgr.subscribed_symbols)
-        target_set = await self._sub_mgr.refresh(spot, mandatory_symbols=self._mandatory_symbols)
+        target_set = await self._sub_mgr.refresh(
+            spot,
+            mandatory_symbols=self._mandatory_symbols,
+            chain_snapshot=self._store.get_snapshot(),
+            first_source_seen_at_mono=self._first_source_seen_at_mono,
+            now_mono=now_mono,
+        )
         self._last_refresh_mono = now_mono
         new_symbols = target_set - prev_symbols
         if new_symbols:
@@ -384,11 +393,4 @@ class FeedOrchestrator:
         )
         self._header_volatility_aux_synced_at_utc = datetime.now(timezone.utc).isoformat()
         self._header_volatility_aux_last_mono = now_mono
-        logger.info(
-            "[FeedOrchestrator] header volatility aux refreshed: spot=%.2f next_expiry=%s atm_iv_1dte=%s atm_iv_1dte_strike=%s vix_iv_decimal=%s",
-            spot,
-            self._header_volatility_aux.get("next_expiry"),
-            self._header_volatility_aux.get("atm_iv_1dte"),
-            self._header_volatility_aux.get("atm_iv_1dte_strike"),
-            self._header_volatility_aux.get("vix_iv_decimal"),
-        )
+        logger.info("[FeedOrchestrator] header volatility aux refreshed: spot=%.2f next_expiry=%s atm_iv_1dte=%s atm_iv_1dte_strike=%s vix_iv_decimal=%s", spot, self._header_volatility_aux.get("next_expiry"), self._header_volatility_aux.get("atm_iv_1dte"), self._header_volatility_aux.get("atm_iv_1dte_strike"), self._header_volatility_aux.get("vix_iv_decimal"))

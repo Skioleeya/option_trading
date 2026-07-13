@@ -11,14 +11,7 @@ from shared.services.l0_runtime.native_loader import load_l0_rust
 _PACKAGE_DIR = Path(__file__).resolve().parents[1] / "_native_generated"
 _L0_RUST = load_l0_rust(
     candidates=[
-        _PACKAGE_DIR / "wave10" / "l0_rust.pyd",
-        _PACKAGE_DIR / "wave9" / "l0_rust.pyd",
-        _PACKAGE_DIR / "wave8" / "l0_rust.pyd",
-        _PACKAGE_DIR / "wave7" / "l0_rust.pyd",
-        _PACKAGE_DIR / "wave6" / "l0_rust.pyd",
-        _PACKAGE_DIR / "wave5" / "l0_rust.pyd",
-        _PACKAGE_DIR / "wave4" / "l0_rust.pyd",
-        _PACKAGE_DIR / "l0_rust.pyd",
+        _PACKAGE_DIR / "wave11" / "l0_rust.pyd",
     ],
     module_suffix="l0_rust_wave11_services_native_support",
 )
@@ -38,6 +31,44 @@ def collect_targets_native(rows: list[Any], spot: float) -> dict[str, Any]:
     return data
 
 
+def select_targets_native(
+    rows: list[Any],
+    *,
+    chain_snapshot: list[dict[str, Any]],
+    spot: float,
+    first_source_seen_at_mono: float | None,
+    now_mono: float,
+    initial_steps: int,
+    dynamic_after_sec: float,
+    coverage: float,
+    core_buffer_steps: int,
+) -> dict[str, Any]:
+    data = dict(
+        _L0_RUST.l0_subscription_select_targets(
+            list(rows),
+            list(chain_snapshot),
+            float(spot),
+            first_source_seen_at_mono,
+            float(now_mono),
+            int(initial_steps),
+            float(dynamic_after_sec),
+            float(coverage),
+            int(core_buffer_steps),
+        )
+    )
+    for key in ("targets", "core_targets", "sentinel_targets"):
+        data[key] = set(data.get(key, []))
+    data["symbol_to_strike"] = {
+        str(symbol): float(strike)
+        for symbol, strike in dict(data.get("symbol_to_strike", {})).items()
+    }
+    data["priority_by_symbol"] = {
+        str(symbol): int(priority)
+        for symbol, priority in dict(data.get("priority_by_symbol", {})).items()
+    }
+    return data
+
+
 def enforce_cap_native(
     *,
     target_symbols: set[str],
@@ -45,6 +76,7 @@ def enforce_cap_native(
     spot: float | None,
     subscription_cap: int,
     symbol_to_strike: dict[str, float],
+    symbol_priority: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     data = dict(
         _L0_RUST.l0_subscription_enforce_cap(
@@ -53,6 +85,7 @@ def enforce_cap_native(
             int(subscription_cap),
             dict(symbol_to_strike),
             spot,
+            dict(symbol_priority or {}),
         )
     )
     data["kept"] = set(data.get("kept", []))

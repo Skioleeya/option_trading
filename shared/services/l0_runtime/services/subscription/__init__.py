@@ -14,8 +14,12 @@ from longport.openapi import Config, SubType
 from shared.config import settings
 from shared.services.l0_runtime.services._native_helpers import (
     clamp_subscription_cap_native,
-    collect_targets_native,
     enforce_cap_native,
+    select_targets_native,
+)
+from shared.services.l0_runtime.services.subscription.selection import (
+    SubscriptionRebalanceGate,
+    SubscriptionSelection,
 )
 from shared.services.l0_runtime.source.runtime import APIRateLimiter
 from shared.services.l0_runtime.source.runtime.quote_runtime import L0QuoteRuntime
@@ -45,6 +49,7 @@ class OptionSubscriptionManager:
         self._depth_subscribed_symbols: set[str] = set()
         self._target_symbols: set[str] = set()
         self._symbol_to_strike: dict[str, float] = {}
+        self._symbol_priority: dict[str, int] = {}
         self._limiter = rate_limiter or APIRateLimiter(
             rate=settings.longport_api_rate_limit,
             burst=settings.longport_api_burst,
@@ -71,6 +76,27 @@ class OptionSubscriptionManager:
         self._metadata_cache_hits = 0
         self._metadata_cache_misses = 0
         self._writer_ready_event = asyncio.Event()
+        self._initial_steps = max(
+            1,
+            int(getattr(settings, "subscription_initial_strike_steps_per_side", 30)),
+        )
+        self._dynamic_after_sec = max(
+            1.0,
+            float(getattr(settings, "subscription_dynamic_lock_after_sec", 600)),
+        )
+        self._volume_coverage = min(
+            1.0,
+            max(0.01, float(getattr(settings, "subscription_volume_coverage", 0.90))),
+        )
+        self._core_buffer_steps = max(
+            0,
+            int(getattr(settings, "subscription_core_buffer_steps", 5)),
+        )
+        self._rebalance_gate = SubscriptionRebalanceGate(
+            confirmations=int(getattr(settings, "subscription_rebalance_confirmations", 2)),
+            min_shift_steps=int(getattr(settings, "subscription_rebalance_min_shift_steps", 2)),
+            interval_sec=float(getattr(settings, "subscription_rebalance_interval_sec", 60)),
+        )
 
     @property
     def subscribed_symbols(self) -> set[str]:
@@ -102,7 +128,7 @@ class OptionSubscriptionManager:
             return 0.0
         return self._metadata_cache_hits / float(total)
 
-    def metadata_cache_diagnostics(self) -> dict[str, float | int]:
+    def metadata_cache_diagnostics(self) -> dict[str, Any]:
         return {
             "hit_rate": self.metadata_cache_hit_rate,
             "hits": self._metadata_cache_hits,
@@ -111,6 +137,7 @@ class OptionSubscriptionManager:
             "ttl_sec": self._metadata_ttl_sec,
             "weight": self._metadata_weight,
             "writer_ready": self.writer_ready,
+            "selection": dict(self._rebalance_gate.selection_diagnostics),
         }
 
     async def wait_for_writer_ready(self, timeout_sec: float) -> None:
@@ -151,8 +178,29 @@ class OptionSubscriptionManager:
         self,
         spot: float | None,
         mandatory_symbols: set[str] | None = None,
+        *,
+        chain_snapshot: list[dict[str, Any]] | None = None,
+        first_source_seen_at_mono: float | None = None,
+        now_mono: float | None = None,
     ) -> set[str]:
-        target_set = await self._collect_core_symbols(spot)
+        refresh_now = time.monotonic() if now_mono is None else float(now_mono)
+        selection = await self._collect_core_symbols(
+            spot,
+            chain_snapshot=chain_snapshot or [],
+            first_source_seen_at_mono=first_source_seen_at_mono,
+            now_mono=refresh_now,
+        )
+        target_set = set(selection.targets)
+        should_rebalance = self._rebalance_gate.should_rebalance(
+            selection.diagnostics,
+            refresh_now,
+            has_target_symbols=bool(self._target_symbols),
+        )
+        if should_rebalance:
+            self._symbol_to_strike = dict(selection.symbol_to_strike)
+            self._symbol_priority = dict(selection.priority_by_symbol)
+        elif self._target_symbols:
+            target_set = set(self._target_symbols)
         if mandatory_symbols:
             target_set.update(mandatory_symbols)
         target_set.add(UNDERLYING_SPOT_SYMBOL)
@@ -163,12 +211,34 @@ class OptionSubscriptionManager:
         )
         self._target_symbols = target_set
         await self._sync_subscriptions(target_set)
+        self._rebalance_gate.record(
+            selection.diagnostics,
+            target_count=len(target_set),
+            subscribed_count=len(self._subscribed_symbols),
+            rebalanced=should_rebalance,
+        )
         return target_set
 
-    async def _collect_core_symbols(self, spot: float | None) -> set[str]:
+    async def _collect_core_symbols(
+        self,
+        spot: float | None,
+        *,
+        chain_snapshot: list[dict[str, Any]],
+        first_source_seen_at_mono: float | None,
+        now_mono: float,
+    ) -> SubscriptionSelection:
         if not spot:
             logger.info("[SubscriptionManager] Skipping collection: spot missing.")
-            return set()
+            return SubscriptionSelection(
+                set(),
+                {},
+                {},
+                {
+                    "phase": "initial",
+                    "call_core_step_range": (0, 0),
+                    "put_core_step_range": (0, 0),
+                },
+            )
         now_date = datetime.now(ZoneInfo("US/Eastern")).date()
         valid_dates = []
         for i in range(7):
@@ -184,12 +254,30 @@ class OptionSubscriptionManager:
                     break
         target_symbols = set()
         new_symbol_to_strike: dict[str, float] = {}
+        priority_by_symbol: dict[str, int] = {}
+        selection_diag: dict[str, Any] = {"phase": "initial"}
         for _, chain_info in valid_dates:
-            native = collect_targets_native(list(chain_info), float(spot))
+            native = select_targets_native(
+                list(chain_info),
+                chain_snapshot=chain_snapshot,
+                spot=float(spot),
+                first_source_seen_at_mono=first_source_seen_at_mono,
+                now_mono=now_mono,
+                initial_steps=self._initial_steps,
+                dynamic_after_sec=self._dynamic_after_sec,
+                coverage=self._volume_coverage,
+                core_buffer_steps=self._core_buffer_steps,
+            )
             target_symbols.update(native["targets"])
             new_symbol_to_strike.update(native["symbol_to_strike"])
-        self._symbol_to_strike = new_symbol_to_strike
-        return target_symbols
+            priority_by_symbol.update(native.get("priority_by_symbol", {}))
+            selection_diag = SubscriptionRebalanceGate.merge_diagnostics(selection_diag, native)
+        return SubscriptionSelection(
+            targets=target_symbols,
+            symbol_to_strike=new_symbol_to_strike,
+            priority_by_symbol=priority_by_symbol,
+            diagnostics=selection_diag,
+        )
 
     def _enforce_subscription_cap(
         self,
@@ -213,6 +301,7 @@ class OptionSubscriptionManager:
             spot=spot,
             subscription_cap=self._subscription_cap,
             symbol_to_strike=self._symbol_to_strike,
+            symbol_priority=self._symbol_priority,
         )
         kept = native["kept"]
         dropped = len(target_set) - len(kept)
@@ -229,6 +318,8 @@ class OptionSubscriptionManager:
     async def _sync_subscriptions(self, target_set: set[str]) -> None:
         if not target_set:
             return
+        if target_set == self._subscribed_symbols and self.is_rust_started and self.writer_ready:
+            return
         await self._runtime.subscribe(sorted(target_set), [SubType.Quote, SubType.Depth, SubType.Trade])
         self.is_rust_started = True
         self._subscribed_symbols = set(target_set)
@@ -238,6 +329,8 @@ class OptionSubscriptionManager:
     async def stop(self) -> None:
         await self._runtime.disconnect()
         self.is_rust_started = False
+        self._subscribed_symbols.clear()
+        self._target_symbols.clear()
         self._writer_ready_event.clear()
         logger.info("[SubscriptionManager] Runtime disconnected.")
 

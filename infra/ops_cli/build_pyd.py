@@ -95,8 +95,7 @@ def _install_paths(repo: Path, crate: str) -> list[Path]:
         "shared_rust_services": [repo / "shared_rust" / "services.pyd"],
         "shared_rust_l0_support": [repo / "shared_rust" / "services_l0_support.pyd"],
         "l0_rust": [
-            repo / "shared" / "services" / "l0_runtime" / "_native_generated" / "l0_rust.pyd",
-            repo / "shared" / "services" / "l0_runtime" / "_native_generated" / "wave10" / "l0_rust.pyd",
+            repo / "shared" / "services" / "l0_runtime" / "_native_generated" / "wave11" / "l0_rust.pyd",
         ],
         "l1_rust": [site_packages / "l1_rust" / f"l1_rust{ext_suffix}"],
         "rust_kernel": [site_packages / "rust_kernel" / f"rust_kernel{ext_suffix}"],

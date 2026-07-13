@@ -1,8 +1,8 @@
 use pyo3::prelude::*;
 
+mod arrow_ipc;
 mod contract_metrics;
 mod contract_option_chain;
-mod arrow_ipc;
 mod gateway_core;
 mod gateway_event_map;
 mod gateway_push_diag;
@@ -19,11 +19,12 @@ mod l0_poller_support;
 mod l0_projection;
 mod l0_sanitization;
 mod l0_state_support;
-mod l0_sync_support;
+mod l0_subscription_selection;
 mod l0_subscription_support;
+mod l0_sync_support;
+mod model_contracts;
 mod quote_contract_support;
 mod quote_profile_support;
-mod model_contracts;
 mod research_store_runtime;
 mod research_store_storage;
 mod rest_rows;

@@ -15,14 +15,7 @@ _PE_MAGIC = b"MZ"
 
 def _default_candidates() -> tuple[Path, ...]:
     return (
-        _PACKAGE_DIR / "wave10" / "l0_rust.pyd",
-        _PACKAGE_DIR / "wave9" / "l0_rust.pyd",
-        _PACKAGE_DIR / "wave8" / "l0_rust.pyd",
-        _PACKAGE_DIR / "wave7" / "l0_rust.pyd",
-        _PACKAGE_DIR / "wave6" / "l0_rust.pyd",
-        _PACKAGE_DIR / "wave5" / "l0_rust.pyd",
-        _PACKAGE_DIR / "wave4" / "l0_rust.pyd",
-        _PACKAGE_DIR / "l0_rust.pyd",
+        _PACKAGE_DIR / "wave11" / "l0_rust.pyd",
     )
 
 
@@ -89,7 +82,7 @@ def _format_error(
         lines.append(f"Incompatible Windows binaries on Linux: {incompatible_windows}")
         lines.append(
             "Linux requires ELF .so artifact. Build and place l0_rust.so under "
-            "shared/services/l0_runtime/_native_generated/(wave10|root)."
+            "shared/services/l0_runtime/_native_generated/wave11."
         )
     if load_errors:
         lines.append("Load errors:")

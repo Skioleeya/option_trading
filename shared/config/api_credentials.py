@@ -101,3 +101,10 @@ class APICredentialsConfig(BaseConfig):
     enable_tier2_polling: bool = Field(default=True)
     enable_tier3_polling: bool = Field(default=True)
     subscription_max: int = Field(default=500)                 # Hard-clamped to official cap(500) at runtime
+    subscription_initial_strike_steps_per_side: int = Field(default=30)
+    subscription_dynamic_lock_after_sec: int = Field(default=600)
+    subscription_volume_coverage: float = Field(default=0.90)
+    subscription_core_buffer_steps: int = Field(default=5)
+    subscription_rebalance_confirmations: int = Field(default=2)
+    subscription_rebalance_min_shift_steps: int = Field(default=2)
+    subscription_rebalance_interval_sec: int = Field(default=60)

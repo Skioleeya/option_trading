@@ -15,6 +15,7 @@ from ._native_helpers import (
     normalize_decimal_ratio_native,
     read_u64_native,
     select_nearest_chain_item_native,
+    select_targets_native,
     to_positive_float_native,
     top_open_interest_native,
 )
@@ -40,6 +41,7 @@ __all__ = [
     "normalize_decimal_ratio_native",
     "read_u64_native",
     "select_nearest_chain_item_native",
+    "select_targets_native",
     "to_positive_float_native",
     "top_open_interest_native",
 ]

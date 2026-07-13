@@ -18,6 +18,9 @@ class _Store:
     def diagnostics(self) -> dict[str, object]:
         return {"quote_lane": {"last_source_timestamp_utc": self._source_timestamp_utc}}
 
+    def get_snapshot(self) -> list[dict[str, object]]:
+        return [{"symbol": "SPY260710C00000705.US", "strike": 705.0, "volume": 1}]
+
 
 class _Limiter:
     symbol_tokens = 0
@@ -45,9 +48,19 @@ class _SubMgr:
     def writer_ready(self) -> bool:
         return self._writer_ready
 
-    async def refresh(self, spot: float, mandatory_symbols: set[str]) -> set[str]:
+    async def refresh(
+        self,
+        spot: float,
+        mandatory_symbols: set[str],
+        *,
+        chain_snapshot: list[dict[str, object]],
+        first_source_seen_at_mono: float | None,
+        now_mono: float,
+    ) -> set[str]:
         self.refresh_calls.append(spot)
-        del mandatory_symbols
+        assert chain_snapshot
+        assert now_mono > 0.0
+        del mandatory_symbols, first_source_seen_at_mono
         self._writer_ready = True
         return {"SPY.US"}
 

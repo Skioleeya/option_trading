@@ -38,7 +38,12 @@ flowchart LR
    - Python fallback runtime 已退出正式 L0 运行链。
 2. `OptionSubscriptionManager` 通过 runtime 抽象触发 Rust 订阅与 REST 拉取。
  - 订阅池执行硬上限：`subscription_max` 会被运行时钳制到官方上限 `500`。
- - 超过上限时按离 spot 距离优先保留近端合约，输出 drop 诊断日志。
+ - 首个有效 L0 source tick 前只允许 bootstrap 订阅刷新；首个有效 source tick 后前 600 秒使用 spot 附近 CALL/PUT 各 `±30` 行权价档位的 initial core。
+  - 首个有效 source tick 满 600 秒后，订阅 core 切到 CALL/PUT 分边的当日累计 `volume` 最窄 90% 连续 strike 区间，并向外扩 `5` 档；若某一边没有可用 volume raw range，该边保持 initial core，另一边仍可进入 dynamic。
+  - diagnostics 中全局 `phase` 只表示 600 秒主门槛是否已过；`call_phase` / `put_phase` 表示分边实际策略：`initial`、`dynamic` 或 `dynamic_guard_initial`。
+ - 动态 core 不硬锁死：重平衡最多 60 秒一次；区间变化超过 2 档立即生效，小幅变化需要连续 2 次确认。
+ - `SPY.US`、mandatory anchor legs、top OI、高 volume/current_volume 合约和近 spot 结构代理位作为 sentinel pool 始终参与目标集合；L0 禁止读取 L1/L2/L3 wall 字段来决定订阅。
+  - 超过上限时按 protection tier、expiry、spot 距离和 symbol 稳定排序裁剪：mandatory/`SPY.US` 优先，其次近 spot 结构哨兵，再次 core range，最后 top OI/flow sentinel，输出 drop 诊断日志。
 - `L0QuoteRuntime.subscribe()` 的输入语义是“当前应生效的完整 symbol 集”；运行时必须把该全集实际 reconcile 到活跃会话，禁止仅在 Python 侧更新 tracked symbols 而不下发到 Rust 会话。
 - runtime diagnostics 应区分 `desired_symbols` 与 `applied_symbols`，`SubscriptionManager.subscribed_symbols` 只能反映已实际应用的集合。
 - `SPY.US` 必须始终属于正式 live subscribe 集合，不能只存在于 startup probe 或运行中的 REST 补刷；顶层 `spot` owner 必须来自 live `SPY.US` depth top-of-book midpoint，而不是周期性 pull quote 或 `last_done` 兜底。
