@@ -103,7 +103,8 @@ flowchart LR
 - `AtmDecayChart` 在 `data=[]` 或过滤后无可渲染点（如跨日切换后仅剩非交易时段数据）时，必须同步清空 hover 焦点并重置初始化标记，避免下一批数据复用旧焦点状态
 - `AtmDecayChart` 在 `init/update/interaction/resize` 任一阶段发生图表引擎异常时，必须进入显式 degraded 模式并执行 chart runtime teardown；degraded 后禁止继续执行图表副作用，但不得阻断 L4 其余模块渲染与广播消费链路
 - `AtmDecayChart` 在 `document.visibilityState='hidden'` 时可以暂停同步，但 `visibilitychange -> visible` 必须重放当前 store 最新 ATM 状态；禁止依赖“下一笔 live tick”才能补图
-- 冷启动历史拉取 `/api/atm-decay/history` 必须使用字段投影（最小集：`timestamp,straddle_pct,call_pct,put_pct,strike_changed`），禁止传输完整行字段到浏览器
+- 冷启动历史拉取 `/api/atm-decay/history` 必须使用字段投影（最小集：`timestamp,locked_at,strike,base_strike,straddle_pct,call_pct,put_pct,strike_changed`），禁止传输完整行字段到浏览器
+- `AtmDecayChart` 必须保留当日全量 ATM history；当 `locked_at + base_strike/strike` anchor 变化时，必须在图表 series 中插入 whitespace 断线 gap，禁止把不同 ATM anchor 的百分比序列直接连线或裁掉旧段
 - 历史接口默认以 `schema=v2`（columnar-json）消费；`schema=v1` 仅用于兼容/回放验证
 - 冷启动 history 请求非 2xx 或响应解码失败在 strict 模式下必须显式报错并可见告警；禁止静默吞错或假数据补齐
 - 当市场处于 `OPEN`（RTH）时，冷启动 ATM history 为空必须显式 fast-fail 并可见告警；当市场处于 `CLOSE`（盘前/盘后/周末）时，当日空 history 属于合法状态，前端必须保持 `-- PENDING` / 历史回放语义，不得把 outside-RTH 空 history 误报为 strict 故障

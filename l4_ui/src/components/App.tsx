@@ -114,7 +114,7 @@ export const App: React.FC = () => {
         window.addEventListener('l4:set_profiling_enabled', handleProfilingToggle as EventListener)
 
         // Cold boot: hydrate chart with minimal ATM history fields before websocket.
-        const atmHistoryFields = 'timestamp,straddle_pct,call_pct,put_pct,strike_changed'
+        const atmHistoryFields = 'timestamp,locked_at,strike,base_strike,straddle_pct,call_pct,put_pct,strike_changed'
         const fetchAtmHistoryV2 = async (): Promise<AtmDecay[]> => {
             const url = `${runtimeConfig.apiBase}/api/atm-decay/history?fields=${encodeURIComponent(atmHistoryFields)}&schema=v2`
             const res = await fetch(url)

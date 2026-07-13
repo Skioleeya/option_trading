@@ -34,8 +34,35 @@ export interface AtmChartStreamState {
     hasRenderableData: boolean
 }
 
+function toAnchorValue(raw: unknown): string | null {
+    if (raw === null || raw === undefined) return null
+    if (typeof raw === 'number') {
+        return Number.isFinite(raw) ? raw.toFixed(4) : null
+    }
+    if (typeof raw === 'string') {
+        const trimmed = raw.trim()
+        const numeric = Number(trimmed)
+        if (Number.isFinite(numeric)) return numeric.toFixed(4)
+        return trimmed.length > 0 ? trimmed : null
+    }
+    return null
+}
+
+function buildAnchorKey(row: ExtendedAtmDecay | undefined): string | null {
+    const lockedAt = toAnchorValue(row?.locked_at)
+    if (!lockedAt) return null
+    const strike = toAnchorValue(row?.base_strike ?? row?.strike)
+    return strike ? `${lockedAt}|${strike}` : lockedAt
+}
+
 function emptySeriesPoints(): AtmSeriesPoint[][] {
     return SERIES_CFG.map(() => [])
+}
+
+function hasAnyRenderablePoint(seriesPoints: AtmSeriesPoint[][]): boolean {
+    return seriesPoints.some((points) =>
+        points.some((point) => typeof point.value === 'number' && Number.isFinite(point.value))
+    )
 }
 
 function toSeriesValue(row: ExtendedAtmDecay, key: AtmSeriesField): number | null {
@@ -54,6 +81,20 @@ function appendPoint(points: AtmSeriesPoint[], time: Time, value: number): void 
     }
 }
 
+function appendAnchorBreak(points: AtmSeriesPoint[], time: Time): boolean {
+    const last = points[points.length - 1]
+    if (!last) return true
+    const lastTime = last.time as number
+    const currentTime = time as number
+    if (lastTime >= currentTime) return true
+    if (lastTime < currentTime - 1) {
+        points.push({ time: (currentTime - 1) as Time })
+        return true
+    }
+    points.push({ time })
+    return false
+}
+
 function appendSmoothedPoint(points: AtmSeriesPoint[], time: Time, value: number): void {
     const last = points[points.length - 1]
     if (!last || (last.time as number) < (time as number)) {
@@ -63,7 +104,7 @@ function appendSmoothedPoint(points: AtmSeriesPoint[], time: Time, value: number
         return
     }
     if ((last.time as number) === (time as number)) {
-        const prevValue = points.length > 1 ? points[points.length - 2].value : value
+        const prevValue = points.length > 1 ? points[points.length - 2].value ?? value : value
         last.value = points.length === 1 ? value : (SMOOTHING_ALPHA * value) + ((1 - SMOOTHING_ALPHA) * prevValue)
     }
 }
@@ -143,20 +184,31 @@ function buildTailFromRows(
     smoothSeriesPoints: AtmSeriesPoint[][],
 ): boolean {
     let hasRenderableData = false
+    let lastAnchorKey: string | null = null
 
     for (const row of rows) {
         if (!row.timestamp || !isMarketHours(row.timestamp)) continue
         const unixTs = toUnixSec(row.timestamp)
         if (unixTs === null) continue
         const time = unixTs as Time
+        const anchorKey = buildAnchorKey(row)
+        const anchorChanged = lastAnchorKey !== null && anchorKey !== null && anchorKey !== lastAnchorKey
+        let shouldAppendCurrentRow = true
 
         SERIES_CFG.forEach(({ key }, index) => {
             const value = toSeriesValue(row, key)
             if (value === null) return
+            if (anchorChanged) {
+                const rawCanAppend = appendAnchorBreak(rawSeriesPoints[index], time)
+                const smoothCanAppend = appendAnchorBreak(smoothSeriesPoints[index], time)
+                shouldAppendCurrentRow = shouldAppendCurrentRow && rawCanAppend && smoothCanAppend
+            }
+            if (!shouldAppendCurrentRow) return
             appendPoint(rawSeriesPoints[index], time, value)
             appendSmoothedPoint(smoothSeriesPoints[index], time, value)
             hasRenderableData = true
         })
+        lastAnchorKey = anchorKey ?? lastAnchorKey
     }
 
     return hasRenderableData
@@ -216,7 +268,7 @@ export function syncChartStreamState(
     const cliffAlreadyAdded = pruneMarkersFromTime(prev.markers, overlapTime).some((marker) => marker.text === '15:30 CLIFF')
     const markers = pruneMarkersFromTime(prev.markers, overlapTime)
     const tailRows = rows.slice(Math.max(prev.lastDataLength - 1, 0))
-    const hasRenderableData = buildTailFromRows(tailRows, rawSeriesPoints, smoothSeriesPoints)
+    buildTailFromRows(tailRows, rawSeriesPoints, smoothSeriesPoints)
     const tailMarkers = buildMarkerTail(tailRows, cliffAlreadyAdded)
 
     return {
@@ -226,7 +278,7 @@ export function syncChartStreamState(
         lastDataLength: rows.length,
         lastTimestamp: rows[rows.length - 1]?.timestamp ?? null,
         lastTailSignature: nextTailSignature,
-        hasRenderableData,
+        hasRenderableData: hasAnyRenderablePoint(rawSeriesPoints),
     }
 }
 

@@ -1,16 +1,16 @@
 # Project State (Index)
 
 ## Active Session
-- Path: notes/sessions/2026-07-09/branch-convergence-master-main/project_state.md
-- Meta: notes/sessions/2026-07-09/branch-convergence-master-main/meta.yaml
+- Path: notes/sessions/2026-07-13/debug-atm-decay-frontend-spike/project_state.md
+- Meta: notes/sessions/2026-07-13/debug-atm-decay-frontend-spike/meta.yaml
 - Status: ACTIVE
 
 ## Recent Sessions
-- notes/sessions/2026-07-09/branch-convergence-master-main/
-- notes/sessions/2026-07-09/auto-startall-preopen/
-- notes/sessions/2026-05-06/upgrade-native-windows-redis-service/
-- notes/sessions/2026-04-23/track-cold-data-20260423/
-- notes/sessions/2026-04-23/research-startup-spot-fix/
+- notes/sessions/2026-07-13/debug-atm-decay-frontend-spike/
+- notes/sessions/2026-07-13/debug-start-all-health/
+- notes/sessions/2026-07-10/postmarket-classifier-error/
+- notes/sessions/2026-07-10/dynamic-core-sentinel-subscriptions/
+- notes/sessions/2026-07-10/premarket-startup-retry/
 
 ## Global Rules
 - Session folders are immutable records; do not overwrite prior sessions.

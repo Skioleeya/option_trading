@@ -1,0 +1,39 @@
+session_id: "2026-07-13/debug-atm-decay-frontend-spike"
+title: "debug-atm-decay-frontend-spike"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-07-13 12:39:25 -04:00"
+updated_at_et: "2026-07-13 12:48:31 -04:00"
+parent_session: null
+
+branch: "codex/research-persistence-startup-fixes-20260423"
+base_commit: "643a55e"
+head_commit: "643a55e"
+
+files_changed:
+  - l4_ui/src/components/App.tsx
+  - l4_ui/src/components/center/atmDecayChartData.ts
+  - l4_ui/src/components/center/atmDecayIncremental.ts
+  - l4_ui/src/components/center/__tests__/atmDecayChartData.test.ts
+  - docs/SOP/L4_FRONTEND.md
+commands:
+  - "npm --prefix l4_ui run test -- --run src/components/center/__tests__/atmDecayChartData.test.ts src/components/__tests__/atmHistoryHydrate.test.tsx"
+  - "npm --prefix l4_ui run test -- --run src/components/center/__tests__/atmDecayChartData.test.ts src/components/center/__tests__/atmDecayIncremental.test.ts src/components/__tests__/atmHistoryHydrate.test.tsx"
+  - "$env:VITE_BACKEND_ORIGIN='http://127.0.0.1:8001'; npm --prefix l4_ui run build"
+  - ".\\.venv\\Scripts\\python.exe manage.py start-all"
+  - ".\\.venv\\Scripts\\python.exe manage.py validate-session --strict"
+tests_passed:
+  - "vitest: atmDecayChartData.test.ts + atmHistoryHydrate.test.tsx (6 passed)"
+  - "vitest: atmDecayChartData.test.ts + atmDecayIncremental.test.ts + atmHistoryHydrate.test.tsx (10 passed)"
+  - "l4_ui production build"
+  - "start-all: Redis/Backend/Frontend listening"
+  - "validate-session --strict passed"
+tests_failed:
+  - "Intermediate atmDecayChartData timestamp/float assertion failures while adjusting the new full-day gap test; fixed before final validation."
+blockers: []
+notes:
+  - "Root cause: history contained multiple ATM anchor segments; L4 connected old-anchor percentages to the current anchor baseline because cold hydrate did not request anchor identity fields."
+  - "First strict validation failed on session governance only: missing OPENSPEC-EXEMPT, missing strict command evidence in meta, and placeholder unchecked debt entries."
+  - "Follow-up correction: latest-anchor trimming hid the morning history; replaced it with full-day history plus whitespace gaps at anchor boundaries."
+

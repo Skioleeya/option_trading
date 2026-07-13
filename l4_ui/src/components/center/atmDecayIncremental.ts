@@ -1,6 +1,6 @@
 import type { Time } from 'lightweight-charts'
 
-export type AtmSeriesPoint = { time: Time; value: number }
+export type AtmSeriesPoint = { time: Time; value?: number }
 
 export interface AtmSeriesApiLike {
     setData: (data: AtmSeriesPoint[]) => void

@@ -1,16 +1,14 @@
 # Open Tasks (Index)
 
 ## Active Session Tasks
-- Path: notes/sessions/2026-07-09/branch-convergence-master-main/open_tasks.md
-
-## Current Priority
-- PR `#5` is open from `codex/research-persistence-startup-fixes-20260423` to `master`.
-- GitHub default branch is now `master`, and `origin/main` has been force-aligned to the same commit as `origin/master`.
+- Path: notes/sessions/2026-07-13/debug-atm-decay-frontend-spike/open_tasks.md
 
 ## Global Backlog (Cross-Session)
 - [x] Preserve valid L0 source spot through the L1 empty-snapshot startup path so first-tick research persistence no longer fatals on `snapshot.spot must be finite and > 0`. (2026-04-23 09:53 ET)
 - [x] Hard-cut runtime research persistence to a single canonical parquet owner, remove silent input fallback, and switch EOD archive runtime input to canonical. (2026-04-23 09:21 ET)
 - [ ] Monitor repo growth and push latency now that `data/cold` is versioned by explicit user request.
+- [ ] Reinstall/update `OptionV4-StartAll-PreOpen` with `.\.venv\Scripts\python.exe manage.py register-start-all-task --apply` after the scheduled startup retry change is applied.
+- [ ] Capture next 09:25 scheduled startup evidence and confirm whether retry was used or first attempt succeeded.
 - [x] Fully resync `最新的启动步骤文档.md` so its meaning exactly matches the current Windows startup implementation and host verification boundary. (2026-04-22 18:40 ET)
 - [x] Refresh `最新的启动步骤文档.md` from real-host Windows startup evidence and remove the frontend runtime/startup blockers in the standard `start-all` path. (2026-04-22 18:33 ET)
 - [x] Open and merge a PR from `chore/master-sync-clean-20260422` into `master` because direct `origin/master` pushes are blocked by repository rules. (2026-04-22 18:10 ET)
