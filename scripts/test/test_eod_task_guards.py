@@ -25,6 +25,15 @@ WAIT_MOD = _load_module("scripts/diagnostics/wait_for_eod_sources_settle.py", "w
 SYNC_MOD = _load_module("scripts/diagnostics/check_eod_manifest_sync.py", "check_eod_manifest_sync")
 
 
+def test_windows_eod_wrapper_uses_repo_virtualenv_python():
+    script = Path("scripts/ops/run_eod_bucket.ps1").read_text(encoding="utf-8")
+
+    assert ".venv\\Scripts\\python.exe" in script
+    assert "Get-Command python" not in script
+    assert '"--python-exe", $pythonExe' in script
+    assert '"--python-exe", "python"' not in script
+
+
 def _sig(role: str, exists: bool, size_bytes: int = -1, last_write_ns: int = -1, required: bool = True):
     return WAIT_MOD.SourceSignature(
         role=role,

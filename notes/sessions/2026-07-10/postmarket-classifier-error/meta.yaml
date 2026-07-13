@@ -1,0 +1,46 @@
+session_id: "2026-07-10/postmarket-classifier-error"
+title: "postmarket-classifier-error"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-07-10 16:08:39 -04:00"
+updated_at_et: "2026-07-10 16:11:23 -04:00"
+parent_session: null
+
+branch: "codex/research-persistence-startup-fixes-20260423"
+base_commit: "643a55e"
+head_commit: "643a55e"
+
+files_changed:
+  - "scripts/ops/run_eod_bucket.ps1"
+  - "scripts/test/test_eod_task_guards.py"
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-07-10/postmarket-classifier-error/project_state.md"
+  - "notes/sessions/2026-07-10/postmarket-classifier-error/open_tasks.md"
+  - "notes/sessions/2026-07-10/postmarket-classifier-error/handoff.md"
+  - "notes/sessions/2026-07-10/postmarket-classifier-error/meta.yaml"
+commands:
+  - ".\\.venv\\Scripts\\python.exe manage.py new-session --task-id postmarket-classifier-error --update-pointer"
+  - ".\\.venv\\Scripts\\python.exe scripts\\diagnostics\\eod_bucket_archive.py --date 20260710 --config scripts\\diagnostics\\config\\eod_bucket_thresholds.json --root data --out-root tmp\\eod_probe_20260710 --strict-quality"
+  - ".\\.venv\\Scripts\\python.exe manage.py run-eod-bucket --python-exe .\\.venv\\Scripts\\python.exe --date 20260710 --data-root data --out-root tmp\\eod_runner_probe_20260710 --run-label probe --settle-stable-window-seconds 1 --settle-timeout-seconds 5 --settle-poll-seconds 1 --max-attempts 1"
+  - "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\\ops\\run_eod_bucket.ps1 -ConfigPath \"scripts/diagnostics/config/eod_bucket_thresholds.json\" -DataRoot \"data\" -OutRoot \"tmp/eod_task_wrapper_probe_20260710\" -SettleStableWindowSeconds 1 -SettleTimeoutSeconds 5 -SettlePollSeconds 1 -MaxAttempts 1 -RunLabel wrapper-probe"
+  - ".\\.venv\\Scripts\\python.exe manage.py run-eod-bucket --python-exe .\\.venv\\Scripts\\python.exe --date 20260710 --data-root data --out-root data\\cold --run-label manual-check --settle-stable-window-seconds 1 --settle-timeout-seconds 5 --settle-poll-seconds 1 --max-attempts 1"
+  - "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\\ops\\run_eod_bucket.ps1 -ConfigPath \"scripts/diagnostics/config/eod_bucket_thresholds.json\" -DataRoot \"data\" -OutRoot \"tmp/eod_task_wrapper_fixed_20260710\" -SettleStableWindowSeconds 1 -SettleTimeoutSeconds 5 -SettlePollSeconds 1 -MaxAttempts 1 -RunLabel wrapper-fixed"
+  - ".\\.venv\\Scripts\\python.exe manage.py run-pytest scripts\\test\\test_eod_task_guards.py"
+  - ".\\.venv\\Scripts\\python.exe manage.py validate-session --strict"
+tests_passed:
+  - ".\\.venv\\Scripts\\python.exe scripts\\diagnostics\\eod_bucket_archive.py --date 20260710 --config scripts\\diagnostics\\config\\eod_bucket_thresholds.json --root data --out-root tmp\\eod_probe_20260710 --strict-quality"
+  - ".\\.venv\\Scripts\\python.exe manage.py run-eod-bucket --python-exe .\\.venv\\Scripts\\python.exe --date 20260710 --data-root data --out-root tmp\\eod_runner_probe_20260710 --run-label probe --settle-stable-window-seconds 1 --settle-timeout-seconds 5 --settle-poll-seconds 1 --max-attempts 1"
+  - ".\\.venv\\Scripts\\python.exe manage.py run-eod-bucket --python-exe .\\.venv\\Scripts\\python.exe --date 20260710 --data-root data --out-root data\\cold --run-label manual-check --settle-stable-window-seconds 1 --settle-timeout-seconds 5 --settle-poll-seconds 1 --max-attempts 1"
+  - "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\\ops\\run_eod_bucket.ps1 -ConfigPath \"scripts/diagnostics/config/eod_bucket_thresholds.json\" -DataRoot \"data\" -OutRoot \"tmp/eod_task_wrapper_fixed_20260710\" -SettleStableWindowSeconds 1 -SettleTimeoutSeconds 5 -SettlePollSeconds 1 -MaxAttempts 1 -RunLabel wrapper-fixed"
+  - ".\\.venv\\Scripts\\python.exe manage.py run-pytest scripts\\test\\test_eod_task_guards.py"
+  - ".\\.venv\\Scripts\\python.exe manage.py validate-session --strict"
+tests_failed: []
+blockers: []
+notes:
+  - "Root cause was scheduled wrapper resolving PATH/system Python instead of repo venv."
+  - "Pre-fix wrapper reproduced C:\\Python314\\python.exe missing pyarrow."
+  - "Formal 20260710 EOD bucket publish succeeded after manual venv run."
+

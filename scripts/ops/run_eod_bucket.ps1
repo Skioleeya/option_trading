@@ -25,23 +25,28 @@ function Resolve-RepositoryRoot {
     return (Resolve-Path -Path $repoCandidate).Path
 }
 
+function Resolve-RepositoryPython {
+    param([string]$RepositoryRoot)
+
+    $pythonExe = Join-Path $RepositoryRoot ".venv\Scripts\python.exe"
+    if (-not (Test-Path -LiteralPath $pythonExe -PathType Leaf)) {
+        throw "repo virtualenv python not found: $pythonExe"
+    }
+    return (Resolve-Path -LiteralPath $pythonExe).Path
+}
+
 try {
     $repoRoot = Resolve-RepositoryRoot -ScriptPath $PSCommandPath
     Set-Location -Path $repoRoot
     Write-TaskLog "repo_root=$repoRoot"
 
-    $pythonCommand = Get-Command python -ErrorAction SilentlyContinue
-    if ($null -eq $pythonCommand) {
-        throw "python executable not found in PATH."
-    }
-
-    $pythonExe = $pythonCommand.Source
+    $pythonExe = Resolve-RepositoryPython -RepositoryRoot $repoRoot
     Write-TaskLog "python=$pythonExe"
 
     $args = @(
         "manage.py",
         "run-eod-bucket",
-        "--python-exe", "python",
+        "--python-exe", $pythonExe,
         "--repo-root", $repoRoot,
         "--config-path", $ConfigPath,
         "--data-root", $DataRoot,
