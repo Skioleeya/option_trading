@@ -4,6 +4,7 @@ import argparse
 import os
 import socket
 import subprocess
+import time
 from getpass import getuser
 from pathlib import Path
 
@@ -44,6 +45,10 @@ def _task_command(repo: Path, args: argparse.Namespace) -> list[str]:
         str(repo),
         "--run-label",
         "schtasks",
+        "--start-attempts",
+        str(args.start_attempts),
+        "--retry-delay-sec",
+        str(args.retry_delay_sec),
     ]
 
 
@@ -101,32 +106,47 @@ def run_scheduled_start_all(args: argparse.Namespace) -> int:
     repo = _resolve_repo_root(args.repo_root)
     python_exe = _resolve_python(args.python_exe)
     date_iso = args.date.strip() or _today_et_iso()
+    attempts = max(1, int(args.start_attempts))
+    retry_delay_sec = max(0.0, float(args.retry_delay_sec))
 
     cmd = [python_exe, str(repo / "manage.py"), "start-all"]
-    print(f"[StartAllTask][{args.run_label}] launch: date={date_iso} cmd={shell_join(cmd)}")
-    proc = subprocess.run(cmd, cwd=repo, check=False)
-
-    if not _is_trading_session(date_iso):
+    last_exit = 1
+    for attempt in range(1, attempts + 1):
         print(
-            f"[StartAllTask][{args.run_label}] non-trading-session detected after launch attempt: "
-            f"date={date_iso}; start-all-exit={proc.returncode}; shutting stack down."
+            f"[StartAllTask][{args.run_label}] launch: "
+            f"date={date_iso} attempt={attempt}/{attempts} cmd={shell_join(cmd)}"
         )
-        stop_code = _shutdown_stack(
-            repo,
-            backend_port=args.backend_port,
-            frontend_port=args.frontend_port,
-            redis_port=args.redis_port,
-        )
-        print(f"[StartAllTask][{args.run_label}] done: exit={stop_code}")
-        return stop_code
+        proc = subprocess.run(cmd, cwd=repo, check=False)
+        last_exit = int(proc.returncode)
 
-    if proc.returncode != 0:
-        print(f"[StartAllTask][{args.run_label}] done: exit={proc.returncode}")
-        return int(proc.returncode)
+        if not _is_trading_session(date_iso):
+            print(
+                f"[StartAllTask][{args.run_label}] non-trading-session detected after launch attempt: "
+                f"date={date_iso}; start-all-exit={last_exit}; shutting stack down."
+            )
+            stop_code = _shutdown_stack(
+                repo,
+                backend_port=args.backend_port,
+                frontend_port=args.frontend_port,
+                redis_port=args.redis_port,
+            )
+            print(f"[StartAllTask][{args.run_label}] done: exit={stop_code}")
+            return stop_code
 
-    print(f"[StartAllTask][{args.run_label}] trading-session confirmed: date={date_iso}; stack remains up.")
-    print(f"[StartAllTask][{args.run_label}] done: exit=0")
-    return 0
+        if last_exit == 0:
+            print(f"[StartAllTask][{args.run_label}] trading-session confirmed: date={date_iso}; stack remains up.")
+            print(f"[StartAllTask][{args.run_label}] done: exit=0")
+            return 0
+
+        if attempt < attempts:
+            print(
+                f"[StartAllTask][{args.run_label}] start-all failed: "
+                f"exit={last_exit}; retrying in {retry_delay_sec:.1f}s."
+            )
+            time.sleep(retry_delay_sec)
+
+    print(f"[StartAllTask][{args.run_label}] done: exit={last_exit}")
+    return last_exit
 
 
 def run_register_start_all_task(args: argparse.Namespace) -> int:
@@ -173,6 +193,7 @@ def run_register_start_all_task(args: argparse.Namespace) -> int:
     print(f"- TaskName: {task_name}")
     print(f"- User: {user}")
     print(f"- StartTime: {args.start_time}")
+    print(f"- RetryPolicy: start-all attempts={args.start_attempts} retry_delay_sec={args.retry_delay_sec}")
     print("- TradingDayGuard: start-all runs first; non-XNYS days trigger immediate shutdown")
     print(f"- schtasks: {shell_join(schtasks_cmd)}")
 
@@ -205,6 +226,8 @@ def build_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]
     runner.add_argument("--backend-port", type=int, default=8001)
     runner.add_argument("--frontend-port", type=int, default=5173)
     runner.add_argument("--redis-port", type=int, default=6380)
+    runner.add_argument("--start-attempts", type=int, default=3)
+    runner.add_argument("--retry-delay-sec", type=float, default=60.0)
     runner.set_defaults(func=run_scheduled_start_all)
 
     scheduler = subparsers.add_parser(
@@ -217,5 +240,7 @@ def build_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]
     scheduler.add_argument("--user", default="")
     scheduler.add_argument("--start-time", default="09:25")
     scheduler.add_argument("--output-dir", default="tmp/schtasks")
+    scheduler.add_argument("--start-attempts", type=int, default=3)
+    scheduler.add_argument("--retry-delay-sec", type=float, default=60.0)
     scheduler.add_argument("--apply", action="store_true")
     scheduler.set_defaults(func=run_register_start_all_task)

@@ -226,7 +226,7 @@ powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 6380 -State List
 # backend strict (default)
 python manage.py start-backend
 
-# pre-open auto-start task (weekday 09:25 + post-launch XNYS guard)
+# pre-open auto-start task (weekday 09:25 + strict retry + post-launch XNYS guard)
 python manage.py register-start-all-task --output-dir tmp/schtasks
 python manage.py register-start-all-task --apply
 
