@@ -1,0 +1,39 @@
+session_id: "2026-07-13/debug-start-all-health"
+title: "debug-start-all-health"
+scope: "operational recovery"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-07-13 09:27:32 -04:00"
+updated_at_et: "2026-07-13 09:37:00 -04:00"
+parent_session: null
+
+branch: "codex/research-persistence-startup-fixes-20260423"
+base_commit: "643a55e"
+head_commit: "643a55e"
+
+files_changed:
+  - "notes/context/project_state.md"
+  - "notes/context/open_tasks.md"
+  - "notes/context/handoff.md"
+  - "notes/sessions/2026-07-13/debug-start-all-health/startup.md"
+  - "notes/sessions/2026-07-13/debug-start-all-health/project_state.md"
+  - "notes/sessions/2026-07-13/debug-start-all-health/open_tasks.md"
+  - "notes/sessions/2026-07-13/debug-start-all-health/handoff.md"
+  - "notes/sessions/2026-07-13/debug-start-all-health/meta.yaml"
+commands:
+  - "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*Option_v4*' }"
+  - "Invoke-WebRequest -UseBasicParsing -TimeoutSec 3 http://127.0.0.1:8001/health"
+  - "Invoke-WebRequest -UseBasicParsing -TimeoutSec 3 http://127.0.0.1:5173"
+  - "PostMessage Escape to cmd pid 19448 to clear Windows console selection mode"
+  - ".\\.venv\\Scripts\\python.exe manage.py start-all --verify-only"
+  - ".\\.venv\\Scripts\\python.exe manage.py validate-session --strict"
+tests_passed:
+  - ".\\.venv\\Scripts\\python.exe manage.py start-all --verify-only"
+  - "Backend /health returned status ok"
+  - "Frontend http://127.0.0.1:5173 returned HTTP 200"
+tests_failed: []
+blockers: []
+notes:
+  - "Root cause: scheduled cmd window was in Select mode, which paused the start-all parent after printing backend readiness gate."
+  - "Recovery: sent Escape to the cmd window; frontend launched via preview-strict and port 5173 became ready."
+
