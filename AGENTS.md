@@ -406,7 +406,26 @@ When a module group is too large for one session:
 </ANTI_PATTERN>
 
 ---
-## 13. Final Operating Principle
+## 13. Deferred Backlog Reminder — Full Rust Backend Runtime
+
+This is a reminder item only. It is NOT an active migration mandate and MUST NOT interrupt urgent
+runtime fixes or market-session stability work.
+
+- Backlog item: evaluate converting the remaining Python backend runtime shell to Rust-first services
+  after current stability work is complete.
+- Motivation: reduce steady-state RAM, remove Python GC jitter from hot runtime paths, improve
+  deterministic latency under reconnect, broadcast, and subscription rebalance pressure.
+- Expected sizing impact from current Windows observation: backend memory may drop from roughly
+  800MB working set / 1.2GB private memory to a materially smaller Rust owner, with realistic full
+  system steady-state target in the 300-700MB range depending on retained caches and buffers.
+- Execution constraint: any future implementation MUST follow §12 Rust/Python Cutover Protocol,
+  including atomic Rust owner implementation, consumer retarget, Python owner deletion, OpenSpec
+  linkage, SOP sync, tests, and strict validation.
+- Priority: non-urgent P3/backlog. Do not start without an explicit planning session and acceptance
+  criteria.
+
+---
+## 14. Final Operating Principle
 
 Agent behavior standard:
 

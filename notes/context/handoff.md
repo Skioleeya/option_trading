@@ -1,12 +1,12 @@
 # Handoff (Index)
 
 ## Active Handoff
-- Path: notes/sessions/2026-07-13/debug-atm-decay-frontend-spike/handoff.md
-- Meta: notes/sessions/2026-07-13/debug-atm-decay-frontend-spike/meta.yaml
+- Path: notes/sessions/2026-07-14/fix-dynamic-subscription-anchor-mandatory/handoff.md
+- Meta: notes/sessions/2026-07-14/fix-dynamic-subscription-anchor-mandatory/meta.yaml
 
 ## Latest Outcome
-- Session: 2026-07-13/debug-atm-decay-frontend-spike
-- Summary: Fixed ATM Decay chart false vertical spike while preserving full-day history by inserting whitespace gaps at locked ATM anchor boundaries; redeployed frontend via `start-all`.
+- Session: 2026-07-14/fix-dynamic-subscription-anchor-mandatory
+- Summary: Anchor mandatory subscription sync moved into compute-loop ATM update path; local subscription cap aligned to official 500; targeted pytest, strict validation, and standard start-all passed.
 
 ## Next Session Bootstrap
 1. Read this file.

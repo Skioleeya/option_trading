@@ -1,0 +1,48 @@
+session_id: "2026-07-14/fix-dynamic-subscription-anchor-mandatory"
+title: "fix-dynamic-subscription-anchor-mandatory"
+scope: "hotfix + runtime stability"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-07-14 11:50:58 -04:00"
+updated_at_et: "2026-07-14 12:03:26 -04:00"
+parent_session: "2026-07-13/debug-atm-decay-frontend-spike"
+change_id: "impl-20260714-anchor-mandatory-subscription-stability"
+
+branch: "codex/research-persistence-startup-fixes-20260423"
+base_commit: "d10e01d"
+head_commit: "d10e01d"
+
+files_changed:
+  - AGENTS.md
+  - app/loops/anchor_mandatory_sync.py
+  - app/loops/compute_loop.py
+  - app/loops/housekeeping_loop.py
+  - app/loops/shared_state.py
+  - app/loops/tests/test_anchor_mandatory_sync.py
+  - app/loops/tests/test_compute_loop_atm_live_continuity.py
+  - docs/SOP/L0_DATA_FEED.md
+  - docs/SOP/L1_LOCAL_COMPUTATION.md
+  - openspec/changes/impl-20260714-anchor-mandatory-subscription-stability/proposal.md
+  - openspec/changes/impl-20260714-anchor-mandatory-subscription-stability/tasks.md
+  - openspec/changes/impl-20260714-anchor-mandatory-subscription-stability/specs/l0-subscription/spec.md
+  - notes/sessions/2026-07-14/fix-dynamic-subscription-anchor-mandatory/startup.md
+  - notes/sessions/2026-07-14/fix-dynamic-subscription-anchor-mandatory/project_state.md
+  - notes/sessions/2026-07-14/fix-dynamic-subscription-anchor-mandatory/open_tasks.md
+  - notes/sessions/2026-07-14/fix-dynamic-subscription-anchor-mandatory/handoff.md
+  - notes/sessions/2026-07-14/fix-dynamic-subscription-anchor-mandatory/meta.yaml
+  - notes/context/project_state.md
+  - notes/context/open_tasks.md
+  - notes/context/handoff.md
+commands:
+  - ".\\.venv\\Scripts\\python.exe manage.py run-pytest app/loops/tests/test_anchor_mandatory_sync.py app/loops/tests/test_compute_loop_atm_live_continuity.py app/loops/tests/test_housekeeping_gpu_dedup.py shared/services/l0_runtime/services/test_subscription_manager.py"
+  - ".\\.venv\\Scripts\\python.exe manage.py validate-session --strict"
+  - ".\\.venv\\Scripts\\python.exe manage.py start-all"
+tests_passed:
+  - "pytest: anchor mandatory sync, compute-loop ATM continuity, housekeeping GPU dedup, subscription manager (18 passed)"
+  - "validate-session --strict passed"
+  - "start-all: Redis 6380, Backend 8001, Frontend 5173 listening"
+tests_failed: []
+blockers: []
+notes:
+  - "Local .env changed SUBSCRIPTION_MAX from 100 to 500; .env is untracked and intentionally omitted from files_changed."
+  - "AGENTS.md was dirty before this session from a prior user-requested backlog reminder and is preserved in this worktree."

@@ -1,11 +1,12 @@
 # Project State (Index)
 
 ## Active Session
-- Path: notes/sessions/2026-07-13/debug-atm-decay-frontend-spike/project_state.md
-- Meta: notes/sessions/2026-07-13/debug-atm-decay-frontend-spike/meta.yaml
+- Path: notes/sessions/2026-07-14/fix-dynamic-subscription-anchor-mandatory/project_state.md
+- Meta: notes/sessions/2026-07-14/fix-dynamic-subscription-anchor-mandatory/meta.yaml
 - Status: ACTIVE
 
 ## Recent Sessions
+- notes/sessions/2026-07-14/fix-dynamic-subscription-anchor-mandatory/
 - notes/sessions/2026-07-13/debug-atm-decay-frontend-spike/
 - notes/sessions/2026-07-13/debug-start-all-health/
 - notes/sessions/2026-07-10/postmarket-classifier-error/

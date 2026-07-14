@@ -7,6 +7,7 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
+from app.loops.anchor_mandatory_sync import update_atm_decay_and_sync_anchor
 from app.loops.atm_live_payload import build_duplicate_snapshot_live_refresh
 from app.loops.active_options_sync import ensure_active_options_same_version
 from app.loops.compute_metadata import _build_l1_extra_metadata
@@ -116,9 +117,8 @@ async def _process_snapshot_tick(
     iv_cache_size = len(iv_cache)
 
     if _is_duplicate_snapshot(snapshot_version, last_processed_version):
-        atm_decay_payload = await ctr.atm_decay_tracker.update(
-            snapshot.get("chain", []),
-            snapshot.get("spot", 0.0),
+        atm_decay_payload = await update_atm_decay_and_sync_anchor(
+            ctr, state, snapshot.get("chain", []), snapshot.get("spot", 0.0), reason="duplicate_snapshot"
         )
         previous_frozen = state.frozen
         active_options_rows = ctr.active_options_service.get_latest()
@@ -200,9 +200,8 @@ async def _process_snapshot_tick(
         snapshot_version=snapshot_version,
     )
 
-    atm_decay_payload = await ctr.atm_decay_tracker.update(
-        snapshot.get("chain", []),
-        snapshot.get("spot", 0.0),
+    atm_decay_payload = await update_atm_decay_and_sync_anchor(
+        ctr, state, snapshot.get("chain", []), snapshot.get("spot", 0.0), reason="compute_tick"
     )
     _log_pipeline_perf(
         snapshot_time=snapshot_time,

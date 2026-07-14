@@ -250,12 +250,12 @@ async def _run_housekeeping_tick_safe(
     last_source_version: int | None,
 ) -> int | None:
     try:
+        _sync_anchor_symbols(ctr)
         next_version = await _update_active_options_from_shared_input(
             ctr,
             state,
             last_source_version=last_source_version,
         )
-        _sync_anchor_symbols(ctr)
         return next_version
     except asyncio.CancelledError:
         raise

@@ -1,7 +1,7 @@
 # Open Tasks (Index)
 
 ## Active Session Tasks
-- Path: notes/sessions/2026-07-13/debug-atm-decay-frontend-spike/open_tasks.md
+- Path: notes/sessions/2026-07-14/fix-dynamic-subscription-anchor-mandatory/open_tasks.md
 
 ## Global Backlog (Cross-Session)
 - [x] Preserve valid L0 source spot through the L1 empty-snapshot startup path so first-tick research persistence no longer fatals on `snapshot.spot must be finite and > 0`. (2026-04-23 09:53 ET)

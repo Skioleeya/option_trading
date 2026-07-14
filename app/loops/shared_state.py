@@ -60,6 +60,10 @@ class SharedLoopState:
     active_options_input_updates: int = 0
     current_compute_interval: float = 1.0
     snapshot_version_iv_probe: dict[str, Any] = field(default_factory=dict)
+    last_anchor_mandatory_symbols: set[str] = field(default_factory=set)
+    last_anchor_mandatory_sync_reason: str | None = None
+    last_anchor_mandatory_sync_time: float = 0.0
+    anchor_mandatory_sync_updates: int = 0
     compute_ticks_seen: int = 0
     duplicate_snapshot_skips: int = 0
     l1_compute_runs: int = 0
@@ -238,6 +242,13 @@ class SharedLoopState:
         self.last_active_options_input_time = time.monotonic()
         self.active_options_input_updates += 1
 
+    def record_anchor_mandatory_sync(self, symbols: set[str], *, reason: str) -> None:
+        """Record a changed ATM anchor mandatory symbol set."""
+        self.last_anchor_mandatory_symbols = set(symbols)
+        self.last_anchor_mandatory_sync_reason = str(reason)
+        self.last_anchor_mandatory_sync_time = time.monotonic()
+        self.anchor_mandatory_sync_updates += 1
+
     def record_compute_tick(self, snapshot_version: int) -> None:
         """Record one compute-loop tick before dedup decision."""
         self.compute_ticks_seen += 1
@@ -292,6 +303,19 @@ class SharedLoopState:
             "invalid_reason": active_options_input.invalid_reason if active_options_input else "missing_input",
         }
 
+    def _anchor_mandatory_diagnostics(self) -> dict[str, Any]:
+        age = (
+            time.monotonic() - self.last_anchor_mandatory_sync_time
+            if self.last_anchor_mandatory_sync_time
+            else None
+        )
+        return {
+            "updates": self.anchor_mandatory_sync_updates,
+            "symbols": sorted(self.last_anchor_mandatory_symbols),
+            "last_reason": self.last_anchor_mandatory_sync_reason,
+            "age_seconds": age,
+        }
+
     def _gpu_compute_audit_diagnostics(self) -> dict[str, Any]:
         return {
             "compute_ticks_seen": self.compute_ticks_seen,
@@ -318,5 +342,6 @@ class SharedLoopState:
             "live_spot": self._live_spot_diagnostics(),
             "snapshot_version_iv_probe": self.snapshot_version_iv_probe,
             "active_options_input": self._active_options_input_diagnostics(),
+            "anchor_mandatory": self._anchor_mandatory_diagnostics(),
             "gpu_compute_audit": self._gpu_compute_audit_diagnostics(),
         }

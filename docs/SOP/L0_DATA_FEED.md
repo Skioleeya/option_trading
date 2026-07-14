@@ -56,6 +56,7 @@ flowchart LR
  - 若启动时从持久化状态恢复出 ATM anchor，`lifespan` 必须在后台 loops 启动前先把该 anchor 两腿同步进 `mandatory_symbols`，避免首轮 warm-up / repair 因时序而看不到 anchor legs。
  - 若盘中冷启动刚完成 same-day bootstrap lock，`lifespan` 也必须在后台 loops 启动前把新锁定的 anchor 两腿同步进 `mandatory_symbols`，并执行一次有界 `option_quote()` repair；若修复命中正价格，应立即触发一次 ATM decay 重算，避免首个有效样本必须等待后续管理 tick。
  - 上述 startup anchor legs 同步进 `mandatory_symbols` 后，还必须立刻执行一次订阅刷新；禁止仅登记 mandatory 集合却等待后续 `FeedOrchestrator` cadence 才把 anchor 两腿纳入 `target_symbols`，否则盘中首个 ATM 样本可能长期看不到锁定腿。
+ - 盘中 anchor 变化的主同步 owner 是 `compute_loop` 的 ATM update 路径：每次 `AtmDecayTracker` 产出新 anchor legs 时，app orchestration 必须通过 `OptionChainBuilder.set_mandatory_symbols()` 下发 mandatory 集合，并在 spot 有效时立即执行一次 `refresh_subscriptions_once()` 与有界 `repair_symbols_once()`；housekeeping 仅作为轻量兜底，禁止让 ActiveOptions strict hard-fail 成为 anchor mandatory 同步的单点故障。
  - WS `volume/current_volume` 必须通过可信上限校验（当前 hard cap: `1_000_000_000`）；超限值视为脏数据并丢弃，且不得置位 `ws_volume_seen/ws_current_volume_seen`（保留 REST fallback 接管能力）。
 - HOT-START OI 预加载优先使用 `SubscriptionManager.symbol_to_strike`，但若启动早期映射尚未建立，允许按 option symbol 直接解析 strike 作为兜底，确保 disk OI 可在首批 live tick 前写入 `ChainStateStore`。
 - `shared/cache/oi_snapshot.py` 是 OI baseline 持久化的中立 surface；`shared/system/persistent_oi_store.py` 已退役并删除，`IVBaselineSync` 与 `ActiveOptionsRuntimeService` 必须通过该 neutral surface 读写 disk OI baseline。

@@ -92,6 +92,9 @@ class _FakeAtmDecayTracker:
     def __init__(self) -> None:
         self.calls = 0
 
+    def get_anchor_symbols(self) -> set[str]:
+        return {"SPY.TEST.C", "SPY.TEST.P"}
+
     async def update(self, chain: list[dict[str, Any]], spot: float) -> dict[str, Any]:
         del chain, spot
         self.calls += 1
@@ -129,6 +132,9 @@ class _FakeBuilder:
     def __init__(self, snapshots: list[dict[str, Any]]) -> None:
         self._snapshots = snapshots
         self._cursor = 0
+        self.last_mandatory_symbols: set[str] | None = None
+        self.refresh_calls = 0
+        self.repair_calls = 0
 
     async def fetch_snapshot(self, *, include_chain_arrow: bool = False) -> dict[str, Any]:
         del include_chain_arrow
@@ -141,6 +147,19 @@ class _FakeBuilder:
 
     def get_iv_sync_context(self) -> tuple[dict[str, float], dict[str, float]]:
         return {}, {}
+
+    def set_mandatory_symbols(self, symbols: set[str]) -> None:
+        self.last_mandatory_symbols = set(symbols)
+
+    async def refresh_subscriptions_once(self, spot: float | None) -> set[str]:
+        del spot
+        self.refresh_calls += 1
+        return {"SPY.US", *(self.last_mandatory_symbols or set())}
+
+    async def repair_symbols_once(self, symbols: set[str], *, log_prefix: str) -> int:
+        del log_prefix
+        self.repair_calls += 1
+        return len(symbols)
 
 
 class _FakeContainer:
@@ -209,6 +228,8 @@ async def test_duplicate_snapshot_tick_keeps_atm_live_updates(monkeypatch: pytes
     assert ctr.l1_reactor.calls == 1
     assert ctr.atm_decay_tracker.calls == 3
     assert ctr.active_options_service.update_calls == 1
+    assert ctr.option_chain_builder.refresh_calls == 1
+    assert ctr.option_chain_builder.repair_calls == 1
     assert state.frozen is not None
     assert state.frozen.atm is not None
     assert state.frozen.atm["timestamp"] == "2026-03-25T10:00:03-04:00"
@@ -235,6 +256,7 @@ async def test_duplicate_snapshot_tick_keeps_active_options_live_updates(
     assert ctr.l1_reactor.calls == 1
     assert ctr.active_options_service.calls == 3
     assert ctr.active_options_service.update_calls == 1
+    assert ctr.option_chain_builder.refresh_calls == 1
     assert state.frozen is not None
     assert state.frozen.ui_state.active_options
     assert state.frozen.ui_state.active_options[0].strike == pytest.approx(563.0)
