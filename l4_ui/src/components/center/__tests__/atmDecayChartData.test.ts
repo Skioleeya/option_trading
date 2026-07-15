@@ -101,6 +101,66 @@ describe('atmDecayChartData', () => {
         expect(state.lastDataLength).toBe(3)
     })
 
+    it('breaks the line before stale recovery points', () => {
+        const rows = [
+            {
+                strike: 753,
+                base_strike: 753,
+                locked_at: '09:30:08',
+                timestamp: '2026-07-15T09:30:09.000-04:00',
+                straddle_pct: 0.01,
+                call_pct: 0.02,
+                put_pct: -0.01,
+                stale_recovery: false,
+            },
+            {
+                strike: 753,
+                base_strike: 753,
+                locked_at: '09:30:08',
+                timestamp: '2026-07-15T09:31:00.000-04:00',
+                straddle_pct: 0.02,
+                call_pct: 0.03,
+                put_pct: -0.02,
+                stale_recovery: true,
+            },
+        ]
+
+        const state = syncChartStreamState(createEmptyChartStreamState(), rows)
+
+        expect(state.rawSeriesPoints[1].map((point) =>
+            typeof point.value === 'number' ? Math.round(point.value) : null
+        )).toEqual([2, null, 3])
+    })
+
+    it('breaks the line when adjacent renderable timestamps gap by more than 30 seconds', () => {
+        const rows = [
+            {
+                strike: 753,
+                base_strike: 753,
+                locked_at: '09:30:08',
+                timestamp: '2026-07-15T09:30:09.000-04:00',
+                straddle_pct: 0.01,
+                call_pct: 0.02,
+                put_pct: -0.01,
+            },
+            {
+                strike: 753,
+                base_strike: 753,
+                locked_at: '09:30:08',
+                timestamp: '2026-07-15T09:30:40.000-04:00',
+                straddle_pct: 0.02,
+                call_pct: 0.03,
+                put_pct: -0.02,
+            },
+        ]
+
+        const state = syncChartStreamState(createEmptyChartStreamState(), rows)
+
+        expect(state.rawSeriesPoints[2].map((point) =>
+            typeof point.value === 'number' ? Math.round(point.value) : null
+        )).toEqual([-1, null, -2])
+    })
+
     it('returns the previous state when neither length nor tail signature changed', () => {
         const initial = syncChartStreamState(createEmptyChartStreamState(), [...BASE_ROWS])
         const unchanged = syncChartStreamState(initial, [...BASE_ROWS])

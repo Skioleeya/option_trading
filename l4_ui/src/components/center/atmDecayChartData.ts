@@ -10,6 +10,7 @@ export type AtmSeriesField = 'straddle_pct' | 'call_pct' | 'put_pct'
 
 export const STORAGE_KEY = 'l4.atm_decay_display_mode'
 export const SMOOTHING_ALPHA = 0.24
+export const ATM_CHART_BREAK_GAP_SECONDS = 30
 export const MODE_ITEMS: { key: DisplayMode; label: string }[] = [
     { key: 'smoothed', label: 'SMTH' },
     { key: 'raw', label: 'RAW' },
@@ -156,6 +157,8 @@ function buildTailSignature(row: ExtendedAtmDecay | undefined): string | null {
         row.call_pct ?? 'NA',
         row.put_pct ?? 'NA',
         row.strike_changed ? '1' : '0',
+        row.stale_recovery ? '1' : '0',
+        row.source_gap_ms ?? 'NA',
     ].join('|')
 }
 
@@ -185,6 +188,7 @@ function buildTailFromRows(
 ): boolean {
     let hasRenderableData = false
     let lastAnchorKey: string | null = null
+    let lastRenderableTime: number | null = null
 
     for (const row of rows) {
         if (!row.timestamp || !isMarketHours(row.timestamp)) continue
@@ -193,12 +197,14 @@ function buildTailFromRows(
         const time = unixTs as Time
         const anchorKey = buildAnchorKey(row)
         const anchorChanged = lastAnchorKey !== null && anchorKey !== null && anchorKey !== lastAnchorKey
+        const gapChanged = lastRenderableTime !== null && (time as number) - lastRenderableTime > ATM_CHART_BREAK_GAP_SECONDS
+        const requiresBreak = anchorChanged || row.stale_recovery === true || gapChanged
         let shouldAppendCurrentRow = true
 
         SERIES_CFG.forEach(({ key }, index) => {
             const value = toSeriesValue(row, key)
             if (value === null) return
-            if (anchorChanged) {
+            if (requiresBreak) {
                 const rawCanAppend = appendAnchorBreak(rawSeriesPoints[index], time)
                 const smoothCanAppend = appendAnchorBreak(smoothSeriesPoints[index], time)
                 shouldAppendCurrentRow = shouldAppendCurrentRow && rawCanAppend && smoothCanAppend
@@ -209,6 +215,7 @@ function buildTailFromRows(
             hasRenderableData = true
         })
         lastAnchorKey = anchorKey ?? lastAnchorKey
+        if (shouldAppendCurrentRow) lastRenderableTime = time as number
     }
 
     return hasRenderableData

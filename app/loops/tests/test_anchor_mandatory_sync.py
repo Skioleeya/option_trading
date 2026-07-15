@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 import pytest
@@ -15,13 +16,15 @@ class _FakeAtmDecayTracker:
     def __init__(self, symbols: set[str]) -> None:
         self.symbols = set(symbols)
         self.update_calls = 0
+        self.last_source_freshness: dict[str, Any] | None = None
 
     def get_anchor_symbols(self) -> set[str]:
         return set(self.symbols)
 
-    async def update(self, chain: Any, spot: Any) -> dict[str, Any]:
+    async def update(self, chain: Any, spot: Any, *, source_freshness: dict[str, Any] | None = None) -> dict[str, Any]:
         del chain, spot
         self.update_calls += 1
+        self.last_source_freshness = source_freshness
         return {"timestamp": "2026-07-14T11:04:00-04:00", "call_pct": 0.1}
 
 
@@ -48,6 +51,17 @@ class _FakeContainer:
     def __init__(self, symbols: set[str]) -> None:
         self.atm_decay_tracker = _FakeAtmDecayTracker(symbols)
         self.option_chain_builder = _FakeBuilder()
+
+
+def _fresh_snapshot() -> dict[str, Any]:
+    return {
+        "governor_telemetry": {
+            "quote_lane": {
+                "source_data_timestamp_utc": datetime.now(timezone.utc).isoformat(),
+                "last_source_gap_ms": 100.0,
+            }
+        }
+    }
 
 
 @pytest.mark.asyncio
@@ -125,10 +139,39 @@ async def test_atm_update_path_syncs_anchor_after_tracker_update() -> None:
         state,
         [{"symbol": "SPY.C754"}],
         749.66,
+        snapshot=_fresh_snapshot(),
         reason="duplicate_snapshot",
     )
 
     assert payload["timestamp"] == "2026-07-14T11:04:00-04:00"
     assert ctr.atm_decay_tracker.update_calls == 1
+    assert ctr.atm_decay_tracker.last_source_freshness is not None
+    assert ctr.atm_decay_tracker.last_source_freshness["source_stale"] is False
     assert ctr.option_chain_builder.last_mandatory_symbols == {"SPY.C754", "SPY.P754"}
     assert ctr.option_chain_builder.refresh_calls == [pytest.approx(749.66)]
+
+
+@pytest.mark.asyncio
+async def test_stale_source_skips_atm_update_but_still_syncs_anchor() -> None:
+    ctr = _FakeContainer({"SPY.C754", "SPY.P754"})
+    state = SharedLoopState()
+
+    payload = await update_atm_decay_and_sync_anchor(
+        ctr,
+        state,
+        [{"symbol": "SPY.C754"}],
+        749.66,
+        snapshot={
+            "governor_telemetry": {
+                "quote_lane": {
+                    "source_data_timestamp_utc": "2026-01-01T14:30:00+00:00",
+                    "last_source_gap_ms": 20_000.0,
+                }
+            }
+        },
+        reason="duplicate_snapshot",
+    )
+
+    assert payload is None
+    assert ctr.atm_decay_tracker.update_calls == 0
+    assert ctr.option_chain_builder.last_mandatory_symbols == {"SPY.C754", "SPY.P754"}

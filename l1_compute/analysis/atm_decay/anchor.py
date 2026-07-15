@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from .raw_pct import calculate_raw_pct as _calculate_raw_pct
+
 from .models import (
     MAX_CAPTURE_CANDIDATES,
     MAX_SPOT_PARITY_STRIKE_GAP,
@@ -227,31 +229,7 @@ def select_roll_anchor(
 
 def calculate_raw_pct(anchor: dict[str, Any] | None, chain: list[dict[str, Any]]) -> tuple[float, float, float] | None:
     """Calculate the un-stitched raw percent decay for the current anchor."""
-    if not anchor:
-        return None
-
-    target_call = anchor["call_symbol"]
-    target_put = anchor["put_symbol"]
-    anchor_c = anchor["call_price"]
-    anchor_p = anchor["put_price"]
-    anchor_s = anchor_c + anchor_p
-
-    curr_c = curr_p = 0.0
-    for opt in chain:
-        sym = opt.get("symbol")
-        if sym == target_call:
-            curr_c = mid_price(opt.get("bid", 0.0), opt.get("ask", 0.0), opt.get("last_price", 0.0))
-        elif sym == target_put:
-            curr_p = mid_price(opt.get("bid", 0.0), opt.get("ask", 0.0), opt.get("last_price", 0.0))
-
-    if curr_c <= 0 or curr_p <= 0:
-        return None
-
-    curr_s = curr_c + curr_p
-    c_pct = (curr_c - anchor_c) / anchor_c if anchor_c > 0 else 0.0
-    p_pct = (curr_p - anchor_p) / anchor_p if anchor_p > 0 else 0.0
-    s_pct = (curr_s - anchor_s) / anchor_s if anchor_s > 0 else 0.0
-    return c_pct, p_pct, s_pct
+    return _calculate_raw_pct(anchor, chain)
 
 
 def build_anchor_leg_diagnostics(

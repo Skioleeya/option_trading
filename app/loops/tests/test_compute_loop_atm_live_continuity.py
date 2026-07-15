@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, replace
+from datetime import datetime, timezone
 from typing import Any
 
 import pytest
@@ -95,7 +96,13 @@ class _FakeAtmDecayTracker:
     def get_anchor_symbols(self) -> set[str]:
         return {"SPY.TEST.C", "SPY.TEST.P"}
 
-    async def update(self, chain: list[dict[str, Any]], spot: float) -> dict[str, Any]:
+    async def update(
+        self,
+        chain: list[dict[str, Any]],
+        spot: float,
+        *,
+        source_freshness: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         del chain, spot
         self.calls += 1
         return {
@@ -105,6 +112,9 @@ class _FakeAtmDecayTracker:
             "straddle_pct": 0.03,
             "strike": 560.0,
             "strike_changed": False,
+            "source_timestamp": (source_freshness or {}).get("source_timestamp"),
+            "source_gap_ms": (source_freshness or {}).get("source_gap_ms"),
+            "stale_recovery": bool((source_freshness or {}).get("stale_recovery")),
         }
 
 
@@ -180,6 +190,12 @@ def _snapshot(version: int) -> dict[str, Any]:
         "volume_map": {},
         "rust_active": True,
         "shm_stats": {"status": "OK", "head": 1, "tail": 1},
+        "governor_telemetry": {
+            "quote_lane": {
+                "source_data_timestamp_utc": datetime.now(timezone.utc).isoformat(),
+                "last_source_gap_ms": 100.0,
+            }
+        },
     }
 
 

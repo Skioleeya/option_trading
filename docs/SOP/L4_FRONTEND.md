@@ -105,6 +105,7 @@ flowchart LR
 - `AtmDecayChart` 在 `document.visibilityState='hidden'` 时可以暂停同步，但 `visibilitychange -> visible` 必须重放当前 store 最新 ATM 状态；禁止依赖“下一笔 live tick”才能补图
 - 冷启动历史拉取 `/api/atm-decay/history` 必须使用字段投影（最小集：`timestamp,locked_at,strike,base_strike,straddle_pct,call_pct,put_pct,strike_changed`），禁止传输完整行字段到浏览器
 - `AtmDecayChart` 必须保留当日全量 ATM history；当 `locked_at + base_strike/strike` anchor 变化时，必须在图表 series 中插入 whitespace 断线 gap，禁止把不同 ATM anchor 的百分比序列直接连线或裁掉旧段
+- `AtmDecayChart` 必须消费 ATM freshness metadata：当 row `stale_recovery=true` 时必须在该 row 前插入 whitespace；相邻可渲染 ATM row 的 timestamp gap 超过 `30s` 时也必须插入 whitespace。该规则仅影响曲线连续性，不改变 CALL=market.up(红)、PUT=market.down(绿) 的固定语义。
 - 历史接口默认以 `schema=v2`（columnar-json）消费；`schema=v1` 仅用于兼容/回放验证
 - 冷启动 history 请求非 2xx 或响应解码失败在 strict 模式下必须显式报错并可见告警；禁止静默吞错或假数据补齐
 - 当市场处于 `OPEN`（RTH）时，冷启动 ATM history 为空必须显式 fast-fail 并可见告警；当市场处于 `CLOSE`（盘前/盘后/周末）时，当日空 history 属于合法状态，前端必须保持 `-- PENDING` / 历史回放语义，不得把 outside-RTH 空 history 误报为 strict 故障

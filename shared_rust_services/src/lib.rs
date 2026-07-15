@@ -22,6 +22,7 @@ mod sabr;
 mod fusion;
 mod mm_flow;
 mod mm_flow_snapshot;
+mod atm_decay;
 
 #[pymodule]
 fn services(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -39,5 +40,6 @@ fn services(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     sabr::register(py, m)?;
     fusion::register(py, m)?;
     mm_flow::register(m)?;
+    atm_decay::register(m)?;
     Ok(())
 }

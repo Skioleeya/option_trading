@@ -7,6 +7,7 @@ import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from app.loops.atm_freshness import build_atm_source_freshness
 from app.loops.shared_state import SharedLoopState
 
 if TYPE_CHECKING:
@@ -96,10 +97,29 @@ async def update_atm_decay_and_sync_anchor(
     chain: Any,
     spot: Any,
     *,
+    snapshot: dict[str, Any] | None = None,
     reason: str,
 ) -> dict[str, Any]:
     """Update ATM decay, then protect the tracker-selected anchor legs in L0."""
-    atm_decay_payload = await ctr.atm_decay_tracker.update(chain, spot)
+    freshness = build_atm_source_freshness(
+        snapshot=snapshot or {},
+        state=state,
+    )
+    if freshness.get("source_stale"):
+        logger.warning(
+            "[AtmDecayFreshness] skipped ordinary sample reason=%s source_ts=%s age_ms=%s gap_ms=%s",
+            freshness.get("reason"),
+            freshness.get("source_timestamp"),
+            freshness.get("source_age_ms"),
+            freshness.get("source_gap_ms"),
+        )
+        atm_decay_payload = None
+    else:
+        atm_decay_payload = await ctr.atm_decay_tracker.update(
+            chain,
+            spot,
+            source_freshness=freshness,
+        )
     await sync_anchor_mandatory_symbols(
         ctr,
         state,

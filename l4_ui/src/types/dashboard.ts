@@ -293,4 +293,8 @@ export interface AtmDecay {
     put_pct: number | null
     timestamp?: string
     strike_changed?: boolean
+    source_timestamp?: string | null
+    source_gap_ms?: number | null
+    stale_recovery?: boolean
+    leg_freshness?: Record<string, unknown> | null
 }

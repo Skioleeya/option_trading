@@ -1,14 +1,10 @@
-# Handoff (Index)
+# Handoff Index
 
 ## Active Handoff
-- Path: notes/sessions/2026-07-14/fix-dynamic-subscription-anchor-mandatory/handoff.md
-- Meta: notes/sessions/2026-07-14/fix-dynamic-subscription-anchor-mandatory/meta.yaml
+- Path: notes/sessions/2026-07-15/fix-atm-decay-freshness-breaks/handoff.md
+- Meta: notes/sessions/2026-07-15/fix-atm-decay-freshness-breaks/meta.yaml
 
-## Latest Outcome
-- Session: 2026-07-14/fix-dynamic-subscription-anchor-mandatory
-- Summary: Anchor mandatory subscription sync moved into compute-loop ATM update path; local subscription cap aligned to official 500; targeted pytest, strict validation, and standard start-all passed.
-
-## Next Session Bootstrap
-1. Read this file.
-2. Read notes/context/project_state.md and notes/context/open_tasks.md.
-3. Open the active session folder and continue from its handoff.md.
+- Latest session: 2026-07-15/fix-atm-decay-freshness-breaks
+- Current session handoff: notes/sessions/2026-07-15/fix-atm-decay-freshness-breaks/handoff.md
+- Archive: notes/context/archive/handoff_2026-07.md
+- Status: ATM decay freshness implementation complete; strict validation passed; start-all intentionally stopped by user after market close.

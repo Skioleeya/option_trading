@@ -1,0 +1,70 @@
+session_id: "2026-07-15/fix-atm-decay-freshness-breaks"
+title: "fix-atm-decay-freshness-breaks"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-07-15 14:18:24 -04:00"
+updated_at_et: "2026-07-15 16:09:31 -04:00"
+parent_session: null
+change_id: "impl-20260715-atm-decay-freshness-breaks"
+
+branch: "codex/research-persistence-startup-fixes-20260423"
+base_commit: "df702b3"
+head_commit: "df702b3"
+
+files_changed:
+  - app/loops/atm_freshness.py
+  - app/loops/anchor_mandatory_sync.py
+  - app/loops/compute_loop.py
+  - app/loops/shared_state.py
+  - app/routes/history.py
+  - l1_compute/analysis/atm_decay/raw_pct.py
+  - l1_compute/analysis/atm_decay/decay_output.py
+  - l1_compute/analysis/atm_decay/anchor.py
+  - l1_compute/analysis/atm_decay/tracker.py
+  - shared/services/l0_runtime/state/runtime/__init__.py
+  - shared_rust_services/src/atm_decay.rs
+  - shared_rust_services/src/lib.rs
+  - l4_ui/src/components/App.tsx
+  - l4_ui/src/components/center/atmDecayChartData.ts
+  - l4_ui/src/components/center/__tests__/atmDecayChartData.test.ts
+  - l4_ui/src/types/dashboard.ts
+  - app/loops/tests/test_anchor_mandatory_sync.py
+  - app/loops/tests/test_compute_loop_atm_live_continuity.py
+  - app/loops/tests/test_compute_loop_gpu_dedup.py
+  - app/tests/test_history_routes_v2.py
+  - l1_compute/tests/test_atm_decay_freshness.py
+  - docs/SOP/L0_DATA_FEED.md
+  - docs/SOP/L1_LOCAL_COMPUTATION.md
+  - docs/SOP/L4_FRONTEND.md
+  - openspec/changes/impl-20260715-atm-decay-freshness-breaks/proposal.md
+  - openspec/changes/impl-20260715-atm-decay-freshness-breaks/tasks.md
+  - openspec/changes/impl-20260715-atm-decay-freshness-breaks/specs/atm-decay-freshness/spec.md
+  - notes/sessions/2026-07-15/fix-atm-decay-freshness-breaks/startup.md
+  - notes/sessions/2026-07-15/fix-atm-decay-freshness-breaks/project_state.md
+  - notes/sessions/2026-07-15/fix-atm-decay-freshness-breaks/open_tasks.md
+  - notes/sessions/2026-07-15/fix-atm-decay-freshness-breaks/handoff.md
+  - notes/sessions/2026-07-15/fix-atm-decay-freshness-breaks/meta.yaml
+  - notes/context/project_state.md
+  - notes/context/open_tasks.md
+  - notes/context/handoff.md
+commands:
+  - ".\\.venv\\Scripts\\python.exe manage.py build-pyd --crate shared_rust_services"
+  - ".\\.venv\\Scripts\\python.exe manage.py run-pytest app/loops/tests/test_anchor_mandatory_sync.py app/loops/tests/test_compute_loop_atm_live_continuity.py app/loops/tests/test_compute_loop_gpu_dedup.py app/tests/test_history_routes_v2.py l1_compute/tests/test_atm_decay_freshness.py"
+  - "npm --prefix l4_ui run test -- atmDecayChartData"
+  - "npm --prefix l4_ui run test"
+  - "$env:VITE_BACKEND_ORIGIN='http://127.0.0.1:8001'; npm --prefix l4_ui run build"
+  - ".\\.venv\\Scripts\\python.exe manage.py validate-session --strict"
+tests_passed:
+  - "Rust pyd rebuild: shared_rust_services installed shared_rust/services.pyd"
+  - "pytest targeted backend: 22 passed"
+  - "L4 ATM chart data: 6 passed"
+  - "L4 full vitest suite: 228 passed"
+  - "L4 build: passed"
+  - "validate-session --strict: passed"
+tests_failed: []
+blockers: []
+notes:
+  - "Initial build-pyd install failed because old shared_rust/services.pyd was held by backend processes 15932/27172; those backend processes were stopped, pyd installed, and build-pyd rerun green."
+  - "User explicitly stopped start-all because the US market was closed; residual start-all processes 27232/23216 were stopped and no backend was left running."
+  - "data/cold 20260714 and 20260715 artifacts are included in the final commit to satisfy the clean-worktree requirement."

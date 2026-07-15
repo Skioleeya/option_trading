@@ -57,6 +57,10 @@ function toOptionalBoolean(raw: unknown): boolean | undefined {
     return undefined
 }
 
+function toOptionalObject(raw: unknown): Record<string, unknown> | null {
+    return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : null
+}
+
 function normalizeAtmHistoryRows(rows: Record<string, unknown>[]): AtmDecay[] {
     return rows.map((row) => ({
         strike: toNullableNumber(row.strike),
@@ -67,6 +71,10 @@ function normalizeAtmHistoryRows(rows: Record<string, unknown>[]): AtmDecay[] {
         put_pct: toNullableNumber(row.put_pct),
         timestamp: toOptionalIsoString(row.timestamp),
         strike_changed: toOptionalBoolean(row.strike_changed),
+        source_timestamp: toOptionalIsoString(row.source_timestamp) ?? null,
+        source_gap_ms: toNullableNumber(row.source_gap_ms),
+        stale_recovery: toOptionalBoolean(row.stale_recovery),
+        leg_freshness: toOptionalObject(row.leg_freshness),
     }))
 }
 
@@ -114,7 +122,7 @@ export const App: React.FC = () => {
         window.addEventListener('l4:set_profiling_enabled', handleProfilingToggle as EventListener)
 
         // Cold boot: hydrate chart with minimal ATM history fields before websocket.
-        const atmHistoryFields = 'timestamp,locked_at,strike,base_strike,straddle_pct,call_pct,put_pct,strike_changed'
+        const atmHistoryFields = 'timestamp,locked_at,strike,base_strike,straddle_pct,call_pct,put_pct,strike_changed,source_timestamp,source_gap_ms,stale_recovery,leg_freshness'
         const fetchAtmHistoryV2 = async (): Promise<AtmDecay[]> => {
             const url = `${runtimeConfig.apiBase}/api/atm-decay/history?fields=${encodeURIComponent(atmHistoryFields)}&schema=v2`
             const res = await fetch(url)

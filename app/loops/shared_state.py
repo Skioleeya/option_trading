@@ -64,6 +64,7 @@ class SharedLoopState:
     last_anchor_mandatory_sync_reason: str | None = None
     last_anchor_mandatory_sync_time: float = 0.0
     anchor_mandatory_sync_updates: int = 0
+    atm_source_was_stale: bool = False
     compute_ticks_seen: int = 0
     duplicate_snapshot_skips: int = 0
     l1_compute_runs: int = 0

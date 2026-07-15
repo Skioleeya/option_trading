@@ -279,7 +279,10 @@ class ChainStateStore:
         patch = _apply_depth_patch(entry=dict(self._chain[event.symbol]), event=event)
         changed = bool(patch.get("changed"))
         if changed:
+            now_et = datetime.now(ZoneInfo("US/Eastern"))
             self._chain[event.symbol] = dict(patch["entry"])
+            self._chain[event.symbol]["last_update"] = now_et
+            self._chain[event.symbol]["last_update_utc"] = now_et.astimezone(ZoneInfo("UTC")).isoformat()
             self._bump_version()
 
     def apply_greeks(self, symbol: str, greeks: dict[str, float]) -> None:

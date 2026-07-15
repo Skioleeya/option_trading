@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import datetime
 from typing import Any, Optional
@@ -12,17 +11,18 @@ from redis.asyncio import Redis
 
 from shared.config import settings
 
-from .anchor import (
-    build_anchor_leg_diagnostics,
-    calculate_raw_pct,
-    is_spot_stable_for_lock,
-    record_spot_sample,
-    summarize_opening_chain_inputs,
+from .anchor import is_spot_stable_for_lock, record_spot_sample, summarize_opening_chain_inputs
+from .decay_output import (
+    build_decay_item,
+    handle_raw_pct_unavailable,
+    is_flat_decay,
+    record_flat_post_lock_if_needed,
+    should_store_decay,
+    store_decay_item,
 )
 from .models import (
     CAPTURE_STALL_LOG_EVERY_FAILURES,
     ET,
-    MAX_CONSECUTIVE_RAW_PCT_FAILURES,
     SPOT_STABILITY_MAX_RANGE,
     SPOT_STABILITY_MIN_SAMPLES,
     is_valid_spot,
@@ -36,6 +36,7 @@ from .runtime import (
     roll_anchor,
     try_restore_pending_anchor,
 )
+from .raw_pct import RawPctResult, calculate_raw_pct_result
 from .storage import AtmDecayStorage
 from .stitching import default_stitch_factor, factor_to_legacy_offset, stitch_with_factor
 
@@ -106,8 +107,18 @@ class AtmDecayTracker:
     async def _roll_anchor(self, chain: list[dict[str, Any]], spot: float, now: datetime) -> None:
         await roll_anchor(self, chain, spot, now)
 
-    def _calculate_raw_pct(self, chain: list[dict[str, Any]]) -> tuple[float, float, float] | None:
-        return calculate_raw_pct(self.anchor, chain)
+    def _calculate_raw_pct(
+        self,
+        chain: list[dict[str, Any]],
+        *,
+        source_freshness: dict[str, Any] | None = None,
+    ) -> RawPctResult:
+        return calculate_raw_pct_result(
+            self.anchor,
+            chain,
+            source_timestamp=_source_timestamp(source_freshness),
+            require_freshness=source_freshness is not None,
+        )
 
     def get_anchor_symbols(self) -> set[str]:
         if not self.anchor:
@@ -147,7 +158,13 @@ class AtmDecayTracker:
             summary["integer_strikes"],
         )
 
-    async def update(self, chain: list[dict[str, Any]], spot: Any) -> dict[str, Any] | None:
+    async def update(
+        self,
+        chain: list[dict[str, Any]],
+        spot: Any,
+        *,
+        source_freshness: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
         if not self.is_initialized:
             logger.debug("[AtmDecayTracker] update skipped: not initialized")
             return None
@@ -206,7 +223,7 @@ class AtmDecayTracker:
         else:
             self._out_of_bounds_ticks = 0
 
-        return self._calculate_decay(chain)
+        return self._calculate_decay(chain, source_freshness=source_freshness)
 
     async def bootstrap_intraday_anchor(self, chain: list[dict[str, Any]], spot: Any) -> dict[str, Any] | None:
         if not self.is_initialized or self.anchor:
@@ -256,38 +273,18 @@ class AtmDecayTracker:
             return None
         return self._calculate_decay(chain)
 
-    def _calculate_decay(self, chain: list[dict[str, Any]]) -> dict[str, Any] | None:
-        raw_pcts = self._calculate_raw_pct(chain)
-        if not raw_pcts:
-            diagnostic = build_anchor_leg_diagnostics(self.anchor, chain)
-            if diagnostic is not None:
-                diagnostic["reason"] = "raw_pct_unavailable"
-                diagnostic["tracker_today"] = self._today
-                diagnostic["timestamp"] = datetime.now(ET).isoformat()
-                logger.warning("[AtmDecay] decay compute skipped; anchor-leg diagnostics=%s", diagnostic)
-                asyncio.ensure_future(self._storage.append_anchor_diagnostic(self._today, diagnostic))
-            self._raw_pct_failure_streak += 1
-            if (
-                self.anchor
-                and self._raw_pct_failure_streak >= MAX_CONSECUTIVE_RAW_PCT_FAILURES
-            ):
-                strike = self.anchor.get("strike")
-                failures = self._raw_pct_failure_streak
-                logger.warning(
-                    "[AtmDecayTracker] Consecutive raw-pct failures hit threshold=%s for strike=%s; "
-                    "invalidating anchor and forcing re-capture.",
-                    MAX_CONSECUTIVE_RAW_PCT_FAILURES,
-                    strike,
-                )
-                self.invalidate_anchor()
-                asyncio.ensure_future(self._storage.delete_anchor(self._today))
-                logger.info(
-                    "[AtmDecayTracker] Persisted anchor cleared after %s consecutive raw-pct failures.",
-                    failures,
-                )
+    def _calculate_decay(
+        self,
+        chain: list[dict[str, Any]],
+        *,
+        source_freshness: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        raw_result = self._calculate_raw_pct(chain, source_freshness=source_freshness)
+        if not raw_result.raw_pcts:
+            handle_raw_pct_unavailable(self, chain, raw_result, logger)
             return None
 
-        c_raw, p_raw, s_raw = raw_pcts
+        c_raw, p_raw, s_raw = raw_result.raw_pcts
         self._raw_pct_failure_streak = 0
         factors = self.accumulated_factor
         c_pct = stitch_with_factor(c_raw, factors.get("c", 1.0))
@@ -295,60 +292,42 @@ class AtmDecayTracker:
         s_pct = stitch_with_factor(s_raw, factors.get("s", 1.0))
 
         ts = datetime.now(ET)
-        item = {
-            "strike": self.anchor["strike"],
-            "base_strike": self.anchor.get("base_strike", self.anchor["strike"]),
-            "locked_at": datetime.fromisoformat(self.anchor["timestamp"]).strftime("%H:%M:%S"),
-            "call_pct": c_pct,
-            "put_pct": p_pct,
-            "straddle_pct": s_pct,
-            "timestamp": ts.isoformat(),
-            "strike_changed": self._strike_changed_flag,
-        }
+        pcts = (c_pct, p_pct, s_pct)
+        item = build_decay_item(
+            anchor=self.anchor,
+            call_pct=c_pct,
+            put_pct=p_pct,
+            straddle_pct=s_pct,
+            ts=ts,
+            strike_changed=self._strike_changed_flag,
+            source_timestamp=_source_timestamp(source_freshness),
+            source_gap_ms=_source_gap_ms(source_freshness),
+            stale_recovery=bool((source_freshness or {}).get("stale_recovery")),
+            leg_freshness=raw_result.leg_freshness,
+        )
 
-        if self._strike_changed_flag:
-            self._strike_changed_flag = False
-
-        if self._opening_tick_pending and abs(c_pct) < 1e-9 and abs(p_pct) < 1e-9 and abs(s_pct) < 1e-9:
+        if self._opening_tick_pending and is_flat_decay(*pcts):
             logger.info(
                 "[AtmDecay] opening tick suppressed for strike=%s while waiting for post-lock movement",
                 int(self.anchor["strike"]),
             )
             return None
 
-        should_store = True
-        if self._prev_pcts is not None:
-            pc, pp, ps = self._prev_pcts
-            if abs(c_pct - pc) < 1e-6 and abs(p_pct - pp) < 1e-6 and abs(s_pct - ps) < 1e-6:
-                should_store = False
-
-        if should_store:
-            if (
-                not self._opening_tick_pending
-                and abs(c_pct) < 1e-9
-                and abs(p_pct) < 1e-9
-                and abs(s_pct) < 1e-9
-            ):
-                diagnostic = build_anchor_leg_diagnostics(self.anchor, chain)
-                if diagnostic is not None:
-                    diagnostic["reason"] = "flat_post_lock_row"
-                    diagnostic["tracker_today"] = self._today
-                    diagnostic["timestamp"] = ts.isoformat()
-                    diagnostic["call_pct"] = c_pct
-                    diagnostic["put_pct"] = p_pct
-                    diagnostic["straddle_pct"] = s_pct
-                    diagnostic["previous_pcts"] = list(self._prev_pcts) if self._prev_pcts is not None else None
-                    logger.warning("[AtmDecay] post-lock flat row stored; anchor-leg diagnostics=%s", diagnostic)
-                    asyncio.ensure_future(self._storage.append_anchor_diagnostic(self._today, diagnostic))
-            self._opening_tick_pending = False
-            self._prev_pcts = (c_pct, p_pct, s_pct)
-            asyncio.ensure_future(self._storage.append_series(ts.strftime("%Y%m%d"), item))
-            logger.info(
-                "[AtmDecay] %s | C:%+.4f  P:%+.4f  S:%+.4f (stored)",
-                int(self.anchor["strike"]),
-                c_pct,
-                p_pct,
-                s_pct,
-            )
+        if should_store_decay(self._prev_pcts, pcts):
+            record_flat_post_lock_if_needed(self, chain, ts=ts, pcts=pcts, logger=logger)
+            store_decay_item(self, item, ts=ts, pcts=pcts, logger=logger)
 
         return item
+
+
+def _source_timestamp(source_freshness: dict[str, Any] | None) -> str | None:
+    raw = (source_freshness or {}).get("source_timestamp")
+    return raw if isinstance(raw, str) and raw else None
+
+
+def _source_gap_ms(source_freshness: dict[str, Any] | None) -> float | None:
+    raw = (source_freshness or {}).get("source_gap_ms")
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None

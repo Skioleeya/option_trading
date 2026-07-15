@@ -80,8 +80,17 @@ class _FakeL3Reactor:
 
 
 class _FakeAtmDecayTracker:
-    async def update(self, chain: list[dict[str, Any]], spot: float) -> dict[str, Any]:
-        del chain, spot
+    def get_anchor_symbols(self) -> set[str]:
+        return set()
+
+    async def update(
+        self,
+        chain: list[dict[str, Any]],
+        spot: float,
+        *,
+        source_freshness: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        del chain, spot, source_freshness
         return {}
 
 
@@ -139,6 +148,7 @@ class _FakeBuilder:
         self._iv_cache: dict[str, float] = {}
         self._spot_at_sync: dict[str, float] = {}
         self.fetch_include_chain_arrow: list[bool] = []
+        self.last_mandatory_symbols: set[str] = set()
 
     async def fetch_snapshot(self, *, include_chain_arrow: bool = False) -> dict[str, Any]:
         self.fetch_include_chain_arrow.append(include_chain_arrow)
@@ -151,6 +161,17 @@ class _FakeBuilder:
 
     def get_iv_sync_context(self) -> tuple[dict[str, float], dict[str, float]]:
         return dict(self._iv_cache), dict(self._spot_at_sync)
+
+    def set_mandatory_symbols(self, symbols: set[str]) -> None:
+        self.last_mandatory_symbols = set(symbols)
+
+    async def refresh_subscriptions_once(self, spot: float | None) -> set[str]:
+        del spot
+        return {"SPY.US"}
+
+    async def repair_symbols_once(self, symbols: set[str], *, log_prefix: str) -> int:
+        del symbols, log_prefix
+        return 0
 
 
 class _FakeContainer:

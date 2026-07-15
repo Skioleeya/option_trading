@@ -107,6 +107,10 @@ flowchart LR
 - ATM Decay 在无法计算时必须记录锁定 call/put 两腿的字段级诊断快照，至少包含 `bid/ask/last_price` 与 `mid_price`，并通过 tracker/storage 的独立诊断流持久化，便于回溯价格饥饿问题
 - 诊断快照必须与正常 decay series 分离，避免污染 `atm_decay` 主历史序列；日志与持久化字段应保持与 anchor/helper 的纯逻辑边界一致
 - Opening anchor 刚锁定后的首个 decay tick 若仍是完全平值（`call/put/straddle = 0`），不得立刻写入主历史序列；应等待锁定后首次真实价格偏移，给 L0 mandatory-symbol price repair 留出恢复窗口
+- ATM Decay live update 必须消费 app 传入的 L0 source freshness context。当前 source age 超过 `10s` 时不得产出普通点；当前 source 已恢复但 `source_gap_ms > 10s` 或上一 tick 处于 stale 状态时，允许产出 `stale_recovery=true` 断点点。
+- ATM Decay payload/history 必须透传 `source_timestamp/source_gap_ms/stale_recovery/leg_freshness`；CALL/PUT 两腿必须具备同批次 freshness（单腿 age <= `10s`，双腿 skew <= `2s`），否则拒绝普通样本。
+- ATM raw pct 百分比公式 owner 为 Rust `shared_rust.services.atm_decay_raw_pct`；Python 侧只允许定位两腿、做 freshness 编排与调用 Rust，不得重新实现百分比公式。
+- Roll anchor 后若 opening all-zero tick 被 suppress，`strike_changed` 必须保留到下一条实际发布样本，禁止在 suppress 路径提前清除。
 - Restore/deferred-restore 读取已持久化 anchor 时，若当日最新 ATM history 点与该 anchor 的 `locked_at` 对齐且 `call/put/straddle` 全为 `0`，必须视为坏锚并直接丢弃，禁止把这类 flat-zero opening point 恢复成当前活动 anchor
 - 若系统在盘中启动且当天不存在可恢复的有效 anchor，启动阶段必须基于首个 `fetch_chain()` 快照立即尝试一次 intraday bootstrap lock；禁止把当天锁锚延迟到“下个交易日”或仅依赖后续慢热门槛
 - 若启动阶段存在 deferred restore anchor，intraday bootstrap 必须先对该 pending anchor 做严格 restore/discard 判定；若 pending anchor 因距离校验等原因被丢弃，startup retry 窗口必须继续 fresh capture，同次启动内完成 same-day 重锁，禁止因为 pending 标记残留而整段跳过 bootstrap

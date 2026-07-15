@@ -118,7 +118,7 @@ async def _process_snapshot_tick(
 
     if _is_duplicate_snapshot(snapshot_version, last_processed_version):
         atm_decay_payload = await update_atm_decay_and_sync_anchor(
-            ctr, state, snapshot.get("chain", []), snapshot.get("spot", 0.0), reason="duplicate_snapshot"
+            ctr, state, snapshot.get("chain", []), snapshot.get("spot", 0.0), snapshot=snapshot, reason="duplicate_snapshot"
         )
         previous_frozen = state.frozen
         active_options_rows = ctr.active_options_service.get_latest()
@@ -201,7 +201,7 @@ async def _process_snapshot_tick(
     )
 
     atm_decay_payload = await update_atm_decay_and_sync_anchor(
-        ctr, state, snapshot.get("chain", []), snapshot.get("spot", 0.0), reason="compute_tick"
+        ctr, state, snapshot.get("chain", []), snapshot.get("spot", 0.0), snapshot=snapshot, reason="compute_tick"
     )
     _log_pipeline_perf(
         snapshot_time=snapshot_time,

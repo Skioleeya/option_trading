@@ -31,6 +31,10 @@ _ATM_DECAY_ALLOWED_FIELDS = {
     "strike",
     "base_strike",
     "locked_at",
+    "source_timestamp",
+    "source_gap_ms",
+    "stale_recovery",
+    "leg_freshness",
 }
 
 
