@@ -1,0 +1,47 @@
+{
+  "date": "20260716",
+  "classification_mode": "primary_plus_context_v1",
+  "primary_day_type": "balance_day",
+  "context_modifiers": [
+    "vol_crush"
+  ],
+  "close_profile": "weak_close",
+  "status": "PASS",
+  "reasons": [],
+  "classification_blocked": false,
+  "rows": {
+    "research_raw": 17256,
+    "research_feature": 17256,
+    "research_label": 15720
+  },
+  "raw_metrics": {
+    "rows": 17256,
+    "session_rows_used": 17223,
+    "spot_outlier_rows_dropped": 33,
+    "net_return": -0.0025373967106835935,
+    "intraday_followthrough": -0.0025373967106835935,
+    "overnight_gap": -0.0015519093791035523,
+    "overnight_gap_available": true,
+    "realized_range": 0.008469059701889098,
+    "open_rv_1m": 6.076071981316598e-05,
+    "ofi_persistence": 0.0,
+    "ofi_nonzero_coverage": 0.0,
+    "directional_efficiency": 0.2996078431372499,
+    "open_side_persistence": 0.5567555013644545,
+    "close_to_extreme": 0.4337254901960763,
+    "max_abs_jump": 0.0004582981860690998,
+    "state_switch_rate": 0.3106672086406132,
+    "atm_iv_change_pct": -0.4190125996948075,
+    "atm_iv_available": true,
+    "pin_band_ratio": 0.0,
+    "close_to_key_level": 0.04106122557702814,
+    "key_level_coverage": 1.0,
+    "start_timestamp": "2026-07-16T13:30:01.392Z",
+    "end_timestamp": "2026-07-16T19:59:57.776Z",
+    "ofi_source": "bbo_imbalance_raw",
+    "midday_return": 0.001142492759784273,
+    "afternoon_return": -0.0036756900212313983,
+    "prev_trade_day": "20260715"
+  },
+  "generated_at_utc": "2026-07-16T20:01:05Z"
+}

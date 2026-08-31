@@ -194,12 +194,15 @@ export const App: React.FC = () => {
             >
                 <Header marketStatus={marketStatus} />
 
-                <div className="flex flex-1 overflow-hidden">
+                <div className="l4-main-layout flex flex-1 overflow-hidden">
                     {/* LEFT PANEL */}
                     <LeftPanel mode={moduleFlags.leftV2 ? 'v2' : 'stable'} />
 
                     {/* CENTER PANEL */}
-                    <div className="relative flex flex-col flex-1 overflow-hidden bg-[#090a0c]">
+                    <div
+                        className="l4-center-panel relative flex flex-col flex-1 overflow-hidden bg-[#090a0c]"
+                        style={{ minWidth: 'var(--l4-center-min-w)' }}
+                    >
                         {atmHistoryLoadError && (
                             <div
                                 className="absolute z-30 text-red-400 border border-red-500/40 bg-black/75"

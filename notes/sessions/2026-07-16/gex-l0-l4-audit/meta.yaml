@@ -1,0 +1,56 @@
+session_id: "2026-07-16/gex-l0-l4-audit"
+title: "gex-l0-l4-audit"
+scope: "read-only audit"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-07-16 09:34:40 -04:00"
+updated_at_et: "2026-07-16 09:48:01 -04:00"
+parent_session: null
+change_id: null
+
+branch: "codex/research-persistence-startup-fixes-20260423"
+base_commit: "d89a877"
+head_commit: "d89a877"
+
+files_changed:
+  - notes/sessions/2026-07-16/gex-l0-l4-audit/startup.md
+  - notes/sessions/2026-07-16/gex-l0-l4-audit/project_state.md
+  - notes/sessions/2026-07-16/gex-l0-l4-audit/open_tasks.md
+  - notes/sessions/2026-07-16/gex-l0-l4-audit/handoff.md
+  - notes/sessions/2026-07-16/gex-l0-l4-audit/meta.yaml
+  - notes/context/project_state.md
+  - notes/context/open_tasks.md
+  - notes/context/handoff.md
+commands:
+  - "Get-Content notes/context/project_state.md"
+  - "Get-Content notes/context/open_tasks.md"
+  - "Get-Content notes/context/handoff.md"
+  - "Get-Content docs/SOP/SYSTEM_OVERVIEW.md docs/SOP/L0_DATA_FEED.md docs/SOP/L1_LOCAL_COMPUTATION.md docs/SOP/L2_DECISION_ANALYSIS.md docs/SOP/L3_OUTPUT_ASSEMBLY.md docs/SOP/L4_FRONTEND.md"
+  - "git status --short --branch"
+  - "rg -n \"net_gex|total_call_gex|total_put_gex|gex_regime|zero_gamma_level|gamma_flip|flip_level_cumulative|AggregateGreeks|call_wall|put_wall\" -S ."
+  - "curl.exe -fsS http://127.0.0.1:8001/health"
+  - "curl.exe -fsS http://127.0.0.1:5173"
+  - ".\\.venv\\Scripts\\python.exe scripts\\diag\\check_gex_status.py"
+  - "python scripts/diagnostics/reconcile_net_gex_online.py --samples 5 --out-dir tmp/gex_audit"
+  - ".\\.venv\\Scripts\\python.exe manage.py repair-pytest-cache-perms"
+  - ".\\.venv\\Scripts\\python.exe manage.py run-pytest l1_compute\\tests\\test_streaming_aggregator_rust_parity.py l1_compute\\tests\\test_gex_classifier_thresholds.py l3_assembly\\assembly\\test_payload_assembler_flip_consistency.py app\\tests\\test_micro_stats_net_gex_contract.py app\\tests\\test_ui_state_tracker_gex_regime.py"
+  - "npm --prefix l4_ui run test -- gexStatus rightPanelModel decisionEngine.render"
+  - ".\\.venv\\Scripts\\python.exe manage.py validate-session --strict"
+tests_passed:
+  - "Backend targeted GEX tests: 17 passed"
+  - "L4 targeted GEX/model tests: 10 passed"
+  - "Backend /health: status ok"
+  - "Frontend 5173: app HTML returned"
+  - "validate-session --strict: passed"
+tests_failed:
+  - "Browser net_gex reconciliation script: ModuleNotFoundError: No module named 'playwright'"
+blockers:
+  - "Playwright not installed in .venv for browser reconciliation"
+notes:
+  - "Audit only; no runtime code changed."
+  - "Formula is correct for current OI-based structural proxy semantics, not dealer inventory truth."
+  - "Live WS sample: net_gex=-257.9, call_wall=755.0, put_wall=750.0, gamma_flip_level=752.53."
+  - "Potential fix follow-up: stop L3 from masking unknown gex_regime with zero-state MicroStats."
+  - "First strict validation run failed on missing strict evidence, handoff context index format, and debt record classification; handoff records were corrected for rerun."
+  - "Second strict validation run passed."
+

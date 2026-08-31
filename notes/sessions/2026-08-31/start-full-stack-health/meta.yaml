@@ -1,0 +1,37 @@
+session_id: "2026-08-31/start-full-stack-health"
+title: "start-full-stack-health"
+scope: "full-stack startup and liveness verification"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-08-31 01:59:08 -04:00"
+updated_at_et: "2026-08-31 02:03:00 -04:00"
+parent_session: null
+
+branch: "codex/research-persistence-startup-fixes-20260423"
+base_commit: "d89a877"
+head_commit: "d89a877"
+
+files_changed:
+  - notes/sessions/2026-08-31/start-full-stack-health/
+  - notes/context/project_state.md
+  - notes/context/open_tasks.md
+  - notes/context/handoff.md
+commands:
+  - ".\\.venv\\Scripts\\python.exe manage.py start-all"
+  - "curl.exe -fsS http://127.0.0.1:8001/health"
+  - "curl.exe -fsS http://127.0.0.1:5173"
+  - "Get-NetTCPConnection -State Listen"
+  - ".\\.venv\\Scripts\\python.exe manage.py validate-session --strict (first run: records incomplete)"
+  - ".\\.venv\\Scripts\\python.exe manage.py validate-session --strict (second run: PASS)"
+tests_passed:
+  - "Redis 6380 listening"
+  - "Backend /health returned status ok"
+  - "Frontend 5173 returned dashboard HTML"
+  - "Backend runtime logs showed ongoing L0 fetch and L3 broadcast"
+  - "Strict session validation passed"
+tests_failed: []
+blockers: []
+notes:
+  - "No runtime code or configuration changed."
+  - "Frontend /api/health returns 404 because backend health is exposed at root /health."
+

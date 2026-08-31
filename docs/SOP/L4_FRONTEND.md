@@ -45,6 +45,8 @@ flowchart LR
 - Center `Header` 小屏收敛必须通过 container-query 触发物理级裁剪：`IV {pct}` 主值是 Tier-0 指标，任何 viewport 下都不得隐藏；只允许依次隐藏 `vol micro`、`vol velocity`、整块附属波动 badge；`RDS LIVE` 保持保留，禁止把左组核心区挤压变形
 - Center `Header` 的视觉层级必须保持机构终端风格：`IV {pct}` 是唯一中心主锚点，品牌/时间/状态属于次级信息，右侧 utility（如 offense/scale/rust）必须弱化到诊断层，不得与 IV 争抢主视觉
 - Center `Header` 的 IV 附属 detail badge 必须保持可读性下限：默认 viewport 下禁止把 regime/micro token 压到接近调试字级别；应优先提高字号/行高并提前触发裁剪，而不是维持不可读的小字
+- 当 viewport 宽度低于 `860px` 时，L4 允许通过父级布局区域将 `Center + Right` 放在上层、`Left` 放在下层信息带；该重排只依据 viewport，不改变面板组件边界、协议合同或核心表格结构。
+- 当 ATM history 在合法的 CLOSE/盘前状态为空时，TradingView runtime 必须保持挂载但隐藏价格轴与时间轴，使主绘图区占满 Center；收到可绘制 ATM row 后必须恢复两个坐标轴。
 - Center `Header` 的 `SPY` 主价必须提供 broker-style last-tick 反馈：按亚洲盘语义执行 `红=涨`、`绿=跌`，仅数值本身响应 tick 方向并触发短促无位移的高亮，不得把该动态扩散到整个 header cluster
 - Center 图表入口必须通过 `ChartEngineAdapter` 抽象创建，当前生产引擎键固定 `lightweight`
 - Right 面板入口必须通过 `RightPanel` 边界组件切换 `v2/stable` 路径；`stable` 路径仅接收 payload 派生的 typed contracts，不得依赖 Center/Left 内部实现

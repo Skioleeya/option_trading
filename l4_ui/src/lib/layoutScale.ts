@@ -56,6 +56,7 @@ interface LayoutProfileTokens {
     wallLabelWidth: number
     wallStateWidth: number
     rowAccentWidth: number
+    centerMinWidth: number
 }
 
 const PROFILE_TOKENS: Record<MonitorLayoutProfile, LayoutProfileTokens> = {
@@ -97,6 +98,7 @@ const PROFILE_TOKENS: Record<MonitorLayoutProfile, LayoutProfileTokens> = {
         wallLabelWidth: 26,
         wallStateWidth: 68,
         rowAccentWidth: 4,
+        centerMinWidth: 520,
     },
     secondary_compact: {
         leftWidth: 240,
@@ -136,6 +138,7 @@ const PROFILE_TOKENS: Record<MonitorLayoutProfile, LayoutProfileTokens> = {
         wallLabelWidth: 24,
         wallStateWidth: 60,
         rowAccentWidth: 3,
+        centerMinWidth: 420,
     },
 }
 
@@ -191,8 +194,13 @@ export function buildLayoutScaleVars(scale: number, profile: MonitorLayoutProfil
     return {
         '--l4-scale': scale.toString(),
         '--l4-header-h': toPx(tokens.headerHeight),
-        '--l4-left-w': toPx(tokens.leftWidth),
-        '--l4-right-w': toPx(tokens.rightWidth),
+        '--l4-left-w': profile === 'secondary_compact'
+            ? `clamp(208px, 22vw, ${toPx(tokens.leftWidth)})`
+            : toPx(tokens.leftWidth),
+        '--l4-right-w': profile === 'secondary_compact'
+            ? `clamp(232px, 24.6vw, ${toPx(tokens.rightWidth)})`
+            : toPx(tokens.rightWidth),
+        '--l4-center-min-w': toPx(tokens.centerMinWidth),
         '--l4-gex-bar-w': toPx(tokens.gexBarWidth),
         '--l4-gex-bar-h': toPx(tokens.gexBarHeight),
         '--l4-gex-pad-x': toPx(tokens.gexPadX),

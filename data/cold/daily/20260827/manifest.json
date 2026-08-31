@@ -1,0 +1,112 @@
+{
+  "version": "v3",
+  "classification_mode": "primary_plus_context_v1",
+  "date": "20260827",
+  "primary_day_type": "balance_day",
+  "context_modifiers": [
+    "vol_crush"
+  ],
+  "close_profile": "mid_close",
+  "source_files": [
+    {
+      "role": "research_raw",
+      "path": "data/cold/daily/20260827/sources/research_raw/raw_20260827.parquet",
+      "source_path": "data/research/canonical/day_20260827.parquet",
+      "size_bytes": 1090840,
+      "sha256": "b6db5044bf1d7ed9351ab54e88a278bab0997ad384e124b6b2e35e17d499875d"
+    },
+    {
+      "role": "research_feature",
+      "path": "data/cold/daily/20260827/sources/research_feature/feature_20260827.parquet",
+      "source_path": "data/research/canonical/day_20260827.parquet",
+      "size_bytes": 2343586,
+      "sha256": "d42b0c4e65d6c4e1a9574eb6b2f30fb66d79e98e1ef9e65959260ee513bfcde0"
+    },
+    {
+      "role": "research_label",
+      "path": "data/cold/daily/20260827/sources/research_label/label_20260827.parquet",
+      "source_path": "data/research/canonical/day_20260827.parquet",
+      "size_bytes": 1107104,
+      "sha256": "2a473444be3c341c193ff98bc203f0ffd0502404d95d6e206fbb0ff6b4d42620"
+    },
+    {
+      "role": "atm_series",
+      "path": "data/cold/daily/20260827/sources/atm_series/atm_series_20260827.jsonl",
+      "source_path": "data/atm_decay/atm_series_20260827.jsonl",
+      "size_bytes": 3473502,
+      "sha256": "ada132ec8d5be6a4ec7728032557dda46d54bbef6c7ea2b416ae7937d929dfcd"
+    },
+    {
+      "role": "mtf_iv_series",
+      "path": "data/cold/daily/20260827/sources/mtf_iv_series/mtf_iv_series_20260827.jsonl",
+      "source_path": "data/mtf_iv/mtf_iv_series_20260827.jsonl",
+      "size_bytes": 1826013,
+      "sha256": "4db7e76659432f96c2df68a71824f809098f18e109559dc26dc949f951eefce4"
+    },
+    {
+      "role": "wall_series",
+      "path": "data/cold/daily/20260827/sources/wall_series/wall_series_20260827.jsonl",
+      "source_path": "data/wall_migration/wall_series_20260827.jsonl",
+      "size_bytes": 10764,
+      "sha256": "6ca2f078ffcd1e0eba42a3434c30322d7707fe22e36b2d295b450bf378ec6c1b"
+    }
+  ],
+  "metrics": {
+    "rows": {
+      "research_raw": 15491,
+      "research_feature": 15491,
+      "research_label": 14045
+    },
+    "raw_day": {
+      "rows": 15491,
+      "session_rows_used": 15461,
+      "spot_outlier_rows_dropped": 30,
+      "net_return": 0.0033443292797981044,
+      "intraday_followthrough": 0.0033443292797981044,
+      "overnight_gap": 0.0035914145602474632,
+      "overnight_gap_available": true,
+      "realized_range": 0.006499970720852615,
+      "open_rv_1m": 5.5122528547873314e-05,
+      "ofi_persistence": 0.0,
+      "ofi_nonzero_coverage": 0.0,
+      "directional_efficiency": 0.5145145145145241,
+      "open_side_persistence": 0.9191514132332966,
+      "close_to_extreme": 0.24924924924924993,
+      "max_abs_jump": 0.0004944633121236017,
+      "state_switch_rate": 0.2754382560320849,
+      "atm_iv_change_pct": -0.7687744922238172,
+      "atm_iv_available": true,
+      "pin_band_ratio": 0.2980402302567751,
+      "close_to_key_level": 0.04025109106590488,
+      "key_level_coverage": 1.0,
+      "start_timestamp": "2026-08-27T13:30:02.015Z",
+      "end_timestamp": "2026-08-27T19:59:59.812Z",
+      "ofi_source": "bbo_imbalance_raw",
+      "midday_return": 0.0028303175811521257,
+      "afternoon_return": 0.0005125609882694667,
+      "prev_trade_day": "20260826"
+    },
+    "source_count": 6
+  },
+  "quality": {
+    "status": "PASS",
+    "reasons": [],
+    "classification_blocked": false,
+    "min_rows": {
+      "raw": 5000,
+      "feature": 5000,
+      "label": 5000
+    },
+    "key_null_pct": {
+      "data_timestamp": 0.0,
+      "spot": 0.0,
+      "atm_iv": 0.0,
+      "net_gex": 0.0
+    }
+  },
+  "rule_hits": [
+    "vol_crush: iv crush threshold passed",
+    "balance_day: low directional control passed"
+  ],
+  "generated_at_utc": "2026-08-27T20:01:07Z"
+}

@@ -1,19 +1,15 @@
-# Project State
+# Project State (Index)
 
 ## Active Session
-- Path: notes/sessions/2026-07-15/fix-atm-decay-freshness-breaks/project_state.md
-- Meta: notes/sessions/2026-07-15/fix-atm-decay-freshness-breaks/meta.yaml
+- Path: notes/sessions/2026-08-31/atm-chart-empty-axis/project_state.md
+- Meta: notes/sessions/2026-08-31/atm-chart-empty-axis/meta.yaml
 - Status: ACTIVE
 
-ACTIVE_SESSION: notes/sessions/2026-07-15/fix-atm-decay-freshness-breaks/project_state.md
-LAST_UPDATED: 2026-07-15 16:09 -04:00
-ARCHIVE: notes/context/archive/project_state_2026-07.md
+## Recent Sessions
+- notes/sessions/2026-08-31/atm-chart-empty-axis/
+- notes/sessions/2026-08-31/layout-compatibility-extension/
 
-CURRENT_STATE:
-- Branch: `codex/research-persistence-startup-fixes-20260423`
-- Focus: ATM decay source freshness, leg freshness, stale recovery chart breaks, and strike_changed preservation.
-- Status: Implementation complete; targeted backend pytest, Rust pyd rebuild, L4 tests/build, and strict validation passed. Standard start-all was stopped by explicit user request after market close.
-
-NEXT:
-- Commit/push if requested.
-- Defer standard `python manage.py start-all` evidence to the next requested runtime window.
+## Global Rules
+- Session folders are immutable records; do not overwrite prior sessions.
+- New substantive work must create a new session folder under notes/sessions/YYYY-MM-DD/<task-id>/ (or notes/sessions/YYYY-MM-DD/HHMM/<task-id>/ with time-bucket mode).
+- Keep this index file updated with the latest active session pointer.

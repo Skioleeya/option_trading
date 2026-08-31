@@ -12,7 +12,7 @@ export interface LeftPanelProps {
 function LeftPanelFrame({ children }: { children: React.ReactNode }): React.JSX.Element {
     return (
         <div
-            className="flex flex-col border-r panel-border-right overflow-hidden"
+            className="l4-left-panel flex flex-col border-r panel-border-right overflow-hidden"
             style={{ width: 'var(--l4-left-w)', minWidth: 'var(--l4-left-w)' }}
         >
             {children}

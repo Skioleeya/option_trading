@@ -1,0 +1,33 @@
+session_id: "2026-08-31/layout-compatibility-extension"
+title: "layout-compatibility-extension"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-08-31 02:51:23 -04:00"
+updated_at_et: "2026-08-31 02:51:23 -04:00"
+parent_session: null
+
+branch: "codex/research-persistence-startup-fixes-20260423"
+base_commit: "d89a877"
+head_commit: "d89a877"
+
+files_changed:
+  - l4_ui/src/lib/layoutScale.ts
+  - l4_ui/src/components/App.tsx
+  - l4_ui/src/components/left/LeftPanel.tsx
+  - l4_ui/src/index.css
+  - docs/SOP/L4_FRONTEND.md
+  - openspec/changes/impl-20260831-l4-viewport-layout-compatibility/
+commands:
+  - "npm --prefix l4_ui run build"
+  - "python manage.py validate-session --strict (first run: record defects)"
+  - "python manage.py validate-session --strict"
+tests_passed:
+  - "l4_ui production build"
+  - "Playwright 1072x896 three-column DOM verification"
+  - "Playwright 820x896 narrow reflow DOM verification"
+  - "Document and body overflow-free in both viewports"
+tests_failed: []
+blockers: []
+notes: []
+

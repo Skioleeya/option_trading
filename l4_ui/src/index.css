@@ -322,7 +322,7 @@ body,
 
 .l4-header {
   display: grid;
-  grid-template-columns: var(--l4-left-w) minmax(0, 1fr) var(--l4-right-w);
+  grid-template-columns: var(--l4-left-w) minmax(var(--l4-center-min-w), 1fr) var(--l4-right-w);
   align-items: center;
   width: 100%;
   height: var(--l4-header-h);
@@ -618,6 +618,42 @@ body,
 .l4-header__rust-dot {
   border-radius: 999px;
   flex: 0 0 auto;
+}
+
+/* The narrow workspace reflows independent panels without changing their contracts. */
+@media (max-width: 860px) {
+  .l4-main-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(232px, 40vw);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 220px);
+    grid-template-areas:
+      "center right"
+      "left left";
+  }
+
+  .l4-main-layout > .l4-left-panel {
+    grid-area: left;
+    width: auto !important;
+    min-width: 0 !important;
+    min-height: 0;
+    border-right: 0;
+    border-top: 1px solid #27272a;
+  }
+
+  .l4-main-layout > .l4-center-panel {
+    grid-area: center;
+    min-width: 0 !important;
+  }
+
+  .l4-main-layout > .border-l.border-bg-border {
+    grid-area: right;
+    width: auto !important;
+    min-width: 0 !important;
+  }
+
+  .l4-header {
+    grid-template-columns: var(--l4-left-w) minmax(0, 1fr) var(--l4-right-w);
+  }
 }
 
 .l4-header__rds-dot {

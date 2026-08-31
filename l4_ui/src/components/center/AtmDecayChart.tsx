@@ -132,6 +132,10 @@ export const AtmDecayChart: React.FC<Props> = memo(({ data: propData }) => {
                 return
             }
             streamStateRef.current = nextStreamState
+            chart.applyOptions({
+                rightPriceScale: { visible: nextStreamState.hasRenderableData },
+                timeScale: { visible: nextStreamState.hasRenderableData },
+            })
 
             if (!nextStreamState.hasRenderableData) {
                 rawSeries.forEach((series) => series?.setData?.([]))
