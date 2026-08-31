@@ -1,11 +1,13 @@
 # Project State (Index)
 
 ## Active Session
-- Path: notes/sessions/2026-08-31/atm-chart-empty-axis/project_state.md
-- Meta: notes/sessions/2026-08-31/atm-chart-empty-axis/meta.yaml
+- Path: notes/sessions/2026-08-31/active-options-readable-density/project_state.md
+- Meta: notes/sessions/2026-08-31/active-options-readable-density/meta.yaml
 - Status: ACTIVE
 
 ## Recent Sessions
+- notes/sessions/2026-08-31/active-options-readable-density/
+- notes/sessions/2026-08-31/right-panel-natural-flow/
 - notes/sessions/2026-08-31/atm-chart-empty-axis/
 - notes/sessions/2026-08-31/layout-compatibility-extension/
 

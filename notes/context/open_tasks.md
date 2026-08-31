@@ -1,7 +1,7 @@
 # Open Tasks (Index)
 
 ## Active Session Tasks
-- Path: notes/sessions/2026-08-31/atm-chart-empty-axis/open_tasks.md
+- Path: notes/sessions/2026-08-31/active-options-readable-density/open_tasks.md
 
 ## Global Backlog (Cross-Session)
 - [ ] P0:

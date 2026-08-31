@@ -1,11 +1,11 @@
 # Handoff (Index)
 
 ## Active Handoff
-- Path: notes/sessions/2026-08-31/atm-chart-empty-axis/handoff.md
-- Meta: notes/sessions/2026-08-31/atm-chart-empty-axis/meta.yaml
+- Path: notes/sessions/2026-08-31/active-options-readable-density/handoff.md
+- Meta: notes/sessions/2026-08-31/active-options-readable-density/meta.yaml
 
 ## Latest Outcome
-- Session: 2026-08-31/atm-chart-empty-axis
+- Session: 2026-08-31/active-options-readable-density
 - Summary: Session created. Fill handoff.md when work is completed.
 
 ## Next Session Bootstrap

@@ -34,7 +34,7 @@ export const ActiveOptions: React.FC<Props> = memo(({ options: propOptions, pref
                 <span className={`font-medium ${isDegraded ? 'text-text-secondary' : 'text-accent-amber'}`} style={{ fontSize: 'var(--l4-font-9)' }}>{isDegraded ? 'DEGRADED' : 'TOP BY VOL'}</span>
             </div>
 
-            <table className="w-full mono table-auto" style={{ fontSize: 'var(--l4-font-9)' }}>
+            <table className="w-full mono table-auto l4-active-options__table" style={{ fontSize: 'var(--l4-font-10)' }}>
                 <thead>
                     <tr className="text-white border-b border-white/5 uppercase font-medium">
                         <th className="text-center py-1 w-6 whitespace-nowrap">#</th>

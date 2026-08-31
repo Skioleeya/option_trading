@@ -1,0 +1,28 @@
+session_id: "2026-08-31/right-panel-natural-flow"
+title: "right-panel-natural-flow"
+scope: "hotfix + modularization"
+owner: "Codex"
+timezone: "America/New_York"
+started_at_et: "2026-08-31 04:39:19 -04:00"
+updated_at_et: "2026-08-31 04:39:19 -04:00"
+parent_session: null
+
+branch: "codex/research-persistence-startup-fixes-20260423"
+base_commit: "0c95140"
+head_commit: "0c95140"
+
+files_changed:
+  - l4_ui/src/components/right/RightPanel.tsx
+  - docs/SOP/L4_FRONTEND.md
+  - openspec/changes/impl-20260831-l4-viewport-layout-compatibility/tasks.md
+commands:
+  - "npm --prefix l4_ui run build"
+  - "python manage.py start-all"
+  - "python manage.py validate-session --strict"
+tests_passed:
+  - "l4_ui production build"
+  - "screen-2 Playwright right-panel geometry verification"
+tests_failed: []
+blockers: []
+notes: []
+

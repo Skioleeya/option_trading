@@ -70,7 +70,7 @@ export const DecisionEngine: React.FC<Props> = memo(({ fused: propFused, netGex:
 
 
     return (
-        <div className="space-y-1.5" style={{ padding: 'var(--l4-panel-pad)' }}>
+        <div className="l4-decision-engine space-y-1.5" style={{ padding: 'var(--l4-panel-pad)' }}>
             <div className="flex items-center justify-between">
                 <span className="section-header" style={{ fontSize: 'var(--l4-font-10)' }}>DECISION ENGINE</span>
                 <span className="section-header text-text-muted" style={{ fontSize: 'var(--l4-font-10)' }}>FUSION</span>

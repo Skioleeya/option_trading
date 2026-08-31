@@ -35,7 +35,7 @@ export const MtfFlow: React.FC<Props> = memo(({ uiState: propState, preferProp =
     ]
 
     return (
-        <div className="border-t border-bg-border" style={{ padding: 'var(--l4-panel-pad)' }}>
+        <div className="l4-mtf-flow border-t border-bg-border" style={{ padding: 'var(--l4-panel-pad)' }}>
             <div className="flex items-center justify-between mb-1.5">
                 <span className="font-bold tracking-wider text-text-primary" style={{ fontSize: 'var(--l4-font-10)' }}>MTF FLOW</span>
                 <span className={`font-bold mono ${s.alignClass}`} style={{ fontSize: 'var(--l4-font-9)' }}>{s.alignLabel}</span>
