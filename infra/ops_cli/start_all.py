@@ -106,8 +106,15 @@ def _start_redis(repo: Path, args: argparse.Namespace) -> None:
             "Place the Windows Redis binary at the repo-fixed path or pass --redis-exe <abs-path>."
         )
 
-    if _is_listening(args.redis_port):
-        _step(f"Redis already listening at port {args.redis_port}, skip start.")
+    port_was_listening = _is_listening(args.redis_port)
+    if port_was_listening:
+        if _test_redis_ready(args.redis_port):
+            _step(f"Redis already listening and ready at port {args.redis_port}, skip start.")
+        else:
+            raise RuntimeError(
+                f"Port {args.redis_port} is occupied but not responding to PING. "
+                "Stop the conflicting process and retry."
+            )
     else:
         redis_cmd = [str(redis_exe), str(conf)]
         redis_log = _resolve_abs_path(repo, args.redis_log)
@@ -125,7 +132,13 @@ def _start_redis(repo: Path, args: argparse.Namespace) -> None:
         _step(f"Redis launcher pid={proc.pid}")
 
         if not _wait_listening(args.redis_port, args.wait_timeout_sec):
-            raise RuntimeError(f"Redis did not open port {args.redis_port} within {args.wait_timeout_sec}s.")
+            redis_log_tail = ""
+            if redis_log.exists():
+                redis_log_tail = "\n".join(redis_log.read_text(encoding="utf-8", errors="ignore").splitlines()[-20:])
+            raise RuntimeError(
+                f"Redis did not open port {args.redis_port} within {args.wait_timeout_sec}s.\n"
+                f"Check if port is in use or see log tail:\n{redis_log_tail}"
+            )
         _step(f"Redis is listening on port {args.redis_port}.")
 
     if not _wait_redis_ready(args.redis_port, args.redis_ready_timeout_sec):
