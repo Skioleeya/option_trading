@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import argparse
 import os
-import subprocess
+import time
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -12,48 +11,30 @@ from infra.ops_cli import redis_preflight
 from infra.ops_cli import start_all
 
 
-class _FakeProcess:
-    pid = 4242
+class _DeadChild:
+    """A launcher handle whose process has already exited."""
+
+    returncode = 3
+
+    def poll(self) -> int:
+        return self.returncode
 
 
-def _args() -> argparse.Namespace:
+class _LiveChild:
+    returncode = None
+
+    def poll(self) -> None:
+        return None
+
+
+def _backend_args() -> argparse.Namespace:
     return argparse.Namespace(
-        frontend_port=5173,
-        frontend_log="logs/frontend_runtime.current.log",
-        frontend_ready_timeout_sec=1,
-        backend_port=8001,
         bind_host="0.0.0.0",
+        backend_port=8001,
+        backend_ready_timeout_sec=30,
+        backend_shutdown_timeout_sec=10.0,
+        log_root="logs",
     )
-
-
-def test_start_frontend_detaches_stdin_and_sets_backend_origin(
-    monkeypatch,
-    tmp_path: Path,
-) -> None:
-    repo = tmp_path
-    ui_dir = repo / "l4_ui"
-    ui_dir.mkdir()
-
-    calls: list[dict[str, Any]] = []
-
-    def fake_popen(*args: Any, **kwargs: Any) -> _FakeProcess:
-        calls.append({"args": args, "kwargs": kwargs})
-        return _FakeProcess()
-
-    monkeypatch.setattr(start_all, "_is_listening", lambda port: False)
-    monkeypatch.setattr(start_all, "_wait_frontend_ready", lambda port, timeout_sec: True)
-    monkeypatch.setattr(start_all, "_kill_existing_vite", lambda _ui_dir: None)
-    monkeypatch.setattr(start_all, "_validate_frontend_env", lambda env: None)
-    monkeypatch.setattr(start_all.subprocess, "Popen", fake_popen)
-
-    start_all._start_frontend(repo, _args())
-
-    assert len(calls) == 1
-    popen_kwargs = calls[0]["kwargs"]
-    assert popen_kwargs["cwd"] == ui_dir
-    assert popen_kwargs["stdin"] is subprocess.DEVNULL
-    assert popen_kwargs["start_new_session"] is True
-    assert popen_kwargs["env"]["VITE_BACKEND_ORIGIN"] == "http://127.0.0.1:8001"
 
 
 def test_redis_preflight_rejects_unc_path(monkeypatch, tmp_path: Path) -> None:
@@ -121,3 +102,56 @@ def test_default_redis_exe_points_to_program_files_memurai() -> None:
     assert start_all._default_redis_exe(Path("E:/US.market/Option_v4")) == Path(
         r"C:\Program Files\Memurai\memurai.exe"
     )
+
+
+def test_verify_stack_rejects_listening_but_unhealthy_backend(monkeypatch) -> None:
+    """An open port is not readiness: /health must be 200."""
+    monkeypatch.setattr(start_all, "is_listening", lambda port: True)
+    monkeypatch.setattr(start_all, "_backend_healthy", lambda bind_host, port: False)
+
+    with pytest.raises(RuntimeError, match="Backend"):
+        start_all._verify_stack("0.0.0.0", 6380, 8001, 5173)
+
+
+def test_verify_stack_accepts_healthy_stack(monkeypatch) -> None:
+    monkeypatch.setattr(start_all, "is_listening", lambda port: True)
+    monkeypatch.setattr(start_all, "_backend_healthy", lambda bind_host, port: True)
+
+    start_all._verify_stack("0.0.0.0", 6380, 8001, 5173)
+
+
+def test_wait_backend_healthy_stops_early_when_child_exited(monkeypatch) -> None:
+    """A dead backend can never become healthy: do not blind-wait the full timeout."""
+    monkeypatch.setattr(start_all, "_backend_healthy", lambda bind_host, port: False)
+
+    started = time.monotonic()
+    ready = start_all._wait_backend_healthy("0.0.0.0", 8001, 30, _DeadChild())
+    elapsed = time.monotonic() - started
+
+    assert ready is False
+    assert elapsed < 5.0, f"waited {elapsed:.1f}s instead of aborting on the dead child"
+
+
+def test_wait_backend_healthy_still_waits_for_a_live_child(monkeypatch) -> None:
+    """Early abort must key off process death, not merely an unhealthy /health."""
+    monkeypatch.setattr(start_all, "_backend_healthy", lambda bind_host, port: False)
+
+    started = time.monotonic()
+    ready = start_all._wait_backend_healthy("0.0.0.0", 8001, 3, _LiveChild())
+    elapsed = time.monotonic() - started
+
+    assert ready is False
+    assert elapsed >= 3.0
+
+
+def test_start_backend_reports_early_exit_instead_of_blind_wait(monkeypatch, tmp_path: Path) -> None:
+    def fake_run_start_backend(args, *, on_process_started=None):
+        if on_process_started is not None:
+            on_process_started(_DeadChild())
+        return 0
+
+    monkeypatch.setattr(start_all, "run_start_backend", fake_run_start_backend)
+    monkeypatch.setattr(start_all, "_backend_healthy", lambda bind_host, port: False)
+
+    with pytest.raises(RuntimeError, match="exited before becoming ready"):
+        start_all._start_backend(tmp_path, _backend_args())

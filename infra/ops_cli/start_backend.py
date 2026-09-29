@@ -6,10 +6,12 @@ import shlex
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
 from .common import ensure_dir, repo_root
+from .log_layout import SERVICE_BACKEND, allocate_run_log_path
 
 
 def _run_powershell(script: str) -> subprocess.CompletedProcess[str]:
@@ -67,9 +69,12 @@ def _graceful_stop_existing_backend(timeout_sec: float) -> tuple[bool, list[int]
     return False, _backend_pids()
 
 
-def _resolve_log_path(repo: Path, log_file: str) -> Path:
-    path = Path(log_file)
-    return path if path.is_absolute() else repo / path
+def _resolve_log_path(repo: Path, log_file: str | None) -> Path:
+    """An explicit --log-file wins; otherwise claim the dated per-start run slot."""
+    if log_file:
+        path = Path(log_file)
+        return path if path.is_absolute() else repo / path
+    return allocate_run_log_path(repo, SERVICE_BACKEND)
 
 
 def _resolve_python_executable(repo: Path) -> Path:
@@ -105,7 +110,11 @@ def _build_env(hotfix_active_options: bool, hotfix_min_volume: int) -> tuple[dic
     return env, boot_mode, hotfix_volume
 
 
-def run_start_backend(args: argparse.Namespace) -> int:
+def run_start_backend(
+    args: argparse.Namespace,
+    *,
+    on_process_started: Callable[[subprocess.Popen], None] | None = None,
+) -> int:
     if os.name != "nt":
         print("[backend-start] Windows-only runtime contract violation: start-backend must run on Windows host.")
         return 1
@@ -176,6 +185,8 @@ def run_start_backend(args: argparse.Namespace) -> int:
                 encoding="utf-8",
                 errors="replace",
             )
+            if on_process_started is not None:
+                on_process_started(proc)
             assert proc.stdout is not None
             for line in proc.stdout:
                 print(line, end="")
@@ -191,6 +202,8 @@ def run_start_backend(args: argparse.Namespace) -> int:
             stderr=subprocess.STDOUT,
             start_new_session=True,
         )
+    if on_process_started is not None:
+        on_process_started(proc)
     print(f"[backend-start] started pid={proc.pid} mode={boot_mode} log={log_path}")
     return 0
 
@@ -201,7 +214,14 @@ def build_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]
     parser.add_argument("--degraded", action="store_true")
     parser.add_argument("--hotfix-active-options", action="store_true")
     parser.add_argument("--hotfix-min-volume", type=int, default=10)
-    parser.add_argument("--log-file", default="logs/backend_runtime.current.log")
+    parser.add_argument(
+        "--log-file",
+        default=None,
+        help=(
+            "Explicit log file. Omit to auto-group into "
+            "logs/<YYYY-MM-DD>/backend/run-<NNN>.log."
+        ),
+    )
     parser.add_argument("--foreground", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--shutdown-timeout-sec", type=float, default=10.0)

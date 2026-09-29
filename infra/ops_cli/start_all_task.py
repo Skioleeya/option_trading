@@ -8,8 +8,17 @@ import time
 from getpass import getuser
 from pathlib import Path
 
-from .common import ensure_dir, now_in_timezone, repo_root, shell_join
-from . import start_all, start_backend
+from .common import (
+    ensure_dir,
+    is_listening,
+    kill_processes_on_port,
+    listening_pids,
+    repo_root,
+    shell_join,
+)
+from .frontend_launch import kill_existing_vite
+from .log_layout import trading_date_iso
+from . import start_backend
 
 
 def _resolve_python(python_exe: str) -> str:
@@ -25,7 +34,7 @@ def _resolve_repo_root(candidate: str) -> Path:
 
 
 def _today_et_iso() -> str:
-    return now_in_timezone("America/New_York").strftime("%Y-%m-%d")
+    return trading_date_iso()
 
 
 def _is_trading_session(date_iso: str) -> bool:
@@ -63,8 +72,8 @@ def _run_powershell(script: str) -> subprocess.CompletedProcess[str]:
 
 def _stop_frontend(repo: Path, frontend_port: int) -> list[int]:
     ui_dir = repo / "l4_ui"
-    start_all._kill_existing_vite(ui_dir)
-    killed = start_all._kill_processes_on_port(frontend_port)
+    kill_existing_vite(ui_dir)
+    killed = kill_processes_on_port(frontend_port)
     return killed
 
 
@@ -75,11 +84,11 @@ def _stop_redis(redis_port: int) -> list[int]:
     except OSError:
         pass
 
-    if not start_all._is_listening(redis_port):
+    if not is_listening(redis_port):
         return []
 
     killed: list[int] = []
-    for pid in start_all._listening_pids(redis_port):
+    for pid in listening_pids(redis_port):
         proc = _run_powershell(f"Stop-Process -Id {pid} -Force -ErrorAction SilentlyContinue")
         if proc.returncode == 0:
             killed.append(pid)

@@ -233,8 +233,8 @@ python manage.py register-start-all-task --apply
 # degraded mode is forbidden by policy
 # python manage.py start-backend --degraded  # DO NOT USE
 
-# backend log tail (latest)
-powershell -NoProfile -Command "Get-Content logs/backend_runtime.current.log -Tail 400"
+# backend log tail (latest run; logs are grouped by trading date + per-service start ordinal)
+powershell -NoProfile -Command "$d = Get-ChildItem logs -Directory | Sort-Object Name | Select-Object -Last 1; Get-ChildItem \"$($d.FullName)\backend\run-*.log\" | Sort-Object Name | Select-Object -Last 1 | ForEach-Object { Get-Content $_.FullName -Tail 400 }"
 
 # frontend
 npm --prefix l4_ui run dev -- --host 0.0.0.0 --port 5173
