@@ -68,6 +68,7 @@ l2_decision/audit/l2_audit_*.parquet
 .idea/
 .playwright-mcp/
 .codex
+.workbuddy-ai/
 .obsidian/cache/
 .obsidian/snapshots/
 .obsidian/.trash/
@@ -81,6 +82,10 @@ desktop.ini
 *.swo
 nul
 backend/nul
+
+# Root-level scratch artifacts (generated dumps / chart exports, referenced by nothing)
+/tmp_openapi.json
+/atm-decay-*.png
 
 # Local binaries and machine-specific configs
 infra/bin/
