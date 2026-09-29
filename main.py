@@ -11,7 +11,7 @@ from app.routes import health, history, ws_dashboard
 from shared.config import settings
 
 logging.basicConfig(
-    level=logging.DEBUG, 
+    level=settings.log_level.upper(),
     format="%(asctime)s [%(levelname)s] %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S"
 )

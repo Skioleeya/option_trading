@@ -46,6 +46,7 @@ from l3_assembly.broadcast.broadcast_governor import BroadcastGovernor
 from l3_assembly.storage.timeseries_store import TimeSeriesStoreV2
 from l3_assembly.observability.l3_instrumentation import L3Instrumentation
 from l3_assembly.assembly.ui_state_tracker import UIStateTracker
+from shared.config import settings
 from shared_rust.services import HeaderVolatilityContextService, ResearchFeatureStore
 
 logger = logging.getLogger(__name__)
@@ -214,17 +215,43 @@ class L3AssemblyReactor:
     ) -> None:
         if self._research_persistence_fatal is not None:
             raise ResearchPersistenceFatalError(self._research_persistence_fatal)
-        try:
-            self.research_store.append_tick(
-                decision=decision,
-                snapshot=snapshot,
-                payload=payload,
-            )
-        except Exception as exc:
-            self._research_persistence_fatal = f"{type(exc).__name__}: {exc}"
-            logger.critical(
-                "[L3 Reactor] research_store append failed (fatal): %s",
-                self._research_persistence_fatal,
-            )
-            raise ResearchPersistenceFatalError(self._research_persistence_fatal) from exc
+
+        # Windows ReplaceFileW can transiently fail with ERROR_UNABLE_TO_REMOVE_REPLACED
+        # (WinError 1175) while the canonical parquet is briefly held by an external
+        # scanner/indexer. Retry a bounded number of times; exhausting the budget is
+        # still fatal so a real persistence fault is never silently swallowed.
+        max_attempts = max(1, int(settings.research_persist_max_attempts))
+        retry_delay_seconds = max(0.0, float(settings.research_persist_retry_delay_ms) / 1000.0)
+        last_exc: Exception | None = None
+
+        for attempt in range(1, max_attempts + 1):
+            try:
+                self.research_store.append_tick(
+                    decision=decision,
+                    snapshot=snapshot,
+                    payload=payload,
+                )
+                return
+            except Exception as exc:  # noqa: BLE001
+                last_exc = exc
+                if attempt < max_attempts:
+                    logger.warning(
+                        "[L3 Reactor] research_store append attempt %d/%d failed; "
+                        "retrying in %.0fms: %s",
+                        attempt,
+                        max_attempts,
+                        retry_delay_seconds * 1000.0,
+                        exc,
+                    )
+                    time.sleep(retry_delay_seconds)
+
+        # max_attempts >= 1 guarantees the loop body ran at least once.
+        assert last_exc is not None
+        self._research_persistence_fatal = f"{type(last_exc).__name__}: {last_exc}"
+        logger.critical(
+            "[L3 Reactor] research_store append failed (fatal) after %d attempt(s): %s",
+            max_attempts,
+            self._research_persistence_fatal,
+        )
+        raise ResearchPersistenceFatalError(self._research_persistence_fatal) from last_exc
 

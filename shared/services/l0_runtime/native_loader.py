@@ -8,6 +8,8 @@ from functools import lru_cache
 from importlib.machinery import ExtensionFileLoader
 from pathlib import Path
 
+from shared.services.l0_runtime.durable_parquet_write import install_durable_parquet_write
+
 _PACKAGE_DIR = Path(__file__).resolve().parent / "_native_generated"
 _ELF_MAGIC = b"\x7fELF"
 _PE_MAGIC = b"MZ"
@@ -146,5 +148,6 @@ def load_l0_rust(*, candidates: list[Path] | None = None, module_suffix: str | N
 
 
 l0_rust = load_l0_rust()
+install_durable_parquet_write(l0_rust)
 
 __all__ = ["l0_rust", "load_l0_rust"]
