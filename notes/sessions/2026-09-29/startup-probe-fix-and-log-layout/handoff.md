@@ -147,6 +147,10 @@ W2 第 4 次启动（重构后重启，验证切分未破坏启动链路）：
 - **`builder.py` 401 行门禁违规（我引入）** → 切出 `arrow_transport.py`，401 → 265，8 例脚本回归通过。
 - **`longport_startup_strict_connectivity` 的 `getattr(..., True)` 静默兜底** → 本轮改为直接属性访问；
   复盘与 `notes/context/open_tasks.md` 中的旧措辞已同步纠正。
+- **工作区清空并推送远端**（KAI 明确要求「提交远端，保持工作区干净」）。7 个提交推上
+  `origin/codex/research-persistence-startup-fixes-20260423`：`.gitignore`、l0 探针修复 + Arrow 切片、
+  日志归类、本会话记录、他会话的持久化改动（单独一个提交并注明非本会话作者）、冷数据归档。
+  收尾时工作区 0 改动、`HEAD` == `origin/<branch>`、未推 0 个。
 
 ## NOTES-PATHS
 
@@ -158,13 +162,18 @@ W2 第 4 次启动（重构后重启，验证切分未破坏启动链路）：
 
 ## OPEN-RISKS
 
-- **工作区混入他会话未提交改动**，本会话**刻意未纳入**，也未对其下任何结论：
-  `l3_assembly/reactor.py`、`l3_assembly/test_reactor.py`、
+- **他会话的在途改动已按 KAI 明确授权提交**（本会话收尾阶段，见 `## Closed in session`），
+  单独一个提交并注明「非本会话作者、未再验证」：`l3_assembly/reactor.py`、`l3_assembly/test_reactor.py`、
   `l4_ui/src/components/center/AtmDecayOverlay.tsx`、`main.py`、`shared/config/persistence.py`、
-  `shared/services/l0_runtime/native_loader.py`，以及 `atm-decay-*.png`、`data/cold/...`。
-  其中 `main.py` 的在途改动正好覆盖本会话核到的 `logging.DEBUG` 遗留项 —— 提交时需注意归属。
-- `notes/context/*` 索引仍指向 **2026-08-31** 的旧会话，且用的是**已废除的旧形态**
-  （引用 `meta.yaml` 与 session 级 `open_tasks.md`）。本会话已按新形态更新索引。
+  `shared/services/l0_runtime/native_loader.py`、`shared/services/l0_runtime/durable_parquet_write.py`、
+  `shared/services/l0_runtime/test_durable_parquet_write.py`，以及两份 9-24 / 9-25 复盘。
+  **风险仍在**：这批代码本会话只做了字节编译检查，没跑回归。
+- **本环境的 git 引用存储有缺陷**（`.git/refs` 下的二级子目录会被删），
+  直接后果是嵌套分支名下第二次 `git commit` 会静默变成 **root commit**。
+  本会话踩到并已恢复；处理手法已写进跨项目 skill `git-tracking-ref-stale`，
+  **此处不重复**。下次在本仓提交前先读那个 skill。
+- `data/cold/**` 与根目录三个临时产物（`.workbuddy-ai/`、`tmp_openapi.json`、`atm-decay-*.png`）
+  已分别提交 / 加入 `.gitignore`，见提交历史。
 - `[SubscriptionManager] Quote runtime connected.` 是误导性日志（`shared/services/l0_runtime/services/subscription/__init__.py:174-175`，
   `connect()` 无网络 I/O，探针失败时照样打印）。**未改，等裁定。**
 - 端点可达性**仍无常驻检查器**（9-25 已记）。候选：把 `tmp/_probe_dashboard_ws.py` 固化进 `tools/`。**等裁定。**
